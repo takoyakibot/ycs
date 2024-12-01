@@ -16,7 +16,10 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::get('/', [ChannelController::class, 'index']);
-Route::get('/{id}', [ChannelController::class, 'show'])->name('channels.show');
+
+Route::get('/{id}', [ChannelController::class, 'show'])
+    ->name('channels.show')
+    ->where('id', '[0-9]+');
 
 Route::get('/dashboard', function () {
     return view('dashboard');
