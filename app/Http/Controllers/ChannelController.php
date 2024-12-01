@@ -42,7 +42,7 @@ class ChannelController extends Controller
     public function show(string $id)
     {
         $keyword = request('keyword');
-        $cmntChatType = request('type');
+        $cmntChatType = request('type', '0');
 
         // チャンネル情報を取得して表示
         $channelData = [
@@ -68,6 +68,9 @@ class ChannelController extends Controller
             },
         );
 
+        if (request()->ajax()) {
+            return response()->json($channelData['comments']);
+        }
         return view('channels.show', compact('channelData'));
     }
 
