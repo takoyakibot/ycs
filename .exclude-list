@@ -1,6 +1,7 @@
 tests
 artisan
 .editorconfig
+.env
 .env.example
 .exclude-list
 .git
