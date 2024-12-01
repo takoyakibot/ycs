@@ -3,39 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <title>コメント検索 {{ $channelData['name'] }}</title>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    @vite('resources/js/show.js')
+    <meta name="csrf-token" content="{{ csrf_token() }}">
 </head>
 <body>
     <h1>コメント検索 {{ $channelData['name'] }}</h1>
 
     <!-- 検索フォーム -->
-    <form method="GET" action="{{ url()->current() }}">
-        <input type="text" name="keyword" placeholder="検索ワードを入力" value="{{ request('keyword') }}">
+    <form id="searchForm">
+        <!-- 検索キーワード -->
+        <input type="text" name="keyword" id="keyword" placeholder="コメントを検索" value="{{ request('keyword') }}">
+        
+        <!-- ラジオボタンで選択 -->
         <label>
-            <input type="radio" name="type" value="1" {{ request('type') === '1' ? 'checked' : '' }}>
-            チャットのみ
+            <input type="radio" name="type" value="1"> チャットのみ
         </label>
         <label>
-            <input type="radio" name="type" value="2" {{ request('type') === '2' ? 'checked' : '' }}>
-            コメントのみ
+            <input type="radio" name="type" value="2"> コメントのみ
         </label>
         <label>
-            <input type="radio" name="type" value="0" {{ request('type') === '0' || !request('type') ? 'checked' : '' }}>
-            指定しない
+            <input type="radio" name="type" value="0" checked> 指定しない
         </label>
+
+        <!-- 検索ボタン -->
         <button type="submit">検索</button>
-        <button type="button" onclick="window.location.href='{{ url()->current() }}'">リセット</button>
+        <!-- リセットボタン -->
+        <button type="button" id="resetButton">リセット</button>
     </form>
 
-    <ul>
-        @forelse ($channelData['comments'] as $comment)
-            <li>{{ $comment['timestamp'] }} {{ $comment['message'] }}</li>
-        @empty
-            @if (empty(request('keyword')))
-                <li>検索ワードを入力してください。</li>
-            @else
-                <li>コメントが見つかりません。</li>
-            @endif
-        @endforelse
+    <ul id="results">
+        <li>検索ワードを入力してください。</li>
     </ul>
 </body>
 </html>
