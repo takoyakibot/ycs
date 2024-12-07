@@ -5,7 +5,7 @@
         </h2>
     </x-slot>
 
-    <div class="py-12">
+    <div class="px-6 py-12">
         {{ session('status') }}
         @if ($errors->any())
             <div class="alert alert-danger">
@@ -31,6 +31,7 @@
             <label for="channel_id">チャンネルID</label>
             <input type="text" id="channel_id" name="channel_id">
             <button type="submit">登録</button>
+            <span>(https://youtube.com/@<strong>XXXXXXXXX</strong>)</span>
         </form>
 
         <!-- チャンネル一覧 -->
@@ -38,9 +39,9 @@
         <ul>
             @foreach ($channels as $channel)
                 <li>
-                    <a href="{{ route('dashboard.channel', $channel->id) }}">
+                    <a href="{{ route('dashboard.channel', $channel->channel_id) }}">
                         <img src="{{ $channel->thumbnail }}" alt="サムネイル">
-                        {{ $channel->name }}
+                        <span>{{ $channel->name }}</span>
                     </a>
                 </li>
             @endforeach
