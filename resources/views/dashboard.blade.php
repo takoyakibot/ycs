@@ -29,9 +29,12 @@
         <form method="POST" action="{{ route('dashboard.addChannel') }}">
             @csrf
             <label for="channel_id">チャンネルID</label>
-            <input type="text" id="channel_id" name="channel_id">
+            <input type="text" id="channel_id" name="channel_id" placeholder="7777777">
             <button type="submit">登録</button>
-            <span>(https://youtube.com/@<strong>XXXXXXXXX</strong>)</span>
+            <span class="text-gray-500">(
+                https://youtube.com/@</span><span class="text-black font-bold">7777777</span><span
+                class="text-gray-500">
+                )</span>
         </form>
 
         <!-- チャンネル一覧 -->
