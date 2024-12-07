@@ -37,7 +37,12 @@
         <h2>登録チャンネル</h2>
         <ul>
             @foreach ($channels as $channel)
-                <li><a href="{{ route('dashboard.channel', $channel->id) }}">{{ $channel->name }}</a></li>
+                <li>
+                    <a href="{{ route('dashboard.channel', $channel->id) }}">
+                        <img src="{{ $channel->thumbnail }}" alt="サムネイル">
+                        {{ $channel->name }}
+                    </a>
+                </li>
             @endforeach
         </ul>
     </div>

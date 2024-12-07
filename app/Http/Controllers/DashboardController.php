@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Channel;
 use App\Services\YouTubeService;
+use App\Services\ImageService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Crypt;
@@ -11,10 +12,12 @@ use Illuminate\Support\Facades\Crypt;
 class DashboardController extends Controller
 {
     protected $youtubeService;
+    protected $imageService;
 
-    public function __construct(YouTubeService $youtubeService)
+    public function __construct(YouTubeService $youtubeService, ImageService $imageService)
     {
         $this->youtubeService = $youtubeService;
+        $this->imageService = $imageService;
     }
 
     public function index()
@@ -46,24 +49,29 @@ class DashboardController extends Controller
             'channel_id' => 'required|string|unique:channels,channel_id',
         ]);
 
-        
         $channel = $this->youtubeService->getChannelByHandle($request->channel_id);
         if (!$channel || !isset($channel['title']) || !$channel['title']) {
             return redirect()->back()->with('status', 'チャンネルが存在しません。');
         }
 
+        $thumbnail = $this->imageService->downloadThumbnail($channel['thumbnail']);
+        if (!$thumbnail) {
+            return redirect()->back()->with('status', 'サムネイルの取得に失敗しました。');
+        }
+
         Channel::create([
             'channel_id' => $request->channel_id,
             'name' => $channel['title'],
+            'thumbnail' => $thumbnail,
         ]);
 
         return redirect()->back()->with('status', 'チャンネルを登録しました。');
     }
 
-    public function manageChannel($id)
-    {
-        $channel = Channel::findOrFail($id);
-        $archives = Archive::where('channel_id', $channel->channel_id)->get();
-        return view('channels.manage', compact('channel', 'archives'));
-    }
+    // public function manageChannel($id)
+    // {
+    //     $channel = Channel::findOrFail($id);
+    //     $archives = Archive::where('channel_id', $channel->channel_id)->get();
+    //     return view('channels.manage', compact('channel', 'archives'));
+    // }
 }
