@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Crypt;
 
 class DashboardController extends Controller
 {
@@ -11,7 +12,7 @@ class DashboardController extends Controller
     {
         // ログインユーザーのAPIキーを取得
         $user = Auth::user();
-        $apiKey = $user->api_key;
+        $apiKey = $user->api_key ? Crypt::decryptString($user->api_key) : "";
         $channels = [];//Channel::all(); // 登録済みのチャンネル
 
         return view('dashboard', compact('apiKey', 'channels'));
@@ -23,9 +24,9 @@ class DashboardController extends Controller
             'api_key' => 'required|string',
         ]);
 
-        // ログインユーザーのAPIキーを更新
+        // ログインユーザーのAPIキーを暗号化して更新
         $user = Auth::user();
-        $user->update(['api_key' => $request->api_key]);
+        $user->update(['api_key' => Crypt::encryptString($request->api_key)]);
 
         return redirect()->back()->with('status', 'APIキーを更新しました。');
     }
