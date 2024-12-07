@@ -3,12 +3,20 @@
 namespace App\Http\Controllers;
 
 use App\Models\Channel;
+use App\Services\YouTubeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Crypt;
 
 class DashboardController extends Controller
 {
+    protected $youtubeService;
+
+    public function __construct(YouTubeService $youtubeService)
+    {
+        $this->youtubeService = $youtubeService;
+    }
+
     public function index()
     {
         // ログインユーザーのAPIキーを取得
@@ -38,14 +46,16 @@ class DashboardController extends Controller
             'channel_id' => 'required|string|unique:channels,channel_id',
         ]);
 
-        try {
-            Channel::create([
-                'channel_id' => $request->channel_id,
-                'name' => "サンプル " . $request->channel_id,
-            ]);
-        } catch (QueryException $e) {
-            return redirect()->back()->with('status', 'チャンネルの追加中にエラーが発生しました。');
+        
+        $channel = $this->youtubeService->getChannelByHandle($request->channel_id);
+        if (!$channel || !isset($channel['title']) || !$channel['title']) {
+            return redirect()->back()->with('status', 'チャンネルが存在しません。');
         }
+
+        Channel::create([
+            'channel_id' => $request->channel_id,
+            'name' => $channel['title'],
+        ]);
 
         return redirect()->back()->with('status', 'チャンネルを登録しました。');
     }
