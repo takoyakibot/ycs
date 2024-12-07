@@ -6,6 +6,17 @@
     </x-slot>
 
     <div class="py-12">
+        {{ session('status') }}
+        @if ($errors->any())
+            <div class="alert alert-danger">
+                <ul>
+                    @foreach ($errors->all() as $error)
+                        <li>{{ $error }}</li>
+                    @endforeach
+                </ul>
+            </div>
+        @endif
+
         <!-- APIキー -->
         <form method="POST" action="{{ route('dashboard.updateApiKey') }}">
             @csrf
