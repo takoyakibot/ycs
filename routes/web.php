@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ChannelController;
+use App\Http\Controllers\DashboardController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -21,9 +22,12 @@ Route::get('/{id}', [ChannelController::class, 'show'])
     ->name('channels.show')
     ->where('id', '[0-9]+');
 
-Route::get('/dashboard', function () {
-    return view('dashboard');
-})->middleware(['auth', 'verified'])->name('dashboard');
+Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::post('/dashboard/api-key', [DashboardController::class, 'updateApiKey'])->name('dashboard.updateApiKey');
+    Route::post('/dashboard/add-channel', [DashboardController::class, 'addChannel'])->name('dashboard.addChannel');
+    Route::get('/dashboard/{id}', [DashboardController::class, 'manageChannel'])->name('dashboard.channel');
+});
 
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');

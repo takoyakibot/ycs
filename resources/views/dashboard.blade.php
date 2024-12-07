@@ -6,12 +6,28 @@
     </x-slot>
 
     <div class="py-12">
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-            <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
-                <div class="p-6 text-gray-900 dark:text-gray-100">
-                    {{ __("You're logged in!") }}
-                </div>
-            </div>
-        </div>
+        <!-- APIキー -->
+        <form method="POST" action="{{ route('dashboard.updateApiKey') }}">
+            @csrf
+            <label for="api_key">YouTube APIキー</label>
+            <input type="text" id="api_key" name="api_key" value="{{ $apiKey }}">
+            <button type="submit">登録</button>
+        </form>
+
+        <!-- チャンネル登録フォーム -->
+        <form method="POST" action="{{ route('dashboard.addChannel') }}">
+            @csrf
+            <label for="channel_id">チャンネルID</label>
+            <input type="text" id="channel_id" name="channel_id">
+            <button type="submit">登録</button>
+        </form>
+
+        <!-- チャンネル一覧 -->
+        <h2>登録チャンネル</h2>
+        <ul>
+            @foreach ($channels as $channel)
+                <li><a href="{{ route('dashboard.channel', $channel->id) }}">{{ $channel->name }}</a></li>
+            @endforeach
+        </ul>
     </div>
 </x-app-layout>
