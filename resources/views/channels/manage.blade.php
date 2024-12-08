@@ -34,7 +34,7 @@
             <ul>
                 @foreach ($archives as $archive)
                     <li>
-                        {{ $archive['archive_id'] . ' ' . $archive['archive_name'] }}
+                        {{ $archive['video_id'] . ' ' . $archive['title'] }}
                         @foreach ($archive['comments'] as $comment)
                             <li>{{ $comment['timestamp'] . ' ' . $comment['comment'] }}</li>
                         @endforeach

@@ -72,8 +72,8 @@ class YouTubeService
 
                 $archives[] = [
                     'channel_id' => $channel_id,
-                    'archive_id' => $item['contentDetails']['videoId'],
-                    'archive_name' => $item['snippet']['title'],
+                    'video_id' => $item['contentDetails']['videoId'],
+                    'title' => $item['snippet']['title'],
                     'comments' => $comments,
                 ];
             }

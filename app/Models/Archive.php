@@ -11,8 +11,8 @@ class Archive extends Model
 
     protected $fillable = [
         'channel_id',
-        'archive_id',
-        'archive_name',
+        'video_id',
+        'title',
         'is_public',
         'is_display',
         'comments',

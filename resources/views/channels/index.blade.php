@@ -1,10 +1,5 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <title>トップ画面</title>
-</head>
-<body>
+<x-app-layout>
+
     <h1>チャンネル一覧</h1>
     <ul>
         @foreach ($channels as $channel)
@@ -14,5 +9,5 @@
         @endforeach
     </ul>
     <a href="/login">管理画面へ</a>
-</body>
-</html>
+
+</x-app-layout>
