@@ -11,10 +11,10 @@ return new class extends Migration {
     public function up(): void
     {
         Schema::create('archives', function (Blueprint $table) {
-            $table->id();
+            $table->string('video_id')->primary();
             $table->string('channel_id');
-            $table->string('archive_id');
-            $table->string('archive_name');
+            $table->string('title');
+            $table->string('thumbnail')->nullable();
             $table->boolean('is_public')->default(true);
             $table->boolean('is_display')->default(false);
             $table->json('comments');
