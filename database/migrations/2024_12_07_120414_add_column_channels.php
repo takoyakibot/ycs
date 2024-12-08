@@ -11,7 +11,7 @@ return new class extends Migration {
     public function up(): void
     {
         Schema::table('Channels', function (Blueprint $table) {
-            $table->longText('thumbnail')->after('name');
+            $table->longText('thumbnail')->after('title');
         });
     }
 

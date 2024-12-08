@@ -18,6 +18,8 @@ class Archive extends Model
         'comments',
     ];
 
+    protected $hidden = ['channel_id'];
+
     protected $casts = [
         'comments' => 'array',
     ];

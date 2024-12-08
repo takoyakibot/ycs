@@ -59,7 +59,7 @@
                     <li>
                         <a href="{{ route('dashboard.channel', $channel['handle']) }}">
                             <img src="{{ $channel['thumbnail'] }}" alt="サムネイル">
-                            <span>{{ $channel['name'] }}</span>
+                            <span>{{ $channel['title'] }}</span>
                         </a>
                     </li>
                 @endforeach

@@ -11,10 +11,9 @@ return new class extends Migration {
     public function up(): void
     {
         Schema::create('channels', function (Blueprint $table) {
-            $table->id();
+            $table->string('handle')->primary();
             $table->string('channel_id')->unique();
-            $table->string('handle')->unique();
-            $table->string('name');
+            $table->string('title');
             $table->timestamps();
         });
     }
