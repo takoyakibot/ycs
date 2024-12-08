@@ -89,9 +89,9 @@ class DashboardController extends Controller
 
     public function updateAchives($id)
     {
-
         $channel = Channel::where('handle', $id)->firstOrFail();
-        $archives = Archive::where('channel_id', $channel->channel_id)->get();
-        return view('channels.update-achives', compact('channel', 'archives'));
+        $archives = $this->youtubeService->getArchives($channel->channel_id);
+        // $archives = Archive::where('channel_id', $channel->channel_id)->get();
+        return view('channels.manage', compact('channel', 'archives'));
     }
 }

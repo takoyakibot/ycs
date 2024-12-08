@@ -34,6 +34,10 @@
             <ul>
                 @foreach ($archives as $archive)
                     <li>
+                        {{ $archive['archive_id'] . ' ' . $archive['archive_name'] }}
+                        @foreach ($archive['comments'] as $comment)
+                            <li>{{ $comment['timestamp'] . ' ' . $comment['comment'] }}</li>
+                        @endforeach
                     </li>
                 @endforeach
             </ul>
