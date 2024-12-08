@@ -20,7 +20,7 @@
         <div class="p-2">
             <h2 class="text-gray-500">
                 <img src="{{ $channel->thumbnail }}" alt="サムネイル">
-                <span>{{ $channel->name }}</span>
+                <span>{{ $channel->title }}</span>
             </h2>
 
             <form method="POST" action="{{ route('dashboard.updateAchives', ['id' => $channel->handle]) }}">

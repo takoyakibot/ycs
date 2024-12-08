@@ -73,7 +73,7 @@ class DashboardController extends Controller
         Channel::create([
             'handle' => $request->handle,
             'channel_id' => $channel['channel_id'],
-            'name' => $channel['title'],
+            'title' => $channel['title'],
             'thumbnail' => $thumbnail,
         ]);
 
