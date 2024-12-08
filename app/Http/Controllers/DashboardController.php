@@ -25,8 +25,10 @@ class DashboardController extends Controller
     {
         // ログインユーザーのAPIキーを取得
         $user = Auth::user();
-        $apiKey = $user->api_key ? "1" : ""; // 登録済みかどうかだけを送る
-        $channels = Channel::all(); // 登録済みのチャンネル
+        // 登録済みかどうかだけを送る
+        $apiKey = $user->api_key ? "1" : "";
+        // $hiddenを有効化するために変換してから渡す
+        $channels = Channel::all()->toArray();
 
         return view('dashboard', compact('apiKey', 'channels'));
     }
@@ -55,13 +57,13 @@ class DashboardController extends Controller
     public function addChannel(Request $request)
     {
         $request->validate([
-            'channel_id' => 'required|string|unique:channels,channel_id',
+            'handle' => 'required|string|unique:channels,handle',
         ]);
 
         $this->youtubeService->setApiKey(
             Crypt::decryptString(Auth::user()->api_key)
         );
-        $channel = $this->youtubeService->getChannelByHandle($request->channel_id);
+        $channel = $this->youtubeService->getChannelByHandle($request->handle);
         if (!$channel || !isset($channel['title']) || !$channel['title']) {
             return redirect()->back()->with('status', 'チャンネルが存在しません。');
         }
@@ -72,7 +74,8 @@ class DashboardController extends Controller
         }
 
         Channel::create([
-            'channel_id' => $request->channel_id,
+            'handle' => $request->handle,
+            'channel_id' => $channel['channel_id'],
             'name' => $channel['title'],
             'thumbnail' => $thumbnail,
         ]);
@@ -82,7 +85,7 @@ class DashboardController extends Controller
 
     public function manageChannel($id)
     {
-        $channel = Channel::where('channel_id', $id)->firstOrFail();
+        $channel = Channel::where('handle', $id)->firstOrFail();
         $archives = Archive::where('channel_id', $channel->channel_id)->get();
         return view('channels.manage', compact('channel', 'archives'));
     }
@@ -90,7 +93,7 @@ class DashboardController extends Controller
     public function updateAchives($id)
     {
 
-        $channel = Channel::where('channel_id', $id)->firstOrFail();
+        $channel = Channel::where('handle', $id)->firstOrFail();
         $archives = Archive::where('channel_id', $channel->channel_id)->get();
         return view('channels.update-achives', compact('channel', 'archives'));
     }
