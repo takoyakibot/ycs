@@ -60,9 +60,6 @@ class DashboardController extends Controller
             'handle' => 'required|string|unique:channels,handle',
         ]);
 
-        $this->youtubeService->setApiKey(
-            Crypt::decryptString(Auth::user()->api_key)
-        );
         $channel = $this->youtubeService->getChannelByHandle($request->handle);
         if (!$channel || !isset($channel['title']) || !$channel['title']) {
             return redirect()->back()->with('status', 'チャンネルが存在しません。');
