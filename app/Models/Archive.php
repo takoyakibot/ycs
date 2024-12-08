@@ -10,6 +10,7 @@ class Archive extends Model
     use HasFactory;
 
     protected $fillable = [
+        'channel_id',
         'archive_id',
         'archive_name',
         'is_public',
