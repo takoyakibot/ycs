@@ -37,9 +37,9 @@ class YouTubeService
         // 検索結果が存在するかを確認
         if (count($response->getItems()) > 0) {
             $channel = $response->getItems()[0];
-            $channel_id = $channel['id']['channelId'];
             return [
                 'title' => $channel['snippet']['title'],
+                'channel_id' => $channel['id']['channelId'],
                 'thumbnail' => $channel['snippet']['thumbnails']['default']['url'],
             ];
         }
