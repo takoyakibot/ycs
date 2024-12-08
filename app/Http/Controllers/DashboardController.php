@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Channel;
+use App\Models\Archive;
 use App\Services\YouTubeService;
 use App\Services\ImageService;
 use Illuminate\Http\Request;
@@ -81,8 +82,16 @@ class DashboardController extends Controller
 
     public function manageChannel($id)
     {
-        $channel = Channel::findOrFail($id);
+        $channel = Channel::where('channel_id', $id)->firstOrFail();
         $archives = Archive::where('channel_id', $channel->channel_id)->get();
         return view('channels.manage', compact('channel', 'archives'));
+    }
+
+    public function updateAchives($id)
+    {
+
+        $channel = Channel::where('channel_id', $id)->firstOrFail();
+        $archives = Archive::where('channel_id', $channel->channel_id)->get();
+        return view('channels.update-achives', compact('channel', 'archives'));
     }
 }
