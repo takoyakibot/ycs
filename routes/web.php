@@ -24,7 +24,8 @@ Route::get('/{id}', [ChannelController::class, 'show'])
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
-    Route::post('/dashboard/api-key', [DashboardController::class, 'updateApiKey'])->name('dashboard.updateApiKey');
+    Route::put('/dashboard/api-key', [DashboardController::class, 'updateApiKey'])->name('dashboard.updateApiKey');
+    Route::post('/dashboard/api-key', [DashboardController::class, 'registerApiKey'])->name('dashboard.registerApiKey');
     Route::post('/dashboard/add-channel', [DashboardController::class, 'addChannel'])->name('dashboard.addChannel');
     Route::get('/dashboard/{id}', [DashboardController::class, 'manageChannel'])->name('dashboard.channel');
 });
@@ -35,4 +36,4 @@ Route::middleware('auth')->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
-require __DIR__.'/auth.php';
+require __DIR__ . '/auth.php';

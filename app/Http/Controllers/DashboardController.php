@@ -24,8 +24,16 @@ class DashboardController extends Controller
     {
         // ログインユーザーのAPIキーを取得
         $user = Auth::user();
-        $apiKey = $user->api_key ? Crypt::decryptString($user->api_key) : null;
+        $apiKey = $user->api_key ? "1" : ""; // 登録済みかどうかだけを送る
         $channels = Channel::all(); // 登録済みのチャンネル
+
+        return view('dashboard', compact('apiKey', 'channels'));
+    }
+
+    public function registerApiKey(Request $request)
+    {
+        $apiKey = "";
+        $channels = Channel::all();
 
         return view('dashboard', compact('apiKey', 'channels'));
     }
@@ -40,7 +48,7 @@ class DashboardController extends Controller
         $user = Auth::user();
         $user->update(['api_key' => Crypt::encryptString($request->api_key)]);
 
-        return redirect()->back()->with('status', 'APIキーを更新しました。');
+        return redirect()->route('dashboard')->with('status', 'APIキーを更新しました。');
     }
 
     public function addChannel(Request $request)
@@ -49,6 +57,9 @@ class DashboardController extends Controller
             'channel_id' => 'required|string|unique:channels,channel_id',
         ]);
 
+        $this->youtubeService->setApiKey(
+            Crypt::decryptString(Auth::user()->api_key)
+        );
         $channel = $this->youtubeService->getChannelByHandle($request->channel_id);
         if (!$channel || !isset($channel['title']) || !$channel['title']) {
             return redirect()->back()->with('status', 'チャンネルが存在しません。');
@@ -65,13 +76,13 @@ class DashboardController extends Controller
             'thumbnail' => $thumbnail,
         ]);
 
-        return redirect()->back()->with('status', 'チャンネルを登録しました。');
+        return redirect()->route('dashboard')->with('status', 'チャンネルを登録しました。');
     }
 
-    // public function manageChannel($id)
-    // {
-    //     $channel = Channel::findOrFail($id);
-    //     $archives = Archive::where('channel_id', $channel->channel_id)->get();
-    //     return view('channels.manage', compact('channel', 'archives'));
-    // }
+    public function manageChannel($id)
+    {
+        $channel = Channel::findOrFail($id);
+        $archives = Archive::where('channel_id', $channel->channel_id)->get();
+        return view('channels.manage', compact('channel', 'archives'));
+    }
 }
