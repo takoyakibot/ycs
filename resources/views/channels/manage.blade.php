@@ -23,7 +23,7 @@
                 <span>{{ $channel->name }}</span>
             </h2>
 
-            <form method="POST" action="{{ route('dashboard.updateApiKey') }}">
+            <form method="POST" action="{{ route('dashboard.updateAchives', ['id' => $channel->handle]) }}">
                 @csrf
                 <button type="submit">アーカイブ取得</button>
             </form>
