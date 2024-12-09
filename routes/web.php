@@ -28,7 +28,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/dashboard/api-key', [DashboardController::class, 'registerApiKey'])->name('dashboard.registerApiKey');
     Route::post('/dashboard/add-channel', [DashboardController::class, 'addChannel'])->name('dashboard.addChannel');
     Route::get('/dashboard/{id}', [DashboardController::class, 'manageChannel'])->name('dashboard.channel');
-    Route::post('/dashboard/{id}/update-achives', [DashboardController::class, 'updateAchives'])->name('dashboard.updateAchives');
+    Route::post('/dashboard/{id}', [DashboardController::class, 'updateAchives'])->name('dashboard.updateAchives');
 });
 
 Route::middleware('auth')->group(function () {
