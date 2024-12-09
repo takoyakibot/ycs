@@ -14,6 +14,7 @@ return new class extends Migration {
             $table->string('handle')->primary();
             $table->string('channel_id')->unique();
             $table->string('title');
+            $table->string('thumbnail')->nullable();
             $table->timestamps();
         });
     }

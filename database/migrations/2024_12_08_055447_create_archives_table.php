@@ -18,6 +18,8 @@ return new class extends Migration {
             $table->boolean('is_public')->default(true);
             $table->boolean('is_display')->default(false);
             $table->json('comments');
+            $table->date('published_at');
+            $table->date('comments_updated_at');
             $table->timestamps();
         });
     }

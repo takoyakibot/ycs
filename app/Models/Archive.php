@@ -13,9 +13,11 @@ class Archive extends Model
         'channel_id',
         'video_id',
         'title',
+        'thumbnail',
         'is_public',
         'is_display',
         'comments',
+        'last_updated',
     ];
 
     protected $hidden = ['channel_id'];
