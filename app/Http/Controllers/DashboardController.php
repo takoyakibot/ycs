@@ -65,16 +65,11 @@ class DashboardController extends Controller
             return redirect()->back()->with('status', 'チャンネルが存在しません。');
         }
 
-        $thumbnail = $this->imageService->downloadThumbnail($channel['thumbnail']);
-        if (!$thumbnail) {
-            return redirect()->back()->with('status', 'サムネイルの取得に失敗しました。');
-        }
-
         Channel::create([
             'handle' => $request->handle,
             'channel_id' => $channel['channel_id'],
             'title' => $channel['title'],
-            'thumbnail' => $thumbnail,
+            'thumbnail' => $channel['thumbnail'],
         ]);
 
         return redirect()->route('dashboard')->with('status', 'チャンネルを登録しました。');
