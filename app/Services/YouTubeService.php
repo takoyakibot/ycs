@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Carbon\Carbon;
 use Google_Client;
 use Google_Service_YouTube;
 use Illuminate\Support\Facades\Auth;
@@ -60,9 +61,9 @@ class YouTubeService
         $response = null;
         $archives = [];
         do {
-            $response = $this->youtube->playlistItems->listPlaylistItems('snippet,contentDetails', [
+            $response = $this->youtube->playlistItems->listPlaylistItems('snippet', [
                 'playlistId' => $playlist_id,
-                'maxResults' => 20,
+                'maxResults' => 2,
                 'pageToken' => $response ? $response->getNextPageToken() : "",
             ]);
 
@@ -72,13 +73,18 @@ class YouTubeService
 
                 $archives[] = [
                     'channel_id' => $channel_id,
-                    'video_id' => $item['contentDetails']['videoId'],
+                    'video_id' => $item['snippet']['resourceId']['videoId'],
                     'title' => $item['snippet']['title'],
+                    'thumbnail' => $item['snippet']['thumbnails']['default']['url'],
+                    'is_public' => true,
+                    'is_display' => true,
                     'comments' => $comments,
+                    'published_at' => Carbon::parse($item['snippet']['publishedAt'])->format('Y-m-d H:i:s'),
+                    'comments_updated_at' => today(),
                 ];
             }
             // TODO: テスト用にブレイクする
-            if (count($archives) >= 40) {
+            if (count($archives) >= 4) {
                 break;
             }
         } while (!empty($response->getNextPageToken()));

@@ -9,6 +9,7 @@ use App\Services\ImageService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
@@ -86,6 +87,14 @@ class DashboardController extends Controller
     {
         $channel = Channel::where('handle', $id)->firstOrFail();
         $archives = $this->youtubeService->getArchives($channel->channel_id);
+
+        DB::transaction(function () use ($channel, $archives) {
+            Archive::where('channel_id', $channel->channel_id)->delete();
+            foreach ($archives as $archive) {
+                Archive::create($archive);
+            }
+            // DB::table('archives')->insert($archives);
+        });
         // $archives = Archive::where('channel_id', $channel->channel_id)->get();
         return view('channels.manage', compact('channel', 'archives'));
     }
