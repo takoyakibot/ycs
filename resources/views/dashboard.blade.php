@@ -41,8 +41,8 @@
         <div class="p-2">
             <form method="POST" action="{{ route('dashboard.addChannel') }}">
                 @csrf
-                <label for="channel_id" class="text-gray-500">チャンネルID</label>
-                <input type="text" id="channel_id" name="channel_id" placeholder="7777777">
+                <label for="handle" class="text-gray-500">ハンドル</label>
+                <input type="text" id="handle" name="handle" placeholder="7777777">
                 <button type="submit">登録</button>
                 <span class="text-gray-500">(
                     https://youtube.com/@</span><span class="text-black font-bold">7777777</span><span
@@ -57,9 +57,9 @@
             <ul>
                 @foreach ($channels as $channel)
                     <li>
-                        <a href="{{ route('dashboard.channel', $channel->channel_id) }}">
-                            <img src="{{ $channel->thumbnail }}" alt="サムネイル">
-                            <span>{{ $channel->name }}</span>
+                        <a href="{{ route('dashboard.channel', $channel['handle']) }}">
+                            <img src="{{ $channel['thumbnail'] }}" alt="サムネイル">
+                            <span>{{ $channel['title'] }}</span>
                         </a>
                     </li>
                 @endforeach

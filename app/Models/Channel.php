@@ -9,5 +9,7 @@ class Channel extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['channel_id', 'name', 'thumbnail'];
+    protected $fillable = ['handle', 'channel_id', 'title', 'thumbnail'];
+
+    protected $hidden = ['channel_id'];
 }
