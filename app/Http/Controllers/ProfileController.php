@@ -18,8 +18,10 @@ class ProfileController extends Controller
      */
     public function edit(Request $request): View
     {
+        $user = $request->user();
+        $user->api_key = $user->api_key ? '1' : '';
         return view('profile.edit', [
-            'user' => $request->user(),
+            'user' => $user,
         ]);
     }
 
@@ -35,17 +37,17 @@ class ProfileController extends Controller
         }
 
         if ($request->user()->isDirty('api_key')) {
-            $old_user = User::where('id', $request->user()->id)->firstOrFail();
             // 削除の場合はnull
             if ($request->user()->api_key === '削除') {
                 $request->user()->api_key = null;
             } elseif ($request->user()->api_key) {
                 // 別の値が入力されていれば暗号化して更新
-                if ($request->user()->api_key !== $old_user->api_key) {
+                if ($request->user()->api_key !== '1') {
                     $request->user()->api_key = Crypt::encryptString($request->user()->api_key);
                 }
             } else {
                 // 空の場合は古い値のまま変更しない
+                $old_user = User::where('id', $request->user()->id)->firstOrFail();
                 $request->user()->api_key = $old_user->api_key;
             }
         }
