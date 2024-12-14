@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
 use App\Http\Requests\ProfileUpdateRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Redirect;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\View\View;
 
 class ProfileController extends Controller
@@ -30,6 +32,22 @@ class ProfileController extends Controller
 
         if ($request->user()->isDirty('email')) {
             $request->user()->email_verified_at = null;
+        }
+
+        if ($request->user()->isDirty('api_key')) {
+            $old_user = User::where('id', $request->user()->id)->firstOrFail();
+            // 削除の場合はnull
+            if ($request->user()->api_key === '削除') {
+                $request->user()->api_key = null;
+            } elseif ($request->user()->api_key) {
+                // 別の値が入力されていれば暗号化して更新
+                if ($request->user()->api_key !== $old_user->api_key) {
+                    $request->user()->api_key = Crypt::encryptString($request->user()->api_key);
+                }
+            } else {
+                // 空の場合は古い値のまま変更しない
+                $request->user()->api_key = $old_user->api_key;
+            }
         }
 
         $request->user()->save();

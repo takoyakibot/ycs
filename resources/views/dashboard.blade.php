@@ -17,26 +17,6 @@
             </div>
         @endif
 
-        <!-- APIキー -->
-        <div class="p-2">
-            @if ($apiKey == "1")
-                <form method="POST" action="{{ route('dashboard.registerApiKey') }}">
-                    @csrf
-                    <label for="api_key" class="text-gray-500">YouTube APIキー</label>
-                    <span>登録済み</span>
-                    <button type="submit">編集</button>
-                </form>
-            @else
-                <form method="POST" action="{{ route('dashboard.updateApiKey') }}">
-                    @csrf
-                    @method('PUT')
-                    <label for="api_key" class="text-gray-500">YouTube APIキー</label>
-                    <input type="text" id="api_key" name="api_key" class="w-[400px]" value="{{ $apiKey }}">
-                    <button type="submit">登録</button>
-                </form>
-            @endif
-        </div>
-
         <!-- チャンネル登録フォーム -->
         <div class="p-2">
             <form method="POST" action="{{ route('dashboard.addChannel') }}">
