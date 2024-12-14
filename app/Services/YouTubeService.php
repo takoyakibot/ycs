@@ -58,6 +58,7 @@ class YouTubeService
         $playlist_id = 'UU' . substr($channel_id, 2);
 
         // nextPageTokenが取得できなくなるまでループ
+        $maxResults = config('app.debug') ? 2 : 50;
         $response = null;
         $archives = [];
         do {
@@ -83,8 +84,7 @@ class YouTubeService
                     'comments_updated_at' => today(),
                 ];
             }
-            // TODO: テスト用にブレイクする
-            if (count($archives) >= 4) {
+            if (config('app.debug') && count($archives) >= 4) {
                 break;
             }
         } while (!empty($response->getNextPageToken()));
