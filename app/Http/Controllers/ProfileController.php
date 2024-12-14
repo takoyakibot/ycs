@@ -40,9 +40,7 @@ class ProfileController extends Controller
             if ($request->user()->api_key === '削除') {
                 $request->user()->api_key = null;
             } elseif ($request->user()->api_key) {
-                // 入力されていれば暗号化して更新
-                error_log('request: ' . $request->user()->api_key);
-                error_log('auth: ' . $old_user->api_key);
+                // 別の値が入力されていれば暗号化して更新
                 if ($request->user()->api_key !== $old_user->api_key) {
                     $request->user()->api_key = Crypt::encryptString($request->user()->api_key);
                 }
