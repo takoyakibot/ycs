@@ -24,35 +24,9 @@ class DashboardController extends Controller
 
     public function index()
     {
-        // ログインユーザーのAPIキーを取得
-        $user = Auth::user();
-        // 登録済みかどうかだけを送る
-        $apiKey = $user->api_key ? "1" : "";
         // $hiddenを有効化するために変換してから渡す
         $channels = Channel::all()->toArray();
-
-        return view('dashboard', compact('apiKey', 'channels'));
-    }
-
-    public function registerApiKey(Request $request)
-    {
-        $apiKey = "";
-        $channels = Channel::all();
-
-        return view('dashboard', compact('apiKey', 'channels'));
-    }
-
-    public function updateApiKey(Request $request)
-    {
-        $request->validate([
-            'api_key' => 'required|string',
-        ]);
-
-        // ログインユーザーのAPIキーを暗号化して更新
-        $user = Auth::user();
-        $user->update(['api_key' => Crypt::encryptString($request->api_key)]);
-
-        return redirect()->route('dashboard')->with('status', 'APIキーを更新しました。');
+        return view('dashboard', compact('channels'));
     }
 
     public function addChannel(Request $request)
