@@ -23,12 +23,12 @@ Route::get('/{id}', [ChannelController::class, 'show'])
     ->where('id', '[0-9]+');
 
 Route::middleware(['auth', 'verified'])->group(function () {
-    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
-    Route::put('/dashboard/api-key', [DashboardController::class, 'updateApiKey'])->name('dashboard.updateApiKey');
-    Route::post('/dashboard/api-key', [DashboardController::class, 'registerApiKey'])->name('dashboard.registerApiKey');
-    Route::post('/dashboard/add-channel', [DashboardController::class, 'addChannel'])->name('dashboard.addChannel');
-    Route::get('/dashboard/{id}', [DashboardController::class, 'manageChannel'])->name('dashboard.channel');
-    Route::post('/dashboard/{id}', [DashboardController::class, 'updateAchives'])->name('dashboard.updateAchives');
+    Route::get('/manage', [DashboardController::class, 'index'])->name('dashboard');
+    Route::put('/manage/api-key', [DashboardController::class, 'updateApiKey'])->name('dashboard.updateApiKey');
+    Route::post('/manage/api-key', [DashboardController::class, 'registerApiKey'])->name('dashboard.registerApiKey');
+    Route::post('/manage/add-channel', [DashboardController::class, 'addChannel'])->name('dashboard.addChannel');
+    Route::get('/manage/{id}', [DashboardController::class, 'manageChannel'])->name('dashboard.channel');
+    Route::post('/manage/{id}', [DashboardController::class, 'updateAchives'])->name('dashboard.updateAchives');
 });
 
 Route::middleware('auth')->group(function () {
