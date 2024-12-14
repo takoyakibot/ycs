@@ -3,11 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\Channel;
+use App\Models\Archive;
 use App\Services\YouTubeService;
 use App\Services\ImageService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
@@ -24,8 +26,10 @@ class DashboardController extends Controller
     {
         // ログインユーザーのAPIキーを取得
         $user = Auth::user();
-        $apiKey = $user->api_key ? "1" : ""; // 登録済みかどうかだけを送る
-        $channels = Channel::all(); // 登録済みのチャンネル
+        // 登録済みかどうかだけを送る
+        $apiKey = $user->api_key ? "1" : "";
+        // $hiddenを有効化するために変換してから渡す
+        $channels = Channel::all()->toArray();
 
         return view('dashboard', compact('apiKey', 'channels'));
     }
@@ -54,26 +58,19 @@ class DashboardController extends Controller
     public function addChannel(Request $request)
     {
         $request->validate([
-            'channel_id' => 'required|string|unique:channels,channel_id',
+            'handle' => 'required|string|unique:channels,handle',
         ]);
 
-        $this->youtubeService->setApiKey(
-            Crypt::decryptString(Auth::user()->api_key)
-        );
-        $channel = $this->youtubeService->getChannelByHandle($request->channel_id);
+        $channel = $this->youtubeService->getChannelByHandle($request->handle);
         if (!$channel || !isset($channel['title']) || !$channel['title']) {
             return redirect()->back()->with('status', 'チャンネルが存在しません。');
         }
 
-        $thumbnail = $this->imageService->downloadThumbnail($channel['thumbnail']);
-        if (!$thumbnail) {
-            return redirect()->back()->with('status', 'サムネイルの取得に失敗しました。');
-        }
-
         Channel::create([
-            'channel_id' => $request->channel_id,
-            'name' => $channel['title'],
-            'thumbnail' => $thumbnail,
+            'handle' => $request->handle,
+            'channel_id' => $channel['channel_id'],
+            'title' => $channel['title'],
+            'thumbnail' => $channel['thumbnail'],
         ]);
 
         return redirect()->route('dashboard')->with('status', 'チャンネルを登録しました。');
@@ -81,8 +78,24 @@ class DashboardController extends Controller
 
     public function manageChannel($id)
     {
-        $channel = Channel::findOrFail($id);
+        $channel = Channel::where('handle', $id)->firstOrFail();
         $archives = Archive::where('channel_id', $channel->channel_id)->get();
+        return view('channels.manage', compact('channel', 'archives'));
+    }
+
+    public function updateAchives($id)
+    {
+        $channel = Channel::where('handle', $id)->firstOrFail();
+        $archives = $this->youtubeService->getArchives($channel->channel_id);
+
+        DB::transaction(function () use ($channel, $archives) {
+            Archive::where('channel_id', $channel->channel_id)->delete();
+            foreach ($archives as $archive) {
+                Archive::create($archive);
+            }
+            // DB::table('archives')->insert($archives);
+        });
+        // $archives = Archive::where('channel_id', $channel->channel_id)->get();
         return view('channels.manage', compact('channel', 'archives'));
     }
 }

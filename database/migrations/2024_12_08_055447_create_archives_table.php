@@ -10,11 +10,16 @@ return new class extends Migration {
      */
     public function up(): void
     {
-        Schema::create('channels', function (Blueprint $table) {
-            $table->string('handle')->primary();
-            $table->string('channel_id')->unique();
+        Schema::create('archives', function (Blueprint $table) {
+            $table->string('video_id')->primary();
+            $table->string('channel_id');
             $table->string('title');
             $table->string('thumbnail')->nullable();
+            $table->boolean('is_public')->default(true);
+            $table->boolean('is_display')->default(false);
+            $table->json('comments');
+            $table->date('published_at');
+            $table->date('comments_updated_at');
             $table->timestamps();
         });
     }
@@ -24,6 +29,6 @@ return new class extends Migration {
      */
     public function down(): void
     {
-        Schema::dropIfExists('channels');
+        Schema::dropIfExists('archives');
     }
 };
