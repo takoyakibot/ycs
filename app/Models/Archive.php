@@ -22,7 +22,12 @@ class Archive extends Model
 
     protected $hidden = ['channel_id'];
 
-    protected $casts = [
-        'comments' => 'array',
-    ];
+    protected $primaryKey = 'video_id';
+    public $incrementing = false;
+    protected $keyType = 'string';
+
+    public function tsItems()
+    {
+        return $this->hasMany(TsItem::class, 'video_id', 'video_id');
+    }
 }
