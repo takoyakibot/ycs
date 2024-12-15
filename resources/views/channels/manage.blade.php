@@ -46,9 +46,10 @@
                         @foreach ($archive->tsItems()->get() as $ts_item)
                             <li>
                                 <a href="{{ url('https://youtube.com/watch?v=' . $archive['video_id'] . '&t=' . $ts_item['ts_num'] . 's') }}"
-                                    target="_blank">
-                                    {{ $ts_item['ts_text'] . ' ' . $ts_item['text'] }}
+                                    target="_blank" class="text-blue-500">
+                                    {{ $ts_item['ts_text'] }}
                                 </a>
+                                {{ $ts_item['text'] }}
                             </li>
                         @endforeach
                     </li>
