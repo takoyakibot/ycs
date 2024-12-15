@@ -62,10 +62,14 @@ class DashboardController extends Controller
 
         DB::transaction(function () use ($channel, $archives, $ts_items) {
             Archive::where('channel_id', $channel->channel_id)->delete();
-            DB::table('archives')->insert($archives);
-            DB::table('ts_items')->insert($ts_items);
+            if (!empty($archives)) {
+                DB::table('archives')->insert($archives);
+            }
+            if (!empty($ts_items)) {
+                DB::table('ts_items')->insert($ts_items);
+            }
         });
         // $archives = Archive::where('channel_id', $channel->channel_id)->get();
-        return view('channels.manage', compact('channel', 'archives'));
+        return view('channels.manage', compact('channel', 'archives', 'ts_items'));
     }
 }
