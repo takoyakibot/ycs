@@ -12,7 +12,7 @@ return new class extends Migration {
     {
         Schema::create('ts_items', function (Blueprint $table) {
             $table->id();
-            $table->string('archive_id');
+            $table->string('video_id', 11);
             // 1:description, 2:comment
             $table->enum('type', ['1', '2']);
             // HH:MM:SS or MM:SS
@@ -21,6 +21,9 @@ return new class extends Migration {
             $table->string('text');
             $table->boolean('is_display')->default(true);
             $table->timestamps();
+
+            $table->foreign('video_id')->references('video_id')->on('archives')
+                ->onDelete('cascade');
         });
     }
 

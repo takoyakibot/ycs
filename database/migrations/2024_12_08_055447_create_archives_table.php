@@ -11,7 +11,7 @@ return new class extends Migration {
     public function up(): void
     {
         Schema::create('archives', function (Blueprint $table) {
-            $table->string('video_id')->primary();
+            $table->string('video_id', 11)->primary();
             $table->string('channel_id');
             $table->string('title');
             $table->string('thumbnail')->nullable();
