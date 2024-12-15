@@ -69,8 +69,8 @@ class YouTubeService
             ]);
 
             foreach ($response->getItems() as $item) {
-                $comments = [];
-                $comments = $this->getTimeStampsFromText($item['snippet']['description']);
+                // $comments = [];
+                // $comments = $this->getTimeStampsFromText($item['snippet']['description']);
 
                 $archives[] = [
                     'channel_id' => $channel_id,
@@ -79,7 +79,7 @@ class YouTubeService
                     'thumbnail' => $item['snippet']['thumbnails']['default']['url'],
                     'is_public' => true,
                     'is_display' => true,
-                    'comments' => $comments,
+                    // 'comments' => $comments,
                     'published_at' => Carbon::parse($item['snippet']['publishedAt'])->format('Y-m-d H:i:s'),
                     'comments_updated_at' => today(),
                 ];
