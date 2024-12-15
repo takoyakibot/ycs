@@ -18,9 +18,12 @@
         @endif
 
         <div class="p-2">
-            <h2 class="text-gray-500">
-                <img src="{{ $channel->thumbnail }}" alt="サムネイル">
-                <span>{{ $channel->title }}</span>
+            <h2 class="text-gray-500 flex items-center justify-center gap-4">
+                <img src="{{ $channel->thumbnail }}" alt="アイコン" class="w-20 h-20 rounded-full">
+                <span class="text-lg font-bold text-black">{{ $channel->title }}</span>
+                <a href="{{ url('https://youtube.com/@' . $channel->handle) }}" target="_blank">
+                    Youtubeチャンネルはこちら
+                </a>
             </h2>
 
             <form method="POST" action="{{ route('dashboard.updateAchives', ['id' => $channel->handle]) }}">
@@ -34,11 +37,18 @@
             <ul>
                 @foreach ($archives as $archive)
                     <li>
-                        <img src="{{ $archive['thumbnail'] }}" alt="サムネイル">
-                        {{ $archive['video_id'] . ' ' . $archive['title'] }}
+                        <a href="{{ url('https://youtube.com/watch?v=' . $archive['video_id']) }}" target="_blank">
+                            <img src="{{ $archive['thumbnail'] }}" alt="サムネイル">
+                            {{ $archive['title'] }}
+                            {{ 'アップロード日: ' . $archive['published_at'] }}
+                        </a>
+                        {{ $archive['is_display'] }}
                         @foreach ($archive->tsItems()->get() as $ts_item)
                             <li>
-                                {{ $ts_item['ts_text'] . ' ' . $ts_item['text'] }}
+                                <a href="{{ url('https://youtube.com/watch?v=' . $archive['video_id'] . '&t=' . $ts_item['ts_num'] . 's') }}"
+                                    target="_blank">
+                                    {{ $ts_item['ts_text'] . ' ' . $ts_item['text'] }}
+                                </a>
                             </li>
                         @endforeach
                     </li>
