@@ -16,7 +16,6 @@ class Archive extends Model
         'thumbnail',
         'is_public',
         'is_display',
-        'comments',
         'published_at',
         'comments_updated_at',
     ];
