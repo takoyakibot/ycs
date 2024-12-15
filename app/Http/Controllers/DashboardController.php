@@ -58,18 +58,22 @@ class DashboardController extends Controller
     public function updateAchives($id)
     {
         $channel = Channel::where('handle', $id)->firstOrFail();
-        [$archives, $ts_items] = $this->youtubeService->getArchivesAndTsItems($channel->channel_id);
 
-        DB::transaction(function () use ($channel, $archives, $ts_items) {
+        DB::transaction(function () use ($channel) {
+            [$rtn_archives, $rtn_ts_items] = $this->youtubeService->getArchivesAndTsItems($channel->channel_id);
+
             Archive::where('channel_id', $channel->channel_id)->delete();
-            if (!empty($archives)) {
-                DB::table('archives')->insert($archives);
+            if (!empty($rtn_archives)) {
+                DB::table('archives')->insert($rtn_archives);
             }
-            if (!empty($ts_items)) {
-                DB::table('ts_items')->insert($ts_items);
+            if (!empty($rtn_ts_items)) {
+                DB::table('ts_items')->insert($rtn_ts_items);
             }
         });
-        // $archives = Archive::where('channel_id', $channel->channel_id)->get();
-        return view('channels.manage', compact('channel', 'archives', 'ts_items'));
+
+        $archives = Archive::with('tsItems')
+            ->where('channel_id', $channel->channel_id)
+            ->get();
+        return view('channels.manage', compact('channel', 'archives'));
     }
 }

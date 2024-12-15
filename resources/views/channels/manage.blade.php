@@ -1,7 +1,7 @@
 <x-app-layout>
     <x-slot name="header">
         <h2 class="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">
-            {{ __('チャンネル管理') }}
+            {{ __('アーカイブ管理') }}
         </h2>
     </x-slot>
 
@@ -25,7 +25,7 @@
 
             <form method="POST" action="{{ route('dashboard.updateAchives', ['id' => $channel->handle]) }}">
                 @csrf
-                <button type="submit">アーカイブ取得</button>
+                <x-primary-button>アーカイブ取得</x-primary-button>
             </form>
         </div>
 
@@ -34,9 +34,12 @@
             <ul>
                 @foreach ($archives as $archive)
                     <li>
+                        <img src="{{ $archive['thumbnail'] }}" alt="サムネイル">
                         {{ $archive['video_id'] . ' ' . $archive['title'] }}
-                        @foreach ($archive['comments'] as $comment)
-                            <li>{{ $comment['timestamp'] . ' ' . $comment['comment'] }}</li>
+                        @foreach ($archive->tsItems()->get() as $ts_item)
+                            <li>
+                                {{ $ts_item['ts_text'] . ' ' . $ts_item['text'] }}
+                            </li>
                         @endforeach
                     </li>
                 @endforeach
