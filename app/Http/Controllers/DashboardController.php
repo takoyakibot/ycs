@@ -58,7 +58,7 @@ class DashboardController extends Controller
     public function updateAchives($id)
     {
         $channel = Channel::where('handle', $id)->firstOrFail();
-        [$archives, $ts_items] = $this->youtubeService->getArchives($channel->channel_id);
+        [$archives, $ts_items] = $this->youtubeService->getArchivesAndTsItems($channel->channel_id);
 
         DB::transaction(function () use ($channel, $archives, $ts_items) {
             Archive::where('channel_id', $channel->channel_id)->delete();
