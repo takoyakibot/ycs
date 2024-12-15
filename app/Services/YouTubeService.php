@@ -61,6 +61,7 @@ class YouTubeService
         $maxResults = config('app.debug') ? 2 : 50;
         $response = null;
         $archives = [];
+        $ts_items = [];
         do {
             $response = $this->youtube->playlistItems->listPlaylistItems('snippet', [
                 'playlistId' => $playlist_id,
@@ -69,8 +70,14 @@ class YouTubeService
             ]);
 
             foreach ($response->getItems() as $item) {
-                // $comments = [];
-                // $comments = $this->getTimeStampsFromText($item['snippet']['description']);
+                $ts_items_tmp = $this->getTimeStampsFromText(
+                    $item['snippet']['resourceId']['videoId'],
+                    '1', // description
+                    $item['snippet']['description']
+                );
+                foreach ($ts_items_tmp as $ts_item_tmp) {
+                    $ts_items[] = $ts_item_tmp;
+                }
 
                 $archives[] = [
                     'channel_id' => $channel_id,
@@ -79,7 +86,6 @@ class YouTubeService
                     'thumbnail' => $item['snippet']['thumbnails']['default']['url'],
                     'is_public' => true,
                     'is_display' => true,
-                    // 'comments' => $comments,
                     'published_at' => Carbon::parse($item['snippet']['publishedAt'])->format('Y-m-d H:i:s'),
                     'comments_updated_at' => today(),
                 ];
@@ -89,10 +95,10 @@ class YouTubeService
             }
         } while (!empty($response->getNextPageToken()));
 
-        return $archives;
+        return [$archives, $ts_items];
     }
 
-    private function getTimeStampsFromText($description): array
+    private function getTimeStampsFromText($video_id, $type, $description): array
     {
         // 正規表現でタイムスタンプを抽出 (MM:SS または HH:MM:SS)
         $pattern = '/\b(\d{1,2}:\d{2}(?::\d{2})?)\b/';
@@ -107,14 +113,17 @@ class YouTubeService
 
                 // 結果に追加
                 $results[] = [
-                    'timestamp' => $timestamp,
-                    'seconds' => $this->timestampToSeconds($timestamp),
-                    'comment' => $comment
+                    'video_id' => $video_id,
+                    'type' => $type,
+                    'ts_text' => $timestamp,
+                    'ts_num' => $this->timestampToSeconds($timestamp),
+                    'text' => $comment,
                 ];
             }
         }
         return $results;
     }
+
     private function timestampToSeconds($timestamp): int
     {
         $parts = explode(':', $timestamp);
