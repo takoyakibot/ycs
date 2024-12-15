@@ -7,8 +7,6 @@ use App\Models\Archive;
 use App\Services\YouTubeService;
 use App\Services\ImageService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
@@ -60,14 +58,12 @@ class DashboardController extends Controller
     public function updateAchives($id)
     {
         $channel = Channel::where('handle', $id)->firstOrFail();
-        $archives = $this->youtubeService->getArchives($channel->channel_id);
+        [$archives, $ts_items] = $this->youtubeService->getArchives($channel->channel_id);
 
-        DB::transaction(function () use ($channel, $archives) {
+        DB::transaction(function () use ($channel, $archives, $ts_items) {
             Archive::where('channel_id', $channel->channel_id)->delete();
-            foreach ($archives as $archive) {
-                Archive::create($archive);
-            }
-            // DB::table('archives')->insert($archives);
+            DB::table('archives')->insert($archives);
+            DB::table('ts_items')->insert($ts_items);
         });
         // $archives = Archive::where('channel_id', $channel->channel_id)->get();
         return view('channels.manage', compact('channel', 'archives'));
