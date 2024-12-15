@@ -64,10 +64,7 @@ class DashboardController extends Controller
 
         DB::transaction(function () use ($channel, $archives) {
             Archive::where('channel_id', $channel->channel_id)->delete();
-            foreach ($archives as $archive) {
-                Archive::create($archive);
-            }
-            // DB::table('archives')->insert($archives);
+            DB::table('archives')->insert($archives);
         });
         // $archives = Archive::where('channel_id', $channel->channel_id)->get();
         return view('channels.manage', compact('channel', 'archives'));
