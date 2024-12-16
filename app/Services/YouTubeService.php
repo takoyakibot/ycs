@@ -50,7 +50,7 @@ class YouTubeService
         return null; // 該当するチャンネルが見つからない場合
     }
 
-    public function getArchives($channel_id)
+    public function getArchivesAndTsItems($channel_id)
     {
         $this->setApiKey();
 
