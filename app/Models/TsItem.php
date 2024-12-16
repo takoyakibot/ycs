@@ -16,4 +16,9 @@ class TsItem extends Model
         'ts_num',
         'text',
     ];
+
+    public function archive()
+    {
+        return $this->belongsTo(Archive::class, 'video_id', 'video_id');
+    }
 }

@@ -1,7 +1,7 @@
 <x-app-layout>
     <x-slot name="header">
         <h2 class="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">
-            {{ __('チャンネル管理') }}
+            {{ __('アーカイブ管理') }}
         </h2>
     </x-slot>
 
@@ -18,14 +18,17 @@
         @endif
 
         <div class="p-2">
-            <h2 class="text-gray-500">
-                <img src="{{ $channel->thumbnail }}" alt="サムネイル">
-                <span>{{ $channel->title }}</span>
+            <h2 class="text-gray-500 flex items-center justify-center gap-4">
+                <img src="{{ $channel->thumbnail }}" alt="アイコン" class="w-20 h-20 rounded-full">
+                <span class="text-lg font-bold text-black">{{ $channel->title }}</span>
+                <a href="{{ url('https://youtube.com/@' . $channel->handle) }}" target="_blank">
+                    Youtubeチャンネルはこちら
+                </a>
             </h2>
 
             <form method="POST" action="{{ route('dashboard.updateAchives', ['id' => $channel->handle]) }}">
                 @csrf
-                <button type="submit">アーカイブ取得</button>
+                <x-primary-button>アーカイブ取得</x-primary-button>
             </form>
         </div>
 
@@ -34,9 +37,20 @@
             <ul>
                 @foreach ($archives as $archive)
                     <li>
-                        {{ $archive['video_id'] . ' ' . $archive['title'] }}
-                        @foreach ($archive['comments'] as $comment)
-                            <li>{{ $comment['timestamp'] . ' ' . $comment['comment'] }}</li>
+                        <a href="{{ url('https://youtube.com/watch?v=' . $archive['video_id']) }}" target="_blank">
+                            <img src="{{ $archive['thumbnail'] }}" alt="サムネイル">
+                            {{ $archive['title'] }}
+                            {{ 'アップロード日: ' . $archive['published_at'] }}
+                        </a>
+                        {{ $archive['is_display'] }}
+                        @foreach ($archive->tsItems()->get() as $ts_item)
+                            <li>
+                                <a href="{{ url('https://youtube.com/watch?v=' . $archive['video_id'] . '&t=' . $ts_item['ts_num'] . 's') }}"
+                                    target="_blank" class="text-blue-500">
+                                    {{ $ts_item['ts_text'] }}
+                                </a>
+                                {{ $ts_item['text'] }}
+                            </li>
                         @endforeach
                     </li>
                 @endforeach

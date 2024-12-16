@@ -6,13 +6,15 @@
     </x-slot>
 
     <div class="px-6 py-12">
-        {{ session('status') }}
         @if ($errors->any())
             <div class="alert alert-danger">
                 <ul>
                     @foreach ($errors->all() as $error)
                         <li>{{ $error }}</li>
                     @endforeach
+                    @if (session('status'))
+                        <li>{{ session('status') }}</li>
+                    @endif
                 </ul>
             </div>
         @endif
@@ -21,13 +23,19 @@
         <div class="p-2">
             <form method="POST" action="{{ route('dashboard.addChannel') }}">
                 @csrf
-                <label for="handle" class="text-gray-500">ハンドル</label>
-                <input type="text" id="handle" name="handle" placeholder="7777777">
-                <button type="submit">登録</button>
-                <span class="text-gray-500">(
-                    https://youtube.com/@</span><span class="text-black font-bold">7777777</span><span
-                    class="text-gray-500">
-                    )</span>
+                <x-input-label for="handle" :value="__('handle')" class="mr-2" />
+                <div class="flex items-center gap-2">
+                    <x-text-input id="handle" name="handle" type="text" class="mt-1 block w-[200px]" required autofocus
+                        autocomplete="handle" placeholder="7777777" />
+                    <x-primary-button class="mt-1">登録</x-primary-button>
+                    <div class="gap-0">
+                        <span class="text-gray-500 mt-1">(
+                            https://youtube.com/@</span><span class="text-black font-bold mt-1">7777777</span><span
+                            class="text-gray-500 mt-1">
+                            )
+                        </span>
+                    </div>
+                </div>
             </form>
         </div>
 
@@ -38,7 +46,7 @@
                 @foreach ($channels as $channel)
                     <li>
                         <a href="{{ route('dashboard.channel', $channel['handle']) }}">
-                            <img src="{{ $channel['thumbnail'] }}" alt="サムネイル">
+                            <img src="{{ $channel['thumbnail'] }}" alt="アイコン">
                             <span>{{ $channel['title'] }}</span>
                         </a>
                     </li>
