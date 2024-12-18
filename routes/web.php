@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-Route::get('/', [ChannelController::class, 'index']);
+Route::get('/', [ChannelController::class, 'index'])->name('top');
 
 Route::get('/{id}', [ChannelController::class, 'show'])
     ->name('channels.show')
