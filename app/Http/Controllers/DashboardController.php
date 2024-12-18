@@ -52,7 +52,7 @@ class DashboardController extends Controller
     {
         $channel = Channel::where('handle', $id)->firstOrFail();
         $archives = Archive::where('channel_id', $channel->channel_id)->get();
-        return view('channels.manage', compact('channel', 'archives'));
+        return view('manage.archives', compact('channel', 'archives'));
     }
 
     public function updateAchives($id)
@@ -74,6 +74,6 @@ class DashboardController extends Controller
         $archives = Archive::with('tsItems')
             ->where('channel_id', $channel->channel_id)
             ->get();
-        return view('channels.manage', compact('channel', 'archives'));
+        return view('manage.archives', compact('channel', 'archives'));
     }
 }
