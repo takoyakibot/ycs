@@ -12,13 +12,15 @@
 
                 <!-- Navigation Links -->
                 <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
+                    <x-nav-link :href="route('top')">
+                    {{ __('タイムスタンプ検索したい') }}
+                    </x-nav-link>
+                    <x-nav-link :href="route('top')" :active="request()->routeIs('top')">
+                        {{ __('チャンネル一覧') }}
+                    </x-nav-link>
                     @if (Auth::check())
                         <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
                             {{ __('チャンネル管理') }}
-                        </x-nav-link>
-                    @else
-                        <x-nav-link :href="route('top')">
-                            {{ __('タイムスタンプ検索したい') }}
                         </x-nav-link>
                     @endif
                 </div>
