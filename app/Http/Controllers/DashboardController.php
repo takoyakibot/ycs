@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Channel;
 use App\Models\Archive;
-use App\Services\YouTubeService;
+use App\Models\Channel;
 use App\Services\ImageService;
+use App\Services\YouTubeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -24,7 +24,7 @@ class DashboardController extends Controller
     {
         // $hiddenを有効化するために変換してから渡す
         $channels = Channel::all()->toArray();
-        return view('dashboard', compact('channels'));
+        return view('manage.channels', compact('channels'));
     }
 
     public function addChannel(Request $request)
