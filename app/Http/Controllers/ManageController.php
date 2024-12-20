@@ -2,14 +2,14 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Channel;
 use App\Models\Archive;
-use App\Services\YouTubeService;
+use App\Models\Channel;
 use App\Services\ImageService;
+use App\Services\YouTubeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
-class DashboardController extends Controller
+class ManageController extends Controller
 {
     protected $youtubeService;
     protected $imageService;
@@ -24,7 +24,7 @@ class DashboardController extends Controller
     {
         // $hiddenを有効化するために変換してから渡す
         $channels = Channel::all()->toArray();
-        return view('dashboard', compact('channels'));
+        return view('manage.channels', compact('channels'));
     }
 
     public function addChannel(Request $request)
@@ -45,14 +45,14 @@ class DashboardController extends Controller
             'thumbnail' => $channel['thumbnail'],
         ]);
 
-        return redirect()->route('dashboard')->with('status', 'チャンネルを登録しました。');
+        return redirect()->route('manage')->with('status', 'チャンネルを登録しました。');
     }
 
     public function manageChannel($id)
     {
         $channel = Channel::where('handle', $id)->firstOrFail();
         $archives = Archive::where('channel_id', $channel->channel_id)->get();
-        return view('channels.manage', compact('channel', 'archives'));
+        return view('manage.archives', compact('channel', 'archives'));
     }
 
     public function updateAchives($id)
@@ -74,6 +74,6 @@ class DashboardController extends Controller
         $archives = Archive::with('tsItems')
             ->where('channel_id', $channel->channel_id)
             ->get();
-        return view('channels.manage', compact('channel', 'archives'));
+        return view('manage.archives', compact('channel', 'archives'));
     }
 }
