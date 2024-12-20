@@ -26,7 +26,7 @@
                 </a>
             </h2>
 
-            <form method="POST" action="{{ route('dashboard.updateAchives', ['id' => $channel->handle]) }}">
+            <form method="POST" action="{{ route('manage.updateAchives', ['id' => $channel->handle]) }}">
                 @csrf
                 <x-primary-button>アーカイブ取得</x-primary-button>
             </form>
