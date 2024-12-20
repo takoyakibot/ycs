@@ -9,7 +9,7 @@ use App\Services\YouTubeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
-class DashboardController extends Controller
+class ManageController extends Controller
 {
     protected $youtubeService;
     protected $imageService;
@@ -45,7 +45,7 @@ class DashboardController extends Controller
             'thumbnail' => $channel['thumbnail'],
         ]);
 
-        return redirect()->route('dashboard')->with('status', 'チャンネルを登録しました。');
+        return redirect()->route('manage')->with('status', 'チャンネルを登録しました。');
     }
 
     public function manageChannel($id)

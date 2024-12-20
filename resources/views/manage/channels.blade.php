@@ -21,7 +21,7 @@
 
         <!-- チャンネル登録フォーム -->
         <div class="p-2">
-            <form method="POST" action="{{ route('dashboard.addChannel') }}">
+            <form method="POST" action="{{ route('manage.addChannel') }}">
                 @csrf
                 <x-input-label for="handle" :value="__('handle')" class="mr-2" />
                 <div class="flex items-center gap-2">
@@ -45,7 +45,7 @@
             <ul>
                 @foreach ($channels as $channel)
                     <li>
-                        <a href="{{ route('dashboard.channel', $channel['handle']) }}">
+                        <a href="{{ route('manage.channel', $channel['handle']) }}">
                             <img src="{{ $channel['thumbnail'] }}" alt="アイコン">
                             <span>{{ $channel['title'] }}</span>
                         </a>
