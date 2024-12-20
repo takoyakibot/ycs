@@ -1,8 +1,8 @@
 <?php
 
-use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ChannelController;
-use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ManageController;
+use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -14,19 +14,15 @@ use Illuminate\Support\Facades\Route;
 | routes are loaded by the RouteServiceProvider and all of them will
 | be assigned to the "web" middleware group. Make something great!
 |
-*/
+ */
 
-Route::get('/', [ChannelController::class, 'index']);
-
-Route::get('/{id}', [ChannelController::class, 'show'])
-    ->name('channels.show')
-    ->where('id', '[0-9]+');
+Route::get('/', [ChannelController::class, 'index'])->name('top');
 
 Route::middleware(['auth', 'verified'])->group(function () {
-    Route::get('/manage', [DashboardController::class, 'index'])->name('dashboard');
-    Route::post('/manage/add-channel', [DashboardController::class, 'addChannel'])->name('dashboard.addChannel');
-    Route::get('/manage/{id}', [DashboardController::class, 'manageChannel'])->name('dashboard.channel');
-    Route::post('/manage/{id}', [DashboardController::class, 'updateAchives'])->name('dashboard.updateAchives');
+    Route::get('/manage', [ManageController::class, 'index'])->name('manage');
+    Route::post('/manage/add-channel', [ManageController::class, 'addChannel'])->name('manage.addChannel');
+    Route::get('/manage/{id}', [ManageController::class, 'manageChannel'])->name('manage.channel');
+    Route::post('/manage/{id}', [ManageController::class, 'updateAchives'])->name('manage.updateAchives');
 });
 
 Route::middleware('auth')->group(function () {
@@ -34,5 +30,8 @@ Route::middleware('auth')->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
+
+Route::get('/{id}', [ChannelController::class, 'show'])
+    ->name('channels.show');
 
 require __DIR__ . '/auth.php';
