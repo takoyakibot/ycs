@@ -18,10 +18,6 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/', [ChannelController::class, 'index'])->name('top');
 
-Route::get('/{id}', [ChannelController::class, 'show'])
-    ->name('channels.show')
-    ->where('id', '[0-9]+');
-
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/manage', [ManageController::class, 'index'])->name('manage');
     Route::post('/manage/add-channel', [ManageController::class, 'addChannel'])->name('manage.addChannel');
@@ -34,5 +30,8 @@ Route::middleware('auth')->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
+
+Route::get('/{id}', [ChannelController::class, 'show'])
+    ->name('channels.show');
 
 require __DIR__ . '/auth.php';
