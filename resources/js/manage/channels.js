@@ -22,6 +22,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 });
                 resultsContainer.innerHTML = html;
+
+                // 入力したハンドルをクリア
+                document.getElementById('handle').value = '';
             })
             .catch(function (error) {
                 console.error("Error fetching channels:", error);
