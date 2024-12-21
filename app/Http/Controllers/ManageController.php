@@ -6,6 +6,7 @@ use App\Models\Archive;
 use App\Models\Channel;
 use App\Services\ImageService;
 use App\Services\YouTubeService;
+use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -39,9 +40,14 @@ class ManageController extends Controller
             'handle' => 'required|string|unique:channels,handle',
         ]);
 
-        $channel = $this->youtubeService->getChannelByHandle($request->handle);
+        try {
+            $channel = $this->youtubeService->getChannelByHandle($request->handle);
+        } catch (Exception $e) {
+            error_log($e->getMessage());
+            throw new Exception("youtubeとの接続でエラーが発生しました");
+        }
         if (!$channel || !isset($channel['title']) || !$channel['title']) {
-            return redirect()->back()->with('status', 'チャンネルが存在しません。');
+            throw new Exception("チャンネルが存在しません");
         }
 
         Channel::create([
@@ -51,7 +57,7 @@ class ManageController extends Controller
             'thumbnail' => $channel['thumbnail'],
         ]);
 
-        return redirect()->route('manage')->with('status', 'チャンネルを登録しました。');
+        return response()->json("");
     }
 
     public function manageChannel($id)
