@@ -32,7 +32,7 @@ class ManageController extends Controller
     {
         $api_key_flg = Auth::user()->api_key ? '1' : '';
         $channel = Channel::getByID($id);
-        return view('manage.archives', compact('api_key_flg', 'channel'));
+        return view('manage.show', compact('api_key_flg', 'channel'));
     }
 
     public function fetchChannel(Request $request)
@@ -71,7 +71,7 @@ class ManageController extends Controller
     {
         $channel = Channel::where('handle', $id)->firstOrFail();
         $archives = Archive::where('channel_id', $channel->channel_id)->get();
-        return view('manage.archives', compact('channel', 'archives'));
+        return view('manage.show', compact('channel', 'archives'));
     }
 
     public function updateAchives($id)
@@ -93,6 +93,6 @@ class ManageController extends Controller
         $archives = Archive::with('tsItems')
             ->where('channel_id', $channel->channel_id)
             ->get();
-        return view('manage.archives', compact('channel', 'archives'));
+        return view('manage.show', compact('channel', 'archives'));
     }
 }
