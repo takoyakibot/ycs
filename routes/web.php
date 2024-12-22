@@ -16,13 +16,12 @@ use Illuminate\Support\Facades\Route;
 |
  */
 
-Route::get('/', [ChannelController::class, 'index'])->name('top');
-
 Route::middleware(['auth', 'verified'])->group(function () {
-    Route::get('/manage', [ManageController::class, 'index'])->name('manage');
-    Route::post('/manage/add-channel', [ManageController::class, 'addChannel'])->name('manage.addChannel');
-    Route::get('/manage/{id}', [ManageController::class, 'manageChannel'])->name('manage.channel');
-    Route::post('/manage/{id}', [ManageController::class, 'updateAchives'])->name('manage.updateAchives');
+    Route::get('/channels/manage', [ManageController::class, 'index'])->name('manage');
+    Route::get('/channels/manage/{id}', [ManageController::class, 'manageChannel'])->name('manage.channel');
+    Route::post('/channels/manage/{id}', [ManageController::class, 'updateAchives'])->name('manage.updateAchives');
+    Route::get('api/channels', [ManageController::class, 'fetchChannel'])->name('manage.fetchChannel');
+    Route::post('api/channels', [ManageController::class, 'addChannel'])->name('manage.addChannel');
 });
 
 Route::middleware('auth')->group(function () {
@@ -31,7 +30,9 @@ Route::middleware('auth')->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
-Route::get('/{id}', [ChannelController::class, 'show'])
+Route::get('/', [ChannelController::class, 'index'])->name('top');
+Route::get('/channels', [ChannelController::class, 'index'])->name('channels.index');
+Route::get('/channels/{id}', [ChannelController::class, 'channels.show'])
     ->name('channels.show');
 
 require __DIR__ . '/auth.php';
