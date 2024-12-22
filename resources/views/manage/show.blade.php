@@ -27,7 +27,6 @@
             </h2>
 
             <form id="archiveRegisterForm">
-                @csrf
                 <div class="flex items-center gap-2">
                     <x-primary-button id="registerButton" type="button" class="mt-1">アーカイブ取得</x-primary-button>
                 </div>
@@ -39,6 +38,7 @@
         <div class="p-2">
             <h3 class="text-gray-500">アーカイブ一覧</h3>
             <div id="archives"></div>
+            @if (false)
             <ul>
                 @foreach ($archives as $archive)
                     <li>
@@ -60,6 +60,7 @@
                     </li>
                 @endforeach
             </ul>
+            @endif
         </div>
     </div>
 </x-app-layout>
