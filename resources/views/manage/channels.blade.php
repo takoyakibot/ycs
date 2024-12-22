@@ -33,7 +33,7 @@
             <!-- チャンネル一覧 -->
             <div class="p-2">
                 <h2 class="text-gray-500">登録チャンネル</h2>
-                <div id="results"></div>
+                <div id="channels"></div>
             </div>
         @else
             <div>

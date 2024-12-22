@@ -25,7 +25,14 @@ class ManageController extends Controller
     public function index()
     {
         $api_key_flg = Auth::user()->api_key ? '1' : '';
-        return view('manage.channels', compact('api_key_flg'));
+        return view('manage.index', compact('api_key_flg'));
+    }
+
+    public function show($id)
+    {
+        $api_key_flg = Auth::user()->api_key ? '1' : '';
+        $channel = Channel::getByID($id);
+        return view('manage.archives', compact('api_key_flg', 'channel'));
     }
 
     public function fetchChannel(Request $request)
@@ -57,7 +64,7 @@ class ManageController extends Controller
             'thumbnail' => $channel['thumbnail'],
         ]);
 
-        return response()->json("");
+        return response()->json("チャンネルを登録しました");
     }
 
     public function manageChannel($id)

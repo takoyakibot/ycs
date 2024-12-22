@@ -26,14 +26,19 @@
                 </a>
             </h2>
 
-            <form method="POST" action="{{ route('manage.updateAchives', ['id' => $channel->handle]) }}">
+            <form id="archiveRegisterForm">
                 @csrf
-                <x-primary-button>アーカイブ取得</x-primary-button>
+                <div class="flex items-center gap-2">
+                    <x-primary-button id="registerButton" type="button" class="mt-1">アーカイブ取得</x-primary-button>
+                </div>
+                <!-- エラーメッセージ表示 -->
+                <div id="errorMessage" class="text-red-500 mt-2"></div>
             </form>
         </div>
 
         <div class="p-2">
             <h3 class="text-gray-500">アーカイブ一覧</h3>
+            <div id="archives"></div>
             <ul>
                 @foreach ($archives as $archive)
                     <li>

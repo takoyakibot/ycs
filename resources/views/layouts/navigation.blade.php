@@ -5,7 +5,7 @@
             <div class="flex">
                 <!-- Logo -->
                 <div class="shrink-0 flex items-center">
-                    <a href="{{ route('manage') }}">
+                    <a href="{{ route('top') }}">
                         <x-application-logo class="block h-9 w-auto fill-current text-gray-800 dark:text-gray-200" />
                     </a>
                 </div>
@@ -19,7 +19,7 @@
                         {{ __('チャンネル一覧') }}
                     </x-nav-link>
                     @if (Auth::check())
-                        <x-nav-link :href="route('manage')" :active="request()->routeIs('manage')">
+                        <x-nav-link :href="route('manage.index')" :active="request()->routeIs('manage.index')">
                             {{ __('チャンネル管理') }}
                         </x-nav-link>
                     @endif
@@ -83,7 +83,7 @@
     <div :class="{'block': open, 'hidden': ! open}" class="hidden sm:hidden">
         @if (Auth::check())
             <div class="pt-2 pb-3 space-y-1">
-                <x-responsive-nav-link :href="route('manage')" :active="request()->routeIs('manage')">
+                <x-responsive-nav-link :href="route('manage.index')" :active="request()->routeIs('manage.index')">
                     {{ __('チャンネル管理') }}
                 </x-responsive-nav-link>
             </div>
