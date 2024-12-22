@@ -93,7 +93,7 @@ class YouTubeService
             if (config('app.debug') && count($archives) >= 4) {
                 break;
             }
-        } while (!empty($response->getNextPageToken()));
+        } while ($response->getNextPageToken());
 
         return [$archives, $ts_items];
     }
