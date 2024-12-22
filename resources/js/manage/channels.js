@@ -15,9 +15,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 channels.forEach(channel => {
                     html += `
                         <div class="card border rounded shadow p-4 mb-4">
-                            <a href="manage/${encodeURIComponent(channel.handle)}">
-                                <img src="${escapeHTML(channel.thumbnail)}" alt="アイコン" class="w-20 h-20 rounded-full" />
-                                <span>${escapeHTML(channel.title)}</span>
+                            <a href="manage/${encodeURIComponent(channel.handle || '')}">
+                                <img src="${escapeHTML(channel.thumbnail || '')}" alt="アイコン" class="w-20 h-20 rounded-full" />
+                                <span>${escapeHTML(channel.title || '未設定')}</span>
                             </a>
                         </div>
                     `;
