@@ -35,17 +35,19 @@ document.addEventListener('DOMContentLoaded', function () {
                             <div class="flex-grow sm:w-2/3">
                     `;
 
-                    archive.ts_items.forEach(ts_item => {
-                        html += `
-                                <div class="text-sm text-gray-700">
-                                    <a href="https://youtube.com/watch?v=${encodeURIComponent(archive.video_id)}&t=${encodeURIComponent(ts_item.ts_num)}s"
-                                        target="_blank" class="text-blue-500 tabular-nums hover:underline">
-                                        ${ts_item.ts_text}
-                                    </a>
-                                    <span class="ml-2">${escapeHTML(ts_item.text)}</span>
-                                </div>
-                        `;
-                    });
+                    if (archive.ts_items) {
+                        archive.ts_items.forEach(ts_item => {
+                            html += `
+                                    <div class="text-sm text-gray-700">
+                                        <a href="https://youtube.com/watch?v=${encodeURIComponent(archive.video_id)}&t=${encodeURIComponent(ts_item.ts_num)}s"
+                                            target="_blank" class="text-blue-500 tabular-nums hover:underline">
+                                            ${ts_item.ts_text}
+                                        </a>
+                                        <span class="ml-2">${escapeHTML(ts_item.text)}</span>
+                                    </div>
+                            `;
+                        });
+                    }
 
                     html += `
                             </div>
