@@ -28,6 +28,7 @@
 
             <form id="archiveRegisterForm">
                 <div class="flex items-center gap-2">
+                    <x-text-input type="hidden" id="handle" name="handle" value="{{ $crypt_handle }}" />
                     <x-primary-button id="registerButton" type="button" class="mt-1">アーカイブ取得</x-primary-button>
                 </div>
                 <!-- エラーメッセージ表示 -->
@@ -38,29 +39,8 @@
         <div class="p-2">
             <h3 class="text-gray-500">アーカイブ一覧</h3>
             <div id="archives"></div>
-            @if (false)
-            <ul>
-                @foreach ($archives as $archive)
-                    <li>
-                        <a href="{{ url('https://youtube.com/watch?v=' . $archive['video_id']) }}" target="_blank">
-                            <img src="{{ $archive['thumbnail'] }}" alt="サムネイル">
-                            {{ $archive['title'] }}
-                            {{ 'アップロード日: ' . $archive['published_at'] }}
-                        </a>
-                        {{ $archive['is_display'] }}
-                        @foreach ($archive->tsItems()->get() as $ts_item)
-                            <li>
-                                <a href="{{ url('https://youtube.com/watch?v=' . $archive['video_id'] . '&t=' . $ts_item['ts_num'] . 's') }}"
-                                    target="_blank" class="text-blue-500">
-                                    {{ $ts_item['ts_text'] }}
-                                </a>
-                                {{ $ts_item['text'] }}
-                            </li>
-                        @endforeach
-                    </li>
-                @endforeach
-            </ul>
-            @endif
         </div>
     </div>
 </x-app-layout>
+
+@vite('resources/js/manage/archives.js')

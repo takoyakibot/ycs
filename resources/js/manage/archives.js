@@ -5,20 +5,43 @@ document.addEventListener('DOMContentLoaded', function () {
     const registerButton = document.getElementById('registerButton');
     const resultsContainer = document.getElementById('archives');
     const errorMessage = document.getElementById('errorMessage');
+    const handle = document.getElementById('handle');
 
     // アーカイブ一覧の取得処理
     function fetchArchives() {
-        axios.get('/api/archives')
+        axios.get('/api/channels/' + handle.value)
             .then(function (response) {
                 const archives = response.data;
                 let html = '';
+
                 archives.forEach(archive => {
                     html += `
                         <div class="card border rounded shadow p-4 mb-4">
-                            <a href="https://youtube.com/watch?v=${encodeURIComponent(archive.video_id)}" target="_blank">
-                                <img src="${escapeHTML(archive.thumbnail)}" alt="サムネイル" class="" />
-                            </a>
-                            <span>${escapeHTML(archive.title)}</span>
+                            <div>
+                                <div>
+                                    <a href="https://youtube.com/watch?v=${encodeURIComponent(archive.video_id)}" target="_blank">
+                                        <img src="${escapeHTML(archive.thumbnail)}" alt="サムネイル" class="" />
+                                    </a>
+                                </div>
+                                <div>${escapeHTML(archive.title)}</div>
+                                <div>アップロード日: ${new Date(archive.published_at).toLocaleString()}</div>
+                            </div>
+                            <div>
+                    `;
+
+                    archive.ts_items.forEach(ts_item => {
+                        html += `
+                                <div>
+                                    <a href="https://youtube.com/watch?v=${encodeURIComponent(archive.video_id)}&t=${encodeURIComponent(ts_item.ts_num)}s"
+                                        target="_blank" class="text-blue-500 tabular-nums">
+                                        ${ts_item.ts_text}
+                                    </a> ${ts_item.text} 
+                                </div>
+                        `;
+                    });
+
+                    html += `
+                            </div>
                         </div>
                     `;
                 });
