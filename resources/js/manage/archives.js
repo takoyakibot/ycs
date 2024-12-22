@@ -16,26 +16,33 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 archives.forEach(archive => {
                     html += `
-                        <div class="card border rounded shadow p-4 mb-4">
-                            <div>
-                                <div>
+                        <div class="flex flex-col sm:flex-row w-[100%] max-w-5xl border rounded-lg shadow-lg p-4 gap-4 mb-6 bg-white">
+                            <div class="flex flex-col flex-shrink-0 sm:w-1/3">
+                                <div class="flex-col">
                                     <a href="https://youtube.com/watch?v=${encodeURIComponent(archive.video_id)}" target="_blank">
-                                        <img src="${escapeHTML(archive.thumbnail)}" alt="サムネイル" class="" />
+                                        <img src="${escapeHTML(archive.thumbnail)}" alt="サムネイル" class="h-auto rounded-md object-cover" />
                                     </a>
                                 </div>
-                                <div>${escapeHTML(archive.title)}</div>
-                                <div>アップロード日: ${new Date(archive.published_at).toLocaleString()}</div>
+                                <div class="mt-4">
+                                    <h3 class="font-semibold text-gray-800 mb-2">
+                                        ${escapeHTML(archive.title)}
+                                    </h3>
+                                    <p class="text-sm text-gray-600">
+                                        アップロード日: ${new Date(archive.published_at).toLocaleString()}
+                                    </p>
+                                </div>
                             </div>
-                            <div>
+                            <div class="flex-grow sm:w-2/3">
                     `;
 
                     archive.ts_items.forEach(ts_item => {
                         html += `
-                                <div>
+                                <div class="text-sm text-gray-700">
                                     <a href="https://youtube.com/watch?v=${encodeURIComponent(archive.video_id)}&t=${encodeURIComponent(ts_item.ts_num)}s"
-                                        target="_blank" class="text-blue-500 tabular-nums">
+                                        target="_blank" class="text-blue-500 tabular-nums hover:underline">
                                         ${ts_item.ts_text}
-                                    </a> ${ts_item.text} 
+                                    </a>
+                                    <span class="ml-2">${escapeHTML(ts_item.text)}</span>
                                 </div>
                         `;
                     });
@@ -45,6 +52,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         </div>
                     `;
                 });
+
                 resultsContainer.innerHTML = html;
             })
             .catch(function (error) {
