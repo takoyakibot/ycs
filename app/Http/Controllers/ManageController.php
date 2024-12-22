@@ -6,7 +6,9 @@ use App\Models\Archive;
 use App\Models\Channel;
 use App\Services\ImageService;
 use App\Services\YouTubeService;
+use Exception;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class ManageController extends Controller
@@ -22,9 +24,14 @@ class ManageController extends Controller
 
     public function index()
     {
-        // $hiddenを有効化するために変換してから渡す
-        $channels = Channel::all()->toArray();
-        return view('manage.channels', compact('channels'));
+        $api_key_flg = Auth::user()->api_key ? '1' : '';
+        return view('manage.channels', compact('api_key_flg'));
+    }
+
+    public function fetchChannel(Request $request)
+    {
+        $channels = Channel::all();
+        return response()->json($channels);
     }
 
     public function addChannel(Request $request)
@@ -33,9 +40,14 @@ class ManageController extends Controller
             'handle' => 'required|string|unique:channels,handle',
         ]);
 
-        $channel = $this->youtubeService->getChannelByHandle($request->handle);
+        try {
+            $channel = $this->youtubeService->getChannelByHandle($request->handle);
+        } catch (Exception $e) {
+            error_log($e->getMessage());
+            throw new Exception("youtubeとの接続でエラーが発生しました");
+        }
         if (!$channel || !isset($channel['title']) || !$channel['title']) {
-            return redirect()->back()->with('status', 'チャンネルが存在しません。');
+            throw new Exception("チャンネルが存在しません");
         }
 
         Channel::create([
@@ -45,7 +57,7 @@ class ManageController extends Controller
             'thumbnail' => $channel['thumbnail'],
         ]);
 
-        return redirect()->route('manage')->with('status', 'チャンネルを登録しました。');
+        return response()->json("");
     }
 
     public function manageChannel($id)

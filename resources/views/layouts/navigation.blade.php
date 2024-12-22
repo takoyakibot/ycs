@@ -15,7 +15,7 @@
                     <x-nav-link :href="route('top')">
                     {{ __('タイムスタンプ検索したい') }}
                     </x-nav-link>
-                    <x-nav-link :href="route('top')" :active="request()->routeIs('top')">
+                    <x-nav-link :href="route('channels.index')" :active="request()->routeIs('channels.index')">
                         {{ __('チャンネル一覧') }}
                     </x-nav-link>
                     @if (Auth::check())
