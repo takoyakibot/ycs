@@ -1,7 +1,9 @@
+import { escapeHTML } from "../utils";
+
 document.addEventListener('DOMContentLoaded', function () {
     const registerForm = document.getElementById('channelRegisterForm');
     const registerButton = document.getElementById('registerButton');
-    const resultsContainer = document.getElementById('results');
+    const resultsContainer = document.getElementById('channels');
     const errorMessage = document.getElementById('errorMessage');
 
     // チャンネル一覧の取得処理
@@ -13,13 +15,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 channels.forEach(channel => {
                     html += `
                         <div class="card border rounded shadow p-4 mb-4">
-                            <a href="manage/${encodeURIComponent(channel.handle)}">
-                                <img src="${escapeHTML(channel.thumbnail)}" alt="アイコン" class="w-20 h-20 rounded-full" />
-                                <span>${escapeHTML(channel.title)}</span>
+                            <a href="manage/${encodeURIComponent(channel.handle || '')}">
+                                <img src="${escapeHTML(channel.thumbnail || '')}" alt="アイコン" class="w-20 h-20 rounded-full" />
+                                <span>${escapeHTML(channel.title || '未設定')}</span>
                             </a>
                         </div>
                     `;
-
                 });
                 resultsContainer.innerHTML = html;
 
@@ -56,9 +57,3 @@ document.addEventListener('DOMContentLoaded', function () {
             });
     });
 });
-
-function escapeHTML(str) {
-    const div = document.createElement('div');
-    div.appendChild(document.createTextNode(str));
-    return div.innerHTML;
-}

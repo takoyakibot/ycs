@@ -9,6 +9,7 @@ use App\Services\YouTubeService;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 
 class ManageController extends Controller
@@ -25,7 +26,20 @@ class ManageController extends Controller
     public function index()
     {
         $api_key_flg = Auth::user()->api_key ? '1' : '';
-        return view('manage.channels', compact('api_key_flg'));
+        return view('manage.index', compact('api_key_flg'));
+    }
+
+    public function show($id)
+    {
+        // APIキー未登録の場合はチャンネル管理に戻す
+        $api_key_flg = Auth::user()->api_key ? '1' : '';
+        // ハンドルが存在しない場合はチャンネル管理に戻す
+        $channel = Channel::where('handle', $id)->first();
+        if (!$api_key_flg || !$channel) {
+            return view('manage.index', compact('api_key_flg'));
+        }
+        $crypt_handle = Crypt::encryptString($channel->handle);
+        return view('manage.show', compact('channel', 'crypt_handle'));
     }
 
     public function fetchChannel(Request $request)
@@ -57,35 +71,48 @@ class ManageController extends Controller
             'thumbnail' => $channel['thumbnail'],
         ]);
 
-        return response()->json("");
+        return response()->json("チャンネルを登録しました");
     }
 
-    public function manageChannel($id)
+    public function fetchArchives($id)
     {
-        $channel = Channel::where('handle', $id)->firstOrFail();
-        $archives = Archive::where('channel_id', $channel->channel_id)->get();
-        return view('manage.archives', compact('channel', 'archives'));
+        $handle = Crypt::decryptString($id);
+
+        $channel = Channel::where('handle', $handle)->firstOrFail();
+        $archives = Archive::with('tsItems')
+            ->where('channel_id', $channel->channel_id)
+            ->get();
+        return response()->json($archives);
     }
 
-    public function updateAchives($id)
+    public function addArchives(Request $request)
     {
-        $channel = Channel::where('handle', $id)->firstOrFail();
+        $request->validate([
+            'handle' => 'required|string',
+        ]);
+        $handle = Crypt::decryptString($request->handle);
+
+        $channel = Channel::where('handle', $handle)->firstOrFail();
 
         DB::transaction(function () use ($channel) {
-            [$rtn_archives, $rtn_ts_items] = $this->youtubeService->getArchivesAndTsItems($channel->channel_id);
+            try {
+                [$rtn_archives, $rtn_ts_items] = $this->youtubeService
+                    ->getArchivesAndTsItems($channel->channel_id);
+            } catch (Exception $e) {
+                error_log($e->getMessage());
+                throw new Exception("youtubeとの接続でエラーが発生しました");
+            }
 
+            // cascadeでTsItemsも消える
             Archive::where('channel_id', $channel->channel_id)->delete();
-            if (!empty($rtn_archives)) {
+            if ($rtn_archives) {
                 DB::table('archives')->insert($rtn_archives);
             }
-            if (!empty($rtn_ts_items)) {
+            if ($rtn_ts_items) {
                 DB::table('ts_items')->insert($rtn_ts_items);
             }
         });
 
-        $archives = Archive::with('tsItems')
-            ->where('channel_id', $channel->channel_id)
-            ->get();
-        return view('manage.archives', compact('channel', 'archives'));
+        return response()->json("アーカイブを登録しました");
     }
 }

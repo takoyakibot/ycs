@@ -17,11 +17,16 @@ use Illuminate\Support\Facades\Route;
  */
 
 Route::middleware(['auth', 'verified'])->group(function () {
-    Route::get('/channels/manage', [ManageController::class, 'index'])->name('manage');
-    Route::get('/channels/manage/{id}', [ManageController::class, 'manageChannel'])->name('manage.channel');
-    Route::post('/channels/manage/{id}', [ManageController::class, 'updateAchives'])->name('manage.updateAchives');
+    //TODO: 別のサービスができるまでは自動的に歌枠検索に飛ばす
+    Route::redirect('/manage', '/channels/manage', 301);
+
+    Route::get('/channels/manage', [ManageController::class, 'index'])->name('manage.index');
+    Route::get('/channels/manage/{id}', [ManageController::class, 'show'])->name('manage.show');
+
     Route::get('api/channels', [ManageController::class, 'fetchChannel'])->name('manage.fetchChannel');
     Route::post('api/channels', [ManageController::class, 'addChannel'])->name('manage.addChannel');
+    Route::get('api/channels/{id}', [ManageController::class, 'fetchArchives'])->name('manage.fetchArchives');
+    Route::post('api/archives', [ManageController::class, 'addArchives'])->name('manage.addArchives');
 });
 
 Route::middleware('auth')->group(function () {
@@ -32,7 +37,7 @@ Route::middleware('auth')->group(function () {
 
 Route::get('/', [ChannelController::class, 'index'])->name('top');
 Route::get('/channels', [ChannelController::class, 'index'])->name('channels.index');
-Route::get('/channels/{id}', [ChannelController::class, 'channels.show'])
+Route::get('/channels/{id}', [ChannelController::class, 'show'])
     ->name('channels.show');
 
 require __DIR__ . '/auth.php';
