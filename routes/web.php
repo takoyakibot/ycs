@@ -25,7 +25,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('api/channels', [ManageController::class, 'fetchChannel'])->name('manage.fetchChannel');
     Route::post('api/channels', [ManageController::class, 'addChannel'])->name('manage.addChannel');
-    Route::get('api/archives', [ManageController::class, 'fetchArchive'])->name('manage.fetchArchive');
+    Route::get('api/channels/{id}', [ManageController::class, 'fetchArchives'])->name('manage.fetchArchives');
     Route::post('api/archives', [ManageController::class, 'addArchives'])->name('manage.addArchives');
 });
 

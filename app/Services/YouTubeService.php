@@ -83,7 +83,7 @@ class YouTubeService
                     'channel_id' => $channel_id,
                     'video_id' => $item['snippet']['resourceId']['videoId'],
                     'title' => $item['snippet']['title'],
-                    'thumbnail' => $item['snippet']['thumbnails']['default']['url'],
+                    'thumbnail' => $item['snippet']['thumbnails']['medium']['url'],
                     'is_public' => true,
                     'is_display' => true,
                     'published_at' => Carbon::parse($item['snippet']['publishedAt'])->format('Y-m-d H:i:s'),

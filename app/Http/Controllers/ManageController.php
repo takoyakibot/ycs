@@ -9,6 +9,7 @@ use App\Services\YouTubeService;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 
 class ManageController extends Controller
@@ -37,7 +38,8 @@ class ManageController extends Controller
         if (!$api_key_flg || !$channel) {
             return view('manage.index', compact('api_key_flg'));
         }
-        return view('manage.show', compact('channel'));
+        $crypt_handle = Crypt::encryptString($channel->handle);
+        return view('manage.show', compact('channel', 'crypt_handle'));
     }
 
     public function fetchChannel(Request $request)
@@ -74,16 +76,23 @@ class ManageController extends Controller
 
     public function fetchArchives($id)
     {
-        $channel = Channel::where('handle', $id)->firstOrFail();
+        $handle = Crypt::decryptString($id);
+
+        $channel = Channel::where('handle', $handle)->firstOrFail();
         $archives = Archive::with('tsItems')
             ->where('channel_id', $channel->channel_id)
             ->get();
         return response()->json($archives);
     }
 
-    public function addAchives($id)
+    public function addArchives(Request $request)
     {
-        $channel = Channel::where('handle', $id)->firstOrFail();
+        $request->validate([
+            'handle' => 'required|string',
+        ]);
+        $handle = Crypt::decryptString($request->handle);
+
+        $channel = Channel::where('handle', $handle)->firstOrFail();
 
         DB::transaction(function () use ($channel) {
             try {
