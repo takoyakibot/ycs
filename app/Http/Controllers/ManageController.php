@@ -30,9 +30,14 @@ class ManageController extends Controller
 
     public function show($id)
     {
+        // APIキー未登録の場合はチャンネル管理に戻す
         $api_key_flg = Auth::user()->api_key ? '1' : '';
-        $channel = Channel::getByID($id);
-        return view('manage.show', compact('api_key_flg', 'channel'));
+        // ハンドルが存在しない場合はチャンネル管理に戻す
+        $channel = Channel::where('handle', $id)->first();
+        if (!$api_key_flg || !$channel) {
+            return view('manage.index', compact('api_key_flg'));
+        }
+        return view('manage.show', compact('channel'));
     }
 
     public function fetchChannel(Request $request)
@@ -67,32 +72,38 @@ class ManageController extends Controller
         return response()->json("チャンネルを登録しました");
     }
 
-    public function manageChannel($id)
+    public function fetchArchives($id)
     {
         $channel = Channel::where('handle', $id)->firstOrFail();
-        $archives = Archive::where('channel_id', $channel->channel_id)->get();
-        return view('manage.show', compact('channel', 'archives'));
+        $archives = Archive::with('tsItems')
+            ->where('channel_id', $channel->channel_id)
+            ->get();
+        return response()->json($archives);
     }
 
-    public function updateAchives($id)
+    public function addAchives($id)
     {
         $channel = Channel::where('handle', $id)->firstOrFail();
 
         DB::transaction(function () use ($channel) {
-            [$rtn_archives, $rtn_ts_items] = $this->youtubeService->getArchivesAndTsItems($channel->channel_id);
+            try {
+                [$rtn_archives, $rtn_ts_items] = $this->youtubeService
+                    ->getArchivesAndTsItems($channel->channel_id);
+            } catch (Exception $e) {
+                error_log($e->getMessage());
+                throw new Exception("youtubeとの接続でエラーが発生しました");
+            }
 
+            // cascadeでTsItemsも消える
             Archive::where('channel_id', $channel->channel_id)->delete();
-            if (!empty($rtn_archives)) {
+            if ($rtn_archives) {
                 DB::table('archives')->insert($rtn_archives);
             }
-            if (!empty($rtn_ts_items)) {
+            if ($rtn_ts_items) {
                 DB::table('ts_items')->insert($rtn_ts_items);
             }
         });
 
-        $archives = Archive::with('tsItems')
-            ->where('channel_id', $channel->channel_id)
-            ->get();
-        return view('manage.show', compact('channel', 'archives'));
+        return response()->json("アーカイブを登録しました");
     }
 }
