@@ -11,7 +11,6 @@
             <!-- チャンネル登録フォーム -->
             <div class="p-2">
                 <form id="channelRegisterForm">
-                    @csrf
                     <x-input-label for="handle" :value="__('handle')" class="mr-2" />
                     <div class="flex items-center gap-2">
                         <x-text-input id="handle" name="handle" type="text" class="mt-1 block w-[200px]" required autofocus
