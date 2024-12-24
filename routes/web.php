@@ -35,7 +35,9 @@ Route::middleware('auth')->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
-Route::get('/', [ChannelController::class, 'index'])->name('top');
+Route::get('/', [ChannelController::class, 'alpine'])->name('top');
+//TODO: 別のサービスができるまでは自動的に歌枠検索に飛ばす
+// Route::redirect('/', '/manage', 301);
 Route::get('/channels', [ChannelController::class, 'index'])->name('channels.index');
 Route::get('/channels/{id}', [ChannelController::class, 'show'])
     ->name('channels.show');
