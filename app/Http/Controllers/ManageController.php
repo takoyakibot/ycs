@@ -51,7 +51,7 @@ class ManageController extends Controller
     public function addChannel(Request $request)
     {
         $request->validate([
-            'handle' => 'required|string|unique:channels,handle',
+            'handle' => 'required|string|regex:/^[a-zA-Z0-9]+$/|unique:channels,handle',
         ]);
 
         try {
