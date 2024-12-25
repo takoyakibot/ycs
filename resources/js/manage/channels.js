@@ -14,10 +14,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 let html = '';
                 channels.forEach(channel => {
                     html += `
-                        <div class="card border rounded shadow p-4 mb-4">
-                            <a href="manage/${encodeURIComponent(channel.handle || '')}">
+                        <div class="border rounded-lg shadow-lg p-4 bg-white">
+                            <a href="manage/${encodeURIComponent(channel.handle || '')}" class="flex items-center gap-4">
                                 <img src="${escapeHTML(channel.thumbnail || '')}" alt="アイコン" class="w-20 h-20 rounded-full" />
-                                <span>${escapeHTML(channel.title || '未設定')}</span>
+                                <span class="text-lg font-bold">${escapeHTML(channel.title || '未設定')}</span>
                             </a>
                         </div>
                     `;
