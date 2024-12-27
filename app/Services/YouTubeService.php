@@ -7,6 +7,7 @@ use Google_Client;
 use Google_Service_YouTube;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Str;
 
 class YouTubeService
 {
@@ -54,6 +55,23 @@ class YouTubeService
     {
         $this->setApiKey();
 
+        $archives = $this->getArchives($channel_id);
+        $rtn_archives = [];
+        foreach ($archives as &$archive) {
+            $archive['ts_items'] = $this->getTimeStampsFromText(
+                $archive['video_id'],
+                '1', // description
+                $archive['description'],
+            );
+            $rtn_archives[] = $archive;
+        }
+        return $rtn_archives;
+    }
+
+    private function getArchives($channel_id)
+    {
+        $this->setApiKey();
+
         // チャンネルIDの先頭2文字をUUに置き換える
         $playlist_id = 'UU' . substr($channel_id, 2);
 
@@ -65,20 +83,11 @@ class YouTubeService
         do {
             $response = $this->youtube->playlistItems->listPlaylistItems('snippet', [
                 'playlistId' => $playlist_id,
-                'maxResults' => 2,
+                'maxResults' => $maxResults,
                 'pageToken' => $response ? $response->getNextPageToken() : "",
             ]);
 
             foreach ($response->getItems() as $item) {
-                $ts_items_tmp = $this->getTimeStampsFromText(
-                    $item['snippet']['resourceId']['videoId'],
-                    '1', // description
-                    $item['snippet']['description']
-                );
-                foreach ($ts_items_tmp as $ts_item_tmp) {
-                    $ts_items[] = $ts_item_tmp;
-                }
-
                 $archives[] = [
                     'channel_id' => $channel_id,
                     'video_id' => $item['snippet']['resourceId']['videoId'],
@@ -88,6 +97,7 @@ class YouTubeService
                     'is_display' => true,
                     'published_at' => Carbon::parse($item['snippet']['publishedAt'])->format('Y-m-d H:i:s'),
                     'comments_updated_at' => today(),
+                    'description' => $item['snippet']['description'],
                 ];
             }
             if (config('app.debug') && count($archives) >= 4) {
@@ -95,7 +105,7 @@ class YouTubeService
             }
         } while ($response->getNextPageToken());
 
-        return [$archives, $ts_items];
+        return $archives;
     }
 
     private function getTimeStampsFromText($video_id, $type, $description): array
@@ -113,6 +123,7 @@ class YouTubeService
 
                 // 結果に追加
                 $results[] = [
+                    'id' => Str::ulid(),
                     'video_id' => $video_id,
                     'type' => $type,
                     'ts_text' => $timestamp,

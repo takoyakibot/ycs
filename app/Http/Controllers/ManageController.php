@@ -51,7 +51,7 @@ class ManageController extends Controller
     public function addChannel(Request $request)
     {
         $request->validate([
-            'handle' => 'required|string|regex:/^[a-zA-Z0-9]+$/|unique:channels,handle',
+            'handle' => 'required|string|regex:/^[a-zA-Z0-9_]+$/|unique:channels,handle',
         ]);
 
         try {
@@ -96,11 +96,19 @@ class ManageController extends Controller
 
         DB::transaction(function () use ($channel) {
             try {
-                [$rtn_archives, $rtn_ts_items] = $this->youtubeService
+                $rtn_archives = $this->youtubeService
                     ->getArchivesAndTsItems($channel->channel_id);
             } catch (Exception $e) {
                 error_log($e->getMessage());
                 throw new Exception("youtubeとの接続でエラーが発生しました");
+            }
+            $rtn_ts_items = [];
+            foreach ($rtn_archives as &$archive) {
+                foreach ($archive['ts_items'] as $ts_item) {
+                    $rtn_ts_items[] = $ts_item;
+                }
+                unset($archive['description']);
+                unset($archive['ts_items']);
             }
 
             // cascadeでTsItemsも消える
