@@ -28,6 +28,7 @@ class Archive extends Model
 
     public function tsItems()
     {
-        return $this->hasMany(TsItem::class, 'video_id', 'video_id');
+        return $this->hasMany(TsItem::class, 'video_id', 'video_id')
+            ->orderBy('ts_number', 'asc');
     }
 }
