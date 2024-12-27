@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     html += `
                         <div class="flex flex-col sm:flex-row w-[100%] max-w-5xl border rounded-lg shadow-lg p-4 gap-4 mb-6 bg-white">
                             <div class="flex flex-col flex-shrink-0 sm:w-1/3">
-                                <div class="flex-col">
+                                <div>
                                     <a href="https://youtube.com/watch?v=${encodeURIComponent(archive.video_id || '')}" target="_blank">
                                         <img src="${escapeHTML(archive.thumbnail || '')}" alt="サムネイル" class="h-auto rounded-md object-cover" />
                                     </a>
