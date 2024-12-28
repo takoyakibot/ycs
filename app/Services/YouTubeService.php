@@ -64,7 +64,8 @@ class YouTubeService
                 $archive['description'],
             );
             // タイムスタンプがなかった場合はコメントを検索する
-            if ($archive['ts_items']) {
+            if (empty($archive['ts_items'])) {
+                // コメントを個別取得のみにする場合はここをコメントアウト
                 $archive['ts_items'] = $this->getTimeStampsFromComments($archive['video_id']);
             }
             $rtn_archives[] = $archive;
