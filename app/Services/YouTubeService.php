@@ -116,6 +116,20 @@ class YouTubeService
 
     private function getTimeStampsFromText($video_id, $type, $description): array
     {
+        // 引数のバリデーション
+        // 最低限のチェック
+        if (!is_string($video_id) || !is_string($description)) {
+            // 無効なデータが来た場合、空の結果を返却
+            error_log("Invalid video_id or description");
+            return [];
+        }
+
+        if (!in_array($type, [1, 2], true)) {
+            // タイプが不正ならデフォルト値にする（例えば1）
+            error_log("Invalid type");
+            $type = 1;
+        }
+
         // 正規表現でタイムスタンプを抽出 (MM:SS または HH:MM:SS)
         $pattern = '/\b(\d{1,2}:\d{2}(?::\d{2})?)\b/';
         $lines = explode("\n", $description); // 改行で分割
