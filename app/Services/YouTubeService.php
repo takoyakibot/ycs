@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Carbon\Carbon;
+use Exception;
 use Google_Client;
 use Google_Service_YouTube;
 use Illuminate\Support\Facades\Auth;
@@ -167,8 +168,15 @@ class YouTubeService
                 'pageToken' => $response ? $response->getNextPageToken() : "",
             ];
 
-            // コメントスレッドを取得
-            $response = $this->youtube->commentThreads->listCommentThreads('snippet,replies', $params);
+            try {
+                // コメントスレッドを取得
+                $response = $this->youtube->commentThreads->listCommentThreads('snippet,replies', $params);
+            } catch (Exception $e) {
+                // コメントが無効な場合はスキップ
+                if (strpos($e->getMessage(), 'has disabled comments') !== false) {
+                    continue;
+                }
+            }
 
             // 各コメントを処理
             foreach ($response->getItems() as $item) {
@@ -187,7 +195,6 @@ class YouTubeService
 
         $rtn_ts_items = [];
         foreach ($comments as $comment) {
-            error_log($comment);
             $ts_items = $this->getTimeStampsFromText(
                 $video_id,
                 '2', // comment
