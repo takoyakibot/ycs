@@ -183,7 +183,7 @@ class YouTubeService
                 }
             }
             // 次のページトークンを取得
-        } while ($response->getNextPageToken());
+        } while ($response && $response->getNextPageToken());
 
         $rtn_ts_items = [];
         foreach ($comments as $comment) {
