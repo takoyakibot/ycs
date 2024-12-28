@@ -81,6 +81,7 @@ class ManageController extends Controller
         $channel = Channel::where('handle', $handle)->firstOrFail();
         $archives = Archive::with('tsItems')
             ->where('channel_id', $channel->channel_id)
+            ->orderBy('published_at', 'desc')
             ->get();
         return response()->json($archives);
     }
@@ -107,6 +108,8 @@ class ManageController extends Controller
                 foreach ($archive['ts_items'] as $ts_item) {
                     $rtn_ts_items[] = $ts_item;
                 }
+                // コメントを取得しても
+                $archive['is_display'] = (count($archive['ts_items']) > 0);
                 unset($archive['description']);
                 unset($archive['ts_items']);
             }
