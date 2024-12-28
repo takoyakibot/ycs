@@ -63,6 +63,10 @@ class YouTubeService
                 '1', // description
                 $archive['description'],
             );
+            // タイムスタンプがなかった場合はコメントを検索する
+            if ($archive['ts_items']) {
+                $archive['ts_items'] = $this->getTimeStampsFromComments($archive['video_id']);
+            }
             $rtn_archives[] = $archive;
         }
         return $rtn_archives;
@@ -147,5 +151,52 @@ class YouTubeService
         }
 
         return 0; // 不正なフォーマットの場合
+    }
+
+    private function getTimeStampsFromComments($video_id)
+    {
+        $comments = [];
+        $response = null;
+        do {
+            // リクエストパラメータを設定
+            $params = [
+                'videoId' => $video_id,
+                'part' => 'snippet,replies', // コメントのスニペットとリプライを取得
+                'maxResults' => 100, // 1回のリクエストで取得するコメント数
+                'pageToken' => $response ? $response->getNextPageToken() : "",
+            ];
+
+            // コメントスレッドを取得
+            $response = $this->youtube->commentThreads->listCommentThreads('snippet,replies', $params);
+
+            // 各コメントを処理
+            foreach ($response->getItems() as $item) {
+                $topLevelComment = $item['snippet']['topLevelComment']['snippet']['textOriginal'];
+                $comments[] = $topLevelComment;
+
+                // リプライコメントがある場合
+                if (!empty($item['replies']['comments'])) {
+                    foreach ($item['replies']['comments'] as $reply) {
+                        $comments[] = $reply['snippet']['textOriginal'];
+                    }
+                }
+            }
+            // 次のページトークンを取得
+        } while ($response->getNextPageToken());
+
+        $rtn_ts_items = [];
+        foreach ($comments as $comment) {
+            error_log($comment);
+            $ts_items = $this->getTimeStampsFromText(
+                $video_id,
+                '2', // comment
+                $comment,
+            );
+            foreach ($ts_items as $ts_item) {
+                $rtn_ts_items[] = $ts_item;
+            }
+        }
+
+        return $rtn_ts_items;
     }
 }
