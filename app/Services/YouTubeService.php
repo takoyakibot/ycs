@@ -120,14 +120,15 @@ class YouTubeService
         // 最低限のチェック
         if (!is_string($video_id) || !is_string($description)) {
             // 無効なデータが来た場合、空の結果を返却
-            error_log("Invalid video_id or description");
+            error_log("Invalid video_id or description:"
+                . var_export($video_id, true) . ", " . var_export($description, true));
             return [];
         }
 
         if (!in_array($type, [1, 2], true)) {
             // タイプが不正ならデフォルト値にする（例えば1）
-            error_log("Invalid type");
-            $type = 1;
+            error_log("Invalid type" . var_export($type, true));
+            return [];
         }
 
         // 正規表現でタイムスタンプを抽出 (MM:SS または HH:MM:SS)
