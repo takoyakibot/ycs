@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('ts_items', function (Blueprint $table) {
-            $table->id();
+            $table->string('id', 26)->primary();
             $table->string('video_id', 11);
             // 1:description, 2:comment
             $table->enum('type', ['1', '2']);

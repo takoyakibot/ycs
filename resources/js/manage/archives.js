@@ -16,15 +16,16 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 archives.forEach(archive => {
                     html += `
-                        <div class="flex flex-col sm:flex-row w-[100%] max-w-5xl border rounded-lg shadow-lg p-4 gap-4 mb-6 bg-white">
+                        <div class="flex flex-col sm:flex-row w-[100%] max-w-5xl border rounded-lg shadow-lg p-4 gap-4 mb-6 ${archive.is_display ? 'bg-white' : 'bg-gray-200'}">
                             <div class="flex flex-col flex-shrink-0 sm:w-1/3">
-                                <div class="flex-col">
+                                <div>
                                     <a href="https://youtube.com/watch?v=${encodeURIComponent(archive.video_id || '')}" target="_blank">
-                                        <img src="${escapeHTML(archive.thumbnail || '')}" alt="サムネイル" class="h-auto rounded-md object-cover" />
+                                        <img src="${escapeHTML(archive.thumbnail || '')}" alt="サムネイル"
+                                            class="h-auto rounded-md object-cover ${archive.is_display ? 'filter grayscale-0' : 'filter grayscale'}" />
                                     </a>
                                 </div>
                                 <div class="mt-4">
-                                    <h3 class="font-semibold text-gray-800 mb-2">
+                                    <h3 class="font-semibold mb-2 ${archive.is_display ? 'text-gray-800' : 'text-gray-500'}">
                                         ${escapeHTML(archive.title || '')}
                                     </h3>
                                     <p class="text-sm text-gray-600">

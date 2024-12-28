@@ -3,10 +3,12 @@
 namespace App\Services;
 
 use Carbon\Carbon;
+use Exception;
 use Google_Client;
 use Google_Service_YouTube;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Str;
 
 class YouTubeService
 {
@@ -54,6 +56,28 @@ class YouTubeService
     {
         $this->setApiKey();
 
+        $archives = $this->getArchives($channel_id);
+        $rtn_archives = [];
+        foreach ($archives as &$archive) {
+            $archive['ts_items'] = $this->getTimeStampsFromText(
+                $archive['video_id'],
+                '1', // description
+                $archive['description'],
+            );
+            // タイムスタンプがなかった場合はコメントを検索する
+            if (empty($archive['ts_items'])) {
+                // コメントを個別取得のみにする場合はここをコメントアウト
+                $archive['ts_items'] = $this->getTimeStampsFromComments($archive['video_id']);
+            }
+            $rtn_archives[] = $archive;
+        }
+        return $rtn_archives;
+    }
+
+    private function getArchives($channel_id)
+    {
+        $this->setApiKey();
+
         // チャンネルIDの先頭2文字をUUに置き換える
         $playlist_id = 'UU' . substr($channel_id, 2);
 
@@ -65,20 +89,11 @@ class YouTubeService
         do {
             $response = $this->youtube->playlistItems->listPlaylistItems('snippet', [
                 'playlistId' => $playlist_id,
-                'maxResults' => 2,
+                'maxResults' => $maxResults,
                 'pageToken' => $response ? $response->getNextPageToken() : "",
             ]);
 
             foreach ($response->getItems() as $item) {
-                $ts_items_tmp = $this->getTimeStampsFromText(
-                    $item['snippet']['resourceId']['videoId'],
-                    '1', // description
-                    $item['snippet']['description']
-                );
-                foreach ($ts_items_tmp as $ts_item_tmp) {
-                    $ts_items[] = $ts_item_tmp;
-                }
-
                 $archives[] = [
                     'channel_id' => $channel_id,
                     'video_id' => $item['snippet']['resourceId']['videoId'],
@@ -88,6 +103,7 @@ class YouTubeService
                     'is_display' => true,
                     'published_at' => Carbon::parse($item['snippet']['publishedAt'])->format('Y-m-d H:i:s'),
                     'comments_updated_at' => today(),
+                    'description' => $item['snippet']['description'],
                 ];
             }
             if (config('app.debug') && count($archives) >= 4) {
@@ -95,7 +111,7 @@ class YouTubeService
             }
         } while ($response->getNextPageToken());
 
-        return [$archives, $ts_items];
+        return $archives;
     }
 
     private function getTimeStampsFromText($video_id, $type, $description): array
@@ -113,6 +129,7 @@ class YouTubeService
 
                 // 結果に追加
                 $results[] = [
+                    'id' => Str::ulid(),
                     'video_id' => $video_id,
                     'type' => $type,
                     'ts_text' => $timestamp,
@@ -136,5 +153,58 @@ class YouTubeService
         }
 
         return 0; // 不正なフォーマットの場合
+    }
+
+    private function getTimeStampsFromComments($video_id)
+    {
+        $comments = [];
+        $response = null;
+        do {
+            // リクエストパラメータを設定
+            $params = [
+                'videoId' => $video_id,
+                'part' => 'snippet,replies', // コメントのスニペットとリプライを取得
+                'maxResults' => 100, // 1回のリクエストで取得するコメント数
+                'pageToken' => $response ? $response->getNextPageToken() : "",
+            ];
+
+            try {
+                // コメントスレッドを取得
+                $response = $this->youtube->commentThreads->listCommentThreads('snippet,replies', $params);
+            } catch (Exception $e) {
+                // コメントが無効な場合はスキップ
+                if (strpos($e->getMessage(), 'has disabled comments') !== false) {
+                    continue;
+                }
+            }
+
+            // 各コメントを処理
+            foreach ($response->getItems() as $item) {
+                $topLevelComment = $item['snippet']['topLevelComment']['snippet']['textOriginal'];
+                $comments[] = $topLevelComment;
+
+                // リプライコメントがある場合
+                if (!empty($item['replies']['comments'])) {
+                    foreach ($item['replies']['comments'] as $reply) {
+                        $comments[] = $reply['snippet']['textOriginal'];
+                    }
+                }
+            }
+            // 次のページトークンを取得
+        } while ($response && $response->getNextPageToken());
+
+        $rtn_ts_items = [];
+        foreach ($comments as $comment) {
+            $ts_items = $this->getTimeStampsFromText(
+                $video_id,
+                '2', // comment
+                $comment,
+            );
+            foreach ($ts_items as $ts_item) {
+                $rtn_ts_items[] = $ts_item;
+            }
+        }
+
+        return $rtn_ts_items;
     }
 }

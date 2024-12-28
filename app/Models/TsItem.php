@@ -9,7 +9,11 @@ class TsItem extends Model
 {
     use HasFactory;
 
+    public $incrementing = false;
+    protected $keyType = 'string';
+
     protected $fillable = [
+        'id',
         'archive_id',
         'type',
         'ts_text',
