@@ -112,4 +112,15 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             });
     });
+
+    // アーカイブ表示切替処理
+    resultsContainer.addEventListener('click', function (event) {
+        const target = event.target;
+
+        // 表示非表示切り替えボタン押下時
+        if (target.classList.contains('toggle-display-btn')) {
+
+
+        }
+    });
 });
