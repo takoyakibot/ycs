@@ -95,6 +95,7 @@ class YouTubeService
 
             foreach ($response->getItems() as $item) {
                 $archives[] = [
+                    'id' => Str::ulid(),
                     'channel_id' => $channel_id,
                     'video_id' => $item['snippet']['resourceId']['videoId'],
                     'title' => $item['snippet']['title'],

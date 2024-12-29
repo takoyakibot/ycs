@@ -12,7 +12,8 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('archives', function (Blueprint $table) {
-            $table->string('video_id', 11)->primary();
+            $table->string('id', 26)->primary();
+            $table->string('video_id', 11)->unique();
             $table->string('channel_id');
             $table->string('title');
             $table->string('thumbnail')->nullable();
@@ -22,6 +23,7 @@ return new class extends Migration
             $table->date('comments_updated_at');
             $table->timestamps();
 
+            $table->index('video_id');
             $table->index('channel_id');
         });
     }
