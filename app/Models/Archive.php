@@ -10,6 +10,7 @@ class Archive extends Model
     use HasFactory;
 
     protected $fillable = [
+        'id',
         'channel_id',
         'video_id',
         'title',
@@ -22,7 +23,7 @@ class Archive extends Model
 
     protected $hidden = ['channel_id'];
 
-    protected $primaryKey = 'video_id';
+    protected $primaryKey = 'id';
     public $incrementing = false;
     protected $keyType = 'string';
 
