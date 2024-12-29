@@ -28,7 +28,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                             ${escapeHTML(archive.title || '')}
                                         </p>
                                         <p class="text-sm text-gray-600">
-                                            公開日: ${new Date(archive.published_at || 0).toLocaleString()}
+                                            公開日: ${new Date(archive.published_at || 0).toLocaleString().split(' ')[0]}
                                         </p>
                                     </div>
                                     <div>
