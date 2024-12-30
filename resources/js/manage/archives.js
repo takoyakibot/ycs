@@ -126,6 +126,11 @@ document.addEventListener('DOMContentLoaded', function () {
             const archiveElement = target.closest('.archive'); // 親要素を取得
             const id = target.getAttribute('data-id');
             const isDisplay = target.getAttribute('data-display'); // 現在のフラグ
+            if (!id || !isDisplay) {
+                console.error('Invalid data attributes for toggle display');
+                return;
+            }
+
             const errorMessage = target.parentElement.parentElement.querySelector('.error-message');
             errorMessage.textContent = '';
 
@@ -140,6 +145,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 .then(response => {
                     // サーバーからのレスポンスを処理
                     const newDisplay = response.data;
+                    if (!newDisplay) {
+                        console.error('Invalid response from toggle display API');
+                        errorMessage.textContent = 'サーバーからの応答が無効です。';
+                        return;
+                    }
                     toggleDisplay(archiveElement, newDisplay);
                 })
                 .catch(error => {
@@ -150,11 +160,6 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 });
 
-/**
- * 変更後のis_displayの値に合わせて対応する項目の状態を変更する
- * @param {*} element 押されたボタンの親archive要素
- * @param {*} newDisplay 変更後のis_display
- */
 function toggleDisplay(element, newDisplay) {
     // 文字列なので'0'もtrueになってしまうため、ややこしくないように内部ではboolで扱う
     const newDisplayFlg = newDisplay === '1';
