@@ -32,19 +32,21 @@ document.addEventListener('DOMContentLoaded', function () {
                                             公開日: ${new Date(archive.published_at || 0).toLocaleString().split(' ')[0]}
                                         </p>
                                     </div>
-                                    <div>
-                                        <button 
-                                            class="toggle-display-btn ${archive.is_display ? 'bg-red-500' : 'bg-green-500'} text-white px-4 py-1 rounded-full font-semibold w-auto"
-                                            data-id="${archive.id}"
-                                            data-display="${archive.is_display}">
-                                            ${archive.is_display ? '非表示にする' : '表示にする'}
-                                        </button>
-                                        <button
-                                            class="fetch-comment-btn ${archive.is_display ? '' : 'hidden'} bg-blue-500 text-white px-4 py-1 rounded-full font-semibold w-auto"
-                                            data-id="${archive.id}"
-                                            data-display="${archive.is_display}">
-                                            コメント取得
-                                        </button>
+                                    <div class="flex flex-col">
+                                        <div class="flex gap-2">
+                                            <button 
+                                                class="toggle-display-btn ${archive.is_display ? 'bg-red-500' : 'bg-green-500'} text-white px-4 py-1 rounded-full font-semibold w-auto"
+                                                data-id="${archive.id}"
+                                                data-display="${archive.is_display}">
+                                                ${archive.is_display ? '非表示にする' : '表示にする'}
+                                            </button>
+                                            <button
+                                                class="fetch-comment-btn ${archive.is_display ? '' : 'hidden'} bg-blue-500 text-white px-4 py-1 rounded-full font-semibold w-auto"
+                                                data-id="${archive.id}"
+                                                data-display="${archive.is_display}">
+                                                コメント取得
+                                            </button>
+                                        </div>
                                         <div class="error-message mt-1 text-red-500 text-sm"></div>
                                     </div>
                                 </div>
