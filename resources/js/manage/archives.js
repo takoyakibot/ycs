@@ -22,7 +22,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                 <div class="flex flex-col gap-2">
                                     <a href="${youtubeUrl}" target="_blank">
                                         <img src="${escapeHTML(archive.thumbnail || '')}" alt="サムネイル"
-                                            class="h-auto rounded-md object-cover ${archive.is_display ? 'filter grayscale-0' : 'filter grayscale'}" />
+                                            class="h-auto rounded-md object-cover filter ${archive.is_display ? 'grayscale-0' : 'grayscale'}" />
                                     </a>
                                     <div>
                                         <h4 class="font-semibold ${archive.is_display ? 'text-gray-800' : 'text-gray-500'}">
@@ -41,7 +41,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                                 ${archive.is_display ? '非表示にする' : '表示にする'}
                                             </button>
                                             <button
-                                                class="fetch-comment-btn ${archive.is_display ? '' : 'hidden'} bg-blue-500 text-white px-4 py-1 rounded-full font-semibold w-auto"
+                                                class="fetch-comment-btn bg-blue-500 text-white px-4 py-1 rounded-full font-semibold w-auto"
                                                 data-id="${archive.id}"
                                                 data-display="${archive.is_display}">
                                                 コメント取得
@@ -105,6 +105,7 @@ document.addEventListener('DOMContentLoaded', function () {
         axios.post('/api/archives', formData)
             .then(function (response) {
                 // 登録成功後にアーカイブ一覧を再取得
+                alert(response.data);
                 fetchArchives();
             })
             .catch(function (error) {
@@ -123,73 +124,79 @@ document.addEventListener('DOMContentLoaded', function () {
         // 表示非表示切り替えボタン押下時
         if (target.classList.contains('toggle-display-btn')) {
             const archiveElement = target.closest('.archive'); // 親要素を取得
-            const videoId = target.getAttribute('data-id');
+            const id = target.getAttribute('data-id');
             const isDisplay = target.getAttribute('data-display'); // 現在のフラグ
             const errorMessage = target.parentElement.parentElement.querySelector('.error-message');
+            errorMessage.textContent = '';
 
             // サーバーに送信するデータ
             const data = {
-                video_id: videoId,
+                id: id,
                 is_display: isDisplay,
             };
 
-            // // Ajaxリクエスト
-            // axios.post('/api/archives/toggle-display', data)
-            //     .then(response => {
-            //         // サーバーからのレスポンスを処理
-            //         const newDisplay = response.data.is_display;
-
-            //         toggleDisplay(archiveElement, newDisplay);
-            //     })
-            //     .catch(error => {
-            //         console.error('エラーが発生しました:', error);
-            //         errorMessage.textContent = '変更に失敗しました。もう一度お試しください。';
-            //     });
-            const newDisplay = (isDisplay !== '1');
-            toggleDisplay(archiveElement, newDisplay);
+            // Ajaxリクエスト
+            axios.patch('/api/archives/toggle-display', data)
+                .then(response => {
+                    // サーバーからのレスポンスを処理
+                    const newDisplay = response.data;
+                    toggleDisplay(archiveElement, newDisplay);
+                })
+                .catch(error => {
+                    console.error('エラーが発生しました:', error);
+                    errorMessage.textContent = '変更に失敗しました。もう一度お試しください。';
+                });
         }
     });
 });
 
+/**
+ * 変更後のis_displayの値に合わせて対応する項目の状態を変更する
+ * @param {*} element 押されたボタンの親archive要素
+ * @param {*} newDisplay 変更後のis_display
+ */
 function toggleDisplay(element, newDisplay) {
+    // 文字列なので'0'もtrueになってしまうため、ややこしくないように内部ではboolで扱う
+    const newDisplayFlg = newDisplay === '1';
     // ボタンのテキストとクラスを更新
     const toggleButton = element.querySelector('.toggle-display-btn');
     if (toggleButton) {
-        toggleButton.textContent = newDisplay ? '非表示にする' : '表示にする';
-        toggleButton.setAttribute('data-display', newDisplay ? '1' : '0');
-        toggleButton.classList.toggle('bg-red-500', newDisplay);
-        toggleButton.classList.toggle('bg-green-500', !newDisplay);
+        toggleButton.textContent = newDisplayFlg ? '非表示にする' : '表示にする';
+        toggleButton.setAttribute('data-display', newDisplayFlg ? '1' : '0');
+        toggleButton.classList.toggle('bg-red-500', newDisplayFlg);
+        toggleButton.classList.toggle('bg-green-500', !newDisplayFlg);
     }
 
     // サムネイルのグレースケール
     const thumbnail = element.querySelector('img');
     if (thumbnail) {
         thumbnail.classList.toggle('filter', true);
-        thumbnail.classList.toggle('grayscale-0', newDisplay);
-        thumbnail.classList.toggle('grayscale', !newDisplay);
+        thumbnail.classList.toggle('grayscale-0', newDisplayFlg);
+        thumbnail.classList.toggle('grayscale', !newDisplayFlg);
     }
 
     // タイトルのスタイル
     const title = element.querySelector('h4');
     if (title) {
-        title.classList.toggle('text-gray-800', newDisplay);
-        title.classList.toggle('text-gray-500', !newDisplay);
+        title.classList.toggle('text-gray-800', newDisplayFlg);
+        title.classList.toggle('text-gray-500', !newDisplayFlg);
     }
 
-    // コメント取得ボタンの表示非表示
-    const commentButton = element.querySelector('.fetch-comment-btn');
-    if (commentButton) {
-        commentButton.classList.toggle('hidden', !newDisplay);
-    }
+    //NOTE: よく考えると表示にした瞬間に編集できてないとだめだから、他のボタンは出しっぱなしにしなきゃだわ
+    // // コメント取得ボタンの表示非表示
+    // const commentButton = element.querySelector('.fetch-comment-btn');
+    // if (commentButton) {
+    //     commentButton.classList.toggle('hidden', !newDisplayFlg);
+    // }
 
     // タイムスタンプ編集ボタンの表示非表示
-    const editButton = element.querySelector('.edit-timestamps-btn');
-    // ts_itemが存在しなければ非表示のまま
-    if (editButton && element.querySelectorAll('.timestamp').length > 0) {
-        editButton.classList.toggle('hidden', !newDisplay);
-    }
+    // const editButton = element.querySelector('.edit-timestamps-btn');
+    // // ts_itemが存在しなければ非表示のまま
+    // if (editButton && element.querySelectorAll('.timestamp').length > 0) {
+    //     editButton.classList.toggle('hidden', !newDisplayFlg);
+    // }
 
     // 全体の背景色
-    element.classList.toggle('bg-white', newDisplay);
-    element.classList.toggle('bg-gray-200', !newDisplay);
+    element.classList.toggle('bg-white', newDisplayFlg);
+    element.classList.toggle('bg-gray-200', !newDisplayFlg);
 }
