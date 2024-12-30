@@ -27,6 +27,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('api/channels', [ManageController::class, 'addChannel'])->name('manage.addChannel');
     Route::get('api/channels/{id}', [ManageController::class, 'fetchArchives'])->name('manage.fetchArchives');
     Route::post('api/archives', [ManageController::class, 'addArchives'])->name('manage.addArchives');
+    Route::patch('api/archives/toggle-display', [ManageController::class, 'toggleDisplay'])->name('manage.toggleDisplay');
 });
 
 Route::middleware('auth')->group(function () {
