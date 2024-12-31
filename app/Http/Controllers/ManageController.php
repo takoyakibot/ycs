@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Archive;
 use App\Models\Channel;
+use App\Models\TsItem;
 use App\Services\ImageService;
 use App\Services\YouTubeService;
 use Exception;
@@ -127,10 +128,6 @@ class ManageController extends Controller
         return response()->json("アーカイブを登録しました");
     }
 
-    /**
-     * @param \Illuminate\Http\Request $request
-     * @return mixed|\Illuminate\Http\JsonResponse
-     */
     public function toggleDisplay(Request $request)
     {
         $request->validate([
@@ -140,5 +137,29 @@ class ManageController extends Controller
         $new_display = ($request->is_display === '1') ? '0' : '1';
         Archive::where('id', $request->id)->update(['is_display' => $new_display]);
         return response()->json($new_display);
+    }
+
+    public function fetchComments(Request $request)
+    {
+        $request->validate([
+            'id' => ['required', 'string'],
+        ]);
+        $archive = Archive::findOrFail($request->id, 'video_id');
+        DB::transaction(function () use ($archive) {
+            try {
+                $ts_items = $this->youtubeService->getTimeStampsFromComments($archive->video_id);
+            } catch (Exception $e) {
+                error_log($e->getMessage());
+                throw new Exception("youtubeとの接続でエラーが発生しました");
+            }
+            TsItem::where('video_id', $archive->video_id)
+                ->where('type', '2')
+                ->delete();
+            if ($ts_items) {
+                DB::table('ts_items')->insert($ts_items);
+            }
+        });
+        $ts_items = TsItem::where('video_id', $archive->video_id)->get();
+        return response()->json($ts_items);
     }
 }

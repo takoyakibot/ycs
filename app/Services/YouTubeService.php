@@ -76,8 +76,6 @@ class YouTubeService
 
     private function getArchives($channel_id)
     {
-        $this->setApiKey();
-
         // チャンネルIDの先頭2文字をUUに置き換える
         $playlist_id = 'UU' . substr($channel_id, 2);
 
@@ -85,7 +83,6 @@ class YouTubeService
         $maxResults = config('app.debug') ? 2 : 50;
         $response = null;
         $archives = [];
-        $ts_items = [];
         do {
             $response = $this->youtube->playlistItems->listPlaylistItems('snippet', [
                 'playlistId' => $playlist_id,
@@ -171,8 +168,10 @@ class YouTubeService
         return 0; // 不正なフォーマットの場合
     }
 
-    private function getTimeStampsFromComments($video_id)
+    public function getTimeStampsFromComments($video_id)
     {
+        $this->setApiKey();
+
         $comments = [];
         $response = null;
         do {
@@ -191,6 +190,8 @@ class YouTubeService
                 // コメントが無効な場合はスキップ
                 if (strpos($e->getMessage(), 'has disabled comments') !== false) {
                     continue;
+                } else {
+                    error_log($e->getMessage());
                 }
             }
 
