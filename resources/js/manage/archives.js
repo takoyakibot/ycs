@@ -66,6 +66,8 @@ document.addEventListener('DOMContentLoaded', function () {
                                         data-id="${archive.id}">
                                         タイムスタンプ編集
                                     </button>
+                                    <!-- エラーメッセージ表示 -->
+                                    <div class="error-message mt-1 text-red-500 text-sm"></div>
                                 </div>
                             </div>
                         </div>
@@ -200,6 +202,39 @@ document.addEventListener('DOMContentLoaded', function () {
                 });
         }
 
+        // タイムスタンプ編集ボタン押下時
+        if (target.classList.contains('edit-timestamps-btn')) {
+            toggleButtonDisabled(target, isProcessing);
+
+            const id = target.getAttribute('data-id');
+            if (!id) {
+                console.error('Invalid data attributes for fetch comment');
+                return;
+            }
+
+            const errorMessage = target.parentElement.querySelector('.error-message');
+            errorMessage.textContent = '';
+
+            // サーバーに送信するデータ
+            const data = {
+                id: id,
+            };
+
+            // Ajaxリクエスト
+            axios.patch('/api/archives/edit-timestamps', data)
+                .then(response => {
+                    alert(response.data);
+                    errorMessage.textContent = 'ほげ';
+                })
+                .catch(error => {
+                    console.error('エラーが発生しました:', error);
+                    errorMessage.textContent = 'コメント編集に失敗しました。もう一度お試しください。';
+                })
+                .finally(() => {
+                    isProcessing = false;
+                    toggleButtonDisabled(target, isProcessing);
+                });
+        }
         isProcessing = false;
     });
 });

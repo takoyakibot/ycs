@@ -29,6 +29,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('api/archives', [ManageController::class, 'addArchives'])->name('manage.addArchives');
     Route::patch('api/archives/toggle-display', [ManageController::class, 'toggleDisplay'])->name('manage.toggleDisplay');
     Route::patch('api/archives/fetch-comments', [ManageController::class, 'fetchComments'])->name('manage.fetchComments');
+    Route::patch('api/archives/edit-timestamps', [ManageController::class, 'editTimestamps'])->name('manage.editTimestamps');
 });
 
 Route::middleware('auth')->group(function () {

@@ -162,4 +162,9 @@ class ManageController extends Controller
         $ts_items = TsItem::where('video_id', $archive->video_id)->get();
         return response()->json($ts_items);
     }
+
+    public function editTimestamps(Request $request)
+    {
+        return response()->json("editTimestamps returned.");
+    }
 }
