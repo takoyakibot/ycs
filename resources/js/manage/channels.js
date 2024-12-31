@@ -1,4 +1,4 @@
-import { escapeHTML } from "../utils";
+import { escapeHTML, toggleButtonDisabled } from "../utils";
 
 document.addEventListener('DOMContentLoaded', function () {
     const registerForm = document.getElementById('channelRegisterForm');
