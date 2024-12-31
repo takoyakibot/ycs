@@ -173,7 +173,12 @@ document.addEventListener('DOMContentLoaded', function () {
                         errorMessage.textContent = 'サーバーからの応答が無効です。';
                         return;
                     }
-                    timestampsElement.innerHTML += getTsItems(ts_items);
+                    timestampsElement.innerHTML = getTsItems(ts_items);
+                    if (ts_items.length > 0) {
+                        alert("コメント取得完了");
+                    } else {
+                        alert("抽出できるコメントがありませんでした");
+                    }
                 })
                 .catch(error => {
                     console.error('エラーが発生しました:', error);
