@@ -127,10 +127,6 @@ class ManageController extends Controller
         return response()->json("アーカイブを登録しました");
     }
 
-    /**
-     * @param \Illuminate\Http\Request $request
-     * @return mixed|\Illuminate\Http\JsonResponse
-     */
     public function toggleDisplay(Request $request)
     {
         $request->validate([
@@ -140,5 +136,15 @@ class ManageController extends Controller
         $new_display = ($request->is_display === '1') ? '0' : '1';
         Archive::where('id', $request->id)->update(['is_display' => $new_display]);
         return response()->json($new_display);
+    }
+
+    public function fetchComments(Request $request)
+    {
+        $request->validate([
+            'id' => ['required', 'string'],
+        ]);
+        $archive = Archive::findOrFail($request->id);
+        $ts_items = $this->youtubeService->getTimeStampsFromComments($archive->video_id);
+        return response()->json($ts_items);
     }
 }
