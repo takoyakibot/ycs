@@ -37,7 +37,11 @@ document.addEventListener('DOMContentLoaded', function () {
     fetchChannels();
 
     // チャンネル登録処理
+    let isProcessing = false;
     registerButton.addEventListener('click', function () {
+        if (isProcessing) { return; }
+        isProcessing = true;
+        toggleButtonDisabled(registerButton, isProcessing);
         const formData = new FormData(registerForm);
 
         // エラーメッセージをクリア
@@ -54,6 +58,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 } else {
                     errorMessage.textContent = 'エラーが発生しました。';
                 }
+            })
+            .finally(function () {
+                isProcessing = false;
+                toggleButtonDisabled(registerButton, isProcessing);
             });
     });
 });
