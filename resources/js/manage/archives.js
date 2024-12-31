@@ -41,9 +41,8 @@ document.addEventListener('DOMContentLoaded', function () {
                                                 ${archive.is_display ? '非表示にする' : '表示にする'}
                                             </button>
                                             <button
-                                                class="fetch-comment-btn bg-blue-500 text-white px-4 py-1 rounded-full font-semibold w-auto"
-                                                data-id="${archive.id}"
-                                                data-display="${archive.is_display}">
+                                                class="fetch-comments-btn bg-blue-500 text-white px-4 py-1 rounded-full font-semibold w-auto"
+                                                data-id="${archive.id}">
                                                 コメント取得
                                             </button>
                                         </div>
@@ -52,21 +51,11 @@ document.addEventListener('DOMContentLoaded', function () {
                                 </div>
                             </div>
                             <div class="flex flex-col flex-grow sm:w-2/3 gap-2">
-                                <div class="flex flex-col gap-2 sm:gap-0">
+                                <div class="timestamps flex flex-col gap-2 sm:gap-0">
                     `;
 
                     if (archive.ts_items) {
-                        archive.ts_items.forEach(ts_item => {
-                            html += `
-                                    <div class="timestamp text-sm text-gray-700" key="${ts_item.id}">
-                                        <a href="${youtubeUrl}&t=${encodeURIComponent(ts_item.ts_num || '0')}s"
-                                            target="_blank" class="text-blue-500 tabular-nums hover:underline">
-                                            ${ts_item.ts_text || '0:00:00'}
-                                        </a>
-                                        <span class="ml-2">${escapeHTML(ts_item.text || '')}</span>
-                                    </div>
-                            `;
-                        });
+                        html += getTsItems(archive.ts_items);
                     }
 
                     html += `
@@ -74,8 +63,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                 <div>
                                     <button 
                                         class="edit-timestamps-btn bg-blue-500 text-white ${archive.is_display || archive.ts_items.length ? '' : 'hidden'} px-4 py-1 rounded-full font-semibold w-auto"
-                                        data-id="${archive.id}"
-                                        data-display="${archive.is_display}">
+                                        data-id="${archive.id}">
                                         タイムスタンプ編集
                                     </button>
                                 </div>
@@ -157,6 +145,46 @@ document.addEventListener('DOMContentLoaded', function () {
                     errorMessage.textContent = '変更に失敗しました。もう一度お試しください。';
                 });
         }
+
+        // コメント取得ボタン押下時
+        if (target.classList.contains('fetch-comments-btn')) {
+            const timestampsElement = target.closest('.archive').querySelector('.timestamps');
+            const id = target.getAttribute('data-id');
+            if (!id) {
+                console.error('Invalid data attributes for fetch comment');
+                return;
+            }
+
+            const errorMessage = target.parentElement.parentElement.querySelector('.error-message');
+            errorMessage.textContent = '';
+
+            // サーバーに送信するデータ
+            const data = {
+                id: id,
+            };
+
+            // Ajaxリクエスト
+            axios.patch('/api/archives/fetch-comments', data)
+                .then(response => {
+                    // サーバーからのレスポンスを処理
+                    const ts_items = response.data;
+                    if (!ts_items) {
+                        console.error('Invalid response from fetch comment API');
+                        errorMessage.textContent = 'サーバーからの応答が無効です。';
+                        return;
+                    }
+                    timestampsElement.innerHTML = getTsItems(ts_items);
+                    if (ts_items.length > 0) {
+                        alert("コメント取得完了");
+                    } else {
+                        alert("抽出できるコメントがありませんでした");
+                    }
+                })
+                .catch(error => {
+                    console.error('エラーが発生しました:', error);
+                    errorMessage.textContent = 'コメント取得に失敗しました。もう一度お試しください。';
+                });
+        }
     });
 });
 
@@ -189,7 +217,7 @@ function toggleDisplay(element, newDisplay) {
 
     //NOTE: よく考えると表示にした瞬間に編集できてないとだめだから、他のボタンは出しっぱなしにしなきゃだわ
     // // コメント取得ボタンの表示非表示
-    // const commentButton = element.querySelector('.fetch-comment-btn');
+    // const commentButton = element.querySelector('.fetch-comments-btn');
     // if (commentButton) {
     //     commentButton.classList.toggle('hidden', !newDisplayFlg);
     // }
@@ -204,4 +232,20 @@ function toggleDisplay(element, newDisplay) {
     // 全体の背景色
     element.classList.toggle('bg-white', newDisplayFlg);
     element.classList.toggle('bg-gray-200', !newDisplayFlg);
+}
+
+function getTsItems(ts_items) {
+    let html = '';
+    ts_items.forEach(ts_item => {
+        html += `
+                <div class="timestamp text-sm text-gray-700" key="${ts_item.id}">
+                    <a href="${"https://youtube.com/watch?v=" + encodeURIComponent(ts_item.video_id || '')}&t=${encodeURIComponent(ts_item.ts_num || '0')}s"
+                        target="_blank" class="text-blue-500 tabular-nums hover:underline">
+                        ${ts_item.ts_text || '0:00:00'}
+                    </a>
+                    <span class="ml-2">${escapeHTML(ts_item.text || '')}</span>
+                </div>
+        `;
+    });
+    return html;
 }
