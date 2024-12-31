@@ -105,12 +105,16 @@ document.addEventListener('DOMContentLoaded', function () {
             });
     });
 
-    // アーカイブ表示切替処理
+    // アーカイブ編集ボタン類イベント追加
+    let isProcessing = false;
     resultsContainer.addEventListener('click', function (event) {
+        if (isProcessing) { return; }
+        isProcessing = true;
         const target = event.target;
 
         // 表示非表示切り替えボタン押下時
         if (target.classList.contains('toggle-display-btn')) {
+            toggleButtonDisabled(target, isProcessing);
             const archiveElement = target.closest('.archive'); // 親要素を取得
             const id = target.getAttribute('data-id');
             const isDisplay = target.getAttribute('data-display'); // 現在のフラグ
@@ -143,11 +147,17 @@ document.addEventListener('DOMContentLoaded', function () {
                 .catch(error => {
                     console.error('エラーが発生しました:', error);
                     errorMessage.textContent = '変更に失敗しました。もう一度お試しください。';
+                })
+                .finally(() => {
+                    isProcessing = false;
+                    toggleButtonDisabled(target, false);
                 });
         }
 
         // コメント取得ボタン押下時
         if (target.classList.contains('fetch-comments-btn')) {
+            toggleButtonDisabled(target, isProcessing);
+
             const timestampsElement = target.closest('.archive').querySelector('.timestamps');
             const id = target.getAttribute('data-id');
             if (!id) {
@@ -183,8 +193,14 @@ document.addEventListener('DOMContentLoaded', function () {
                 .catch(error => {
                     console.error('エラーが発生しました:', error);
                     errorMessage.textContent = 'コメント取得に失敗しました。もう一度お試しください。';
+                })
+                .finally(() => {
+                    isProcessing = false;
+                    toggleButtonDisabled(target, isProcessing);
                 });
         }
+
+        isProcessing = false;
     });
 });
 
