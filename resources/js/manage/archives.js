@@ -63,7 +63,8 @@ document.addEventListener('DOMContentLoaded', function () {
                                 <div>
                                     <button 
                                         class="edit-timestamps-btn bg-blue-500 text-white ${archive.is_display || archive.ts_items.length ? '' : 'hidden'} px-4 py-1 rounded-full font-semibold w-auto"
-                                        data-id="${archive.id}">
+                                        data-id="${archive.id}"
+                                        data-is-edit="0">
                                         タイムスタンプ編集
                                     </button>
                                     <!-- エラーメッセージ表示 -->
@@ -85,8 +86,21 @@ document.addEventListener('DOMContentLoaded', function () {
     // 初期表示でアーカイブ一覧を取得
     fetchArchives();
 
+    let isProcessing = false;
+
     // アーカイブ登録処理
     registerButton.addEventListener('click', function () {
+        if (isProcessing) { return; }
+        isProcessing = true;
+        toggleButtonDisabled(registerButton, isProcessing);
+
+        // 確認メッセージを表示
+        if (!confirm('アーカイブを取得します。すでに取得済みの場合、編集内容などが初期化されますがよろしいですか？')) {
+            isProcessing = false;
+            toggleButtonDisabled(registerButton, isProcessing);
+            return;
+        }
+
         const formData = new FormData(registerForm);
 
         // エラーメッセージをクリア
@@ -104,11 +118,14 @@ document.addEventListener('DOMContentLoaded', function () {
                 } else {
                     errorMessage.textContent = 'エラーが発生しました。';
                 }
+            })
+            .finally(() => {
+                isProcessing = false;
+                toggleButtonDisabled(registerButton, isProcessing);
             });
     });
 
     // アーカイブ編集ボタン類イベント追加
-    let isProcessing = false;
     resultsContainer.addEventListener('click', function (event) {
         if (isProcessing) { return; }
         isProcessing = true;
@@ -205,37 +222,49 @@ document.addEventListener('DOMContentLoaded', function () {
         // タイムスタンプ編集ボタン押下時
         if (target.classList.contains('edit-timestamps-btn')) {
             toggleButtonDisabled(target, isProcessing);
+            const timestampsElement = target.closest('.timestamps'); // 親要素を取得
 
             const id = target.getAttribute('data-id');
-            if (!id) {
-                console.error('Invalid data attributes for fetch comment');
+            const isEdit = target.getAttribute('data-is-edit');
+            if (!id || !isEdit) {
+                console.error('Invalid data attributes for edit timestamps');
                 return;
             }
 
             const errorMessage = target.parentElement.querySelector('.error-message');
             errorMessage.textContent = '';
 
-            // サーバーに送信するデータ
-            const data = {
-                id: id,
-            };
+            // 編集状態かどうかで処理を分岐
+            if (isEdit !== "1") {
+                // 編集状態ではない場合、表示を編集モードに切り替える
+                toggleTsItemEditButtonStyle(target, isEdit);
 
-            // Ajaxリクエスト
-            axios.patch('/api/archives/edit-timestamps', data)
-                .then(response => {
-                    alert(response.data);
-                    errorMessage.textContent = 'ほげ';
-                })
-                .catch(error => {
-                    console.error('エラーが発生しました:', error);
-                    errorMessage.textContent = 'コメント編集に失敗しました。もう一度お試しください。';
-                })
-                .finally(() => {
-                    isProcessing = false;
-                    toggleButtonDisabled(target, isProcessing);
-                });
+            } else {
+                // サーバーに送信するデータ
+                const data = {
+                    id: id,
+                    ts_items: null,
+                };
+
+                // Ajaxリクエスト
+                axios.patch('/api/archives/edit-timestamps', data)
+                    .then(response => {
+                        alert(response.data.message);
+                        errorMessage.textContent = 'ほげ';
+                        toggleTsItemEditButtonStyle(target, isEdit);
+                    })
+                    .catch(error => {
+                        console.error('エラーが発生しました:', error);
+                        errorMessage.textContent = 'コメント編集に失敗しました。もう一度お試しください。';
+                    })
+                    .finally(() => {
+                        isProcessing = false;
+                        toggleButtonDisabled(target, isProcessing);
+                    });
+            }
         }
         isProcessing = false;
+        toggleButtonDisabled(target, isProcessing);
     });
 });
 
@@ -285,16 +314,29 @@ function toggleDisplay(element, newDisplay) {
     element.classList.toggle('bg-gray-200', !newDisplayFlg);
 }
 
-function getTsItems(ts_items) {
+// 編集中かどうかと表示非表示で表示方法を変更する
+// ボタンの制御だけで大丈夫
+function toggleTsItemEditButtonStyle(target, currentIsEdit) {
+    const newIsEditFlg = currentIsEdit !== '1'
+    if (target) {
+        target.setAttribute('data-is-edit', newIsEditFlg ? '1' : '0');
+        target.textContent = newIsEditFlg ? '編集を完了する' : 'タイムスタンプ編集';
+        target.classList.toggle('bg-blue-500', !newIsEditFlg);
+        target.classList.toggle('bg-orange-500', newIsEditFlg);
+        // キャンセルボタンの表示
+    }
+}
+
+function getTsItems(tsItems, isEdit = false) {
     let html = '';
-    ts_items.forEach(ts_item => {
+    tsItems.forEach(tsItem => {
         html += `
-                <div class="timestamp text-sm text-gray-700" key="${ts_item.id}">
-                    <a href="${"https://youtube.com/watch?v=" + encodeURIComponent(ts_item.video_id || '')}&t=${encodeURIComponent(ts_item.ts_num || '0')}s"
+                <div class="timestamp text-sm text-gray-700" key="${tsItem.id}">
+                    <a href="${"https://youtube.com/watch?v=" + encodeURIComponent(tsItem.video_id || '')}&t=${encodeURIComponent(tsItem.ts_num || '0')}s"
                         target="_blank" class="text-blue-500 tabular-nums hover:underline">
-                        ${ts_item.ts_text || '0:00:00'}
+                        ${tsItem.ts_text || '0:00:00'}
                     </a>
-                    <span class="ml-2">${escapeHTML(ts_item.text || '')}</span>
+                    <span class="ml-2">${escapeHTML(tsItem.text || '')}</span>
                 </div>
         `;
     });

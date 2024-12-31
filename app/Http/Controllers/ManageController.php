@@ -165,6 +165,6 @@ class ManageController extends Controller
 
     public function editTimestamps(Request $request)
     {
-        return response()->json("editTimestamps returned.");
+        return response()->json(['message' => "editTimestamps returned."]);
     }
 }
