@@ -1,4 +1,4 @@
-import { escapeHTML } from "../utils";
+import { escapeHTML, toggleButtonDisabled } from "../utils";
 
 document.addEventListener('DOMContentLoaded', function () {
     const registerForm = document.getElementById('archiveRegisterForm');
@@ -150,7 +150,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 })
                 .finally(() => {
                     isProcessing = false;
-                    toggleButtonDisabled(target, false);
+                    toggleButtonDisabled(target, isProcessing);
                 });
         }
 
