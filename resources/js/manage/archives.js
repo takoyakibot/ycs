@@ -227,6 +227,8 @@ document.addEventListener('DOMContentLoaded', function () {
             const isEdit = target.getAttribute('data-is-edit');
             if (!id || !isEdit) {
                 console.error('Invalid data attributes for edit timestamps');
+                isProcessing = false;
+                toggleButtonDisabled(target, isProcessing);
                 return;
             }
 
@@ -235,8 +237,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
             // 編集状態かどうかで処理を分岐
             if (isEdit !== "1") {
-                // 編集状態ではない場合、表示を編集モードに切り替える
-                toggleTsItemsStyle(target, isEdit);
+                try {
+                    // 編集状態ではない場合、表示を編集モードに切り替える
+                    toggleTsItemsStyle(target, isEdit);
+                } catch (e) {
+                    console.error('Failed to toggle timestamp styles:', e);
+                    isProcessing = false;
+                    toggleButtonDisabled(target, isProcessing);
+                    return;
+                }
             } else {
                 // 編集後の表示非表示状態を取得してAPIの引数を作成する
                 const updateTsItems = [];
