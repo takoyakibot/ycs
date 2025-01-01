@@ -222,8 +222,8 @@ document.addEventListener('DOMContentLoaded', function () {
         // タイムスタンプ編集ボタン押下時
         if (target.classList.contains('edit-timestamps-btn')) {
             toggleButtonDisabled(target, isProcessing);
-            const timestampsElement = target.closest('.timestamps'); // 親要素を取得
 
+            const timestampsElement = target.closest('.archive').querySelector('.timestamps');
             const id = target.getAttribute('data-id');
             const isEdit = target.getAttribute('data-is-edit');
             if (!id || !isEdit) {
@@ -237,8 +237,7 @@ document.addEventListener('DOMContentLoaded', function () {
             // 編集状態かどうかで処理を分岐
             if (isEdit !== "1") {
                 // 編集状態ではない場合、表示を編集モードに切り替える
-                toggleTsItemEditButtonStyle(target, isEdit);
-
+                toggleTsItemsStyle(timestampsElement, isEdit);
             } else {
                 // サーバーに送信するデータ
                 const data = {
@@ -251,7 +250,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     .then(response => {
                         alert(response.data.message);
                         errorMessage.textContent = 'ほげ';
-                        toggleTsItemEditButtonStyle(target, isEdit);
+                        // 通常モードに戻す
+                        toggleTsItemsStyle(timestampsElement, isEdit);
                     })
                     .catch(error => {
                         console.error('エラーが発生しました:', error);
@@ -315,27 +315,38 @@ function toggleDisplay(element, newDisplay) {
 }
 
 // 編集中かどうかと表示非表示で表示方法を変更する
-// ボタンの制御だけで大丈夫
-function toggleTsItemEditButtonStyle(target, currentIsEdit) {
+function toggleTsItemsStyle(timestampsElement, currentIsEdit) {
+    const btn = timestampsElement.querySelector('.edit-timestamps-btn');
+    const tsItems = timestampsElement.querySelectorAll('.timestamp');
     const newIsEditFlg = currentIsEdit !== '1'
-    if (target) {
-        target.setAttribute('data-is-edit', newIsEditFlg ? '1' : '0');
-        target.textContent = newIsEditFlg ? '編集を完了する' : 'タイムスタンプ編集';
-        target.classList.toggle('bg-blue-500', !newIsEditFlg);
-        target.classList.toggle('bg-orange-500', newIsEditFlg);
+    if (btn) {
+        btn.setAttribute('data-is-edit', newIsEditFlg ? '0' : '1');
+        btn.textContent = newIsEditFlg ? '編集を完了する' : 'タイムスタンプ編集';
+        btn.classList.toggle('bg-blue-500', !newIsEditFlg);
+        btn.classList.toggle('bg-orange-500', newIsEditFlg);
         // キャンセルボタンの表示
     }
+    // TS項目のモード変更
+    tsItems.forEach(tsItem => {
+        tsItem.classList.toggle('bg-gray-200', newIsEditFlg);
+        tsItem.classList.toggle('mb-1', newIsEditFlg);
+        tsItem.querySelector('a').classList.toggle('hidden', newIsEditFlg);
+        tsItem.querySelector('span').classList.toggle('hidden', !newIsEditFlg);
+    });
 }
 
-function getTsItems(tsItems, isEdit = false) {
+function getTsItems(tsItems) {
     let html = '';
     tsItems.forEach(tsItem => {
         html += `
-                <div class="timestamp text-sm text-gray-700" key="${tsItem.id}">
+                <div class="timestamp text-sm ${tsItem.is_display ? 'text-gray-700' : 'text-gray-400'}" key="${tsItem.id}">
                     <a href="${"https://youtube.com/watch?v=" + encodeURIComponent(tsItem.video_id || '')}&t=${encodeURIComponent(tsItem.ts_num || '0')}s"
                         target="_blank" class="text-blue-500 tabular-nums hover:underline">
                         ${tsItem.ts_text || '0:00:00'}
                     </a>
+                    <span class="tabular-nums hidden">
+                        ${tsItem.ts_text || '0:00:00'}
+                    </span>
                     <span class="ml-2">${escapeHTML(tsItem.text || '')}</span>
                 </div>
         `;
