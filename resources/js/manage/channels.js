@@ -42,6 +42,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (isProcessing) { return; }
         isProcessing = true;
         toggleButtonDisabled(registerButton, isProcessing);
+
         const formData = new FormData(registerForm);
 
         // エラーメッセージをクリア
