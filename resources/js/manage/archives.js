@@ -238,22 +238,22 @@ document.addEventListener('DOMContentLoaded', function () {
                 // 編集状態ではない場合、表示を編集モードに切り替える
                 toggleTsItemsStyle(target, isEdit);
             } else {
-                // 編集後のtsItemsを作成する
-                //NOTE: そのままgetTsItemsに流用できればよいのだがパラメータが足りないのでサーバの返却値を使う
+                // 編集後の表示非表示状態を取得してAPIの引数を作成する
                 const updateTsItems = [];
-
-                // サーバーに送信するデータ
-                // ts_item の id と、その is_display を渡す
-                const data = {
-                    id: id,
-                    ts_items: updateTsItems,
-                };
+                const tsItems = target.closest('.archive').querySelectorAll('.timestamp');
+                tsItems.forEach(tsItem => {
+                    const id = tsItem.getAttribute('key');
+                    const isDisplay = tsItem.classList.contains('is-display');
+                    updateTsItems.push({
+                        id: id,
+                        is_display: isDisplay ? '1' : '0',
+                    });
+                });
 
                 // Ajaxリクエスト
-                axios.patch('/api/archives/edit-timestamps', data)
+                axios.patch('/api/archives/edit-timestamps', updateTsItems)
                     .then(response => {
                         alert(response.data.message);
-                        errorMessage.textContent = 'ほげ';
                         // 通常モードに戻す
                         toggleTsItemsStyle(target, isEdit);
                     })
@@ -350,6 +350,9 @@ function toggleTsItemsStyle(btn, currentIsEdit) {
         tsItem.classList.toggle('border-[0.5px]', newIsEditFlg);
         tsItem.classList.toggle('mb-[1px]', newIsEditFlg);
         tsItem.classList.toggle('px-2', newIsEditFlg);
+        tsItem.classList.toggle('hover:cursor-pointer', newIsEditFlg);
+        tsItem.classList.toggle('hover:shadow-md', newIsEditFlg);
+        tsItem.classList.toggle('hover:border-red-500', newIsEditFlg);
         tsItem.querySelector('a').classList.toggle('hidden', newIsEditFlg);
         tsItem.querySelector('span').classList.toggle('hidden', !newIsEditFlg);
     });
@@ -368,7 +371,7 @@ function toggleTsItemDisplay(tsItem) {
     tsItem.classList.toggle('is-display', newIsDisplayFlg);
     tsItem.classList.toggle('text-gray-700', newIsDisplayFlg);
     // 非表示時
-    tsItem.classList.toggle('text-gray-400', !newIsDisplayFlg);
+    tsItem.classList.toggle('text-gray-500', !newIsDisplayFlg);
     tsItem.classList.toggle('pl-4', !newIsDisplayFlg);
     tsItem.classList.toggle('bg-gray-200', !newIsDisplayFlg);
 }
@@ -377,7 +380,7 @@ function getTsItems(tsItems) {
     let html = '';
     tsItems.forEach(tsItem => {
         html += `
-                <div class="timestamp text-sm ${tsItem.is_display ? 'text-gray-700 is-display' : 'text-gray-400'}" key="${tsItem.id}">
+                <div class="timestamp text-sm ${tsItem.is_display ? 'text-gray-700 is-display' : 'text-gray-500 pl-4 bg-gray-200'}" key="${tsItem.id}">
                     <a href="${"https://youtube.com/watch?v=" + encodeURIComponent(tsItem.video_id || '')}&t=${encodeURIComponent(tsItem.ts_num || '0')}s"
                         target="_blank" class="text-blue-500 tabular-nums hover:underline">
                         ${tsItem.ts_text || '0:00:00'}
