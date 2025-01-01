@@ -63,9 +63,12 @@ document.addEventListener('DOMContentLoaded', function () {
                                 <div>
                                     <button 
                                         class="edit-timestamps-btn bg-blue-500 text-white ${archive.is_display || archive.ts_items.length ? '' : 'hidden'} px-4 py-1 rounded-full font-semibold w-auto"
-                                        data-id="${archive.id}">
+                                        data-id="${archive.id}"
+                                        data-is-edit="0">
                                         タイムスタンプ編集
                                     </button>
+                                    <!-- エラーメッセージ表示 -->
+                                    <div class="error-message mt-1 text-red-500 text-sm"></div>
                                 </div>
                             </div>
                         </div>
@@ -83,8 +86,21 @@ document.addEventListener('DOMContentLoaded', function () {
     // 初期表示でアーカイブ一覧を取得
     fetchArchives();
 
+    let isProcessing = false;
+
     // アーカイブ登録処理
     registerButton.addEventListener('click', function () {
+        if (isProcessing) { return; }
+        isProcessing = true;
+        toggleButtonDisabled(registerButton, isProcessing);
+
+        // 確認メッセージを表示
+        if (!confirm('アーカイブを取得します。すでに取得済みの場合、編集内容などが初期化されますがよろしいですか？')) {
+            isProcessing = false;
+            toggleButtonDisabled(registerButton, isProcessing);
+            return;
+        }
+
         const formData = new FormData(registerForm);
 
         // エラーメッセージをクリア
@@ -102,11 +118,14 @@ document.addEventListener('DOMContentLoaded', function () {
                 } else {
                     errorMessage.textContent = 'エラーが発生しました。';
                 }
+            })
+            .finally(() => {
+                isProcessing = false;
+                toggleButtonDisabled(registerButton, isProcessing);
             });
     });
 
     // アーカイブ編集ボタン類イベント追加
-    let isProcessing = false;
     resultsContainer.addEventListener('click', function (event) {
         if (isProcessing) { return; }
         isProcessing = true;
@@ -200,7 +219,77 @@ document.addEventListener('DOMContentLoaded', function () {
                 });
         }
 
+        // タイムスタンプ編集ボタン押下時
+        if (target.classList.contains('edit-timestamps-btn')) {
+            toggleButtonDisabled(target, isProcessing);
+
+            const id = target.getAttribute('data-id');
+            const isEdit = target.getAttribute('data-is-edit');
+            if (!id || !isEdit) {
+                console.error('Invalid data attributes for edit timestamps');
+                isProcessing = false;
+                toggleButtonDisabled(target, isProcessing);
+                return;
+            }
+
+            const errorMessage = target.parentElement.querySelector('.error-message');
+            errorMessage.textContent = '';
+
+            // 編集状態かどうかで処理を分岐
+            if (isEdit !== "1") {
+                try {
+                    // 編集状態ではない場合、表示を編集モードに切り替える
+                    toggleTsItemsStyle(target, isEdit);
+                } catch (e) {
+                    console.error('Failed to toggle timestamp styles:', e);
+                    isProcessing = false;
+                    toggleButtonDisabled(target, isProcessing);
+                    return;
+                }
+            } else {
+                // 編集後の表示非表示状態を取得してAPIの引数を作成する
+                const updateTsItems = [];
+                const tsItems = target.closest('.archive').querySelectorAll('.timestamp');
+                tsItems.forEach(tsItem => {
+                    const id = tsItem.getAttribute('key');
+                    const isDisplay = tsItem.classList.contains('is-display');
+                    updateTsItems.push({
+                        id: id,
+                        is_display: isDisplay ? '1' : '0',
+                    });
+                });
+
+                // Ajaxリクエスト
+                axios.patch('/api/archives/edit-timestamps', updateTsItems)
+                    .then(response => {
+                        alert(response.data.message);
+                        // 通常モードに戻す
+                        toggleTsItemsStyle(target, isEdit);
+                    })
+                    .catch(error => {
+                        console.error('エラーが発生しました:', error);
+                        errorMessage.textContent = 'コメント編集に失敗しました。もう一度お試しください。';
+                    })
+                    .finally(() => {
+                        isProcessing = false;
+                        toggleButtonDisabled(target, isProcessing);
+                    });
+            }
+        }
+
+        // タイムスタンプ押下時（編集モードのみ）
+        // 子要素のクリックでも反応させる
+        if (target.classList.contains('timestamp')) {
+            toggleTsItemDisplay(target);
+        } else {
+            const parent = target.closest('.timestamp');
+            if (parent) {
+                toggleTsItemDisplay(parent);
+            }
+        }
         isProcessing = false;
+        toggleButtonDisabled(target, isProcessing);
+        return;
     });
 });
 
@@ -250,16 +339,66 @@ function toggleDisplay(element, newDisplay) {
     element.classList.toggle('bg-gray-200', !newDisplayFlg);
 }
 
-function getTsItems(ts_items) {
+// 編集モードと通常モードの表示切り替え
+function toggleTsItemsStyle(btn, currentIsEdit) {
+    const timestampsElement = btn.closest('.archive').querySelector('.timestamps');
+    const tsItems = timestampsElement.querySelectorAll('.timestamp');
+    // 現在のisEditと逆の状態をnewIsEditとし、その状態に各要素を更新していく
+    // 現在が通常時で編集ボタンを押した場合は、newIsEdit = true となり編集モードのスタイルが適用される
+    // 現在が編集中で完了ボタンを押した場合は、newIsEdit = false となり通常モードのスタイルが適用される
+    const newIsEditFlg = currentIsEdit !== '1'
+    if (btn) {
+        btn.setAttribute('data-is-edit', newIsEditFlg ? '1' : '0');
+        btn.textContent = newIsEditFlg ? '編集を完了する' : 'タイムスタンプ編集';
+        btn.classList.toggle('bg-blue-500', !newIsEditFlg);
+        btn.classList.toggle('bg-orange-500', newIsEditFlg);
+        // キャンセルボタンの表示
+    }
+    // TS項目のモード変更
+    tsItems.forEach(tsItem => {
+        tsItem.classList.toggle('border-[0.5px]', newIsEditFlg);
+        tsItem.classList.toggle('mb-[1px]', newIsEditFlg);
+        tsItem.classList.toggle('px-2', newIsEditFlg);
+        tsItem.classList.toggle('hover:cursor-pointer', newIsEditFlg);
+        tsItem.classList.toggle('hover:shadow-md', newIsEditFlg);
+        tsItem.classList.toggle('hover:border-red-500', newIsEditFlg);
+        tsItem.querySelector('a').classList.toggle('hidden', newIsEditFlg);
+        tsItem.querySelector('span').classList.toggle('hidden', !newIsEditFlg);
+    });
+}
+
+// TS項目クリック時の表示切替
+function toggleTsItemDisplay(tsItem) {
+    // 編集モードでなければ終了（リンクが非表示の場合は通常モードなので終了）
+    const linkElement = tsItem.querySelector('a');
+    if (!linkElement || !linkElement.classList.contains('hidden')) { return; }
+
+    // 現在の表示状態を取得し、状態を反転させてそれに合わせてclassを更新する
+    const newIsDisplayFlg = !tsItem.classList.contains('is-display');
+
+    // tsItemのclassを更新
+    // 表示時
+    tsItem.classList.toggle('is-display', newIsDisplayFlg);
+    tsItem.classList.toggle('text-gray-700', newIsDisplayFlg);
+    // 非表示時
+    tsItem.classList.toggle('text-gray-500', !newIsDisplayFlg);
+    tsItem.classList.toggle('pl-4', !newIsDisplayFlg);
+    tsItem.classList.toggle('bg-gray-200', !newIsDisplayFlg);
+}
+
+function getTsItems(tsItems) {
     let html = '';
-    ts_items.forEach(ts_item => {
+    tsItems.forEach(tsItem => {
         html += `
-                <div class="timestamp text-sm text-gray-700" key="${ts_item.id}">
-                    <a href="${"https://youtube.com/watch?v=" + encodeURIComponent(ts_item.video_id || '')}&t=${encodeURIComponent(ts_item.ts_num || '0')}s"
+                <div class="timestamp text-sm ${tsItem.is_display ? 'text-gray-700 is-display' : 'text-gray-500 pl-4 bg-gray-200'}" key="${tsItem.id}">
+                    <a href="${"https://youtube.com/watch?v=" + encodeURIComponent(tsItem.video_id || '')}&t=${encodeURIComponent(tsItem.ts_num || '0')}s"
                         target="_blank" class="text-blue-500 tabular-nums hover:underline">
-                        ${ts_item.ts_text || '0:00:00'}
+                        ${tsItem.ts_text || '0:00:00'}
                     </a>
-                    <span class="ml-2">${escapeHTML(ts_item.text || '')}</span>
+                    <span class="tabular-nums hidden">
+                        ${tsItem.ts_text || '0:00:00'}
+                    </span>
+                    <span class="ml-2">${escapeHTML(tsItem.text || '')}</span>
                 </div>
         `;
     });

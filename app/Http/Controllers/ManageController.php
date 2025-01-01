@@ -162,4 +162,16 @@ class ManageController extends Controller
         $ts_items = TsItem::where('video_id', $archive->video_id)->get();
         return response()->json($ts_items);
     }
+
+    public function editTimestamps(Request $request)
+    {
+        $validatedData = $request->validate([
+            '*.id' => 'required|string|exists:ts_items,id',
+            '*.is_display' => 'required|boolean',
+        ]);
+        foreach ($validatedData as $item) {
+            TsItem::where('id', $item['id'])->update(['is_display' => $item['is_display']]);
+        }
+        return response()->json(['message' => "タイムスタンプの編集が完了しました"]);
+    }
 }
