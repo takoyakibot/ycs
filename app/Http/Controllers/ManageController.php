@@ -165,6 +165,9 @@ class ManageController extends Controller
 
     public function editTimestamps(Request $request)
     {
-        return response()->json(['message' => "editTimestamps returned."]);
+        foreach ($request->all() as $item) {
+            TsItem::where('id', $item['id'])->update(['is_display' => $item['is_display']]);
+        }
+        return response()->json(['message' => "タイムスタンプの編集が完了しました"]);
     }
 }
