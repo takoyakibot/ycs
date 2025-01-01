@@ -361,7 +361,8 @@ function toggleTsItemsStyle(btn, currentIsEdit) {
 // TS項目クリック時の表示切替
 function toggleTsItemDisplay(tsItem) {
     // 編集モードでなければ終了（リンクが非表示の場合は通常モードなので終了）
-    if (!tsItem.querySelector('a').classList.contains('hidden')) { return; }
+    const linkElement = tsItem.querySelector('a');
+    if (!linkElement || !linkElement.classList.contains('hidden')) { return; }
 
     // 現在の表示状態を取得し、状態を反転させてそれに合わせてclassを更新する
     const newIsDisplayFlg = !tsItem.classList.contains('is-display');
