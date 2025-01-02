@@ -37,7 +37,7 @@ class ManageController extends Controller
         // ハンドルが存在しない場合はチャンネル管理に戻す
         $channel = Channel::where('handle', $id)->first();
         if (!$api_key_flg || !$channel) {
-            return view('manage.index', compact('api_key_flg'));
+            return redirect()->route('manage.index');
         }
         $crypt_handle = Crypt::encryptString($channel->handle);
         return view('manage.show', compact('channel', 'crypt_handle'));
