@@ -21,7 +21,7 @@ document.addEventListener('DOMContentLoaded', function () {
                             <div class="flex flex-col flex-shrink-0 sm:w-1/3">
                                 <div class="flex flex-col gap-2">
                                     <a href="${youtubeUrl}" target="_blank">
-                                        <img src="${escapeHTML(archive.thumbnail || '')}" alt="サムネイル"
+                                        <img src="${escapeHTML(archive.thumbnail || '')}" alt="サムネイル" loading="lazy"
                                             class="h-auto rounded-md object-cover filter ${archive.is_display ? 'grayscale-0' : 'grayscale'}" />
                                     </a>
                                     <div>
