@@ -67,6 +67,9 @@ document.addEventListener('DOMContentLoaded', function () {
                                         data-is-edit="0">
                                         タイムスタンプ編集
                                     </button>
+                                    <button class="cancel-timestamps-btn ml-1 bg-gray-200 text-gray-500 hidden px-4 py-1 rounded-full font-semibold w-auto">
+                                        編集をキャンセル
+                                    </button>
                                     <!-- エラーメッセージ表示 -->
                                     <div class="error-message mt-1 text-red-500 text-sm"></div>
                                 </div>
@@ -126,6 +129,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     // アーカイブ編集ボタン類イベント追加
+    // 親要素全体のクリックイベントを拾い、それがボタンなど処理が必要なものかどうかを判定する
     resultsContainer.addEventListener('click', function (event) {
         if (isProcessing) { return; }
         isProcessing = true;
@@ -268,7 +272,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     })
                     .catch(error => {
                         console.error('エラーが発生しました:', error);
-                        errorMessage.textContent = 'コメント編集に失敗しました。もう一度お試しください。';
+                        errorMessage.textContent = 'タイムスタンプの編集に失敗しました。もう一度お試しください。';
                     })
                     .finally(() => {
                         isProcessing = false;
@@ -280,12 +284,31 @@ document.addEventListener('DOMContentLoaded', function () {
         // タイムスタンプ押下時（編集モードのみ）
         // 子要素のクリックでも反応させる
         if (target.classList.contains('timestamp')) {
-            toggleTsItemDisplay(target);
+            toggleTsItemGrayout(target);
         } else {
             const parent = target.closest('.timestamp');
             if (parent) {
-                toggleTsItemDisplay(parent);
+                toggleTsItemGrayout(parent);
             }
+        }
+
+        // キャンセルボタン押下時
+        if (target.classList.contains('cancel-timestamps-btn')) {
+            toggleButtonDisabled(target, isProcessing);
+
+            const tsItems = target.closest('.archive').querySelectorAll('.timestamp')
+            tsItems.forEach(tsItem => {
+                const isDisplay = tsItem.classList.contains('is-display');
+                const defaultDisplay = tsItem.classList.contains('default-display');
+                // フラグが異なる場合は値と見た目を戻す
+                if (isDisplay !== defaultDisplay) {
+                    toggleTsItemGrayout(tsItem);
+                }
+            });
+            // 通常モードに戻す
+            // 編集時しか表示しないので固定値
+            alert('タイムスタンプの編集をキャンセルしました');
+            toggleTsItemsStyle(target, '1');
         }
         isProcessing = false;
         toggleButtonDisabled(target, isProcessing);
@@ -342,17 +365,22 @@ function toggleDisplay(element, newDisplay) {
 // 編集モードと通常モードの表示切り替え
 function toggleTsItemsStyle(btn, currentIsEdit) {
     const timestampsElement = btn.closest('.archive').querySelector('.timestamps');
+    const editBtn = btn.closest('.archive').querySelector('.edit-timestamps-btn');
+    const camcelBtn = btn.closest('.archive').querySelector('.cancel-timestamps-btn');
     const tsItems = timestampsElement.querySelectorAll('.timestamp');
     // 現在のisEditと逆の状態をnewIsEditとし、その状態に各要素を更新していく
     // 現在が通常時で編集ボタンを押した場合は、newIsEdit = true となり編集モードのスタイルが適用される
     // 現在が編集中で完了ボタンを押した場合は、newIsEdit = false となり通常モードのスタイルが適用される
     const newIsEditFlg = currentIsEdit !== '1'
-    if (btn) {
-        btn.setAttribute('data-is-edit', newIsEditFlg ? '1' : '0');
-        btn.textContent = newIsEditFlg ? '編集を完了する' : 'タイムスタンプ編集';
-        btn.classList.toggle('bg-blue-500', !newIsEditFlg);
-        btn.classList.toggle('bg-orange-500', newIsEditFlg);
+    if (editBtn) {
+        editBtn.setAttribute('data-is-edit', newIsEditFlg ? '1' : '0');
+        editBtn.textContent = newIsEditFlg ? '編集を完了する' : 'タイムスタンプ編集';
+        editBtn.classList.toggle('bg-blue-500', !newIsEditFlg);
+        editBtn.classList.toggle('bg-orange-500', newIsEditFlg);
+    }
+    if (camcelBtn) {
         // キャンセルボタンの表示
+        camcelBtn.classList.toggle('hidden', !newIsEditFlg);
     }
     // TS項目のモード変更
     tsItems.forEach(tsItem => {
@@ -367,8 +395,11 @@ function toggleTsItemsStyle(btn, currentIsEdit) {
     });
 }
 
-// TS項目クリック時の表示切替
-function toggleTsItemDisplay(tsItem) {
+/**
+ * TS項目クリック時の表示切替
+ * フラグの変更などは内部で実施してくれるので、グレイアウトを反転させたいTS項目を指定して実行するだけでよい
+ */
+function toggleTsItemGrayout(tsItem) {
     // 編集モードでなければ終了（リンクが非表示の場合は通常モードなので終了）
     const linkElement = tsItem.querySelector('a');
     if (!linkElement || !linkElement.classList.contains('hidden')) { return; }
@@ -390,7 +421,8 @@ function getTsItems(tsItems) {
     let html = '';
     tsItems.forEach(tsItem => {
         html += `
-                <div class="timestamp text-sm ${tsItem.is_display ? 'text-gray-700 is-display' : 'text-gray-500 pl-4 bg-gray-200'}" key="${tsItem.id}">
+                <div class="timestamp text-sm ${tsItem.is_display ? 'text-gray-700 is-display default-display' : 'text-gray-500 pl-4 bg-gray-200'}"
+                    key="${tsItem.id}">
                     <a href="${"https://youtube.com/watch?v=" + encodeURIComponent(tsItem.video_id || '')}&t=${encodeURIComponent(tsItem.ts_num || '0')}s"
                         target="_blank" class="text-blue-500 tabular-nums hover:underline">
                         ${tsItem.ts_text || '0:00:00'}
