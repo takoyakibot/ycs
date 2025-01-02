@@ -14,6 +14,6 @@
 <script>
     // 5秒後にトップページにリダイレクト
     setTimeout(() => {
-        location.href = "{{ route('top') }}";
+        location.href = "{{ e(route('top')) }}";
     }, 5000);
 </script>

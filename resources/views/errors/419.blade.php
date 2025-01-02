@@ -14,6 +14,6 @@
 <script type="text/javascript">
     // 5秒後に自動的にログイン画面にリダイレクト
     setTimeout(() => {
-        location.href = "{{ route('login') }}";
+        location.href = "{{ e(route('login')) }}";
     }, 5000);
 </script>
