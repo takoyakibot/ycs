@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { escapeHTML, toggleButtonDisabled } from "../utils";
 
 document.addEventListener('DOMContentLoaded', function () {
