@@ -12,7 +12,7 @@ class ChannelController extends Controller
     public function index()
     {
         // チャンネル情報を取得して表示
-        $channels = Channel::all()->toArray();
+        $channels = Channel::paginate(100)->toArray();
         return view('channels.index', compact('channels'));
     }
 
