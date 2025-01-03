@@ -1,7 +1,7 @@
 <x-app-layout>
     <x-slot name="alpine_script">
         <script>
-            window.channels = @json($channels['data']);
+            window.channels = @json($channels['data'] ?? []);
         </script>
     </x-slot>
     <x-slot name="header">
