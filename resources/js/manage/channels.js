@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { escapeHTML, toggleButtonDisabled } from "../utils";
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -14,12 +15,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 let html = '';
                 channels.forEach(channel => {
                     html += `
-                        <div class="border rounded-lg shadow-lg p-4 bg-white">
-                            <a href="manage/${encodeURIComponent(channel.handle || '')}" class="flex items-center gap-4">
+                        <a href="manage/${encodeURIComponent(channel.handle || '')}">
+                            <div class="flex items-center gap-4 border rounded-lg shadow-lg p-4 bg-white cursor-pointer hover:bg-gray-200">
                                 <img src="${escapeHTML(channel.thumbnail || '')}" alt="アイコン" class="w-20 h-20 rounded-full" />
                                 <span class="text-lg font-bold">${escapeHTML(channel.title || '未設定')}</span>
-                            </a>
-                        </div>
+                            </div>
+                        </a>
                     `;
                 });
                 resultsContainer.innerHTML = html;
