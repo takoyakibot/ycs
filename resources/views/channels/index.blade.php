@@ -1,13 +1,45 @@
 <x-app-layout>
+    <x-slot name="alpine_script">
+        <script>
+            window.channels = @json($channels);
+        </script>
+    </x-slot>
+    <x-slot name="header">
+        <h2 class="font-semibold sm:text-xl text-gray-800 dark:text-gray-200 leading-tight">
+            {{ __('チャンネル一覧') }}
+        </h2>
+    </x-slot>
 
-    <h1>チャンネル一覧</h1>
-    <ul>
-        @foreach ($channels as $channel)
-            <li>
-                <a href="/{{ $channel['id'] }}">{{ $channel['name'] }}</a>
-            </li>
-        @endforeach
-    </ul>
-    <a href="/login">管理画面へ</a>
+    <div class="flex flex-col p-6 items-center">
+        <div class="p-2">
+            <div x-data='{ channels: window.channels, selectedChannel: null }'
+                class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 w-[100%] max-w-5xl border shadow p-4 rounded-lg">
+                <template x-for="channel in channels" :key="channel.handle">
+                    <a :href="'/channels/'+channel.handle">
+                        <div class="flex items-center gap-4 border rounded-lg shadow-lg p-4 bg-white cursor-pointer hover:bg-gray-200">
+                            <img :src="escapeHTML(channel.thumbnail)" alt="アイコン" class="w-20 h-20 rounded-full" />
+                            <span class="text-lg font-bold" x-text="channel.title"></span>
+                        </div>
+                    </a>
+                </template>
+                <div x-show="selectedChannel" class="mt-4">
+                    <p>現在選択中のチャンネル： <span x-text="selectedChannel"></span></p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        function escapeHTML(str) {
+            const div = document.createElement('div');
+            div.appendChild(document.createTextNode(str));
+            return div.innerHTML;
+        }
+
+        function toggleButtonDisabled(target, flg) {
+            target.disabled = flg;
+            target.classList.toggle('opacity-50', flg);
+            target.classList.toggle('cursor-not-allowed', flg);
+        }
+    </script>
 
 </x-app-layout>
