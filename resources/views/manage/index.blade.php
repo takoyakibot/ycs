@@ -5,7 +5,7 @@
         </h2>
     </x-slot>
 
-    <div class="flex flex-col px-6 py-12 items-center">
+    <div class="flex flex-col p-6 items-center">
 
         @if ($api_key_flg)
             <!-- チャンネル登録フォーム -->
