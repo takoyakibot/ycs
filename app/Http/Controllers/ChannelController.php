@@ -27,7 +27,7 @@ class ChannelController extends Controller
 
         // チャンネル情報を取得して表示
         $channel = Channel::where('handle', $id)->firstOrFail();
-        $archives = Archive::where('channel_id', $channel->id)->get();
+        $archives = Archive::where('channel_id', $channel->id)->paginate(100)->toArray();
 
         // $channelData['comments'] = !$keyword
         // ? []
