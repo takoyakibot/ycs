@@ -13,7 +13,7 @@ class ChannelController extends Controller
     public function index()
     {
         // チャンネル情報を取得して表示
-        $channels = Channel::paginate(100)->toArray();
+        $channels = Channel::paginate(50)->toArray();
         return view('channels.index', compact('channels'));
     }
 
@@ -27,7 +27,7 @@ class ChannelController extends Controller
 
         // チャンネル情報を取得して表示
         $channel = Channel::where('handle', $id)->firstOrFail();
-        $archives = Archive::where('channel_id', $channel->id)->paginate(100)->toArray();
+        $archives = Archive::where('channel_id', $channel->id)->paginate(50)->toArray();
 
         // $channelData['comments'] = !$keyword
         // ? []
