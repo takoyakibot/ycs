@@ -25,10 +25,14 @@ class ChannelController extends Controller
         // $keyword = request('keyword');
         // $cmntChatType = request('type', '0');
 
+        error_log($id);
         // チャンネル情報を取得して表示
         $channel = Channel::where('handle', $id)->firstOrFail();
-        $archives = Archive::where('channel_id', $channel->id)->paginate(50)->toArray();
-
+        error_log($channel->channel_id);
+        $archives = Archive::where('channel_id', $channel->channel_id)
+            ->where('is_display', '1')
+            ->orderBy('published_at', 'desc')
+            ->paginate(50)->toArray();
         // $channelData['comments'] = !$keyword
         // ? []
         // : array_filter(
@@ -45,6 +49,6 @@ class ChannelController extends Controller
         // if (request()->ajax()) {
         //     return response()->json($channelData['comments']);
         // }
-        return view('channels.show', compact('archives'));
+        return view('channels.show', compact('channel', 'archives'));
     }
 }
