@@ -53,7 +53,7 @@
         }
 
         function getArchiveUrl(videoId, tsNum = 0) {
-            return 'https://youtube.com/watch?v=' + encodeURIComponentLocal(videoId || '') + (tsNum === '0' ? encodeURIComponentLocal('&t=' + tsNum + 's') : '');
+            return 'https://youtube.com/watch?v=' + encodeURIComponentLocal(videoId || '') + (tsNum !== 0 ? '&t=' + tsNum + 's' : '');
         }
     </script>
 </html>
