@@ -16,13 +16,13 @@
             <h2 class="text-gray-500 items-center justify-center gap-4 hidden sm:flex">
                 <img :src="escapeHTML(channel.thumbnail || '')" alt="アイコン" class="w-20 h-20 rounded-full">
                 <span class="text-lg font-bold" x-text="channel.title || '未設定'"></span>
-                <a :href="'https://youtube.com/@' + escapeHTML(channel.handle || '')" target="_blank">
+                <a :href="'https://youtube.com/@' + escapeHTML(channel.handle || '')" target="_blank" class="hover:opacity-80">
                     Youtubeチャンネルはこちら
                 </a>
             </h2>
             <h2 class="text-gray-500 justify-self-center sm:hidden">
-                <a href="{{ url('https://youtube.com/@' . $channel->handle) }}" target="_blank" class="flex items-center gap-4">
-                    <img :href="'https://youtube.com/@' + escapeHTML(channel.handle || '')" alt="アイコン" class="w-20 h-20 rounded-full">
+                <a :href="'https://youtube.com/@' + escapeHTML(channel.handle || '')" target="_blank" class="flex items-center gap-4 hover:opacity-80">
+                    <img :src="escapeHTML(channel.thumbnail || '')" alt="アイコン" class="w-20 h-20 rounded-full">
                     <span class="text-lg font-bold" x-text="channel.title || '未設定'"></span>
                 </a>
             </h2>
