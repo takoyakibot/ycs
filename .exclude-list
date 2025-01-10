@@ -1,5 +1,4 @@
 tests
-artisan
 .editorconfig
 .env
 .env.example
@@ -7,8 +6,6 @@ artisan
 .git
 .gitattributes
 .gitignore
-composer.json
-composer.lock
 phpunit.xml
 README.md
 vit.config.js
