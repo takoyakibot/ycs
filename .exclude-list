@@ -1,0 +1,11 @@
+tests
+.editorconfig
+.env
+.env.example
+.exclude-list
+.git
+.gitattributes
+.gitignore
+phpunit.xml
+README.md
+vit.config.js
