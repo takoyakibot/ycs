@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // チャンネル一覧の取得処理
     function fetchChannels() {
-        axios.get('/api/channels')
+        axios.get('/api/manage/channels')
             .then(function (response) {
                 const channels = response.data;
                 let html = '';
@@ -49,7 +49,7 @@ document.addEventListener('DOMContentLoaded', function () {
         // エラーメッセージをクリア
         errorMessage.textContent = '';
 
-        axios.post('/api/channels', formData)
+        axios.post('/api/manage/channels', formData)
             .then(function (response) {
                 // 登録成功後にチャンネル一覧を再取得
                 fetchChannels();
