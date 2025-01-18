@@ -33,7 +33,7 @@
             <div id="archives" class="flex flex-col items-center w-[100%]">
                 <!-- アーカイブリスト -->
                 <template x-for="archive in archives.data" :key="archive.id">
-                    <div class="archive flex flex-col sm:flex-row w-[100%] max-w-5xl border rounded-lg shadow-lg p-4 gap-4 mb-6 bg-white">
+                    <div class="archive flex flex-col sm:flex-row w-[100%] max-w-5xl border rounded-lg shadow-lg p-4 gap-4 mb-2 bg-white">
                         <div class="flex flex-col flex-shrink-0 sm:w-1/3">
                             <div class="flex flex-col gap-2">
                                 <a :href="getArchiveUrl(archive.video_id || '')" target="_blank">
@@ -81,19 +81,7 @@
 
                         const paginationButtons = document.querySelectorAll('#paginationButtons button');
                         paginationButtons.forEach(button => {
-                            if (button.classList.contains('last')) {
-                                if (this.archives.prev_page_url) {
-                                    button.classList.remove('pagination-button-disabled');
-                                } else {
-                                    button.classList.add('pagination-button-disabled');
-                                }
-                            } else {
-                                if (this.archives.next_page_url) {
-                                    button.classList.remove('pagination-button-disabled');
-                                } else {
-                                    button.classList.add('pagination-button-disabled');
-                                }
-                            }
+                            togglePaginationButtonDisabled(button);
                         });
                     } catch (error) {
                         console.error('データの取得に失敗しました:', error);
@@ -119,10 +107,28 @@
                 init() {
                     const paginationButtons = document.querySelectorAll('#paginationButtons button');
                     paginationButtons.forEach(button => {
+                        togglePaginationButtonDisabled(button);
                         button.addEventListener('click', this.handlePaginationClick.bind(this));
                     });
                 }
             }));
         });
+
+        // ページネーションボタンのクラス修正
+        function togglePaginationButtonDisabled(button) {
+            if (button.classList.contains('last')) {
+                if (this.archives.prev_page_url) {
+                    button.classList.remove('pagination-button-disabled');
+                } else {
+                    button.classList.add('pagination-button-disabled');
+                }
+            } else {
+                if (this.archives.next_page_url) {
+                    button.classList.remove('pagination-button-disabled');
+                } else {
+                    button.classList.add('pagination-button-disabled');
+                }
+            }
+        }
     </script>
 </x-app-layout>
