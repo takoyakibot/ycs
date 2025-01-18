@@ -23,13 +23,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/channels/manage', [ManageController::class, 'index'])->name('manage.index');
     Route::get('/channels/manage/{id}', [ManageController::class, 'show'])->name('manage.show');
 
-    Route::get('api/channels', [ManageController::class, 'fetchChannel'])->name('manage.fetchChannel');
-    Route::post('api/channels', [ManageController::class, 'addChannel'])->name('manage.addChannel');
-    Route::get('api/channels/{id}', [ManageController::class, 'fetchArchives'])->name('manage.fetchArchives');
-    Route::post('api/archives', [ManageController::class, 'addArchives'])->name('manage.addArchives');
-    Route::patch('api/archives/toggle-display', [ManageController::class, 'toggleDisplay'])->name('manage.toggleDisplay');
-    Route::patch('api/archives/fetch-comments', [ManageController::class, 'fetchComments'])->name('manage.fetchComments');
-    Route::patch('api/archives/edit-timestamps', [ManageController::class, 'editTimestamps'])->name('manage.editTimestamps');
+    Route::get('api/manage/channels', [ManageController::class, 'fetchChannel'])->name('manage.fetchChannel');
+    Route::post('api/manage/channels', [ManageController::class, 'addChannel'])->name('manage.addChannel');
+    Route::get('api/manage/channels/{id}', [ManageController::class, 'fetchArchives'])->name('manage.fetchArchives');
+    Route::post('api/manage/archives', [ManageController::class, 'addArchives'])->name('manage.addArchives');
+    Route::patch('api/manage/archives/toggle-display', [ManageController::class, 'toggleDisplay'])->name('manage.toggleDisplay');
+    Route::patch('api/manage/archives/fetch-comments', [ManageController::class, 'fetchComments'])->name('manage.fetchComments');
+    Route::patch('api/manage/archives/edit-timestamps', [ManageController::class, 'editTimestamps'])->name('manage.editTimestamps');
 });
 
 Route::middleware('auth')->group(function () {
@@ -42,5 +42,7 @@ Route::get('/', [ChannelController::class, 'index'])->name('top');
 Route::get('/channels', [ChannelController::class, 'index'])->name('channels.index');
 Route::get('/channels/{id}', [ChannelController::class, 'show'])
     ->name('channels.show');
+
+Route::get('api/channels/{id}', [ChannelController::class, 'fetchArchives'])->name('channels.fetchArchives');
 
 require __DIR__ . '/auth.php';
