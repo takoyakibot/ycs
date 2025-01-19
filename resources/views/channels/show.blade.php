@@ -106,6 +106,7 @@
                 init() {
                     const paginationButtons = document.querySelectorAll('#paginationButtons button');
                     paginationButtons.forEach(button => {
+                        togglePaginationButtonDisabled(button, 1);
                         button.addEventListener('click', this.handlePaginationClick.bind(this));
                     });
                 }
@@ -115,9 +116,8 @@
         // ページネーションボタンのクラス修正
         const maxPage = Math.ceil(this.archives.total / this.archives.per_page);
         function togglePaginationButtonDisabled(button, newPage) {
-
-            if (button.classList.contains('prev') && newPage > 1
-            || button.classList.contains('next') && newPage < maxPage) {
+            const isNext = button.classList.contains('next');
+            if (!isNext && 1 < newPage || isNext && newPage < maxPage) {
                 button.classList.remove('pagination-button-disabled');
             } else {
                 button.classList.add('pagination-button-disabled');
