@@ -13,7 +13,8 @@ class ChannelController extends Controller
     public function index()
     {
         // チャンネル情報を取得して表示
-        $channels = Channel::paginate(50)->toArray();
+        $page = config('utils.page');
+        $channels = Channel::paginate($page)->toArray();
         return view('channels.index', compact('channels'));
     }
 
@@ -27,11 +28,7 @@ class ChannelController extends Controller
 
         // チャンネル情報を取得して表示
         $channel = Channel::where('handle', $id)->firstOrFail();
-        $archives = Archive::with('tsItemsDisplay')
-            ->where('channel_id', $channel->channel_id)
-            ->where('is_display', '1')
-            ->orderBy('published_at', 'desc')
-            ->paginate(50)->toArray();
+        $archives = $this->getArchives($channel->channel_id)->toArray();
         // $channelData['comments'] = !$keyword
         // ? []
         // : array_filter(
@@ -49,5 +46,21 @@ class ChannelController extends Controller
         //     return response()->json($channelData['comments']);
         // }
         return view('channels.show', compact('channel', 'archives'));
+    }
+
+    public function fetchArchives(string $id)
+    {
+        $channel = Channel::where('handle', $id)->firstOrFail();
+        $archives = $this->getArchives($channel->channel_id);
+        return response()->json($archives);
+    }
+
+    private function getArchives(string $channel_id)
+    {
+        return Archive::with('tsItemsDisplay')
+            ->where('channel_id', $channel_id)
+            ->where('is_display', '1')
+            ->orderBy('published_at', 'desc')
+            ->paginate(config('utils.page'));
     }
 }

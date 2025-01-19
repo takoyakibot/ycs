@@ -1,3 +1,31 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+.pagination-button {
+    padding: 4px 20px;
+    border: 1px solid #ccc;
+    background-color: #eee;
+    font: #999;
+    cursor: pointer;
+    border-radius: 12px;
+    transition: background-color 0.3s;
+}
+
+.pagination-button:hover {
+    border: 1px solid #666;
+    background-color: #fff;
+    font: #000;
+}
+
+.pagination-button-disabled {
+    background-color: #ddd;
+    font: #999;
+    cursor: not-allowed;
+}
+
+.pagination-button-disabled:hover {
+    border: 1px solid #ccc !important;
+    background-color: #ddd !important;
+    font: #999 !important;
+}
