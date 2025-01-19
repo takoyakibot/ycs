@@ -32,7 +32,7 @@
             <x-pagination></x-pagination>
             <div id="archives" class="flex flex-col items-center w-[100%]">
                 <!-- アーカイブリスト -->
-                <template x-for="archive in archives.data" :key="archive.id">
+                <template x-for="archive in (archives.data || [])" :key="archive.id">
                     <div class="archive flex flex-col sm:flex-row w-[100%] max-w-5xl border rounded-lg shadow-lg p-4 gap-4 mb-2 bg-white">
                         <div class="flex flex-col flex-shrink-0 sm:w-1/3">
                             <div class="flex flex-col gap-2">
@@ -78,11 +78,6 @@
                         const response = await fetch(`/api/channels/${channel.handle}?page=${page}`);
                         if (!response.ok) throw new Error('データ取得エラー');
                         this.archives = await response.json(); // データを更新
-
-                        const paginationButtons = document.querySelectorAll('#paginationButtons button');
-                        paginationButtons.forEach(button => {
-                            togglePaginationButtonDisabled(button);
-                        });
                     } catch (error) {
                         console.error('データの取得に失敗しました:', error);
                     }
@@ -99,6 +94,10 @@
                     const page = isNext
                         ? this.archives.current_page + 1
                         : this.archives.current_page - 1;
+                    const paginationButtons = document.querySelectorAll('#paginationButtons button');
+                    paginationButtons.forEach(button => {
+                        togglePaginationButtonDisabled(button, page);
+                    });
 
                     this.fetchData(page); // Alpine.js内でfetchDataを呼び出し
                 },
@@ -107,7 +106,6 @@
                 init() {
                     const paginationButtons = document.querySelectorAll('#paginationButtons button');
                     paginationButtons.forEach(button => {
-                        togglePaginationButtonDisabled(button);
                         button.addEventListener('click', this.handlePaginationClick.bind(this));
                     });
                 }
@@ -115,19 +113,14 @@
         });
 
         // ページネーションボタンのクラス修正
-        function togglePaginationButtonDisabled(button) {
-            if (button.classList.contains('last')) {
-                if (this.archives.prev_page_url) {
-                    button.classList.remove('pagination-button-disabled');
-                } else {
-                    button.classList.add('pagination-button-disabled');
-                }
+        const maxPage = Math.ceil(this.archives.total / this.archives.per_page);
+        function togglePaginationButtonDisabled(button, newPage) {
+
+            if (button.classList.contains('prev') && newPage > 1
+            || button.classList.contains('next') && newPage < maxPage) {
+                button.classList.remove('pagination-button-disabled');
             } else {
-                if (this.archives.next_page_url) {
-                    button.classList.remove('pagination-button-disabled');
-                } else {
-                    button.classList.add('pagination-button-disabled');
-                }
+                button.classList.add('pagination-button-disabled');
             }
         }
     </script>
