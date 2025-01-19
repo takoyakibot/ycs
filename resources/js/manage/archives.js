@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // アーカイブ一覧の取得処理
     function fetchArchives() {
-        axios.get('/api/channels/' + handle.value)
+        axios.get('/api/manage/channels/' + handle.value)
             .then(function (response) {
                 const archives = response.data;
                 let html = '';
@@ -110,7 +110,7 @@ document.addEventListener('DOMContentLoaded', function () {
         // エラーメッセージをクリア
         errorMessage.textContent = '';
 
-        axios.post('/api/archives', formData)
+        axios.post('/api/manage/archives', formData)
             .then(function (response) {
                 // 登録成功後にアーカイブ一覧を再取得
                 alert(response.data);
@@ -157,7 +157,7 @@ document.addEventListener('DOMContentLoaded', function () {
             };
 
             // Ajaxリクエスト
-            axios.patch('/api/archives/toggle-display', data)
+            axios.patch('/api/manage/archives/toggle-display', data)
                 .then(response => {
                     // サーバーからのレスポンスを処理
                     const newDisplay = response.data;
@@ -198,7 +198,7 @@ document.addEventListener('DOMContentLoaded', function () {
             };
 
             // Ajaxリクエスト
-            axios.patch('/api/archives/fetch-comments', data)
+            axios.patch('/api/manage/archives/fetch-comments', data)
                 .then(response => {
                     // サーバーからのレスポンスを処理
                     const ts_items = response.data;
@@ -265,7 +265,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 });
 
                 // Ajaxリクエスト
-                axios.patch('/api/archives/edit-timestamps', updateTsItems)
+                axios.patch('/api/manage/archives/edit-timestamps', updateTsItems)
                     .then(response => {
                         alert(response.data.message);
                         // 通常モードに戻す

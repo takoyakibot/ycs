@@ -83,7 +83,7 @@ class ManageController extends Controller
         $archives = Archive::with('tsItems')
             ->where('channel_id', $channel->channel_id)
             ->orderBy('published_at', 'desc')
-            ->get();
+            ->paginate(config('utils.page'));
         return response()->json($archives);
     }
 
