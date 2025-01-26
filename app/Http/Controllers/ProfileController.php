@@ -2,13 +2,13 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\User;
 use App\Http\Requests\ProfileUpdateRequest;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Redirect;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Redirect;
 use Illuminate\View\View;
 
 class ProfileController extends Controller
@@ -50,6 +50,10 @@ class ProfileController extends Controller
                 $old_user = User::where('id', $request->user()->id)->firstOrFail();
                 $request->user()->api_key = $old_user->api_key;
             }
+        }
+        // productionの場合はapi_keyの新規登録は受け付けない
+        if (config('app.env') == 'production') {
+            $request->user()->api_key = '';
         }
 
         $request->user()->save();
