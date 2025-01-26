@@ -64,11 +64,11 @@ class YouTubeService
                 '1', // description
                 $archive['description'],
             );
-            // タイムスタンプがなかった場合はコメントを検索する
-            if (empty($archive['ts_items'])) {
-                // コメントを個別取得のみにする場合はここをコメントアウト
-                $archive['ts_items'] = $this->getTimeStampsFromComments($archive['video_id']);
-            }
+            // // タイムスタンプがなかった場合はコメントを検索する
+            // if (empty($archive['ts_items'])) {
+            //     // コメントを個別取得のみにする場合はここをコメントアウト
+            //     $archive['ts_items'] = $this->getTimeStampsFromComments($archive['video_id']);
+            // }
             $rtn_archives[] = $archive;
         }
         return $rtn_archives;
@@ -80,7 +80,7 @@ class YouTubeService
         $playlist_id = 'UU' . substr($channel_id, 2);
 
         // nextPageTokenが取得できなくなるまでループ
-        $maxResults = config('app.debug') ? 2 : 50;
+        $maxResults = config('app.debug') ? config('utils.page') : 50;
         $response = null;
         $archives = [];
         do {
@@ -104,7 +104,7 @@ class YouTubeService
                     'description' => $item['snippet']['description'],
                 ];
             }
-            if (config('app.debug') && count($archives) >= 4) {
+            if (config('app.debug') && count($archives) >= config('utils.max_archive_count')) {
                 break;
             }
         } while ($response->getNextPageToken());
