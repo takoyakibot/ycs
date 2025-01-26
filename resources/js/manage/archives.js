@@ -15,7 +15,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 const archives = response.data;
                 let html = '';
 
-                archives.forEach(archive => {
+                archives['data'].forEach(archive => {
                     const youtubeUrl = "https://youtube.com/watch?v=" + encodeURIComponent(archive.video_id || '');
                     html += `
                         <div class="archive flex flex-col sm:flex-row w-[100%] max-w-5xl border rounded-lg shadow-lg p-4 gap-4 mb-6 ${archive.is_display ? 'bg-white' : 'bg-gray-200'}">
