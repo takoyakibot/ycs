@@ -8,3 +8,4 @@ tests
 .gitignore
 phpunit.xml
 README.md
+storage/logs

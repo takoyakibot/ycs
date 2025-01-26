@@ -60,11 +60,13 @@
                     </x-dropdown>
                 </div>
             @else
-                <!-- Guest User: Login/Register Links -->
-                <div class="hidden sm:flex sm:items-center sm:ms-6">
-                    <a href="{{ route('login') }}" class="text-gray-500 hover:text-blue-500">ログイン</a>
-                    <a href="{{ route('register') }}" class="ml-4 text-gray-500 hover:text-blue-500">新規登録</a>
-                </div>
+                @if (config('app.env') === 'local')
+                    <!-- Guest User: Login/Register Links -->
+                    <div class="hidden sm:flex sm:items-center sm:ms-6">
+                        <a href="{{ route('login') }}" class="text-gray-500 hover:text-blue-500">ログイン</a>
+                        <a href="{{ route('register') }}" class="ml-4 text-gray-500 hover:text-blue-500">新規登録</a>
+                    </div>
+                @endif
             @endif
 
             <!-- Hamburger -->
@@ -112,15 +114,17 @@
                 </div>
             </div>
         @else
-            <!-- Guest Links -->
-            <div class="pt-2 pb-3 space-y-1">
-                <x-responsive-nav-link :href="route('login')">
-                    {{ __('ログイン') }}
-                </x-responsive-nav-link>
-                <x-responsive-nav-link :href="route('register')">
-                    {{ __('新規登録') }}
-                </x-responsive-nav-link>
-            </div>
+            @if (config('app.env') === 'local')
+                <!-- Guest Links -->
+                <div class="pt-2 pb-3 space-y-1">
+                    <x-responsive-nav-link :href="route('login')">
+                        {{ __('ログイン') }}
+                    </x-responsive-nav-link>
+                    <x-responsive-nav-link :href="route('register')">
+                        {{ __('新規登録') }}
+                    </x-responsive-nav-link>
+                </div>
+            @endif
         @endif
     </div>
 </nav>
