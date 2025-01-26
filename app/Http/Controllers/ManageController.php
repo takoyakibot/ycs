@@ -109,7 +109,7 @@ class ManageController extends Controller
                 foreach ($archive['ts_items'] as $ts_item) {
                     $rtn_ts_items[] = $ts_item;
                 }
-                // コメントを取得しても
+                // タイムスタンプが存在すればデフォルト表示とする
                 $archive['is_display'] = (count($archive['ts_items']) > 0);
                 unset($archive['description']);
                 unset($archive['ts_items']);
@@ -118,10 +118,17 @@ class ManageController extends Controller
             // cascadeでTsItemsも消える
             Archive::where('channel_id', $channel->channel_id)->delete();
             if ($rtn_archives) {
-                DB::table('archives')->insert($rtn_archives);
+                // 一気にやるとヤバなので100件くらいずつ登録
+                $chunked = array_chunk($rtn_archives, 100);
+                foreach ($chunked as $chunk) {
+                    DB::table('archives')->insert($chunk);
+                }
             }
             if ($rtn_ts_items) {
-                DB::table('ts_items')->insert($rtn_ts_items);
+                $chunked = array_chunk($rtn_ts_items, 100);
+                foreach ($chunked as $chunk) {
+                    DB::table('ts_items')->insert($chunk);
+                }
             }
         });
 
