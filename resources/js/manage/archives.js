@@ -12,10 +12,16 @@ document.addEventListener('DOMContentLoaded', function () {
     function fetchArchives() {
         axios.get('/api/manage/channels/' + handle.value)
             .then(function (response) {
-                const archives = response.data;
+                const d = response.data
+                let archives = [];
+                if (Array.isArray(d['data'])) {
+                    archives = d['data'];
+                } else {
+                    console.error('データの形式が不正です');
+                }
                 let html = '';
 
-                archives['data'].forEach(archive => {
+                archives.forEach(archive => {
                     const youtubeUrl = "https://youtube.com/watch?v=" + encodeURIComponent(archive.video_id || '');
                     html += `
                         <div class="archive flex flex-col sm:flex-row w-[100%] max-w-5xl border rounded-lg shadow-lg p-4 gap-4 mb-6 ${archive.is_display ? 'bg-white' : 'bg-gray-200'}">
