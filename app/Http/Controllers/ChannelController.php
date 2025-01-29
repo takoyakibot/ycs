@@ -23,28 +23,10 @@ class ChannelController extends Controller
      */
     public function show(string $id)
     {
-        // $keyword = request('keyword');
-        // $cmntChatType = request('type', '0');
-
         // チャンネル情報を取得して表示
         $channel = Channel::where('handle', $id)->firstOrFail();
         $archives = $this->getArchives($channel->channel_id)->toArray();
-        // $channelData['comments'] = !$keyword
-        // ? []
-        // : array_filter(
-        //     $channelData['comments'],
-        //     function ($comment) use ($keyword, $cmntChatType) {
-        //         // タイプ一致かつメッセージが含まれるもののみtrue
-        //         return
-        //         ($comment['cmntChatType'] === $cmntChatType || $cmntChatType === '0')
-        //         ? strpos($comment['message'], $keyword) !== false
-        //         : false;
-        //     },
-        // );
 
-        // if (request()->ajax()) {
-        //     return response()->json($channelData['comments']);
-        // }
         return view('channels.show', compact('channel', 'archives'));
     }
 
