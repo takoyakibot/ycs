@@ -43,8 +43,7 @@
         </div>
 
         <div class="p-2 flex flex-col justify-self-center w-[100%] max-w-5xl gap-2">
-            <h3 class="text-lg font-bold text-gray-800">アーカイブ一覧</h3>
-            <div id="archives" class="flex flex-col items-center w-[100%]"></div>
+            <div id="archives" class="flex flex-col items-center w-[100%] gap-2"></div>
         </div>
     </div>
 </x-app-layout>
