@@ -9,8 +9,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const handle = document.getElementById('handle');
 
     // アーカイブ一覧の取得処理
-    function fetchArchives() {
-        axios.get('/api/manage/channels/' + handle.value)
+    function fetchArchives(page = 0) {
+        axios.get('/api/manage/channels/' + handle.value + (page > 0 ? '?page=' + page : ''))
             .then(function (response) {
                 const d = response.data
                 let archives = [];
@@ -19,7 +19,22 @@ document.addEventListener('DOMContentLoaded', function () {
                 } else {
                     console.error('データの形式が不正です');
                 }
-                let html = '';
+
+                const paginationButtons = `
+                    <div id="paginationButtons" class="flex gap-2 justify-center w-[100%]">
+                        <!-- 前へボタン -->
+                        <button class="pagination-button prev ${d['prev_page_url'] ? '' : 'pagination-button-disabled'}" aria-label="Previous page" data-page="${d['current_page'] - 1}">
+                            <
+                        </button>
+
+                        <!-- 次へボタン -->
+                        <button class="pagination-button next ${d['next_page_url'] ? '' : 'pagination-button-disabled'}" aria-label="Next page" data-page="${d['current_page'] + 1}">
+                            >
+                        </button>
+                    </div>
+                `;
+
+                let html = paginationButtons;
 
                 archives.forEach(archive => {
                     const youtubeUrl = "https://youtube.com/watch?v=" + encodeURIComponent(archive.video_id || '');
@@ -84,6 +99,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         </div>
                     `;
                 });
+                html += paginationButtons;
 
                 resultsContainer.innerHTML = html;
             })
@@ -317,6 +333,12 @@ document.addEventListener('DOMContentLoaded', function () {
             alert('タイムスタンプの編集をキャンセルしました');
             toggleTsItemsStyle(target, '1');
         }
+
+        // ページネーションボタン押下時
+        if (target.classList.contains('pagination-button') && !target.classList.contains('pagination-button-disabled')) {
+            const page = parseInt(target.getAttribute('data-page'));
+            fetchArchives(page);
+        }
         isProcessing = false;
         toggleButtonDisabled(target, isProcessing);
         return;
@@ -443,3 +465,5 @@ function getTsItems(tsItems) {
     });
     return html;
 }
+
+// ページネーション関連を追加する
