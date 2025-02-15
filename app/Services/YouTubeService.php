@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Services;
 
 use Carbon\Carbon;
@@ -43,9 +42,9 @@ class YouTubeService
         if (count($response->getItems()) > 0) {
             $channel = $response->getItems()[0];
             return [
-                'title' => $channel['snippet']['title'],
+                'title'      => $channel['snippet']['title'] ?? '',
                 'channel_id' => $channel['id'],
-                'thumbnail' => $channel['snippet']['thumbnails']['default']['url'],
+                'thumbnail'  => $channel['snippet']['thumbnails']['default']['url'] ?? '',
             ];
         }
 
@@ -56,7 +55,7 @@ class YouTubeService
     {
         $this->setApiKey();
 
-        $archives = $this->getArchives($channel_id);
+        $archives     = $this->getArchives($channel_id);
         $rtn_archives = [];
         foreach ($archives as &$archive) {
             $archive['ts_items'] = $this->getTimeStampsFromText(
@@ -64,11 +63,19 @@ class YouTubeService
                 '1', // description
                 $archive['description'],
             );
-            // // タイムスタンプがなかった場合はコメントを検索する
-            // if (empty($archive['ts_items'])) {
-            //     // コメントを個別取得のみにする場合はここをコメントアウト
-            //     $archive['ts_items'] = $this->getTimeStampsFromComments($archive['video_id']);
-            // }
+            // 歌枠の場合は一旦表示にする
+            $archive['is_display'] = $this->isSingingStream($archive['title']);
+            // コメントを個別取得のみにする場合はここをコメントアウト
+            // 以下の場合にコメントを検索する
+            // 概要欄にタイムスタンプが1件以下（過去のコピペなどで0:00:00が残っている場合がある）
+            // 歌枠の場合（タイトルに特定の文字列が含まれる場合）
+            if (empty($archive['ts_items']) || count($archive['ts_items']) <= 1 || $archive['is_display']) {
+                $comment_ts_items = $this->getTimeStampsFromComments($archive['video_id']);
+                foreach ($comment_ts_items as $ts_item) {
+                    $archive['ts_items'][] = $ts_item;
+                }
+            }
+
             $rtn_archives[] = $archive;
         }
         return $rtn_archives;
@@ -81,28 +88,30 @@ class YouTubeService
 
         // nextPageTokenが取得できなくなるまでループ
         $maxResults = config('app.debug') ? config('utils.page') : 50;
-        $response = null;
-        $archives = [];
+        $response   = null;
+        $archives   = [];
         do {
             $response = $this->youtube->playlistItems->listPlaylistItems('snippet', [
                 'playlistId' => $playlist_id,
                 'maxResults' => $maxResults,
-                'pageToken' => $response ? $response->getNextPageToken() : "",
+                'pageToken'  => $response ? $response->getNextPageToken() : "",
             ]);
 
-            foreach ($response->getItems() as $item) {
-                $archives[] = [
-                    'id' => Str::ulid(),
-                    'channel_id' => $channel_id,
-                    'video_id' => $item['snippet']['resourceId']['videoId'],
-                    'title' => $item['snippet']['title'],
-                    'thumbnail' => $item['snippet']['thumbnails']['medium']['url'],
-                    'is_public' => true,
-                    'is_display' => true,
-                    'published_at' => Carbon::parse($item['snippet']['publishedAt'])->format('Y-m-d H:i:s'),
-                    'comments_updated_at' => today(),
-                    'description' => $item['snippet']['description'],
-                ];
+            if (is_array($response->getItems())) {
+                foreach ($response->getItems() as $item) {
+                    $archives[] = [
+                        'id'                  => Str::ulid(),
+                        'channel_id'          => $channel_id,
+                        'video_id'            => $item['snippet']['resourceId']['videoId'],
+                        'title'               => $item['snippet']['title'],
+                        'thumbnail'           => $item['snippet']['thumbnails']['medium']['url'],
+                        'is_public'           => true,
+                        'is_display'          => true,
+                        'published_at'        => Carbon::parse($item['snippet']['publishedAt'])->format('Y-m-d H:i:s'),
+                        'comments_updated_at' => today(),
+                        'description'         => $item['snippet']['description'],
+                    ];
+                }
             }
             if (config('app.debug') && count($archives) >= config('utils.max_archive_count')) {
                 break;
@@ -116,14 +125,14 @@ class YouTubeService
     {
         // 引数のバリデーション
         // 最低限のチェック
-        if (!is_string($video_id) || !is_string($description)) {
+        if (! is_string($video_id) || ! is_string($description)) {
             // 無効なデータが来た場合、空の結果を返却
             error_log("Invalid video_id or description: "
                 . var_export($video_id, true) . ", " . var_export($description, true));
             return [];
         }
 
-        if (!in_array($type, ['1', '2'])) {
+        if (! in_array($type, ['1', '2'])) {
             // タイプが不正ならデフォルト値にする（例えば1）
             error_log("Invalid type: " . var_export($type, true));
             return [];
@@ -131,23 +140,23 @@ class YouTubeService
 
         // 正規表現でタイムスタンプを抽出 (MM:SS または HH:MM:SS)
         $pattern = '/\b(\d{1,2}:\d{2}(?::\d{2})?)\b/';
-        $lines = explode("\n", $description); // 改行で分割
+        $lines   = explode("\n", $description); // 改行で分割
         $results = [];
 
         foreach ($lines as $line) {
             // 各行からタイムスタンプを抽出
             if (preg_match($pattern, $line, $matches)) {
-                $timestamp = $matches[1]; // タイムスタンプ部分
-                $comment = trim(str_replace($timestamp, '', $line)); // タイムスタンプを除外した部分
+                $timestamp = $matches[1];                              // タイムスタンプ部分
+                $comment   = trim(str_replace($timestamp, '', $line)); // タイムスタンプを除外した部分
 
                 // 結果に追加
                 $results[] = [
-                    'id' => Str::ulid(),
+                    'id'       => Str::ulid(),
                     'video_id' => $video_id,
-                    'type' => $type,
-                    'ts_text' => $timestamp,
-                    'ts_num' => $this->timestampToSeconds($timestamp),
-                    'text' => $comment,
+                    'type'     => $type,
+                    'ts_text'  => $timestamp,
+                    'ts_num'   => $this->timestampToSeconds($timestamp),
+                    'text'     => $comment,
                 ];
             }
         }
@@ -177,10 +186,10 @@ class YouTubeService
         do {
             // リクエストパラメータを設定
             $params = [
-                'videoId' => $video_id,
-                'part' => 'snippet,replies', // コメントのスニペットとリプライを取得
-                'maxResults' => 100, // 1回のリクエストで取得するコメント数
-                'pageToken' => $response ? $response->getNextPageToken() : "",
+                'videoId'    => $video_id,
+                'part'       => 'snippet,replies', // コメントのスニペットとリプライを取得
+                'maxResults' => 100,               // 1回のリクエストで取得するコメント数
+                'pageToken'  => $response ? $response->getNextPageToken() : "",
             ];
 
             try {
@@ -198,10 +207,10 @@ class YouTubeService
             // 各コメントを処理
             foreach ($response->getItems() as $item) {
                 $topLevelComment = $item['snippet']['topLevelComment']['snippet']['textOriginal'];
-                $comments[] = $topLevelComment;
+                $comments[]      = $topLevelComment;
 
                 // リプライコメントがある場合
-                if (!empty($item['replies']['comments'])) {
+                if (! empty($item['replies']['comments'])) {
                     foreach ($item['replies']['comments'] as $reply) {
                         $comments[] = $reply['snippet']['textOriginal'];
                     }
@@ -223,5 +232,17 @@ class YouTubeService
         }
 
         return $rtn_ts_items;
+    }
+
+    private function isSingingStream(string $title): bool
+    {
+        // 特定の歌��タイトルに含まれるかを判定する
+        $keywords = ['singing stream', '歌枠', 'カラオケ', 'karaoke'];
+        foreach ($keywords as $keyword) {
+            if (str_contains(strtolower($title), $keyword)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

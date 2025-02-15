@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Http\Controllers;
 
 use App\Models\Archive;
@@ -21,7 +20,7 @@ class ManageController extends Controller
     public function __construct(YouTubeService $youtubeService, ImageService $imageService)
     {
         $this->youtubeService = $youtubeService;
-        $this->imageService = $imageService;
+        $this->imageService   = $imageService;
     }
 
     public function index()
@@ -36,7 +35,7 @@ class ManageController extends Controller
         $api_key_flg = Auth::user()->api_key ? '1' : '';
         // ハンドルが存在しない場合はチャンネル管理に戻す
         $channel = Channel::where('handle', $id)->first();
-        if (!$api_key_flg || !$channel) {
+        if (! $api_key_flg || ! $channel) {
             return redirect()->route('manage.index');
         }
         $crypt_handle = Crypt::encryptString($channel->handle);
@@ -61,15 +60,15 @@ class ManageController extends Controller
             error_log($e->getMessage());
             throw new Exception("youtubeとの接続でエラーが発生しました");
         }
-        if (!$channel || !isset($channel['title']) || !$channel['title']) {
+        if (! $channel || ! isset($channel['title']) || ! $channel['title']) {
             throw new Exception("チャンネルが存在しません");
         }
 
         Channel::create([
-            'handle' => $request->handle,
+            'handle'     => $request->handle,
             'channel_id' => $channel['channel_id'],
-            'title' => $channel['title'],
-            'thumbnail' => $channel['thumbnail'],
+            'title'      => $channel['title'],
+            'thumbnail'  => $channel['thumbnail'],
         ]);
 
         return response()->json("チャンネルを登録しました");
@@ -79,7 +78,7 @@ class ManageController extends Controller
     {
         $handle = Crypt::decryptString($id);
 
-        $channel = Channel::where('handle', $handle)->firstOrFail();
+        $channel  = Channel::where('handle', $handle)->firstOrFail();
         $archives = Archive::with('tsItems')
             ->where('channel_id', $channel->channel_id)
             ->orderBy('published_at', 'desc')
@@ -109,8 +108,6 @@ class ManageController extends Controller
                 foreach ($archive['ts_items'] as $ts_item) {
                     $rtn_ts_items[] = $ts_item;
                 }
-                // タイムスタンプが存在すればデフォルト表示とする
-                $archive['is_display'] = (count($archive['ts_items']) > 0);
                 unset($archive['description']);
                 unset($archive['ts_items']);
             }
@@ -138,7 +135,7 @@ class ManageController extends Controller
     public function toggleDisplay(Request $request)
     {
         $request->validate([
-            'id' => ['required', 'string'],
+            'id'         => ['required', 'string'],
             'is_display' => ['required', 'in:0,1'],
         ]);
         $new_display = ($request->is_display === '1') ? '0' : '1';
@@ -173,7 +170,7 @@ class ManageController extends Controller
     public function editTimestamps(Request $request)
     {
         $validatedData = $request->validate([
-            '*.id' => 'required|string|exists:ts_items,id',
+            '*.id'         => 'required|string|exists:ts_items,id',
             '*.is_display' => 'required|boolean',
         ]);
         foreach ($validatedData as $item) {
