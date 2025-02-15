@@ -63,11 +63,19 @@ class YouTubeService
                 '1', // description
                 $archive['description'],
             );
-            // // タイムスタンプがなかった場合はコメントを検索する
-            // if (empty($archive['ts_items'])) {
-            //     // コメントを個別取得のみにする場合はここをコメントアウト
-            //     $archive['ts_items'] = $this->getTimeStampsFromComments($archive['video_id']);
-            // }
+            // 歌枠の場合は一旦表示にする
+            $archive['is_display'] = $this->isSingingStream($archive['title']);
+            // コメントを個別取得のみにする場合はここをコメントアウト
+            // 以下の場合にコメントを検索する
+            // 概要欄にタイムスタンプが1件以下（過去のコピペなどで0:00:00が残っている場合がある）
+            // 歌枠の場合（タイトルに特定の文字列が含まれる場合）
+            if (empty($archive['ts_items']) || count($archive['ts_items']) <= 1 || $archive['is_display']) {
+                $comment_ts_items = $this->getTimeStampsFromComments($archive['video_id']);
+                foreach ($comment_ts_items as $ts_item) {
+                    $archive['ts_items'][] = $ts_item;
+                }
+            }
+
             $rtn_archives[] = $archive;
         }
         return $rtn_archives;
@@ -222,5 +230,17 @@ class YouTubeService
         }
 
         return $rtn_ts_items;
+    }
+
+    private function isSingingStream(string $title): bool
+    {
+        // 特定の歌��タイトルに含まれるかを判定する
+        $keywords = ['singing stream', '歌枠', 'カラオケ', 'karaoke'];
+        foreach ($keywords as $keyword) {
+            if (str_contains(strtolower($title), $keyword)) {
+                return true;
+            }
+        }
+        return false;
     }
 }
