@@ -42,9 +42,9 @@ class YouTubeService
         if (count($response->getItems()) > 0) {
             $channel = $response->getItems()[0];
             return [
-                'title'      => $channel['snippet']['title'],
+                'title'      => $channel['snippet']['title'] ?? '',
                 'channel_id' => $channel['id'],
-                'thumbnail'  => $channel['snippet']['thumbnails']['default']['url'],
+                'thumbnail'  => $channel['snippet']['thumbnails']['default']['url'] ?? '',
             ];
         }
 
@@ -97,19 +97,21 @@ class YouTubeService
                 'pageToken'  => $response ? $response->getNextPageToken() : "",
             ]);
 
-            foreach ($response->getItems() as $item) {
-                $archives[] = [
-                    'id'                  => Str::ulid(),
-                    'channel_id'          => $channel_id,
-                    'video_id'            => $item['snippet']['resourceId']['videoId'],
-                    'title'               => $item['snippet']['title'],
-                    'thumbnail'           => $item['snippet']['thumbnails']['medium']['url'],
-                    'is_public'           => true,
-                    'is_display'          => true,
-                    'published_at'        => Carbon::parse($item['snippet']['publishedAt'])->format('Y-m-d H:i:s'),
-                    'comments_updated_at' => today(),
-                    'description'         => $item['snippet']['description'],
-                ];
+            if (is_array($response->getItems())) {
+                foreach ($response->getItems() as $item) {
+                    $archives[] = [
+                        'id'                  => Str::ulid(),
+                        'channel_id'          => $channel_id,
+                        'video_id'            => $item['snippet']['resourceId']['videoId'],
+                        'title'               => $item['snippet']['title'],
+                        'thumbnail'           => $item['snippet']['thumbnails']['medium']['url'],
+                        'is_public'           => true,
+                        'is_display'          => true,
+                        'published_at'        => Carbon::parse($item['snippet']['publishedAt'])->format('Y-m-d H:i:s'),
+                        'comments_updated_at' => today(),
+                        'description'         => $item['snippet']['description'],
+                    ];
+                }
             }
             if (config('app.debug') && count($archives) >= config('utils.max_archive_count')) {
                 break;
