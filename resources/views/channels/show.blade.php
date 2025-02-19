@@ -100,6 +100,7 @@
                     });
 
                     this.fetchData(page); // Alpine.js内でfetchDataを呼び出し
+                    window.scroll({top: 0, behavior: 'auto'});
                 },
 
                 // Alpine.js初期化後にイベントリスナーを設定
