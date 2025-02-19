@@ -75,6 +75,7 @@ class YouTubeService
                     $archive['ts_items'][] = $ts_item;
                 }
             }
+            $this->updateDisplayTsItems($archive['ts_items']);
 
             $rtn_archives[] = $archive;
         }
@@ -121,7 +122,7 @@ class YouTubeService
         return $archives;
     }
 
-    private function getTimeStampsFromText($video_id, $type, $description): array
+    private function getTimeStampsFromText($video_id, $type, $description, $comment_id = 0): array
     {
         // 引数のバリデーション
         // 最低限のチェック
@@ -151,12 +152,13 @@ class YouTubeService
 
                 // 結果に追加
                 $results[] = [
-                    'id'       => Str::ulid(),
-                    'video_id' => $video_id,
-                    'type'     => $type,
-                    'ts_text'  => $timestamp,
-                    'ts_num'   => $this->timestampToSeconds($timestamp),
-                    'text'     => $comment,
+                    'id'         => Str::ulid(),
+                    'comment_id' => $comment_id,
+                    'video_id'   => $video_id,
+                    'type'       => $type,
+                    'ts_text'    => $timestamp,
+                    'ts_num'     => $this->timestampToSeconds($timestamp),
+                    'text'       => $comment,
                 ];
             }
         }
@@ -220,15 +222,18 @@ class YouTubeService
         } while ($response && $response->getNextPageToken());
 
         $rtn_ts_items = [];
+        $comment_id   = 1;
         foreach ($comments as $comment) {
             $ts_items = $this->getTimeStampsFromText(
                 $video_id,
                 '2', // comment
                 $comment,
+                $comment_id,
             );
             foreach ($ts_items as $ts_item) {
                 $rtn_ts_items[] = $ts_item;
             }
+            $comment_id++;
         }
 
         return $rtn_ts_items;
@@ -244,5 +249,28 @@ class YouTubeService
             }
         }
         return false;
+    }
+
+    private function updateDisplayTsItems(array &$ts_items): void
+    {
+        if (empty($ts_items)) {
+            return;
+        }
+
+        // comment_idごとの出現回数をカウント
+        $count_by_comment_id = [];
+        foreach ($ts_items as &$item) {
+            $comment_id                       = $item['comment_id'];
+            $count_by_comment_id[$comment_id] = ($count_by_comment_id[$comment_id] ?? 0) + 1;
+        }
+
+        // 最も多い comment_id を取得
+        $max_count                 = max($count_by_comment_id);
+        $most_frequent_comment_ids = array_keys($count_by_comment_id, $max_count, true);
+
+        // is_display を更新
+        foreach ($ts_items as &$item) {
+            $item['is_display'] = in_array($item['comment_id'], $most_frequent_comment_ids, true);
+        }
     }
 }
