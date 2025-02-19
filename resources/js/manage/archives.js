@@ -340,6 +340,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const page = parseInt(target.getAttribute('data-page'));
             if (!isNaN(page) && page >= 0) {
                 fetchArchives(page);
+                window.scroll({ top: 0, behavior: 'auto' });
             }
         }
         isProcessing = false;
