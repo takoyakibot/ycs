@@ -35,9 +35,9 @@
             </main>
         </div>
         <div id="firstDisplayPopup" class="fixed bottom-0 left-0 right-0 bg-gray-800 text-white p-4 text-center">
-            <p>このサイトを利用することにより、<a href="">[利用規約とプライバシーポリシー]</a>に同意したものとみなします。<br/>
+            <p>このサイトを利用することにより、<a target="_blank" class="text-gray-400 underline" href="{{ route('markdown.show') }}">[利用規約とプライバシーポリシー]</a>に同意したものとみなします。<br/>
             利用規約とプライバシーポリシーの内容をよくご確認の上、引き続きサイトを利用してください。</p>
-            <button id="acceptCookies" onclick="acceptCookies()" class="bg-blue-500 px-4 py-1 my-1 rounded text-white">同意する</button>
+            <button id="acceptCookies" onclick="acceptCookies()" class="bg-blue-500 px-4 py-1 my-1 rounded text-white">おｋ</button>
         </div>
     </body>
     <script>
