@@ -28,7 +28,7 @@ class MarkdownController extends Controller
         $markdownContent = File::get($filePath);
 
         // MarkdownをHTMLに変換
-        $converter = new CommonMarkConverter();
+        $converter = new CommonMarkConverter(['html_input' => 'strip']);
         return $converter->convertToHtml($markdownContent);
     }
 }
