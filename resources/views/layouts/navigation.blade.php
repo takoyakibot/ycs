@@ -13,7 +13,7 @@
                 <!-- Navigation Links -->
                 <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
                     <x-nav-link :href="route('top')">
-                    {{ __('タイムスタンプ検索したい') }}
+                        {{ __('タイムスタンプ検索したい') }}
                     </x-nav-link>
                     <x-nav-link :href="route('channels.index')" :active="request()->routeIs('channels.index')">
                         {{ __('チャンネル一覧') }}
@@ -23,6 +23,10 @@
                             {{ __('チャンネル管理') }}
                         </x-nav-link>
                     @endif
+                    <x-nav-link :href="route('markdown.show')" :active="request()->routeIs('markdown.show')" class="text-center">
+                        {{ __('利用規約・') }}<br/>
+                        {{ __('プライバシーポリシー') }}
+                    </x-nav-link>
                 </div>
             </div>
 
