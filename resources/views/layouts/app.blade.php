@@ -73,7 +73,7 @@
 
         function acceptCookies() {
             document.getElementById("firstDisplayPopup").classList.add("hidden");
-            document.cookie = "cookie_consent=true; max-age=" + (60 * 60 * 24) + "; path=/";
+            document.cookie = "cookie_consent=true; max-age=" + (60 * 60 * 24) + "; path=/; Secure; SameSite=Strict";
         }
     </script>
 </html>
