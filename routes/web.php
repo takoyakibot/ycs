@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\ChannelController;
 use App\Http\Controllers\ManageController;
+use App\Http\Controllers\MarkdownController;
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 
@@ -44,5 +45,7 @@ Route::get('/channels/{id}', [ChannelController::class, 'show'])
     ->name('channels.show');
 
 Route::get('api/channels/{id}', [ChannelController::class, 'fetchArchives'])->name('channels.fetchArchives');
+
+Route::get('/terms', [MarkdownController::class, 'show'])->name('markdown.show');
 
 require __DIR__ . '/auth.php';
