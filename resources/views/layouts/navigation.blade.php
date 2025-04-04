@@ -13,7 +13,7 @@
                 <!-- Navigation Links -->
                 <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
                     <x-nav-link :href="route('top')">
-                        {{ __(config('app.name')) }}
+                        {{ config('app.name') }}
                     </x-nav-link>
                     <x-nav-link :href="route('channels.index')" :active="request()->routeIs('channels.index')">
                         {{ __('チャンネル一覧') }}
@@ -92,6 +92,12 @@
                 <x-responsive-nav-link :href="route('manage.index')" :active="request()->routeIs('manage.index')">
                     {{ __('チャンネル管理') }}
                 </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('channels.index')" :active="request()->routeIs('channels.index')">
+                    {{ __('チャンネル一覧') }}
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('markdown.show')" :active="request()->routeIs('markdown.show')">
+                    {{ __('利用規約・プライバシーポリシー') }}
+                </x-responsive-nav-link>
             </div>
 
             <!-- Responsive Settings Options -->
@@ -126,6 +132,14 @@
                     </x-responsive-nav-link>
                     <x-responsive-nav-link :href="route('register')">
                         {{ __('新規登録') }}
+                    </x-responsive-nav-link>
+                </div>
+                <div class="pt-2 pb-3 space-y-1">
+                    <x-responsive-nav-link :href="route('channels.index')" :active="request()->routeIs('channels.index')">
+                        {{ __('チャンネル一覧') }}
+                    </x-responsive-nav-link>
+                    <x-responsive-nav-link :href="route('markdown.show')" :active="request()->routeIs('markdown.show')">
+                        {{ __('利用規約・プライバシーポリシー') }}
                     </x-responsive-nav-link>
                 </div>
             @endif
