@@ -279,7 +279,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 const updateTsItems = [];
                 const tsItems = target.closest('.archive').querySelectorAll('.timestamp');
                 tsItems.forEach(tsItem => {
-                    const id = tsItem.getAttribute('key');
+                    const id = tsItem.dataset.key;
                     const isDisplay = tsItem.classList.contains('is-display');
                     updateTsItems.push({
                         id: id,
@@ -455,7 +455,7 @@ function getTsItems(tsItems) {
     tsItems.forEach(tsItem => {
         html += `
                 <div class="timestamp text-sm ${tsItem.is_display ? 'text-gray-700 is-display default-display' : 'text-gray-500 pl-4 bg-gray-200'}"
-                    key="${tsItem.id}">
+                    data-key="${tsItem.id}">
                     <a href="${"https://youtube.com/watch?v=" + encodeURIComponent(tsItem.video_id || '')}&t=${encodeURIComponent(tsItem.ts_num || '0')}s"
                         target="_blank" class="text-blue-500 tabular-nums hover:underline">
                         ${tsItem.ts_text || '0:00:00'}
