@@ -466,7 +466,6 @@ function getTsItems(tsItems) {
     let html = '';
     let lastCommentId = '';
     tsItems.forEach(tsItem => {
-        console.log(lastCommentId);
         html += `
                 <div class="timestamp text-sm ${tsItem.is_display ? 'text-gray-700 is-display default-display' : 'text-gray-500 pl-4 bg-gray-200'}
                     ${lastCommentId != tsItem.comment_id && lastCommentId != '' ? 'mt-2' : ''}" data-key="${tsItem.id}" data-comment="${tsItem.comment_id}">
