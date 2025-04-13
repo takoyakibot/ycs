@@ -279,7 +279,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 const updateTsItems = [];
                 const tsItems = target.closest('.archive').querySelectorAll('.timestamp');
                 tsItems.forEach(tsItem => {
-                    const id = tsItem.getAttribute('key');
+                    const id = tsItem.dataset.key;
                     const isDisplay = tsItem.classList.contains('is-display');
                     updateTsItems.push({
                         id: id,
@@ -440,22 +440,36 @@ function toggleTsItemGrayout(tsItem) {
     // 現在の表示状態を取得し、状態を反転させてそれに合わせてclassを更新する
     const newIsDisplayFlg = !tsItem.classList.contains('is-display');
 
+    // 対象の data-comment を取得
+    const commentId = tsItem.dataset.comment;
+
+    // tsItemの親である .timestamps 要素を取得
+    const container = tsItem.closest('.timestamps');
+    if (!container) { return; }
+
+    // container内の、同じ data-comment を持つ timestamp 要素を取得
+    const matchingItems = container.querySelectorAll(`.timestamp[data-comment="${commentId}"]`);
+
     // tsItemのclassを更新
-    // 表示時
-    tsItem.classList.toggle('is-display', newIsDisplayFlg);
-    tsItem.classList.toggle('text-gray-700', newIsDisplayFlg);
-    // 非表示時
-    tsItem.classList.toggle('text-gray-500', !newIsDisplayFlg);
-    tsItem.classList.toggle('pl-4', !newIsDisplayFlg);
-    tsItem.classList.toggle('bg-gray-200', !newIsDisplayFlg);
+    matchingItems.forEach(item => {
+        // 表示時
+        item.classList.toggle('is-display', newIsDisplayFlg);
+        item.classList.toggle('text-gray-700', newIsDisplayFlg);
+        // 非表示時
+        item.classList.toggle('text-gray-500', !newIsDisplayFlg);
+        item.classList.toggle('pl-4', !newIsDisplayFlg);
+        item.classList.toggle('bg-gray-200', !newIsDisplayFlg);
+    });
 }
 
 function getTsItems(tsItems) {
     let html = '';
+    let lastCommentId = '';
     tsItems.forEach(tsItem => {
+        console.log(lastCommentId);
         html += `
-                <div class="timestamp text-sm ${tsItem.is_display ? 'text-gray-700 is-display default-display' : 'text-gray-500 pl-4 bg-gray-200'}"
-                    key="${tsItem.id}">
+                <div class="timestamp text-sm ${tsItem.is_display ? 'text-gray-700 is-display default-display' : 'text-gray-500 pl-4 bg-gray-200'}
+                    ${lastCommentId != tsItem.comment_id && lastCommentId != '' ? 'mt-2' : ''}" data-key="${tsItem.id}" data-comment="${tsItem.comment_id}">
                     <a href="${"https://youtube.com/watch?v=" + encodeURIComponent(tsItem.video_id || '')}&t=${encodeURIComponent(tsItem.ts_num || '0')}s"
                         target="_blank" class="text-blue-500 tabular-nums hover:underline">
                         ${tsItem.ts_text || '0:00:00'}
@@ -466,6 +480,7 @@ function getTsItems(tsItems) {
                     <span class="ml-2">${escapeHTML(tsItem.text || '')}</span>
                 </div>
         `;
+        lastCommentId = tsItem.comment_id;
     });
     return html;
 }

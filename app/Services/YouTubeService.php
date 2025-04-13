@@ -196,7 +196,7 @@ class YouTubeService
 
             try {
                 // コメントスレッドを取得
-                $response = $this->youtube->commentThreads->listCommentThreads('snippet,replies', $params);
+                $response = $this->youtube->commentThreads->listCommentThreads('snippet', $params);
             } catch (Exception $e) {
                 // コメントが無効な場合はスキップ
                 if (strpos($e->getMessage(), 'has disabled comments') !== false) {
@@ -208,32 +208,35 @@ class YouTubeService
 
             // 各コメントを処理
             foreach ($response->getItems() as $item) {
+                $commentId       = $item['id'];
                 $topLevelComment = $item['snippet']['topLevelComment']['snippet']['textOriginal'];
-                $comments[]      = $topLevelComment;
+                $comments[]      = [
+                    'id'          => $commentId,
+                    'description' => $topLevelComment,
+                ];
 
-                // リプライコメントがある場合
-                if (! empty($item['replies']['comments'])) {
-                    foreach ($item['replies']['comments'] as $reply) {
-                        $comments[] = $reply['snippet']['textOriginal'];
-                    }
-                }
+                // // リプライコメントがある場合
+                // if (! empty($item['replies']['comments'])) {
+                //     foreach ($item['replies']['comments'] as $reply) {
+                //         $comments[] = $reply['snippet']['textOriginal'];
+                //     }
+                // }
+                // いやリプライにタイムスタンプ置くやつなんておらんやろ
             }
             // 次のページトークンを取得
         } while ($response && $response->getNextPageToken());
 
         $rtn_ts_items = [];
-        $comment_id   = 1;
         foreach ($comments as $comment) {
             $ts_items = $this->getTimeStampsFromText(
                 $video_id,
                 '2', // comment
-                $comment,
-                $comment_id,
+                $comment['description'],
+                $comment['id'],
             );
             foreach ($ts_items as $ts_item) {
                 $rtn_ts_items[] = $ts_item;
             }
-            $comment_id++;
         }
 
         return $rtn_ts_items;
