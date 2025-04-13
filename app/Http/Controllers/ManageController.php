@@ -174,9 +174,11 @@ class ManageController extends Controller
             '*.comment_id' => 'required|string|exists:ts_items,comment_id',
             '*.is_display' => 'required|boolean',
         ]);
-        foreach ($validatedData as $item) {
-            TsItem::where('id', $item['id'])->update(['is_display' => $item['is_display']]);
-        }
+        DB::transaction(function () use ($validatedData) {
+            foreach ($validatedData as $item) {
+                TsItem::where('id', $item['id'])->update(['is_display' => $item['is_display']]);
+            }
+        });
         return response()->json(['message' => "タイムスタンプの編集が完了しました"]);
     }
 }
