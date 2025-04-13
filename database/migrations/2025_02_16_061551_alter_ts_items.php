@@ -13,7 +13,7 @@ return new class extends Migration
     {
         //ts_itemsにcomment_idを追加
         Schema::table('ts_items', function (Blueprint $table) {
-            $table->unsignedBigInteger('comment_id')->nullable()->after('id');
+            $table->string('comment_id', 26)->nullable()->after('id');
         });
     }
 
