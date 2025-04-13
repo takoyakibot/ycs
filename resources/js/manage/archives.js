@@ -280,9 +280,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 const tsItems = target.closest('.archive').querySelectorAll('.timestamp');
                 tsItems.forEach(tsItem => {
                     const id = tsItem.dataset.key;
+                    const commentId = tsItem.dataset.comment;
                     const isDisplay = tsItem.classList.contains('is-display');
                     updateTsItems.push({
                         id: id,
+                        comment_id: commentId,
                         is_display: isDisplay ? '1' : '0',
                     });
                 });
