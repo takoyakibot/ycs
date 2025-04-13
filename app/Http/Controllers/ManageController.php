@@ -171,6 +171,7 @@ class ManageController extends Controller
     {
         $validatedData = $request->validate([
             '*.id'         => 'required|string|exists:ts_items,id',
+            '*.comment_id' => 'required|string|exists:ts_items,comment_id',
             '*.is_display' => 'required|boolean',
         ]);
         foreach ($validatedData as $item) {
