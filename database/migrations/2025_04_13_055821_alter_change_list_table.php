@@ -16,7 +16,7 @@ return new class extends Migration
             $table->dropColumn('type');
 
             // 'video_id' を追加（string, 26桁, not null）
-            $table->string('video_id', 26);
+            $table->string('video_id', 26)->after('channel_id');
 
             // インデックスを追加
             $table->index(['channel_id', 'video_id', 'comment_id']);
