@@ -4,30 +4,24 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class TsItem extends Model
+class ChangeList extends Model
 {
     use HasFactory;
 
-    public $incrementing = false;
-    protected $keyType   = 'string';
-
     protected $fillable = [
         'id',
-        'archive_id',
-        'type',
+        'channel_id',
+        'video_id',
         'comment_id',
-        'ts_text',
-        'ts_num',
-        'text',
+        'is_display',
     ];
 
     public function archive()
     {
         return $this->belongsTo(Archive::class, 'video_id', 'video_id');
     }
-
-    public function changeList()
+    public function comment()
     {
-        return $this->hasMany(ChangeList::class, 'comment_id', 'comment_id');
+        return $this->hasOne(TsItem::class, 'comment_id', 'comment_id');
     }
 }

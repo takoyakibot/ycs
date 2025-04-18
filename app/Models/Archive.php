@@ -40,4 +40,14 @@ class Archive extends Model
             ->where('is_display', '1')
             ->orderBy('ts_num', 'asc');
     }
+
+    public function channel()
+    {
+        return $this->belongsTo(Channel::class, 'channel_id', 'channel_id');
+    }
+
+    public function changeList()
+    {
+        return $this->hasMany(ChangeList::class, 'video_id', 'video_id');
+    }
 }
