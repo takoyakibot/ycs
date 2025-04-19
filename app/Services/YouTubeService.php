@@ -263,17 +263,23 @@ class YouTubeService
         // comment_idごとの出現回数をカウント
         $count_by_comment_id = [];
         foreach ($ts_items as &$item) {
+            $item['is_display']               = '0';
             $comment_id                       = $item['comment_id'];
             $count_by_comment_id[$comment_id] = ($count_by_comment_id[$comment_id] ?? 0) + 1;
         }
 
         // 最も多い comment_id を取得
-        $max_count                 = max($count_by_comment_id);
-        $most_frequent_comment_ids = array_keys($count_by_comment_id, $max_count, true);
-
-        // is_display を更新
-        foreach ($ts_items as &$item) {
-            $item['is_display'] = in_array($item['comment_id'], $most_frequent_comment_ids, true);
+        $max_count = max($count_by_comment_id);
+        // 1件しかない場合は初期表示なしとする
+        if ($max_count > 1) {
+            $most_frequent_comment_ids = array_keys($count_by_comment_id, $max_count, true);
+            // タイムスタンプが同数の場合も考えるのが先勝ちとする
+            if (count($most_frequent_comment_ids) > 0) {
+                // is_display を更新
+                foreach ($ts_items as &$item) {
+                    $item['is_display'] = ($item['comment_id'] === $most_frequent_comment_ids[0]);
+                }
+            }
         }
     }
 }
