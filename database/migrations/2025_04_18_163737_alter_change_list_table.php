@@ -25,7 +25,7 @@ return new class extends Migration
         });
         // comment_idの桁数を26、nullableに変更
         Schema::table('change_list', function (Blueprint $table) {
-            $table->string('comment_id', 26)->nullable()->change();
+            $table->string('comment_id', 26)->nullable()->after('video_id')->change();
         });
         // video_id,comment_idのインデックスを追加
         Schema::table('change_list', function (Blueprint $table) {
