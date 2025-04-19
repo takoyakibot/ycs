@@ -176,15 +176,29 @@ class ManageController extends Controller
             '*.is_display' => 'required|boolean',
         ]);
         DB::transaction(function () use ($validatedData) {
+            // 1件目を取得
+            foreach ($validatedData as $item) {
+                $commentId = $validatedData[0]['comment_id'];
+                $info      = TsItem::where('comment_id', $commentId)
+                    ->with(['archive'])
+                    ->first();
+                break;
+            }
+            // 取得できない場合は終了
+            if (! $info || ! $info->video_id) {return;}
+            // 変更リストの削除 videoIdが一致し、commentIdがnull以外のものを削除
+            ChangeList::where('video_id', $info->video_id)
+                ->where('comment_id', '!=', null)
+                ->delete();
+
             $lastCommentId = '';
             foreach ($validatedData as $item) {
-                $updateFlg = ($lastCommentId !== $item['comment_id']);
                 // タイムスタンプの更新
                 $tsItem = TsItem::where('id', $item['id']);
                 $tsItem->update(['is_display' => $item['is_display']]);
-                if (! $updateFlg) {
-                    $this->setChangeList($item['comment_id'], $item['is_display']);
-                    $updateFlg = true;
+                // タイムスタンプのコメントIDが変わった場合は変更リストに登録
+                if ($lastCommentId !== $item['comment_id']) {
+                    $this->setChangeList($info->video_id, $item['comment_id'], $item['is_display']);
                 }
                 $lastCommentId = $item['comment_id'];
             }
@@ -192,23 +206,38 @@ class ManageController extends Controller
         return response()->json(['message' => "タイムスタンプの編集が完了しました"]);
     }
 
-    private function setChangeList($comment_id, $is_display)
+    private function setChangeList($videoId, $commentId, $isDisplay)
     {
-        // チャンネルとアーカイブの情報を取得
-        $info = TsItem::where('comment_id', $comment_id)
-            ->with(['archive.channel'])
-            ->first();
-        // 変更リストの削除 videoIdが一致し、commentIdがnull以外のものを削除
-        ChangeList::where('video_id', $info->video_id)
-            ->where('comment_id', '!=', null)
-            ->delete();
+        // タイムスタンプを取得して取得してデフォルト状態と比較
+        $tsItems = TsItem::where('video_id', $videoId)->get();
+        // コメントがnullの場合は動画が対象なのでチェック不要
+        if ($commentId !== null) {
+            // 一番タイムスタンプが多いものがデフォルトtrue
+            // comment_idごとの出現回数をカウント
+            $count_by_comment_id = [];
+            foreach ($tsItems as $item) {
+                $comment_id                       = $item['comment_id'];
+                $count_by_comment_id[$comment_id] = ($count_by_comment_id[$comment_id] ?? 0) + 1;
+            }
+            // 最も多い comment_id を取得
+            $max_count                 = max($count_by_comment_id);
+            $most_frequent_comment_ids = array_keys($count_by_comment_id, $max_count, true);
+            // 1件以上の comment_id がある場合は、最初のものを選択
+            if (count($most_frequent_comment_ids) > 0) {
+                $defaultCommentId = $most_frequent_comment_ids[0];
+                // デフォルトのコメントIDが表示の場合は変更リストに登録しない
+                if ($defaultCommentId === $commentId && $isDisplay === '1') {
+                    return;
+                }
+            }
+        }
+
         // 変更リストの登録
         ChangeList::create(
             [
-                'channel_id' => $info->archive->channel->channel_id,
-                'video_id'   => $info->video_id,
-                'comment_id' => $comment_id,
-                'is_display' => $is_display,
+                'video_id'   => $videoId,
+                'comment_id' => $commentId,
+                'is_display' => $isDisplay,
             ]
         );
     }
