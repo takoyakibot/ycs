@@ -65,17 +65,20 @@ class YouTubeService
             );
             // 歌枠の場合は一旦表示にする
             $archive['is_display'] = $this->isSingingStream($archive['title']);
-            // コメントを個別取得のみにする場合はここをコメントアウト
-            // 以下の場合にコメントを検索する
-            // 概要欄にタイムスタンプが1件以下（過去のコピペなどで0:00:00が残っている場合がある）
-            // 歌枠の場合（タイトルに特定の文字列が含まれる場合）
-            if (empty($archive['ts_items']) || count($archive['ts_items']) <= 1 || $archive['is_display']) {
-                $comment_ts_items = $this->getTimeStampsFromComments($archive['video_id']);
-                foreach ($comment_ts_items as $ts_item) {
-                    $archive['ts_items'][] = $ts_item;
+            // 歌枠の場合のみコメントを取得する
+            if ($archive['is_display']) {
+                // コメントを個別取得のみにする場合はここをコメントアウト
+                // 以下の場合にコメントを検索する
+                // 概要欄にタイムスタンプが1件以下（過去のコピペなどで0:00:00が残っている場合がある）
+                // 歌枠の場合（タイトルに特定の文字列が含まれる場合）
+                if (empty($archive['ts_items']) || count($archive['ts_items']) <= 1 || $archive['is_display']) {
+                    $comment_ts_items = $this->getTimeStampsFromComments($archive['video_id']);
+                    foreach ($comment_ts_items as $ts_item) {
+                        $archive['ts_items'][] = $ts_item;
+                    }
                 }
+                $this->updateDisplayTsItems($archive['ts_items']);
             }
-            $this->updateDisplayTsItems($archive['ts_items']);
 
             $rtn_archives[] = $archive;
         }
