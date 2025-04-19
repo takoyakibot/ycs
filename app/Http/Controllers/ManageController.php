@@ -2,6 +2,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Archive;
+use App\Models\ChangeList;
 use App\Models\Channel;
 use App\Models\TsItem;
 use App\Services\ImageService;
@@ -175,10 +176,40 @@ class ManageController extends Controller
             '*.is_display' => 'required|boolean',
         ]);
         DB::transaction(function () use ($validatedData) {
+            $lastCommentId = '';
             foreach ($validatedData as $item) {
-                TsItem::where('id', $item['id'])->update(['is_display' => $item['is_display']]);
+                $updateFlg = ($lastCommentId !== $item['comment_id']);
+                // タイムスタンプの更新
+                $tsItem = TsItem::where('id', $item['id']);
+                $tsItem->update(['is_display' => $item['is_display']]);
+                if (! $updateFlg) {
+                    $this->setChangeList($item['comment_id'], $item['is_display']);
+                    $updateFlg = true;
+                }
+                $lastCommentId = $item['comment_id'];
             }
         });
         return response()->json(['message' => "タイムスタンプの編集が完了しました"]);
+    }
+
+    private function setChangeList($comment_id, $is_display)
+    {
+        // チャンネルとアーカイブの情報を取得
+        $info = TsItem::where('comment_id', $comment_id)
+            ->with(['archive.channel'])
+            ->first();
+        // 変更リストの削除 videoIdが一致し、commentIdがnull以外のものを削除
+        ChangeList::where('video_id', $info->video_id)
+            ->where('comment_id', '!=', null)
+            ->delete();
+        // 変更リストの登録
+        ChangeList::create(
+            [
+                'channel_id' => $info->archive->channel->channel_id,
+                'video_id'   => $info->video_id,
+                'comment_id' => $comment_id,
+                'is_display' => $is_display,
+            ]
+        );
     }
 }

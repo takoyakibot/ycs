@@ -125,7 +125,7 @@ class YouTubeService
         return $archives;
     }
 
-    private function getTimeStampsFromText($video_id, $type, $description, $comment_id = 0): array
+    private function getTimeStampsFromText($video_id, $type, $description, $comment_id = '0'): array
     {
         // 引数のバリデーション
         // 最低限のチェック
