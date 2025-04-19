@@ -8,9 +8,11 @@ class ChangeList extends Model
 {
     use HasFactory;
 
+    // テーブル名
+    protected $table = 'change_list';
+
     protected $fillable = [
         'id',
-        'channel_id',
         'video_id',
         'comment_id',
         'is_display',
