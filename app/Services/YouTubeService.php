@@ -273,7 +273,7 @@ class YouTubeService
         // 1件しかない場合は初期表示なしとする
         if ($max_count > 1) {
             $most_frequent_comment_ids = array_keys($count_by_comment_id, $max_count, true);
-            // タイムスタンプが同数の場合も考えるのが先勝ちとする
+            // タイムスタンプが同数の場合も考えられるが先勝ちとする
             if (count($most_frequent_comment_ids) > 0) {
                 // is_display を更新
                 foreach ($ts_items as &$item) {
