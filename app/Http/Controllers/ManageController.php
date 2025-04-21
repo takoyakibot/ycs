@@ -176,69 +176,54 @@ class ManageController extends Controller
             '*.is_display' => 'required|boolean',
         ]);
         DB::transaction(function () use ($validatedData) {
-            // 1件目を取得
-            foreach ($validatedData as $item) {
-                $commentId = $validatedData[0]['comment_id'];
-                $info      = TsItem::where('comment_id', $commentId)
-                    ->with(['archive'])
-                    ->first();
-                break;
-            }
-            // 取得できない場合は終了
-            if (! $info || ! $info->video_id) {return;}
+            // 概要欄用のcommentIdが0で共通なので、他のcommentIdも全部取得してしまうねえ
+            // 必要な tsItems を一括取得
+            $commentIds = array_column($validatedData, 'comment_id');
+            $videoId    = TsItem::where('comment_id', $commentIds[0])
+                ->with(['archive'])
+                ->value('video_id');
+            if (! $videoId) {return;}
             // 変更リストの削除 videoIdが一致し、commentIdがnull以外のものを削除
-            ChangeList::where('video_id', $info->video_id)
+            ChangeList::where('video_id', $videoId)
                 ->where('comment_id', '!=', null)
                 ->delete();
 
+            // データベースクエリを削減
+            $tsItems = TsItem::where('video_id', $videoId)->get();
+
+            // comment_id ごとの出現回数を事前に計算（comment_idは文字列）
+            $countByCommentId = [];
+            foreach ($tsItems as $item) {
+                $commentId                    = $item['comment_id'];
+                $countByCommentId[$commentId] = ($countByCommentId[$commentId] ?? 0) + 1;
+            }
+
+            $maxCount              = max($countByCommentId);
+            $mostFrequentCommentId = array_keys($countByCommentId, $maxCount, true)[0] ?? null;
+            // 判定に関係する変数をerror_logで出力
+
+            // validatedData のループ処理
             $lastCommentId = '';
             foreach ($validatedData as $item) {
-                // タイムスタンプの更新
-                $tsItem = TsItem::where('id', $item['id']);
-                $tsItem->update(['is_display' => $item['is_display']]);
-                // タイムスタンプのコメントIDが変わった場合は変更リストに登録
+                // is_display の更新
+                TsItem::where('id', $item['id'])->update(['is_display' => $item['is_display']]);
+
+                // comment_id が変わった場合の処理
                 if ($lastCommentId !== $item['comment_id']) {
-                    $this->setChangeList($info->video_id, $item['comment_id'], $item['is_display']);
+                    // 最大件数が2以上でtrue、またはそれ以外のコメントがfalseなら、デフォルト状態なので変更リストには登録しない
+                    $isDefault = ((string) $item['comment_id'] === (string) $mostFrequentCommentId && $maxCount >= 2 && $item['is_display'])
+                        || ((string) $item['comment_id'] !== (string) $mostFrequentCommentId && ! $item['is_display']);
+                    if (! $isDefault) {
+                        ChangeList::create([
+                            'video_id'   => $videoId,
+                            'comment_id' => $item['comment_id'],
+                            'is_display' => $item['is_display'],
+                        ]);
+                    }
                 }
                 $lastCommentId = $item['comment_id'];
             }
         });
         return response()->json(['message' => "タイムスタンプの編集が完了しました"]);
-    }
-
-    private function setChangeList($videoId, $commentId, $isDisplay)
-    {
-        // タイムスタンプを取得して取得してデフォルト状態と比較
-        $tsItems = TsItem::where('video_id', $videoId)->get();
-        // コメントがnullの場合は動画が対象なのでチェック不要
-        if ($commentId !== null) {
-            // 一番タイムスタンプが多いものがデフォルトtrue
-            // comment_idごとの出現回数をカウント
-            $count_by_comment_id = [];
-            foreach ($tsItems as $item) {
-                $comment_id                       = $item['comment_id'];
-                $count_by_comment_id[$comment_id] = ($count_by_comment_id[$comment_id] ?? 0) + 1;
-            }
-            // 最も多い comment_id を取得
-            $max_count                 = max($count_by_comment_id);
-            $most_frequent_comment_ids = array_keys($count_by_comment_id, $max_count, true);
-            // 1件以上の comment_id がある場合は、最初のものを選択
-            if (count($most_frequent_comment_ids) > 0) {
-                $defaultCommentId = $most_frequent_comment_ids[0];
-                // デフォルトのコメントIDが表示の場合は変更リストに登録しない
-                if ($defaultCommentId === $commentId && $isDisplay === '1') {
-                    return;
-                }
-            }
-        }
-
-        // 変更リストの登録
-        ChangeList::create(
-            [
-                'video_id'   => $videoId,
-                'comment_id' => $commentId,
-                'is_display' => $isDisplay,
-            ]
-        );
     }
 }
