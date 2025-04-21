@@ -62,6 +62,7 @@ class YouTubeService
                 $archive['video_id'],
                 '1', // description
                 $archive['description'],
+                $archive['video_id'],
             );
             // 歌枠の場合は一旦表示にする
             $archive['is_display'] = $this->isSingingStream($archive['title']);
@@ -122,7 +123,7 @@ class YouTubeService
         return $archives;
     }
 
-    private function getTimeStampsFromText($video_id, $type, $description, $comment_id = '0'): array
+    private function getTimeStampsFromText($video_id, $type, $description, $comment_id): array
     {
         // 引数のバリデーション
         // 最低限のチェック

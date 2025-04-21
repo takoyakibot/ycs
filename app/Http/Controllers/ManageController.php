@@ -200,7 +200,6 @@ class ManageController extends Controller
 
             $maxCount              = max($countByCommentId);
             $mostFrequentCommentId = array_keys($countByCommentId, $maxCount, true)[0] ?? null;
-            // 判定に関係する変数をerror_logで出力
 
             // validatedData のループ処理
             $lastCommentId = '';
@@ -211,8 +210,8 @@ class ManageController extends Controller
                 // comment_id が変わった場合の処理
                 if ($lastCommentId !== $item['comment_id']) {
                     // 最大件数が2以上でtrue、またはそれ以外のコメントがfalseなら、デフォルト状態なので変更リストには登録しない
-                    $isDefault = ((string) $item['comment_id'] === (string) $mostFrequentCommentId && $maxCount >= 2 && $item['is_display'])
-                        || ((string) $item['comment_id'] !== (string) $mostFrequentCommentId && ! $item['is_display']);
+                    $isDefault = ($item['comment_id'] === $mostFrequentCommentId && $maxCount >= 2 && $item['is_display'])
+                        || ($item['comment_id'] !== $mostFrequentCommentId && ! $item['is_display']);
                     if (! $isDefault) {
                         ChangeList::create([
                             'video_id'   => $videoId,
