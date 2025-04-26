@@ -176,13 +176,16 @@ class ManageController extends Controller
             '*.is_display' => 'required|boolean',
         ]);
         DB::transaction(function () use ($validatedData) {
-            // 概要欄用のcommentIdが0で共通なので、他のcommentIdも全部取得してしまうねえ
             // 必要な tsItems を一括取得
             $commentIds = array_column($validatedData, 'comment_id');
-            $videoId    = TsItem::where('comment_id', $commentIds[0])
-                ->with(['archive'])
-                ->value('video_id');
-            if (! $videoId) {return;}
+            $tsItem     = TsItem::where('comment_id', $commentIds[0])
+                ->with(['archive'])->first();
+            if (! $tsItem) {return;}
+
+            $channelId = $tsItem->archive->channel_id;
+            $videoId   = $tsItem->video_id;
+
+            if (! $channelId || ! $videoId) {return;}
             // 変更リストの削除 videoIdが一致し、commentIdがnull以外のものを削除
             ChangeList::where('video_id', $videoId)
                 ->where('comment_id', '!=', null)
