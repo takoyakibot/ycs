@@ -13,6 +13,7 @@ class ChangeList extends Model
 
     protected $fillable = [
         'id',
+        'channel_id',
         'video_id',
         'comment_id',
         'is_display',

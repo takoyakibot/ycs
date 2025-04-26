@@ -214,6 +214,7 @@ class ManageController extends Controller
                         || ($item['comment_id'] !== $mostFrequentCommentId && ! $item['is_display']);
                     if (! $isDefault) {
                         ChangeList::create([
+                            'channel_id' => $channelId,
                             'video_id'   => $videoId,
                             'comment_id' => $item['comment_id'],
                             'is_display' => $item['is_display'],
