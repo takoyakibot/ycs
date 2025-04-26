@@ -139,9 +139,28 @@ class ManageController extends Controller
             'id'         => ['required', 'string'],
             'is_display' => ['required', 'in:0,1'],
         ]);
-        $new_display = ($request->is_display === '1') ? '0' : '1';
-        Archive::where('id', $request->id)->update(['is_display' => $new_display]);
-        return response()->json($new_display);
+
+        $newDisplay = DB::transaction(function () use ($request) {
+            $new_display = ($request->is_display === '1') ? '0' : '1';
+            // archivesとchange_listを更新
+            // Archive::where('id', $request->id)->update(['is_display' => $new_display]);
+            // return response()->json($new_display);
+            $archive             = Archive::findOrFail($request->id);
+            $archive->is_display = $new_display;
+            $archive->save();
+            ChangeList::updateOrCreate(
+                [
+                    'channel_id' => $archive->channel_id,
+                    'video_id'   => $archive->video_id,
+                    'comment_id' => null,
+                ],
+                ['is_display' => $new_display]
+            );
+
+            return (string) $new_display;
+        });
+
+        return response()->json($newDisplay);
     }
 
     public function fetchComments(Request $request)
