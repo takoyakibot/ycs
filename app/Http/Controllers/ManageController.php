@@ -168,23 +168,28 @@ class ManageController extends Controller
         $request->validate([
             'id' => ['required', 'string'],
         ]);
-        $archive = Archive::findOrFail($request->id, 'video_id');
-        DB::transaction(function () use ($archive) {
-            try {
-                $ts_items = $this->youtubeService->getTimeStampsFromComments($archive->video_id);
-            } catch (Exception $e) {
-                error_log($e->getMessage());
-                throw new Exception("youtubeとの接続でエラーが発生しました");
-            }
-            TsItem::where('video_id', $archive->video_id)
-                ->where('type', '2')
-                ->delete();
-            if ($ts_items) {
-                DB::table('ts_items')->insert($ts_items);
-            }
+        $videoId = Archive::findOrFail($request->id, ['video_id'])->video_id;
+        DB::transaction(function () use ($videoId) {
+            $this->getComments($videoId);
         });
-        $ts_items = TsItem::where('video_id', $archive->video_id)->get();
+        $ts_items = TsItem::where('video_id', $videoId)->get();
         return response()->json($ts_items);
+    }
+
+    private function getComments($videoId)
+    {
+        try {
+            $ts_items = $this->youtubeService->getTimeStampsFromComments($videoId);
+        } catch (Exception $e) {
+            error_log($e->getMessage());
+            throw new Exception("youtubeとの接続でエラーが発生しました");
+        }
+        TsItem::where('video_id', $videoId)
+            ->where('type', '2')
+            ->delete();
+        if ($ts_items) {
+            DB::table('ts_items')->insert($ts_items);
+        }
     }
 
     public function editTimestamps(Request $request)
