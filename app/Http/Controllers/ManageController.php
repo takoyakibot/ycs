@@ -128,6 +128,70 @@ class ManageController extends Controller
                     DB::table('ts_items')->insert($chunk);
                 }
             }
+            // 以下でSQLを実行
+            // ts_itemsにcommentがない、かつchangeListにcommentが存在する場合、コメントを取得
+            $results = DB::select("
+                SELECT t1.video_id
+                FROM archives t1
+                WHERE
+                    NOT EXISTS (
+                        SELECT 1
+                        FROM ts_items t2
+                        WHERE t2.video_id = t1.video_id
+                        AND t2.type = '2'
+                    )
+                    AND EXISTS (
+                        SELECT 1
+                        FROM change_list t3
+                        WHERE t3.video_id = t1.video_id
+                        AND t3.comment_id IS NOT NULL
+                        AND t3.comment_id <> t3.video_id
+                    )
+            ");
+            // コメントが取得されていないアーカイブについて、コメントを取得
+            foreach ($results as $result) {
+                $video_id = $result->video_id;
+                try {
+                    $this->getComments($video_id);
+                } catch (Exception $e) {
+                    error_log($e->getMessage());
+                    throw new Exception("youtubeとの接続でエラーが発生しました");
+                }
+            }
+            // 個別のクエリを発行
+            // change_list.is_displayをts_itemsに反映
+            DB::statement("
+                UPDATE ts_items t1
+                JOIN change_list t2 ON t2.video_id = t1.video_id and t2.comment_id = t1.comment_id
+                SET t1.is_display = t2.is_display
+                where t1.is_display <> t2.is_display
+            ");
+            // change_list.is_displayををarchivesに反映
+            DB::statement("
+                UPDATE archives t1
+                JOIN change_list t2 ON t2.video_id = t1.video_id and t2.comment_id IS NULL
+                SET t1.is_display = t2.is_display
+                where t1.is_display <> t2.is_display
+            ");
+            // archivesとts_itemsに存在しないchange_listを削除
+            DB::statement("
+                DELETE t1 FROM change_list t1
+                LEFT JOIN ts_items t2 ON t2.video_id = t1.video_id AND t2.comment_id = t1.comment_id
+                LEFT JOIN archives t3 ON t3.video_id = t1.video_id AND t1.comment_id IS NULL
+                WHERE
+                    (
+                        t2.id IS NOT NULL AND t2.is_display = t1.is_display
+                    )
+                    OR (
+                        t2.id IS NULL AND t1.comment_id IS NOT NULL
+                    )
+                    OR (
+                        t3.id IS NOT NULL AND t1.comment_id IS NULL AND t3.is_display = t1.is_display
+                    )
+                    OR (
+                        t1.comment_id IS NULL AND t3.id IS NULL
+                    )
+            ");
         });
 
         return response()->json("アーカイブを登録しました");
