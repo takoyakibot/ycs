@@ -236,7 +236,7 @@ class ManageController extends Controller
         DB::transaction(function () use ($videoId) {
             $this->getComments($videoId);
         });
-        $ts_items = TsItem::where('video_id', $videoId)->get();
+        $ts_items = TsItem::where('video_id', $videoId)->orderBy('comment_id')->get();
         return response()->json($ts_items);
     }
 
