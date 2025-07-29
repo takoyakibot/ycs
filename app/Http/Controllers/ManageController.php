@@ -276,7 +276,7 @@ class ManageController extends Controller
             if (! $channelId || ! $videoId) {return;}
             // 変更リストの削除 videoIdが一致し、commentIdがnull以外のものを削除
             ChangeList::where('video_id', $videoId)
-                ->where('comment_id', '!=', null)
+                ->whereNotNull('comment_id')
                 ->delete();
 
             // データベースクエリを削減
