@@ -286,6 +286,12 @@ class ManageController extends Controller
         }
     }
 
+    /**
+     * 画面からのリクエストでタイムスタンプの表示非表示を編集する
+     * デフォルト状態から変わっていない内容は登録しないとか考えたかったけど無駄に複雑になりそうなのでやめよう
+     * @param \Illuminate\Http\Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
     public function editTimestamps(Request $request)
     {
         $validatedData = $request->validate([
@@ -294,33 +300,22 @@ class ManageController extends Controller
             '*.is_display' => 'required|boolean',
         ]);
         DB::transaction(function () use ($validatedData) {
-            // 必要な tsItems を一括取得
+            // リクエストで渡されたコメントIDに紐づくarchiveを取得
             $commentIds = array_column($validatedData, 'comment_id');
             $tsItem     = TsItem::where('comment_id', $commentIds[0])
                 ->with(['archive'])->first();
             if (! $tsItem) {return;}
 
+            // 取得したarchiveからchannelIdとvideoIdを取得
             $channelId = $tsItem->archive->channel_id;
             $videoId   = $tsItem->video_id;
-
             if (! $channelId || ! $videoId) {return;}
+
             // 変更リストの削除 videoIdが一致し、commentIdがnull以外のものを削除
+            // タイムスタンプの編集なので動画（commentId=null）は除き、洗替のために削除する
             ChangeList::where('video_id', $videoId)
                 ->whereNotNull('comment_id')
                 ->delete();
-
-            // 初期状態と変わらない変更リストを避けるためにデフォルト状態を判定する
-            $tsItems = TsItem::where('video_id', $videoId)->get();
-
-            // comment_id ごとの出現回数を事前に計算（comment_idは文字列）
-            $countByCommentId = [];
-            foreach ($tsItems as $item) {
-                $commentId                    = $item['comment_id'];
-                $countByCommentId[$commentId] = ($countByCommentId[$commentId] ?? 0) + 1;
-            }
-
-            $maxCount              = max($countByCommentId);
-            $mostFrequentCommentId = array_keys($countByCommentId, $maxCount, true)[0] ?? null;
 
             // validatedData のループ処理
             $lastCommentId = '';
@@ -330,17 +325,12 @@ class ManageController extends Controller
 
                 // comment_id が変わった場合の処理
                 if ($lastCommentId !== $item['comment_id']) {
-                    // 最大件数が2以上でtrue、またはそれ以外のコメントがfalseなら、デフォルト状態なので変更リストには登録しない
-                    $isDefault = ($item['comment_id'] === $mostFrequentCommentId && $maxCount >= 2 && $item['is_display'])
-                        || ($item['comment_id'] !== $mostFrequentCommentId && ! $item['is_display']);
-                    if (! $isDefault) {
-                        ChangeList::create([
-                            'channel_id' => $channelId,
-                            'video_id'   => $videoId,
-                            'comment_id' => $item['comment_id'],
-                            'is_display' => $item['is_display'],
-                        ]);
-                    }
+                    ChangeList::create([
+                        'channel_id' => $channelId,
+                        'video_id'   => $videoId,
+                        'comment_id' => $item['comment_id'],
+                        'is_display' => $item['is_display'],
+                    ]);
                 }
                 $lastCommentId = $item['comment_id'];
             }
