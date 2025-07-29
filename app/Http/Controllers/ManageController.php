@@ -152,7 +152,7 @@ class ManageController extends Controller
             foreach ($results as $result) {
                 $video_id = $result->video_id;
                 try {
-                    $this->getComments($video_id);
+                    $this->refreshTimeStampsFromComments($video_id);
                 } catch (Exception $e) {
                     error_log($e->getMessage());
                     throw new Exception("youtubeとの接続でエラーが発生しました");
@@ -234,13 +234,19 @@ class ManageController extends Controller
         ]);
         $videoId = Archive::findOrFail($request->id, ['video_id'])->video_id;
         DB::transaction(function () use ($videoId) {
-            $this->getComments($videoId);
+            $this->refreshTimeStampsFromComments($videoId);
         });
         $ts_items = TsItem::where('video_id', $videoId)->orderBy('comment_id')->get();
         return response()->json($ts_items);
     }
 
-    private function getComments($videoId)
+    /**
+     * コメントを取得して、現在登録されているコメントを削除して再登録
+     * @param mixed $videoId
+     * @throws \Exception
+     * @return void
+     */
+    private function refreshTimeStampsFromComments($videoId)
     {
         try {
             $ts_items = $this->youtubeService->getTimeStampsFromComments($videoId);
