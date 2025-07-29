@@ -97,6 +97,7 @@ class ManageController extends Controller
         $channel = Channel::where('handle', $handle)->firstOrFail();
 
         DB::transaction(function () use ($channel) {
+            // 1.archivesとts_itemsの取得および整形
             try {
                 $rtn_archives = $this->youtubeService
                     ->getArchivesAndTsItems($channel->channel_id);
@@ -113,8 +114,10 @@ class ManageController extends Controller
                 unset($archive['ts_items']);
             }
 
-            // cascadeでTsItemsも消える
+            // 2.一度関連情報を削除（cascadeでTsItemsも消える）
             Archive::where('channel_id', $channel->channel_id)->delete();
+
+            // 3.一旦DBに登録する
             if ($rtn_archives) {
                 // 一気にやるとヤバなので100件くらいずつ登録
                 $chunked = array_chunk($rtn_archives, 100);
@@ -129,7 +132,9 @@ class ManageController extends Controller
                 }
             }
             // 以下でSQLを実行
-            // ts_itemsにcommentがない、かつchangeListにcommentが存在する場合、コメントを取得
+            // 4.表示非表示の履歴情報を反映させつつ不要な情報を削除していく
+            // 4.1.履歴でコメントを取得しているが現時点ではコメントがない場合、コメントを取得
+            // 4.1.1.ts_itemsにcommentがない、かつchangeListにcommentが存在するvideo_idを取得
             $results = DB::select("
                 SELECT t1.video_id
                 FROM archives t1
@@ -147,8 +152,10 @@ class ManageController extends Controller
                         AND t3.comment_id IS NOT NULL
                         AND t3.comment_id <> t3.video_id
                     )
-            ");
-            // コメントが取得されていないアーカイブについて、コメントを取得
+                    AND t1.channel_id = ?
+            ", [$channel->channel_id]);
+
+            // 4.1.2.取得したvideo_id（コメントを取得する必要のあるアーカイブ）について、コメントを洗替え
             foreach ($results as $result) {
                 $video_id = $result->video_id;
                 try {
@@ -158,45 +165,62 @@ class ManageController extends Controller
                     throw new Exception("youtubeとの接続でエラーが発生しました");
                 }
             }
-            // 個別のクエリを発行
-            // change_list.is_displayをts_itemsに反映
+
+            // 4.2.履歴情報から、タイムスタンプの表示非表示を反映させる
+            // change_list.is_displayが登録されている値と異なる場合、ts_itemsに反映
+            // TODO:全件対象にしちゃってるのがやや気になるが悪さはしないので一旦ステイ
             DB::statement("
                 UPDATE ts_items t1
-                JOIN change_list t2 ON t2.video_id = t1.video_id and t2.comment_id = t1.comment_id
+                INNER JOIN change_list t2
+                  ON t2.video_id = t1.video_id
+                  AND t2.comment_id = t1.comment_id
+                  AND t2.channel_id = ?
                 SET t1.is_display = t2.is_display
-                where t1.is_display <> t2.is_display
-            ");
-            // change_list.is_displayををarchivesに反映
+                WHERE t1.is_display <> t2.is_display
+            ", [$channel->channel_id]);
+
+            // 4.3.履歴情報から、動画の表示非表示を反映させる
+            // change_list.is_displayが登録されている値と異なる場合、archivesに反映
             DB::statement("
                 UPDATE archives t1
-                JOIN change_list t2 ON t2.video_id = t1.video_id and t2.comment_id IS NULL
+                INNER JOIN change_list t2
+                  ON t2.video_id = t1.video_id
+                  AND t2.comment_id IS NULL
                 SET t1.is_display = t2.is_display
-                where t1.is_display <> t2.is_display
-            ");
-            // archivesとts_itemsに存在しないchange_listを削除
+                WHERE t1.is_display <> t2.is_display
+                  AND t1.channel_id = ?
+            ", [$channel->channel_id]);
+
+            // 4.4.不要な履歴は削除する
+            // archivesとts_itemsを外部結合したときに、結合先が存在しないchange_listを削除
             DB::statement("
                 DELETE t1 FROM change_list t1
                 LEFT JOIN ts_items t2 ON t2.video_id = t1.video_id AND t2.comment_id = t1.comment_id
                 LEFT JOIN archives t3 ON t3.video_id = t1.video_id AND t1.comment_id IS NULL
-                WHERE
+                WHERE t1.channel_id = ?
+                    AND
                     (
-                        t2.id IS NOT NULL AND t2.is_display = t1.is_display
+                        (
+                            t2.id IS NOT NULL AND t2.is_display = t1.is_display
+                        )
+                        OR (
+                            t2.id IS NULL AND t1.comment_id IS NOT NULL
+                        )
+                        OR (
+                            t3.id IS NOT NULL AND t1.comment_id IS NULL AND t3.is_display = t1.is_display
+                        )
+                        OR (
+                            t1.comment_id IS NULL AND t3.id IS NULL
+                        )
                     )
-                    OR (
-                        t2.id IS NULL AND t1.comment_id IS NOT NULL
-                    )
-                    OR (
-                        t3.id IS NOT NULL AND t1.comment_id IS NULL AND t3.is_display = t1.is_display
-                    )
-                    OR (
-                        t1.comment_id IS NULL AND t3.id IS NULL
-                    )
-            ");
+            ", [$channel->channel_id]);
         });
 
         return response()->json("アーカイブを登録しました");
     }
 
+    // 動画の表示非表示切り替え
+    // comment_id = null の場合に動画と判断する
     public function toggleDisplay(Request $request)
     {
         $request->validate([
@@ -285,7 +309,7 @@ class ManageController extends Controller
                 ->whereNotNull('comment_id')
                 ->delete();
 
-            // データベースクエリを削減
+            // 初期状態と変わらない変更リストを避けるためにデフォルト状態を判定する
             $tsItems = TsItem::where('video_id', $videoId)->get();
 
             // comment_id ごとの出現回数を事前に計算（comment_idは文字列）
