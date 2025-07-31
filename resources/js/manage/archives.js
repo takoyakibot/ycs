@@ -280,9 +280,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 const tsItems = target.closest('.archive').querySelectorAll('.timestamp');
                 tsItems.forEach(tsItem => {
                     const id = tsItem.dataset.key;
+                    const commentId = tsItem.dataset.comment;
                     const isDisplay = tsItem.classList.contains('is-display');
                     updateTsItems.push({
                         id: id,
+                        comment_id: commentId,
                         is_display: isDisplay ? '1' : '0',
                     });
                 });
@@ -466,7 +468,6 @@ function getTsItems(tsItems) {
     let html = '';
     let lastCommentId = '';
     tsItems.forEach(tsItem => {
-        console.log(lastCommentId);
         html += `
                 <div class="timestamp text-sm ${tsItem.is_display ? 'text-gray-700 is-display default-display' : 'text-gray-500 pl-4 bg-gray-200'}
                     ${lastCommentId != tsItem.comment_id && lastCommentId != '' ? 'mt-2' : ''}" data-key="${tsItem.id}" data-comment="${tsItem.comment_id}">
