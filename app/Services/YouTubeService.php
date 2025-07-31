@@ -58,6 +58,9 @@ class YouTubeService
         $archives     = $this->getArchives($channel_id);
         $rtn_archives = [];
         foreach ($archives as &$archive) {
+            // 概要欄に存在するタイムスタンプをts_itemsとして取得する
+            // 概要欄なので、comment_idにvideo_idを設定している
+            // typeがあるんだからいいじゃないかという気がするがchangeListの管理方法とズレているためこんなことになっている
             $archive['ts_items'] = $this->getTimeStampsFromText(
                 $archive['video_id'],
                 '1', // description

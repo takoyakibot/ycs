@@ -105,6 +105,7 @@ class ManageController extends Controller
                 error_log($e->getMessage());
                 throw new Exception("youtubeとの接続でエラーが発生しました");
             }
+            // そのままDBに取り込めるように、ts_itemsは別のリストにまとめて、archivesからは削除する
             $rtn_ts_items = [];
             foreach ($rtn_archives as &$archive) {
                 foreach ($archive['ts_items'] as $ts_item) {
@@ -156,6 +157,7 @@ class ManageController extends Controller
             ", [$channel->channel_id]);
 
             // 4.1.2.取得したvideo_id（コメントを取得する必要のあるアーカイブ）について、コメントを洗替え
+            // cascadeで消えてるはずなので登録だけでいいような気もするが、ほか処理でも使うので冗長さは目を瞑る
             foreach ($results as $result) {
                 $video_id = $result->video_id;
                 try {
@@ -168,15 +170,14 @@ class ManageController extends Controller
 
             // 4.2.履歴情報から、タイムスタンプの表示非表示を反映させる
             // change_list.is_displayが登録されている値と異なる場合、ts_itemsに反映
-            // TODO:全件対象にしちゃってるのがやや気になるが悪さはしないので一旦ステイ
             DB::statement("
                 UPDATE ts_items t1
                 INNER JOIN change_list t2
                   ON t2.video_id = t1.video_id
                   AND t2.comment_id = t1.comment_id
-                  AND t2.channel_id = ?
                 SET t1.is_display = t2.is_display
                 WHERE t1.is_display <> t2.is_display
+                  AND t2.channel_id = ?
             ", [$channel->channel_id]);
 
             // 4.3.履歴情報から、動画の表示非表示を反映させる
@@ -258,6 +259,7 @@ class ManageController extends Controller
         ]);
         $videoId = Archive::findOrFail($request->id, ['video_id'])->video_id;
         DB::transaction(function () use ($videoId) {
+            // TODO:概要欄の再取得が現状不可能 日々の更新ができるようになれば勝手に更新されるはずなので問題ない？
             $this->refreshTimeStampsFromComments($videoId);
         });
         $ts_items = TsItem::where('video_id', $videoId)->orderBy('comment_id')->get();
@@ -288,6 +290,7 @@ class ManageController extends Controller
 
     /**
      * 画面からのリクエストでタイムスタンプの表示非表示を編集する
+     * ひとつの動画に対してのタイムスタンプの表示非表示を、コメント単位で設定する（タイムスタンプをコメント単位にまとめるのは、画面側で実施している）
      * デフォルト状態から変わっていない内容は登録しないとか考えたかったけど無駄に複雑になりそうなのでやめよう
      * @param \Illuminate\Http\Request $request
      * @return \Illuminate\Http\JsonResponse
@@ -313,6 +316,7 @@ class ManageController extends Controller
 
             // 変更リストの削除 videoIdが一致し、commentIdがnull以外のものを削除
             // タイムスタンプの編集なので動画（commentId=null）は除き、洗替のために削除する
+            // ちなみにcommentId=videoIdのレコードは概要欄のもの
             ChangeList::where('video_id', $videoId)
                 ->whereNotNull('comment_id')
                 ->delete();
@@ -324,6 +328,7 @@ class ManageController extends Controller
                 TsItem::where('id', $item['id'])->update(['is_display' => $item['is_display']]);
 
                 // comment_id が変わった場合の処理
+                // コメント単位に変更リストにレコードを作成する
                 if ($lastCommentId !== $item['comment_id']) {
                     ChangeList::create([
                         'channel_id' => $channelId,
