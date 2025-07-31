@@ -58,18 +58,22 @@ class YouTubeService
         $archives     = $this->getArchives($channel_id);
         $rtn_archives = [];
         foreach ($archives as &$archive) {
+            // 概要欄に存在するタイムスタンプをts_itemsとして取得する
+            // 概要欄なので、comment_idにvideo_idを設定している
+            // typeがあるんだからいいじゃないかという気がするがchangeListの管理方法とズレているためこんなことになっている
             $archive['ts_items'] = $this->getTimeStampsFromText(
                 $archive['video_id'],
                 '1', // description
                 $archive['description'],
+                $archive['video_id'],
             );
             // 歌枠の場合は一旦表示にする
             $archive['is_display'] = $this->isSingingStream($archive['title']);
             // コメントを個別取得のみにする場合はここをコメントアウト
             // 以下の場合にコメントを検索する
             // 概要欄にタイムスタンプが1件以下（過去のコピペなどで0:00:00が残っている場合がある）
-            // 歌枠の場合（タイトルに特定の文字列が含まれる場合）
-            if (empty($archive['ts_items']) || count($archive['ts_items']) <= 1 || $archive['is_display']) {
+            // かつ、歌枠の場合（タイトルに特定の文字列が含まれる場合）
+            if ((empty($archive['ts_items']) || count($archive['ts_items']) <= 1) && $archive['is_display']) {
                 $comment_ts_items = $this->getTimeStampsFromComments($archive['video_id']);
                 foreach ($comment_ts_items as $ts_item) {
                     $archive['ts_items'][] = $ts_item;
@@ -122,7 +126,7 @@ class YouTubeService
         return $archives;
     }
 
-    private function getTimeStampsFromText($video_id, $type, $description, $comment_id = 0): array
+    private function getTimeStampsFromText($video_id, $type, $description, $comment_id): array
     {
         // 引数のバリデーション
         // 最低限のチェック
@@ -263,17 +267,23 @@ class YouTubeService
         // comment_idごとの出現回数をカウント
         $count_by_comment_id = [];
         foreach ($ts_items as &$item) {
+            $item['is_display']               = '0';
             $comment_id                       = $item['comment_id'];
             $count_by_comment_id[$comment_id] = ($count_by_comment_id[$comment_id] ?? 0) + 1;
         }
 
         // 最も多い comment_id を取得
-        $max_count                 = max($count_by_comment_id);
-        $most_frequent_comment_ids = array_keys($count_by_comment_id, $max_count, true);
-
-        // is_display を更新
-        foreach ($ts_items as &$item) {
-            $item['is_display'] = in_array($item['comment_id'], $most_frequent_comment_ids, true);
+        $max_count = max($count_by_comment_id);
+        // 1件しかない場合は初期表示なしとする
+        if ($max_count > 1) {
+            $most_frequent_comment_ids = array_keys($count_by_comment_id, $max_count, true);
+            // タイムスタンプが同数の場合も考えられるが先勝ちとする
+            if (count($most_frequent_comment_ids) > 0) {
+                // is_display を更新
+                foreach ($ts_items as &$item) {
+                    $item['is_display'] = ($item['comment_id'] === $most_frequent_comment_ids[0]);
+                }
+            }
         }
     }
 }
