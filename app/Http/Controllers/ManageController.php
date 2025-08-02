@@ -307,12 +307,16 @@ class ManageController extends Controller
             $commentIds = array_column($validatedData, 'comment_id');
             $tsItem     = TsItem::where('comment_id', $commentIds[0])
                 ->with(['archive'])->first();
-            if (! $tsItem) {return;}
+            if (! $tsItem) {
+                throw new Exception('tsItem is not found');
+            }
 
             // 取得したarchiveからchannelIdとvideoIdを取得
             $channelId = $tsItem->archive->channel_id;
             $videoId   = $tsItem->video_id;
-            if (! $channelId || ! $videoId) {return;}
+            if (! $channelId || ! $videoId) {
+                throw new Exception('channelId or videoId is not found');
+            }
 
             // 変更リストの削除 videoIdが一致し、commentIdがnull以外のものを削除
             // タイムスタンプの編集なので動画（commentId=null）は除き、洗替のために削除する
