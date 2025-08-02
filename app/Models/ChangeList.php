@@ -12,7 +12,6 @@ class ChangeList extends Model
     protected $table = 'change_list';
 
     protected $fillable = [
-        'id',
         'channel_id',
         'video_id',
         'comment_id',

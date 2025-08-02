@@ -13,7 +13,7 @@ return new class extends Migration
     {
         // channel_id,video_id,comment_idのインデックスを削除
         Schema::table('change_list', function (Blueprint $table) {
-            $table->dropIndex(['channel_id', 'video_id', 'comment_id']);
+            $table->dropIndex('change_list_channel_id_video_id_comment_id_index');
         });
         // video_idの桁数を11に変更
         Schema::table('change_list', function (Blueprint $table) {
@@ -25,11 +25,11 @@ return new class extends Migration
         });
         // channel_idのインデックスを追加
         Schema::table('change_list', function (Blueprint $table) {
-            $table->index(['channel_id']);
+            $table->index(['channel_id'], 'change_list_channel_id_index');
         });
         // video_id,comment_idのインデックスを追加
         Schema::table('change_list', function (Blueprint $table) {
-            $table->index(['video_id', 'comment_id']);
+            $table->index(['video_id', 'comment_id'], 'change_list_video_id_comment_id_index');
         });
     }
 
@@ -40,15 +40,15 @@ return new class extends Migration
     {
         // channel_id,video_id,comment_idのインデックスを追加
         Schema::table('change_list', function (Blueprint $table) {
-            $table->index(['channel_id', 'video_id', 'comment_id']);
+            $table->index(['channel_id', 'video_id', 'comment_id'], 'change_list_channel_id_video_id_comment_id_index');
         });
         // channel_idのインデックスを削除
         Schema::table('change_list', function (Blueprint $table) {
-            $table->dropIndex(['channel_id']);
+            $table->dropIndex('change_list_channel_id_index');
         });
         // video_id,comment_idのインデックスを削除
         Schema::table('change_list', function (Blueprint $table) {
-            $table->dropIndex(['video_id', 'comment_id']);
+            $table->dropIndex('change_list_video_id_comment_id_index');
         });
     }
 };
