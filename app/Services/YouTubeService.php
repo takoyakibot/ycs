@@ -19,7 +19,7 @@ class YouTubeService
         $this->client = new Google_Client();
     }
 
-    public function setApiKey()
+    private function setApiKey()
     {
         // 定義済みの場合は終了
         if ($this->youtube) {
