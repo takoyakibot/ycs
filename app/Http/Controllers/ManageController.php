@@ -193,7 +193,10 @@ class ManageController extends Controller
             ", [$channel->channel_id]);
 
             // 4.4.不要な履歴は削除する
-            // archivesとts_itemsを外部結合したときに、結合先が存在しないchange_listを削除
+            // archivesとts_itemsを外部結合したときに、結合先が存在しないchange_listを削除、条件は以下
+            // a. タイムスタンプ(コメント<>null)でts_itemsに紐づかないレコード
+            // b. アーカイブ(コメント==null)でarvhivesに紐づかないレコード
+            // c. ts_itemsにもarchivesにも紐づかないレコード
             DB::statement("
                 DELETE t1 FROM change_list t1
                 LEFT JOIN ts_items t2 ON t2.video_id = t1.video_id AND t2.comment_id = t1.comment_id
@@ -202,16 +205,13 @@ class ManageController extends Controller
                     AND
                     (
                         (
-                            t2.id IS NOT NULL AND t2.is_display = t1.is_display
-                        )
-                        OR (
                             t2.id IS NULL AND t1.comment_id IS NOT NULL
                         )
                         OR (
-                            t3.id IS NOT NULL AND t1.comment_id IS NULL AND t3.is_display = t1.is_display
+                            t3.id IS NULL AND t1.comment_id IS NULL
                         )
                         OR (
-                            t1.comment_id IS NULL AND t3.id IS NULL
+                            t2.id IS NULL AND t3.id IS NULL
                         )
                     )
             ", [$channel->channel_id]);
