@@ -18,13 +18,13 @@ class ManageController extends Controller
 {
     protected $youtubeService;
     protected $imageService;
-    protected $refreshService;
+    protected $archiveService;
 
-    public function __construct(YouTubeService $youtubeService, ImageService $imageService, ArchiveService $refreshService)
+    public function __construct(YouTubeService $youtubeService, ImageService $imageService, ArchiveService $archiveService)
     {
         $this->youtubeService = $youtubeService;
         $this->imageService   = $imageService;
-        $this->refreshService = $refreshService;
+        $this->archiveService = $archiveService;
     }
 
     public function index()
@@ -99,7 +99,7 @@ class ManageController extends Controller
 
         $channel = Channel::where('handle', $handle)->firstOrFail();
 
-        $this->refreshService->refreshArchives($channel);
+        $this->archiveService->refreshArchives($channel);
 
         return response()->json("アーカイブを登録しました");
     }
@@ -144,7 +144,7 @@ class ManageController extends Controller
         $videoId = Archive::findOrFail($request->id, ['video_id'])->video_id;
         DB::transaction(function () use ($videoId) {
             // TODO:概要欄の再取得が現状不可能 日々の更新ができるようになれば勝手に更新されるはずなので問題ない？
-            $this->refreshService->refreshTimeStampsFromComments($videoId);
+            $this->archiveService->refreshTimeStampsFromComments($videoId);
         });
         $ts_items = TsItem::where('video_id', $videoId)->orderBy('comment_id')->get();
         return response()->json($ts_items);
