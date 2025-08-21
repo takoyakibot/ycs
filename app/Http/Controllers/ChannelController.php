@@ -56,6 +56,11 @@ class ChannelController extends Controller
             ->paginate(config('utils.page'));
     }
 
+    /**
+     * 検索ワードとして渡された単語をスペースで分割してand条件の部分一致whereに変換する
+     * @param mixed $query
+     * @param string $params
+     */
     private function setQueryWhereParams($query, string $params)
     {
         if ($params === '') {
