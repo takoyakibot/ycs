@@ -1,5 +1,4 @@
 <div x-data="searchComponent({
-        apiUrl: '{{ $apiUrl }}',
         channelId: '{{ $channelId ?? '' }}'
     })" class="search-component">
     <!-- 検索フォーム -->
@@ -24,7 +23,7 @@
     /**
      * search-resultsという名前のイベントを発火し、検索窓の内容を連携する
      */
-    function searchComponent({ apiUrl, channelId }) {
+    function searchComponent({ channelId }) {
         return {
             query: '', // 検索クエリ
             results: [], // 検索結果
