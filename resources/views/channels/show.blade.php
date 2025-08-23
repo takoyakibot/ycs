@@ -30,7 +30,6 @@
 
         <div class="p-2 flex flex-col justify-self-center w-[100%] max-w-5xl gap-2">
             <x-search
-                api-url="/api/search"
                 :channel-id="$channel->handle"
                 placeholder="チャンネル内を検索"
                 button-text="検索"
