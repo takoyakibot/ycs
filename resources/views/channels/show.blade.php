@@ -29,6 +29,12 @@
         </div>
 
         <div class="p-2 flex flex-col justify-self-center w-[100%] max-w-5xl gap-2">
+            <x-search
+                :channel-id="$channel->handle"
+                placeholder="チャンネル内を検索"
+                button-text="検索"
+                alpine-parent="archiveListComponent"
+            />
             <x-pagination></x-pagination>
             <div id="archives" class="flex flex-col items-center w-[100%]">
                 <!-- アーカイブリスト -->
@@ -105,6 +111,10 @@
 
                 // Alpine.js初期化後にイベントリスナーを設定
                 init() {
+                    this.$el.addEventListener('search-results', (e) => {
+                        this.archives = e.detail;
+                    });
+
                     const paginationButtons = document.querySelectorAll('#paginationButtons button');
                     paginationButtons.forEach(button => {
                         togglePaginationButtonDisabled(button, 1);
