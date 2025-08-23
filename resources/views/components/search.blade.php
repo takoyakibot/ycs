@@ -7,8 +7,7 @@
             type="text"
             x-model="query"
             placeholder="{{ $placeholder ?? '検索ワードを入力' }}"
-            class="border p-2 rounded w-full"
-            @keydown.enter.prevent />
+            class="border p-2 rounded w-full" />
         <button
             type="submit"
             @click="search"
