@@ -90,6 +90,7 @@
                 },
 
                 // ページ遷移の処理
+                // 読み込み時にボタンに割り当てる
                 handlePaginationClick(event) {
                     const button = event.target;
                     const isNext = button.classList.contains('next');
@@ -97,6 +98,7 @@
                     if (!isNext && !this.archives.prev_page_url) return;
                     // 進むときに進み先urlがnullなら終了
                     if (isNext && !this.archives.next_page_url) return;
+                    // 遷移先のページ番号を取得
                     const page = isNext
                         ? this.archives.current_page + 1
                         : this.archives.current_page - 1;
@@ -126,6 +128,8 @@
 
         // ページネーションボタンのクラス修正
         const maxPage = Math.ceil(this.archives.total / this.archives.per_page);
+        // 受け取ったボタンに対して、nextのボタンなら現在のページが最大値のときにdisabled、
+        // それ以外（previewのボタン）なら1ページのときにdisabledとする
         function togglePaginationButtonDisabled(button, newPage) {
             const isNext = button.classList.contains('next');
             if (!isNext && 1 < newPage || isNext && newPage < maxPage) {
