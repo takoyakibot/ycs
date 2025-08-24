@@ -2,7 +2,7 @@
         channelId: '{{ $channelId ?? '' }}'
     })" class="search-component">
     <!-- 検索フォーム -->
-    <div class="flex items-center gap-2 max-w-7lg">
+    <form @submit.prevent="search" class="flex items-center gap-2 max-w-7lg">
         <input
             type="text"
             x-model="query"
@@ -10,11 +10,10 @@
             class="border p-2 rounded w-full" />
         <button
             type="submit"
-            @click="search"
             class="bg-blue-500 text-white px-4 py-2 rounded min-w-[100px]">
             {{ $buttonText ?? '検索' }}
         </button>
-    </div>
+    </form>
 
 </div>
 
@@ -35,13 +34,7 @@
                     params.append('page', '1');
                     params.append('baramutsu', this.query);
 
-                    const response = await fetch(`${apiUrl}/${channelId}?${params.toString()}`);
-                    if (!response.ok) {
-                        throw new Error('検索に失敗しました');
-                    }
-
-                    this.results = await response.json()
-                    this.$dispatch('search-results', this.results);
+                    this.$dispatch('search-results', params.toString());
 
                 } catch (error) {
                     console.error(error);
