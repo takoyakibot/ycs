@@ -31,7 +31,6 @@
 
                 try {
                     const params = new URLSearchParams();
-                    params.append('page', '1');
                     params.append('baramutsu', this.query);
 
                     this.$dispatch('search-results', params.toString());

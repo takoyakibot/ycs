@@ -24,26 +24,24 @@ class ChannelController extends Controller
     public function show(string $id)
     {
         // チャンネル情報を取得して表示
-        $channel  = Channel::where('handle', $id)->firstOrFail();
-        $archives = $this->getArchives($channel->channel_id, '')->toArray();
-
-        return view('channels.show', compact('channel', 'archives'));
+        $channel = Channel::where('handle', $id)->firstOrFail();
+        return view('channels.show', compact('channel'));
     }
 
     public function fetchArchives(string $id, Request $request)
     {
-        $channel  = Channel::where('handle', $id)->firstOrFail();
-        $archives = $this->getArchives($channel->channel_id, (string) $request->query('baramutsu', ''))
+        $archives = $this->getArchives($id, (string) $request->query('baramutsu', ''))
             ->appends($request->query());
         return response()->json($archives);
     }
 
-    private function getArchives(string $channel_id, string $params)
+    private function getArchives(string $handle, string $params)
     {
+        $channel  = Channel::where('handle', $handle)->firstOrFail();
         $archives = Archive::with(['tsItemsDisplay' => function ($query) use ($params) {
             return $this->setQueryWhereParams($query, $params);
         }])
-            ->where('channel_id', $channel_id)
+            ->where('channel_id', $channel->channel_id)
             ->where('is_display', '1');
 
         if ($params != '') {

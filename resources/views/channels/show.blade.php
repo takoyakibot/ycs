@@ -80,9 +80,8 @@
                 archives: window.archives || {},
 
                 // ページのデータを取得するメソッド
-                async fetchData(params) {
+                async fetchData(url) {
                     try {
-                        url = `/api/channels/${channel.handle}?${params}`;
                         const response = await fetch(url);
                         if (!response.ok) throw new Error('データ取得エラー');
                         this.archives = await response.json(); // データを更新
@@ -103,44 +102,37 @@
                     return Math.ceil(this.archives.total / this.archives.per_page);
                 },
 
+                firstUrl(params) {
+                    return `/api/channels/${this.channel.handle}?page=1` + (params ? `&${params}` : '');
+                },
+
                 // ページ遷移の処理
                 // 読み込み時にボタンに割り当てる
                 handlePaginationClick(event) {
                     const button = event.target;
                     const isNext = button.classList.contains('next');
+                    const url = isNext ? this.archives.next_page_url : this.archives.prev_page_url;
 
-                    // 戻るときに戻り先urlがnullなら終了
-                    if (!isNext && !this.archives.prev_page_url) return;
-                    // 進むときに進み先urlがnullなら終了
-                    if (isNext && !this.archives.next_page_url) return;
-                    // 遷移先のページ番号を取得
-                    const page = isNext
-                        ? this.archives.current_page + 1
-                        : this.archives.current_page - 1;
-                    const paginationButtons = document.querySelectorAll('#paginationButtons button');
-                    paginationButtons.forEach(button => {
-                        togglePaginationButtonDisabled(button, page, this.maxPage);
-                    });
-
-                    // Alpine.js内でfetchDataを呼び出し
-                    // 戻ってきたurlのパラメータを返却する
-                    this.fetchData((isNext
-                        ? this.archives.next_page_url
-                        : this.archives.prev_page_url
-                    ).split('?')[1]);
+                    // 遷移先に対応するurlがnullなら終了
+                    if (!url) return;
+                    // 対応するurlでfetch
+                    this.fetchData(url);
                     window.scroll({top: 0, behavior: 'auto'});
                 },
 
                 // Alpine.js初期化後にイベントリスナーを設定
                 init() {
-                    this.fetchData('page=1');
+                    // 初回呼び出し
+                    this.fetchData(this.firstUrl());
 
+                    // 検索コンポーネントのイベントのリスナーを定義
                     this.$el.addEventListener('search-results', (e) => {
-                        this.fetchData(e.detail);
+                        // 渡されたクエリを付与したurlでfetchする
+                        this.fetchData(this.firstUrl(e.detail));
                     });
 
-                    const paginationButtons = document.querySelectorAll('#paginationButtons button');
                     // ページネーションボタンを取得してイベント設定
+                    const paginationButtons = document.querySelectorAll('#paginationButtons button');
                     paginationButtons.forEach(button => {
                         button.addEventListener('click', this.handlePaginationClick.bind(this));
                     });
