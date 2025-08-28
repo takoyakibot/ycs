@@ -33,6 +33,7 @@
                     const params = new URLSearchParams();
                     params.append('baramutsu', this.query);
 
+                    this.$dispatch('filter-changed', this.query.length > 0);
                     this.$dispatch('search-results', params.toString());
 
                 } catch (error) {
