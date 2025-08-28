@@ -33,13 +33,13 @@ class RefreshArchives extends Command
 
             // 一番古いアーカイブを取得し、そのチャンネルの情報を再作成する
             $channel = $service->getOldestUpdatedChannel();
-            echo '更新対象：' . $channel->title;
+            echo now() . ' 更新対象：' . $channel->title;
             $service->refreshArchives($channel);
 
-            echo '更新成功';
+            echo " 更新成功\n";
             return 0;
         } catch (Exception $e) {
-            echo '更新失敗';
+            echo " 更新失敗\n";
             return 1;
         }
 
