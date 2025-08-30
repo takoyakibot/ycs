@@ -2,7 +2,8 @@
     <x-slot name="alpine_script">
         <script>
             window.channel = @json($channel ?? []);
-            window.archives = @json($archives ?? []);
+            // initで取得するのでこちらはコメントアウト
+            // window.archives = @json($archives ?? []);
         </script>
     </x-slot>
     <x-slot name="header">
@@ -79,54 +80,71 @@
                 archives: window.archives || {},
 
                 // ページのデータを取得するメソッド
-                async fetchData(page) {
+                async fetchData(url) {
                     try {
-                        const response = await fetch(`/api/channels/${channel.handle}?page=${page}`);
+                        const response = await fetch(url);
                         if (!response.ok) throw new Error('データ取得エラー');
                         this.archives = await response.json(); // データを更新
+
+                        const paginationButtons = document.querySelectorAll('#paginationButtons button');
+                        // ページネーションボタンを取得してイベント設定
+                        paginationButtons.forEach(button => {
+                            // 定義されているjsの呼び出し、初期化処理なので1ページ固定で実施
+                            togglePaginationButtonDisabled(button, this.archives.current_page, this.maxPage);
+                        });
                     } catch (error) {
                         console.error('データの取得に失敗しました:', error);
                     }
                 },
 
+                get maxPage() {
+                    if (!this.archives.total || !this.archives.per_page) return 1;
+                    return Math.ceil(this.archives.total / this.archives.per_page);
+                },
+
+                firstUrl(params) {
+                    return `/api/channels/${this.channel.handle}?page=1` + (params ? `&${params}` : '');
+                },
+
                 // ページ遷移の処理
+                // 読み込み時にボタンに割り当てる
                 handlePaginationClick(event) {
                     const button = event.target;
                     const isNext = button.classList.contains('next');
-                    // 戻るときに戻り先urlがnullなら終了
-                    if (!isNext && !this.archives.prev_page_url) return;
-                    // 進むときに進み先urlがnullなら終了
-                    if (isNext && !this.archives.next_page_url) return;
-                    const page = isNext
-                        ? this.archives.current_page + 1
-                        : this.archives.current_page - 1;
-                    const paginationButtons = document.querySelectorAll('#paginationButtons button');
-                    paginationButtons.forEach(button => {
-                        togglePaginationButtonDisabled(button, page);
-                    });
+                    const url = isNext ? this.archives.next_page_url : this.archives.prev_page_url;
 
-                    this.fetchData(page); // Alpine.js内でfetchDataを呼び出し
+                    // 遷移先に対応するurlがnullなら終了
+                    if (!url) return;
+                    // 対応するurlでfetch
+                    this.fetchData(url);
                     window.scroll({top: 0, behavior: 'auto'});
                 },
 
                 // Alpine.js初期化後にイベントリスナーを設定
                 init() {
+                    // 初回呼び出し
+                    this.fetchData(this.firstUrl());
+
+                    // 検索コンポーネントのイベントのリスナーを定義
                     this.$el.addEventListener('search-results', (e) => {
-                        this.archives = e.detail;
+                        // 渡されたクエリを付与したurlでfetchする
+                        this.fetchData(this.firstUrl(e.detail));
                     });
 
+                    // ページネーションボタンを取得してイベント設定
                     const paginationButtons = document.querySelectorAll('#paginationButtons button');
                     paginationButtons.forEach(button => {
-                        togglePaginationButtonDisabled(button, 1);
                         button.addEventListener('click', this.handlePaginationClick.bind(this));
                     });
                 }
             }));
+
         });
 
         // ページネーションボタンのクラス修正
-        const maxPage = Math.ceil(this.archives.total / this.archives.per_page);
-        function togglePaginationButtonDisabled(button, newPage) {
+        // 受け取ったボタンに対して、nextのボタンなら現在のページが最大値のときにdisabled、
+        // それ以外（previewのボタン）なら1ページのときにdisabledとする
+        function togglePaginationButtonDisabled(button, newPage, maxPage) {
             const isNext = button.classList.contains('next');
             if (!isNext && 1 < newPage || isNext && newPage < maxPage) {
                 button.classList.remove('pagination-button-disabled');
