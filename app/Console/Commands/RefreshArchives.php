@@ -39,7 +39,7 @@ class RefreshArchives extends Command
             echo " 更新成功\n";
             return 0;
         } catch (Exception $e) {
-            echo " 更新失敗\n";
+            echo " 更新失敗: " . $e->getMessage() . "\n";
             return 1;
         }
 
