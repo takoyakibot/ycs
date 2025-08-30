@@ -37,23 +37,26 @@
                 alpine-parent="archiveListComponent"
             />
             <x-pagination></x-pagination>
-            <div id="archives" class="flex flex-col items-center w-[100%]">
+            <div id="archives" x-data="{ isFiltered : false }"
+             @filter-changed.window="isFiltered = $event.detail"
+             class="flex flex-col items-center w-[100%]">
                 <!-- アーカイブリスト -->
                 <template x-for="archive in (archives.data || [])" :key="archive.id">
                     <div class="archive flex flex-col sm:flex-row w-[100%] max-w-5xl border rounded-lg shadow-lg p-4 gap-4 mb-2 bg-white">
-                        <div class="flex flex-col flex-shrink-0 sm:w-1/3">
-                            <div class="flex flex-col gap-2">
-                                <a :href="getArchiveUrl(archive.video_id || '')" target="_blank">
+                        <div class="flex flex-col flex-shrink-0" :class="isFiltered ? 'sm:w-1/2' : 'sm:w-1/3'">
+                            <div class="flex gap-2" :class="isFiltered ? 'flex-row' : 'flex-col'">
+                                <a :href="getArchiveUrl(archive.video_id || '')" target="_blank" :class="isFiltered ? 'w-1/4' : 'h-auto'" >
                                     <img :src="escapeHTML(archive.thumbnail || '')" alt="サムネイル" loading="lazy"
-                                        class="h-auto rounded-md object-cover" />
+                                        class="rounded-md object-cover flex flex-shrink-0"/>
                                 </a>
-                                <div>
-                                    <h4 class="font-semibold text-gray-800" x-text="archive.title || ''"></h4>
-                                    <p class="text-sm text-gray-600" x-text="'公開日: ' + (new Date(archive.published_at || 0)).toLocaleString().split(' ')[0]"></p>
+                                <div :class="isFiltered ? 'w-3/4' : ''">
+                                    <h4 class="font-semibold text-gray-800 line-clamp-2" x-text="archive.title || ''"></h4>
+                                    <p class="text-sm text-gray-600"
+                                        x-text="'公開日: ' + (new Date(archive.published_at || 0)).toLocaleString().split(' ')[0]"></p>
                                 </div>
                             </div>
                         </div>
-                        <div class="flex flex-col flex-grow sm:w-2/3 gap-2">
+                        <div class="flex flex-col flex-grow gap-2" :class="isFiltered ? 'sm:w-1/2' : 'sm:w-2/3'">
                             <div class="timestamps flex flex-col gap-2 sm:gap-0">
                                 <template x-for="tsItem in archive.ts_items_display" :key="tsItem.id">
                                     <div class="timestamp text-sm text-gray-700">
@@ -78,6 +81,7 @@
             Alpine.data('archiveListComponent', () => ({
                 channel: window.channel || {},
                 archives: window.archives || {},
+                isFiltered: false,
 
                 // ページのデータを取得するメソッド
                 async fetchData(url) {
