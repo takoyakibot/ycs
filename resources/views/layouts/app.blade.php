@@ -73,7 +73,8 @@
 
         function acceptCookies() {
             document.getElementById("firstDisplayPopup").classList.add("hidden");
-            document.cookie = "cookie_consent=true; max-age=" + (60 * 60 * 24) + "; path=/; Secure; SameSite=Strict";
+            // 保存期間を1週間くらいにしておく
+            document.cookie = "cookie_consent=true; max-age=" + (7 * 60 * 60 * 24) + "; path=/; Secure; SameSite=Strict";
         }
     </script>
 </html>
