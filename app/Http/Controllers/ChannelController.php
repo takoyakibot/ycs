@@ -30,24 +30,46 @@ class ChannelController extends Controller
 
     public function fetchArchives(string $id, Request $request)
     {
-        $archives = $this->getArchives($id, (string) $request->query('baramutsu', ''))
+        $archives = $this->getArchives($id,
+            (string) $request->query('baramutsu', ''),
+            (string) $request->query('visible', ''),
+            (string) $request->query('ts', '')
+        )
             ->appends($request->query());
         return response()->json($archives);
     }
 
-    private function getArchives(string $handle, string $params)
+    private function getArchives(string $handle, string $params, string $visibleFlg, string $tsFlg)
     {
         $channel  = Channel::where('handle', $handle)->firstOrFail();
         $archives = Archive::with(['tsItemsDisplay' => function ($query) use ($params) {
             return $this->setQueryWhereParams($query, $params);
         }])
-            ->where('channel_id', $channel->channel_id)
-            ->where('is_display', '1');
+            ->where('channel_id', $channel->channel_id);
 
-        if ($params != '') {
+        // 検索ワードがある場合
+        if ($params != '' && $tsFlg != '2') {
             $archives->whereHas('tsItemsDisplay', function ($query) use ($params) {
                 $query = $this->setQueryWhereParams($query, $params);
             });
+        }
+
+        // 表示非表示
+        if ($visibleFlg === '1') {
+            // 非表示のみ
+            $archives->where('is_display', '0');
+        } elseif ($visibleFlg != '2') {
+            // 絞り込みなし以外（表示のみ）
+            $archives->where('is_display', '1');
+        }
+
+        // タイムスタンプ
+        if ($tsFlg === '1') {
+            // 有のみ
+            $archives->whereHas('tsItemsDisplay');
+        } elseif ($tsFlg === '2') {
+            // 無のみ
+            $archives->whereDoesntHave('tsItemsDisplay');
         }
 
         return $archives->orderBy('published_at', 'desc')
