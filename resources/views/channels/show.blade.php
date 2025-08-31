@@ -34,6 +34,7 @@
                 :channel-id="$channel->handle"
                 placeholder="チャンネル内を検索"
                 button-text="検索"
+                manage-flg=""
                 alpine-parent="archiveListComponent"
             />
             <x-pagination></x-pagination>
