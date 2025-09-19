@@ -17,7 +17,7 @@
                 </select>
                 <select x-model="tsFlg" class="border p-2 pr-8 rounded">
                     <option value="">タイムスタンプ</option>
-                    <option value="1" selected>有のみ</option>
+                    <option value="1">有のみ</option>
                     <option value="2">無のみ</option>
                 </select>
             </div>
@@ -39,7 +39,7 @@
         return {
             query: '', // 検索クエリ
             visibleFlg: '', // 表示非表示
-            tsFlg: '1', // タイムスタンプ有無
+            tsFlg: '', // タイムスタンプ有無
             results: [], // 検索結果
             loading: false, // ローディング状態
             async search() {
