@@ -1,7 +1,7 @@
 <?php
 namespace App\Console\Commands;
 
-use App\Services\ArchiveService;
+use App\Services\RefreshArchiveService;
 use Exception;
 use Illuminate\Console\Command;
 
@@ -24,7 +24,7 @@ class RefreshArchives extends Command
     /**
      * Execute the console command.
      */
-    public function handle(ArchiveService $service)
+    public function handle(RefreshArchiveService $service)
     {
         try {
             // 受け取ったIDで偽装ログイン
