@@ -5,8 +5,8 @@ use App\Models\Archive;
 use App\Models\ChangeList;
 use App\Models\Channel;
 use App\Models\TsItem;
-use App\Services\ArchiveService;
 use App\Services\ImageService;
+use App\Services\RefreshArchiveService;
 use App\Services\YouTubeService;
 use Exception;
 use Illuminate\Http\Request;
@@ -18,13 +18,13 @@ class ManageController extends Controller
 {
     protected $youtubeService;
     protected $imageService;
-    protected $archiveService;
+    protected $refreshArchiveService;
 
-    public function __construct(YouTubeService $youtubeService, ImageService $imageService, ArchiveService $archiveService)
+    public function __construct(YouTubeService $youtubeService, ImageService $imageService, RefreshArchiveService $refreshArchiveService)
     {
-        $this->youtubeService = $youtubeService;
-        $this->imageService   = $imageService;
-        $this->archiveService = $archiveService;
+        $this->youtubeService        = $youtubeService;
+        $this->imageService          = $imageService;
+        $this->refreshArchiveService = $refreshArchiveService;
     }
 
     public function index()
@@ -99,7 +99,7 @@ class ManageController extends Controller
 
         $channel = Channel::where('handle', $handle)->firstOrFail();
 
-        $this->archiveService->refreshArchives($channel);
+        $this->refreshArchiveService->refreshArchives($channel);
 
         return response()->json("アーカイブを登録しました");
     }
@@ -144,7 +144,7 @@ class ManageController extends Controller
         $videoId = Archive::findOrFail($request->id, ['video_id'])->video_id;
         DB::transaction(function () use ($videoId) {
             // TODO:概要欄の再取得が現状不可能 日々の更新ができるようになれば勝手に更新されるはずなので問題ない？
-            $this->archiveService->refreshTimeStampsFromComments($videoId);
+            $this->refreshArchiveService->refreshTimeStampsFromComments($videoId);
         });
         $ts_items = TsItem::where('video_id', $videoId)->orderBy('comment_id')->get();
         return response()->json($ts_items);

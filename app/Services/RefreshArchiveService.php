@@ -10,7 +10,7 @@ use Exception;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
-class ArchiveService
+class RefreshArchiveService
 {
     protected $youtubeService;
 
