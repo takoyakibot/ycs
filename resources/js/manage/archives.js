@@ -9,9 +9,15 @@ document.addEventListener('DOMContentLoaded', function () {
     const errorMessage = document.getElementById('errorMessage');
     const handle = document.getElementById('handle');
 
+    function firstUrl(params = null) {
+        return `/api/manage/channels/${handle.value}?page=1` + (params ? `&${params}` : '');
+    };
+
     // アーカイブ一覧の取得処理
-    function fetchArchives(page = 0) {
-        axios.get('/api/manage/channels/' + handle.value + (page > 0 ? '?page=' + page : ''))
+    function fetchArchives(url = null) {
+        if (!url) url = firstUrl();
+
+        axios.get(url)
             .then(function (response) {
                 const d = response.data
                 let archives = [];
@@ -24,12 +30,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 const paginationButtons = `
                     <div id="paginationButtons" class="flex gap-2 justify-center w-[100%]">
                         <!-- 前へボタン -->
-                        <button class="pagination-button prev ${d['prev_page_url'] ? '' : 'pagination-button-disabled'}" aria-label="Prev page" data-page="${d['prev_page_url'] ? d['current_page'] - 1 : ''}">
+                        <button class="pagination-button prev ${d['prev_page_url'] ? '' : 'pagination-button-disabled'}" aria-label="Prev page" data-url="${d['prev_page_url']}">
                             <
                         </button>
 
                         <!-- 次へボタン -->
-                        <button class="pagination-button next ${d['next_page_url'] ? '' : 'pagination-button-disabled'}" aria-label="Next page" data-page="${d['next_page_url'] ? d['current_page'] + 1 : ''}">
+                        <button class="pagination-button next ${d['next_page_url'] ? '' : 'pagination-button-disabled'}" aria-label="Next page" data-url="${d['next_page_url']}">
                             >
                         </button>
                     </div>
@@ -107,6 +113,9 @@ document.addEventListener('DOMContentLoaded', function () {
             .catch(function (error) {
                 console.error("Error fetching channels:", error);
                 resultsContainer.innerHTML = '<p class="text-red-500">アーカイブの取得に失敗しました。</p>';
+            })
+            .finally(() => {
+                isProcessing = false;
             });
     }
 
@@ -339,15 +348,27 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // ページネーションボタン押下時
         if (target.classList.contains('pagination-button') && !target.classList.contains('pagination-button-disabled')) {
-            const page = parseInt(target.getAttribute('data-page'));
-            if (!isNaN(page) && page >= 0) {
-                fetchArchives(page);
-                window.scroll({ top: 0, behavior: 'auto' });
+            toggleButtonDisabled(target, isProcessing);
+            // data-urlから対応するURLを取得
+            const url = target.dataset.url;
+            // URLがnullの場合は何もしない（たぶん押せないのでありえないが一応挙動を合わせておく）
+            if (!url) {
+                isProcessing = false;
+                toggleButtonDisabled(target, isProcessing);
+                return;
             }
+            // アーカイブ一覧を取得
+            fetchArchives(url);
         }
+
+        // 空振りの場合はフラグを戻す
         isProcessing = false;
-        toggleButtonDisabled(target, isProcessing);
-        return;
+    });
+
+    // 検索コンポーネントのイベントのリスナーを定義
+    document.addEventListener('search-results', (e) => {
+        // 渡されたクエリを付与したurlでfetchする
+        fetchArchives(firstUrl(e.detail));
     });
 });
 
