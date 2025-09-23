@@ -45,7 +45,7 @@
         <div class="p-2 flex flex-col justify-self-center w-[100%] max-w-5xl gap-2">
             <x-search
                 :channel-id="$channel->handle"
-                placeholder="チャンネル内を検索"
+                placeholder="アーカイブ名を検索"
                 button-text="検索"
                 manage-flg="なんか書いとけ"
                 alpine-parent="archiveListComponent"
