@@ -3,9 +3,22 @@ namespace App\Services;
 
 use App\Models\Archive;
 use App\Models\Channel;
+use Illuminate\Support\Facades\Crypt;
 
 class GetArchiveService
 {
+    public function getArchivesForManage(string $id, string $params, string $visibleFlg, string $tsFlg)
+    {
+        $handle   = Crypt::decryptString($id);
+        $channel  = Channel::where('handle', $handle)->firstOrFail();
+        $archives = Archive::with('tsItems')
+            ->where('channel_id', $channel->channel_id)
+            ->orderBy('published_at', 'desc')
+            ->paginate(config('utils.page'));
+
+        return $archives;
+    }
+
     public function getArchives(string $handle, string $params, string $visibleFlg, string $tsFlg)
     {
         $channel  = Channel::where('handle', $handle)->firstOrFail();
