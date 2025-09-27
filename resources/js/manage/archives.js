@@ -168,15 +168,22 @@ document.addEventListener('DOMContentLoaded', function () {
         if (isProcessing) { return; }
         isProcessing = true;
         const target = event.target;
+        // 一旦非活性に変更
+        toggleButtonDisabled(target, isProcessing);
+
+        const errorProcessing = function (errorMessage) {
+            console.error(errorMessage);
+            isProcessing = false;
+            toggleButtonDisabled(target, isProcessing);
+        };
 
         // 表示非表示切り替えボタン押下時
         if (target.classList.contains('toggle-display-btn')) {
-            toggleButtonDisabled(target, isProcessing);
             const archiveElement = target.closest('.archive'); // 親要素を取得
             const id = target.getAttribute('data-id');
             const isDisplay = target.getAttribute('data-display'); // 現在のフラグ
             if (!id || !isDisplay) {
-                console.error('Invalid data attributes for toggle display');
+                errorProcessing('Invalid data attributes for toggle display');
                 return;
             }
 
@@ -213,12 +220,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // コメント取得ボタン押下時
         if (target.classList.contains('fetch-comments-btn')) {
-            toggleButtonDisabled(target, isProcessing);
-
             const timestampsElement = target.closest('.archive').querySelector('.timestamps');
             const id = target.getAttribute('data-id');
             if (!id) {
-                console.error('Invalid data attributes for fetch comment');
+                errorProcessing('Invalid data attributes for fetch comment');
                 return;
             }
 
@@ -264,9 +269,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const id = target.getAttribute('data-id');
             const isEdit = target.getAttribute('data-is-edit');
             if (!id || !isEdit) {
-                console.error('Invalid data attributes for edit timestamps');
-                isProcessing = false;
-                toggleButtonDisabled(target, isProcessing);
+                errorProcessing('Invalid data attributes for edit timestamps');
                 return;
             }
 
@@ -279,9 +282,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     // 編集状態ではない場合、表示を編集モードに切り替える
                     toggleTsItemsStyle(target, isEdit);
                 } catch (e) {
-                    console.error('Failed to toggle timestamp styles:', e);
-                    isProcessing = false;
-                    toggleButtonDisabled(target, isProcessing);
+                    errorProcessing('Failed to toggle timestamp styles:', e);
                     return;
                 }
             } else {
@@ -354,16 +355,16 @@ document.addEventListener('DOMContentLoaded', function () {
             const url = target.dataset.url;
             // URLがnullの場合は何もしない（たぶん押せないのでありえないが一応挙動を合わせておく）
             if (!url) {
-                isProcessing = false;
-                toggleButtonDisabled(target, isProcessing);
+                errorProcessing('pagination-url is not existed.');
                 return;
             }
             // アーカイブ一覧を取得
             fetchArchives(url);
         }
 
-        // 空振りの場合はフラグを戻す
+        // 空振りの場合も含めて、最終的に状態を戻す
         isProcessing = false;
+        toggleButtonDisabled(target, isProcessing);
     });
 
     // 検索コンポーネントのイベントのリスナーを定義
