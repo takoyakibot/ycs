@@ -9,7 +9,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const errorMessage = document.getElementById('errorMessage');
     const handle = document.getElementById('handle');
 
-    function firstUrl(params = null) {
+    // 初期状態の表示フラグは「しぼりこみなし」になっているので、デフォルトで設定されるようにする
+    function firstUrl(params = 'visible=2') {
         return `/api/manage/channels/${handle.value}?page=1` + (params ? `&${params}` : '');
     };
 
