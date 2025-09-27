@@ -13,6 +13,11 @@ class GetArchiveService
         $channel  = Channel::where('handle', $handle)->firstOrFail();
         $archives = Archive::with('tsItems');
 
+        // 検索ワードがある場合
+        if ($params != '') {
+            $archives = $this->setQueryWhereParams($archives, $params, 'title');
+        }
+
         return $this->getArchiveCommon($archives, $channel->channel_id, $visibleFlg, $tsFlg);
     }
 
