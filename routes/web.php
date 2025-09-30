@@ -41,8 +41,7 @@ Route::middleware('auth')->group(function () {
 
 Route::get('/', [ChannelController::class, 'index'])->name('top');
 Route::get('/channels', [ChannelController::class, 'index'])->name('channels.index');
-Route::get('/channels/{id}', [ChannelController::class, 'show'])
-    ->name('channels.show');
+Route::get('/channels/{id}', [ChannelController::class, 'show'])->name('channels.show');
 
 Route::get('api/channels/{id}', [ChannelController::class, 'fetchArchives'])->name('channels.fetchArchives');
 
