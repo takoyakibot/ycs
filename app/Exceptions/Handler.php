@@ -1,7 +1,7 @@
 <?php
-
 namespace App\Exceptions;
 
+use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
 use Throwable;
 
@@ -25,6 +25,10 @@ class Handler extends ExceptionHandler
     {
         $this->reportable(function (Throwable $e) {
             //
+        });
+
+        $this->renderable(function (DecryptException $e, $request) {
+            return response()->json(['message' => 'Bad request'], 400);
         });
     }
 }
