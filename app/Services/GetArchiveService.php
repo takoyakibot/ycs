@@ -80,7 +80,7 @@ class GetArchiveService
      */
     private function setQueryWhereParams($query, string $params, string $column)
     {
-        if ($params === '') {
+        if (trim($params) === '') {
             return $query;
         }
 
