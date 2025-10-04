@@ -1,6 +1,7 @@
 <?php
 namespace App\Http\Controllers;
 
+use App\Exceptions\NotFoundException;
 use App\Models\Archive;
 use App\Models\ChangeList;
 use App\Models\Channel;
@@ -72,7 +73,7 @@ class ManageController extends Controller
             throw new Exception("youtubeとの接続でエラーが発生しました");
         }
         if (! $channel || ! isset($channel['title']) || ! $channel['title']) {
-            throw new Exception("チャンネルが存在しません");
+            throw new NotFoundException("チャンネルが存在しません");
         }
 
         Channel::create([
@@ -178,14 +179,14 @@ class ManageController extends Controller
             $tsItem     = TsItem::where('comment_id', $commentIds[0])
                 ->with(['archive'])->first();
             if (! $tsItem) {
-                throw new Exception('tsItem is not found');
+                throw new NotFoundException('tsItem is not found');
             }
 
             // 取得したarchiveからchannelIdとvideoIdを取得
             $channelId = $tsItem->archive->channel_id;
             $videoId   = $tsItem->video_id;
             if (! $channelId || ! $videoId) {
-                throw new Exception('channelId or videoId is not found');
+                throw new NotFoundException('channelId or videoId is not found');
             }
 
             // 変更リストの削除 videoIdが一致し、commentIdがnull以外のものを削除
