@@ -3,23 +3,46 @@ namespace App\Services;
 
 use App\Models\Archive;
 use App\Models\Channel;
+use Illuminate\Support\Facades\Crypt;
 
 class GetArchiveService
 {
+    public function getArchivesForManage(string $id, string $params, string $visibleFlg, string $tsFlg)
+    {
+        $handle   = Crypt::decryptString($id);
+        $channel  = Channel::where('handle', $handle)->firstOrFail();
+        $archives = Archive::with('tsItems');
+
+        return $this->getArchiveCommon($archives, $channel->channel_id, $visibleFlg, $tsFlg);
+    }
+
     public function getArchives(string $handle, string $params, string $visibleFlg, string $tsFlg)
     {
         $channel  = Channel::where('handle', $handle)->firstOrFail();
         $archives = Archive::with(['tsItemsDisplay' => function ($query) use ($params) {
-            return $this->setQueryWhereParams($query, $params);
-        }])
-            ->where('channel_id', $channel->channel_id);
+            return $this->setQueryWhereParams($query, $params, 'text');
+        }]);
 
         // 検索ワードがある場合
         if ($params != '' && $tsFlg != '2') {
             $archives->whereHas('tsItemsDisplay', function ($query) use ($params) {
-                $query = $this->setQueryWhereParams($query, $params);
+                $query = $this->setQueryWhereParams($query, $params, 'text');
             });
         }
+
+        return $this->getArchiveCommon($archives, $channel->channel_id, $visibleFlg, $tsFlg);
+    }
+
+    /**
+     * getArchive関連で共通の処理を付加する
+     * @param mixed $archives
+     * @param string $channelId
+     * @param string $visibleFlg
+     * @param string $tsFlg
+     */
+    private function getArchiveCommon($archives, string $channelId, string $visibleFlg, string $tsFlg)
+    {
+        $archives->where('channel_id', $channelId);
 
         // 表示非表示
         if ($visibleFlg === '1') {
@@ -39,16 +62,18 @@ class GetArchiveService
             $archives->whereDoesntHave('tsItemsDisplay');
         }
 
-        return $archives->orderBy('published_at', 'desc')
-            ->paginate(config('utils.page'));
+        $archives->orderBy('published_at', 'desc');
+
+        return $archives->paginate(config('utils.page'));
     }
 
     /**
      * 検索ワードとして渡された単語をスペースで分割してand条件の部分一致whereに変換する
      * @param mixed $query
      * @param string $params
+     * @param string $column
      */
-    private function setQueryWhereParams($query, string $params)
+    private function setQueryWhereParams($query, string $params, string $column)
     {
         if ($params === '') {
             return $query;
@@ -56,7 +81,7 @@ class GetArchiveService
 
         $paramList = preg_split('/\s+|\x{3000}+/u', trim($params), -1, PREG_SPLIT_NO_EMPTY);
         foreach ($paramList as $p) {
-            $query->where('text', 'like', "%{$p}%");
+            $query->where($column, 'like', "%{$p}%");
         }
 
         return $query;
