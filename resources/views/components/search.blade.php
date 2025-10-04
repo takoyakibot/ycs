@@ -1,5 +1,6 @@
 <div x-data="searchComponent({
-        channelId: '{{ $channelId ?? '' }}'
+        channelId: '{{ $channelId ?? '' }}',
+        manageFlg: '{{ $manageFlg ?? '' }}'
     })" class="search-component">
     <!-- 検索フォーム -->
     <form @submit.prevent="search" class="flex items-stretch sm:items-center gap-2 max-w-7lg">
@@ -35,10 +36,10 @@
     /**
      * search-resultsという名前のイベントを発火し、検索窓の内容を連携する
      */
-    function searchComponent({ channelId }) {
+    function searchComponent({ channelId, manageFlg }) {
         return {
             query: '', // 検索クエリ
-            visibleFlg: '', // 表示非表示
+            visibleFlg: manageFlg ? '2' : '', // 表示非表示
             tsFlg: '', // タイムスタンプ有無
             results: [], // 検索結果
             loading: false, // ローディング状態

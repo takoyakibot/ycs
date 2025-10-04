@@ -1,10 +1,12 @@
 <?php
 namespace App\Http\Controllers;
 
+use App\Exceptions\NotFoundException;
 use App\Models\Archive;
 use App\Models\ChangeList;
 use App\Models\Channel;
 use App\Models\TsItem;
+use App\Services\GetArchiveService;
 use App\Services\ImageService;
 use App\Services\RefreshArchiveService;
 use App\Services\YouTubeService;
@@ -19,12 +21,18 @@ class ManageController extends Controller
     protected $youtubeService;
     protected $imageService;
     protected $refreshArchiveService;
+    protected $getArchiveService;
 
-    public function __construct(YouTubeService $youtubeService, ImageService $imageService, RefreshArchiveService $refreshArchiveService)
-    {
+    public function __construct(
+        YouTubeService $youtubeService,
+        ImageService $imageService,
+        RefreshArchiveService $refreshArchiveService,
+        GetArchiveService $getArchiveService
+    ) {
         $this->youtubeService        = $youtubeService;
         $this->imageService          = $imageService;
         $this->refreshArchiveService = $refreshArchiveService;
+        $this->getArchiveService     = $getArchiveService;
     }
 
     public function index()
@@ -65,7 +73,7 @@ class ManageController extends Controller
             throw new Exception("youtubeとの接続でエラーが発生しました");
         }
         if (! $channel || ! isset($channel['title']) || ! $channel['title']) {
-            throw new Exception("チャンネルが存在しません");
+            throw new NotFoundException("チャンネルが存在しません");
         }
 
         Channel::create([
@@ -78,15 +86,16 @@ class ManageController extends Controller
         return response()->json("チャンネルを登録しました");
     }
 
-    public function fetchArchives($id)
+    public function fetchArchives(string $id, Request $request)
     {
-        $handle = Crypt::decryptString($id);
+        $archives = $this->getArchiveService->getArchivesForManage(
+            $id,
+            (string) $request->query('baramutsu', ''),
+            (string) $request->query('visible', ''),
+            (string) $request->query('ts', '')
+        )
+            ->appends($request->query());
 
-        $channel  = Channel::where('handle', $handle)->firstOrFail();
-        $archives = Archive::with('tsItems')
-            ->where('channel_id', $channel->channel_id)
-            ->orderBy('published_at', 'desc')
-            ->paginate(config('utils.page'));
         return response()->json($archives);
     }
 
@@ -170,14 +179,14 @@ class ManageController extends Controller
             $tsItem     = TsItem::where('comment_id', $commentIds[0])
                 ->with(['archive'])->first();
             if (! $tsItem) {
-                throw new Exception('tsItem is not found');
+                throw new NotFoundException('tsItem is not found');
             }
 
             // 取得したarchiveからchannelIdとvideoIdを取得
             $channelId = $tsItem->archive->channel_id;
             $videoId   = $tsItem->video_id;
             if (! $channelId || ! $videoId) {
-                throw new Exception('channelId or videoId is not found');
+                throw new NotFoundException('channelId or videoId is not found');
             }
 
             // 変更リストの削除 videoIdが一致し、commentIdがnull以外のものを削除
