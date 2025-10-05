@@ -151,7 +151,6 @@ document.addEventListener('DOMContentLoaded', function () {
         axios.post('/api/manage/archives', formData)
             .then(function (response) {
                 // 登録成功後にアーカイブ一覧を再取得
-                alert(response.data);
                 fetchArchives();
             })
             .catch(function (error) {
