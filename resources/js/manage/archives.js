@@ -50,7 +50,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         <div class="archive flex flex-col sm:flex-row w-[100%] max-w-5xl border rounded-lg shadow-lg p-4 gap-4 mb-6 ${archive.is_display ? 'bg-white' : 'bg-gray-200'}">
                             <div class="flex flex-col flex-shrink-0 sm:w-1/3">
                                 <div class="flex flex-col gap-2">
-                                    <a href="${youtubeUrl}" target="_blank">
+                                    <a href="${youtubeUrl}" target="_blank" rel="noopener noreferrer">
                                         <img src="${escapeHTML(archive.thumbnail || '')}" alt="サムネイル" loading="lazy"
                                             class="h-auto rounded-md object-cover filter ${archive.is_display ? 'grayscale-0' : 'grayscale'}" />
                                     </a>
@@ -129,6 +129,11 @@ document.addEventListener('DOMContentLoaded', function () {
     registerButton.addEventListener('click', function () {
         if (isProcessing) { return; }
         isProcessing = true;
+
+        if (!target || typeof target.disabled === 'undefined') {
+            isProcessing = false;
+            return;
+        }
         toggleButtonDisabled(registerButton, isProcessing);
 
         // 確認メッセージを表示
@@ -495,7 +500,7 @@ function getTsItems(tsItems) {
                 <div class="timestamp text-sm ${tsItem.is_display ? 'text-gray-700 is-display default-display' : 'text-gray-500 pl-4 bg-gray-200'}
                     ${lastCommentId != tsItem.comment_id && lastCommentId != '' ? 'mt-2' : ''}" data-key="${tsItem.id}" data-comment="${tsItem.comment_id}">
                     <a href="${"https://youtube.com/watch?v=" + encodeURIComponent(tsItem.video_id || '')}&t=${encodeURIComponent(tsItem.ts_num || '0')}s"
-                        target="_blank" class="text-blue-500 tabular-nums hover:underline">
+                        target="_blank" rel="noopener noreferrer" class="text-blue-500 tabular-nums hover:underline">
                         ${tsItem.ts_text || '0:00:00'}
                     </a>
                     <span class="tabular-nums hidden">
