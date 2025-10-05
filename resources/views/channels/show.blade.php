@@ -17,12 +17,12 @@
             <h2 class="text-gray-500 items-center justify-center gap-4 hidden sm:flex">
                 <img :src="escapeHTML(channel.thumbnail || '')" alt="アイコン" class="w-20 h-20 rounded-full">
                 <span class="text-lg font-bold" x-text="channel.title || '未設定'"></span>
-                <a :href="'https://youtube.com/@' + escapeHTML(channel.handle || '')" target="_blank" class="hover:opacity-80">
+                <a :href="'https://youtube.com/@' + escapeHTML(channel.handle || '')" target="_blank" rel="noopener noreferrer" class="hover:opacity-80">
                     Youtubeチャンネルはこちら
                 </a>
             </h2>
             <h2 class="text-gray-500 justify-self-center sm:hidden">
-                <a :href="'https://youtube.com/@' + escapeHTML(channel.handle || '')" target="_blank" class="flex items-center gap-4 hover:opacity-80">
+                <a :href="'https://youtube.com/@' + escapeHTML(channel.handle || '')" target="_blank" rel="noopener noreferrer" class="flex items-center gap-4 hover:opacity-80">
                     <img :src="escapeHTML(channel.thumbnail || '')" alt="アイコン" class="w-20 h-20 rounded-full">
                     <span class="text-lg font-bold" x-text="channel.title || '未設定'"></span>
                 </a>
@@ -46,7 +46,7 @@
                     <div class="archive flex flex-col sm:flex-row w-[100%] max-w-5xl border rounded-lg shadow-lg p-4 gap-4 mb-2 bg-white">
                         <div class="flex flex-col flex-shrink-0" :class="isFiltered ? 'sm:w-1/2' : 'sm:w-1/3'">
                             <div class="flex gap-2" :class="isFiltered ? 'flex-row' : 'flex-col'">
-                                <a :href="getArchiveUrl(archive.video_id || '')" target="_blank" :class="isFiltered ? 'w-1/4' : 'h-auto'" >
+                                <a :href="getArchiveUrl(archive.video_id || '')" target="_blank" rel="noopener noreferrer" :class="isFiltered ? 'w-1/4' : 'h-auto'" >
                                     <img :src="escapeHTML(archive.thumbnail || '')" alt="サムネイル" loading="lazy"
                                         class="rounded-md object-cover flex flex-shrink-0"/>
                                 </a>
@@ -62,7 +62,7 @@
                                 <template x-for="tsItem in archive.ts_items_display" :key="tsItem.id">
                                     <div class="timestamp text-sm text-gray-700">
                                         <a :href="getArchiveUrl(tsItem.video_id, tsItem.ts_num)"
-                                            target="_blank" class="text-blue-500 tabular-nums hover:underline"
+                                            target="_blank" rel="noopener noreferrer" class="text-blue-500 tabular-nums hover:underline"
                                             x-text="tsItem.ts_text || '0:00:00'">
                                         </a> <span class="ml-2" x-text="tsItem.text || ''"></span>
                                     </div>
