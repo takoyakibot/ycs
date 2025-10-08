@@ -171,9 +171,13 @@ document.addEventListener('DOMContentLoaded', function () {
         // 一旦非活性に変更
         toggleButtonDisabled(target, isProcessing);
 
-        const errorProcessing = function (errorMessage) {
+        const errorProcessing = (errorMessage) => {
             console.error(errorMessage);
-            isProcessing = false;
+            cleanup(target);
+        };
+
+        const cleanup = (target) => {
+            const isProcessing = false;
             toggleButtonDisabled(target, isProcessing);
         };
 
@@ -213,8 +217,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     errorMessage.textContent = '変更に失敗しました。もう一度お試しください。';
                 })
                 .finally(() => {
-                    isProcessing = false;
-                    toggleButtonDisabled(target, isProcessing);
+                    cleanup(target);
                 });
         }
 
@@ -257,8 +260,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     errorMessage.textContent = 'コメント取得に失敗しました。もう一度お試しください。';
                 })
                 .finally(() => {
-                    isProcessing = false;
-                    toggleButtonDisabled(target, isProcessing);
+                    cleanup(target);
                 });
         }
 
@@ -312,8 +314,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         errorMessage.textContent = 'タイムスタンプの編集に失敗しました。もう一度お試しください。';
                     })
                     .finally(() => {
-                        isProcessing = false;
-                        toggleButtonDisabled(target, isProcessing);
+                        cleanup(target);
                     });
             }
         }
@@ -363,8 +364,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         // 空振りの場合も含めて、最終的に状態を戻す
-        isProcessing = false;
-        toggleButtonDisabled(target, isProcessing);
+        cleanup(target);
     });
 
     // 検索コンポーネントのイベントのリスナーを定義
