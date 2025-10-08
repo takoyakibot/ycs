@@ -13,10 +13,7 @@ class GetArchiveService
         $channel  = Channel::where('handle', $handle)->firstOrFail();
         $archives = Archive::with('tsItems');
 
-        // 検索ワードがある場合
-        if ($params != '') {
-            $archives = $this->setQueryWhereParams($archives, $params, 'title');
-        }
+        $archives = $this->setQueryWhereParams($archives, $params, 'title');
 
         return $this->getArchiveCommon($archives, $channel->channel_id, $visibleFlg, $tsFlg);
     }
@@ -28,8 +25,8 @@ class GetArchiveService
             return $this->setQueryWhereParams($query, $params, 'text');
         }]);
 
-        // 検索ワードがある場合
-        if ($params != '' && $tsFlg != '2') {
+        // 「タイムスタンプなし」以外が選ばれている場合
+        if ($tsFlg != '2') {
             $archives->whereHas('tsItemsDisplay', function ($query) use ($params) {
                 $query = $this->setQueryWhereParams($query, $params, 'text');
             });
@@ -73,7 +70,8 @@ class GetArchiveService
     }
 
     /**
-     * 検索ワードとして渡された単語をスペースで分割してand条件の部分一致whereに変換する
+     * 検索ワードとして渡された単語をスペースで分割してand条件の部分一致whereに変換する。
+     * trim($params)='' の場合は何もしない。
      * @param mixed $query
      * @param string $params
      * @param string $column
