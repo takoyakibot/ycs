@@ -130,10 +130,6 @@ document.addEventListener('DOMContentLoaded', function () {
         if (isProcessing) { return; }
         isProcessing = true;
 
-        if (!target || typeof target.disabled === 'undefined') {
-            isProcessing = false;
-            return;
-        }
         toggleButtonDisabled(registerButton, isProcessing);
 
         // 確認メッセージを表示
