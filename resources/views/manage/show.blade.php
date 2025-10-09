@@ -21,12 +21,12 @@
             <h2 class="text-gray-500 sm:flex items-center justify-center gap-4 hidden">
                 <img src="{{ $channel->thumbnail ?? '' }}" alt="アイコン" class="w-20 h-20 rounded-full">
                 <span class="text-lg font-bold text-black">{{ $channel->title ?? '' }}</span>
-                <a href="{{ url('https://youtube.com/@' . $channel->handle) }}" target="_blank">
+                <a href="{{ url('https://youtube.com/@' . $channel->handle) }}" target="_blank" rel="noopener noreferrer">
                     Youtubeチャンネルはこちら
                 </a>
             </h2>
             <h2 class="text-gray-500 justify-self-center sm:hidden">
-                <a href="{{ url('https://youtube.com/@' . $channel->handle) }}" target="_blank" class="flex items-center gap-4">
+                <a href="{{ url('https://youtube.com/@' . $channel->handle) }}" target="_blank" rel="noopener noreferrer" class="flex items-center gap-4">
                     <img src="{{ $channel->thumbnail }}" alt="アイコン" class="w-20 h-20 rounded-full">
                     <span class="text-lg font-bold text-black">{{ $channel->title }}</span>
                 </a>

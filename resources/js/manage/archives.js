@@ -9,7 +9,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const errorMessage = document.getElementById('errorMessage');
     const handle = document.getElementById('handle');
 
-    function firstUrl(params = null) {
+    // 初期状態の表示フラグは「しぼりこみなし」になっているので、デフォルトで設定されるようにする
+    function firstUrl(params = 'visible=2') {
         return `/api/manage/channels/${handle.value}?page=1` + (params ? `&${params}` : '');
     };
 
@@ -49,7 +50,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         <div class="archive flex flex-col sm:flex-row w-[100%] max-w-5xl border rounded-lg shadow-lg p-4 gap-4 mb-6 ${archive.is_display ? 'bg-white' : 'bg-gray-200'}">
                             <div class="flex flex-col flex-shrink-0 sm:w-1/3">
                                 <div class="flex flex-col gap-2">
-                                    <a href="${youtubeUrl}" target="_blank">
+                                    <a href="${youtubeUrl}" target="_blank" rel="noopener noreferrer">
                                         <img src="${escapeHTML(archive.thumbnail || '')}" alt="サムネイル" loading="lazy"
                                             class="h-auto rounded-md object-cover filter ${archive.is_display ? 'grayscale-0' : 'grayscale'}" />
                                     </a>
@@ -128,6 +129,7 @@ document.addEventListener('DOMContentLoaded', function () {
     registerButton.addEventListener('click', function () {
         if (isProcessing) { return; }
         isProcessing = true;
+
         toggleButtonDisabled(registerButton, isProcessing);
 
         // 確認メッセージを表示
@@ -145,7 +147,6 @@ document.addEventListener('DOMContentLoaded', function () {
         axios.post('/api/manage/archives', formData)
             .then(function (response) {
                 // 登録成功後にアーカイブ一覧を再取得
-                alert(response.data);
                 fetchArchives();
             })
             .catch(function (error) {
@@ -167,15 +168,26 @@ document.addEventListener('DOMContentLoaded', function () {
         if (isProcessing) { return; }
         isProcessing = true;
         const target = event.target;
+        // 一旦非活性に変更
+        toggleButtonDisabled(target, isProcessing);
+
+        const errorProcessing = (errorMessage) => {
+            console.error(errorMessage);
+            cleanup(target);
+        };
+
+        const cleanup = (target) => {
+            const isProcessing = false;
+            toggleButtonDisabled(target, isProcessing);
+        };
 
         // 表示非表示切り替えボタン押下時
         if (target.classList.contains('toggle-display-btn')) {
-            toggleButtonDisabled(target, isProcessing);
             const archiveElement = target.closest('.archive'); // 親要素を取得
             const id = target.getAttribute('data-id');
             const isDisplay = target.getAttribute('data-display'); // 現在のフラグ
             if (!id || !isDisplay) {
-                console.error('Invalid data attributes for toggle display');
+                errorProcessing('Invalid data attributes for toggle display');
                 return;
             }
 
@@ -205,19 +217,16 @@ document.addEventListener('DOMContentLoaded', function () {
                     errorMessage.textContent = '変更に失敗しました。もう一度お試しください。';
                 })
                 .finally(() => {
-                    isProcessing = false;
-                    toggleButtonDisabled(target, isProcessing);
+                    cleanup(target);
                 });
         }
 
         // コメント取得ボタン押下時
         if (target.classList.contains('fetch-comments-btn')) {
-            toggleButtonDisabled(target, isProcessing);
-
             const timestampsElement = target.closest('.archive').querySelector('.timestamps');
             const id = target.getAttribute('data-id');
             if (!id) {
-                console.error('Invalid data attributes for fetch comment');
+                errorProcessing('Invalid data attributes for fetch comment');
                 return;
             }
 
@@ -251,8 +260,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     errorMessage.textContent = 'コメント取得に失敗しました。もう一度お試しください。';
                 })
                 .finally(() => {
-                    isProcessing = false;
-                    toggleButtonDisabled(target, isProcessing);
+                    cleanup(target);
                 });
         }
 
@@ -263,9 +271,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const id = target.getAttribute('data-id');
             const isEdit = target.getAttribute('data-is-edit');
             if (!id || !isEdit) {
-                console.error('Invalid data attributes for edit timestamps');
-                isProcessing = false;
-                toggleButtonDisabled(target, isProcessing);
+                errorProcessing('Invalid data attributes for edit timestamps');
                 return;
             }
 
@@ -278,9 +284,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     // 編集状態ではない場合、表示を編集モードに切り替える
                     toggleTsItemsStyle(target, isEdit);
                 } catch (e) {
-                    console.error('Failed to toggle timestamp styles:', e);
-                    isProcessing = false;
-                    toggleButtonDisabled(target, isProcessing);
+                    errorProcessing('Failed to toggle timestamp styles:', e);
                     return;
                 }
             } else {
@@ -310,8 +314,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         errorMessage.textContent = 'タイムスタンプの編集に失敗しました。もう一度お試しください。';
                     })
                     .finally(() => {
-                        isProcessing = false;
-                        toggleButtonDisabled(target, isProcessing);
+                        cleanup(target);
                     });
             }
         }
@@ -353,16 +356,15 @@ document.addEventListener('DOMContentLoaded', function () {
             const url = target.dataset.url;
             // URLがnullの場合は何もしない（たぶん押せないのでありえないが一応挙動を合わせておく）
             if (!url) {
-                isProcessing = false;
-                toggleButtonDisabled(target, isProcessing);
+                errorProcessing('pagination-url is not existed.');
                 return;
             }
             // アーカイブ一覧を取得
             fetchArchives(url);
         }
 
-        // 空振りの場合はフラグを戻す
-        isProcessing = false;
+        // 空振りの場合も含めて、最終的に状態を戻す
+        cleanup(target);
     });
 
     // 検索コンポーネントのイベントのリスナーを定義
@@ -493,7 +495,7 @@ function getTsItems(tsItems) {
                 <div class="timestamp text-sm ${tsItem.is_display ? 'text-gray-700 is-display default-display' : 'text-gray-500 pl-4 bg-gray-200'}
                     ${lastCommentId != tsItem.comment_id && lastCommentId != '' ? 'mt-2' : ''}" data-key="${tsItem.id}" data-comment="${tsItem.comment_id}">
                     <a href="${"https://youtube.com/watch?v=" + encodeURIComponent(tsItem.video_id || '')}&t=${encodeURIComponent(tsItem.ts_num || '0')}s"
-                        target="_blank" class="text-blue-500 tabular-nums hover:underline">
+                        target="_blank" rel="noopener noreferrer" class="text-blue-500 tabular-nums hover:underline">
                         ${tsItem.ts_text || '0:00:00'}
                     </a>
                     <span class="tabular-nums hidden">
