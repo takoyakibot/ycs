@@ -34,7 +34,7 @@ class RefreshArchives extends Command
             $channelCount = $service->getChannelCount();
             $count        = 0;
 
-            while ($count < 4000 || $channelCount > 0) {
+            while ($count < 4000 && $channelCount > 0) {
                 // 一番古いアーカイブを取得し、そのチャンネルの情報を再作成する
                 $channel = $service->getOldestUpdatedChannel();
                 echo now() . ' 更新対象：' . $channel->title;
