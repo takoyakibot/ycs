@@ -31,12 +31,23 @@ class RefreshArchives extends Command
             $userId = $this->option('user-id');
             $service->cliLogin($userId);
 
-            // 一番古いアーカイブを取得し、そのチャンネルの情報を再作成する
-            $channel = $service->getOldestUpdatedChannel();
-            echo now() . ' 更新対象：' . $channel->title;
-            $service->refreshArchives($channel);
+            $channelCount = $service->getChannelCount();
+            $count        = 0;
 
-            echo " 更新成功\n";
+            while ($count < 4000 || $channelCount > 0) {
+                // 一番古いアーカイブを取得し、そのチャンネルの情報を再作成する
+                $channel = $service->getOldestUpdatedChannel();
+                echo now() . ' 更新対象：' . $channel->title;
+
+                // アーカイブ更新、動画数を返却させる
+                $count += $service->refreshArchives($channel);
+
+                // 登録されてるチャンネル数をすべて更新したら終了
+                $channelCount--;
+
+                echo " 更新成功\n";
+            }
+
             return 0;
         } catch (Exception $e) {
             echo " 更新失敗: " . $e->getMessage() . "\n";

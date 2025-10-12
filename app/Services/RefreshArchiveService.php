@@ -26,9 +26,9 @@ class RefreshArchiveService
         Auth::login($user);
     }
 
-    public function refreshArchives(Channel $channel): void
+    public function refreshArchives(Channel $channel): int
     {
-        DB::transaction(function () use ($channel) {
+        $count = DB::transaction(function () use ($channel): int {
             // 1.archivesとts_itemsの取得および整形
             try {
                 $rtn_archives = $this->youtubeService
@@ -147,9 +147,11 @@ class RefreshArchiveService
                         )
                     )
             ", [$channel->channel_id]);
+
+            return count($rtn_archives);
         });
 
-        return;
+        return $count;
     }
 
     /**
@@ -179,5 +181,10 @@ class RefreshArchiveService
         $archive = Archive::orderBy('created_at', 'asc')->firstOrFail();
         $channel = Channel::where('channel_id', '=', $archive->channel_id)->firstOrFail();
         return $channel;
+    }
+
+    public function getChannelCount(): int
+    {
+        return Channel::count();
     }
 }
