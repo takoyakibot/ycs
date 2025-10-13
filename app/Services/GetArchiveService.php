@@ -26,7 +26,8 @@ class GetArchiveService
         }]);
 
         // 「タイムスタンプなし」以外が選ばれている場合
-        if ($tsFlg != '2') {
+        // ifの中に入った時点でwhereHasが効いてしまうので、絞り込みをしない場合はifには入らないようにする
+        if ($params != '' && $tsFlg != '2') {
             $archives->whereHas('tsItemsDisplay', function ($query) use ($params) {
                 $query = $this->setQueryWhereParams($query, $params, 'text');
             });
