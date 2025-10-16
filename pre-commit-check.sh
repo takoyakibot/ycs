@@ -37,3 +37,4 @@ echo "✅ Frontend build successful!"
 echo ""
 
 echo "🎉 All checks passed! You can safely commit your changes."
+echo "✨ Pre-commit hooks are working correctly!"
