@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        //ts_itemsにcomment_idを追加
+        // ts_itemsにcomment_idを追加
         Schema::table('ts_items', function (Blueprint $table) {
             $table->string('comment_id', 26)->nullable()->after('video_id');
         });
@@ -22,7 +22,7 @@ return new class extends Migration
      */
     public function down(): void
     {
-        //comment_idを削除
+        // comment_idを削除
         Schema::table('ts_items', function (Blueprint $table) {
             $table->dropColumn('comment_id');
         });

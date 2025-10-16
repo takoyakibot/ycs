@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Services;
 
 use Carbon\Carbon;
@@ -12,11 +13,12 @@ use Illuminate\Support\Str;
 class YouTubeService
 {
     protected $client;
+
     protected $youtube;
 
     public function __construct()
     {
-        $this->client = new Google_Client();
+        $this->client = new Google_Client;
     }
 
     private function setApiKey()
@@ -41,10 +43,11 @@ class YouTubeService
         // 検索結果が存在するかを確認
         if (count($response->getItems()) > 0) {
             $channel = $response->getItems()[0];
+
             return [
-                'title'      => $channel['snippet']['title'] ?? '',
+                'title' => $channel['snippet']['title'] ?? '',
                 'channel_id' => $channel['id'],
-                'thumbnail'  => $channel['snippet']['thumbnails']['default']['url'] ?? '',
+                'thumbnail' => $channel['snippet']['thumbnails']['default']['url'] ?? '',
             ];
         }
 
@@ -55,7 +58,7 @@ class YouTubeService
     {
         $this->setApiKey();
 
-        $archives     = $this->getArchives($channel_id);
+        $archives = $this->getArchives($channel_id);
         $rtn_archives = [];
         foreach ($archives as &$archive) {
             // 概要欄に存在するタイムスタンプをts_itemsとして取得する
@@ -83,38 +86,39 @@ class YouTubeService
 
             $rtn_archives[] = $archive;
         }
+
         return $rtn_archives;
     }
 
     private function getArchives($channel_id)
     {
         // チャンネルIDの先頭2文字をUUに置き換える
-        $playlist_id = 'UU' . substr($channel_id, 2);
+        $playlist_id = 'UU'.substr($channel_id, 2);
 
         // nextPageTokenが取得できなくなるまでループ
         $maxResults = config('app.debug') ? config('utils.page') : 50;
-        $response   = null;
-        $archives   = [];
+        $response = null;
+        $archives = [];
         do {
             $response = $this->youtube->playlistItems->listPlaylistItems('snippet', [
                 'playlistId' => $playlist_id,
                 'maxResults' => $maxResults,
-                'pageToken'  => $response ? $response->getNextPageToken() : "",
+                'pageToken' => $response ? $response->getNextPageToken() : '',
             ]);
 
             if (is_array($response->getItems())) {
                 foreach ($response->getItems() as $item) {
                     $archives[] = [
-                        'id'                  => Str::ulid(),
-                        'channel_id'          => $channel_id,
-                        'video_id'            => $item['snippet']['resourceId']['videoId'],
-                        'title'               => $item['snippet']['title'],
-                        'thumbnail'           => $item['snippet']['thumbnails']['medium']['url'],
-                        'is_public'           => true,
-                        'is_display'          => true,
-                        'published_at'        => Carbon::parse($item['snippet']['publishedAt'])->format('Y-m-d H:i:s'),
+                        'id' => Str::ulid(),
+                        'channel_id' => $channel_id,
+                        'video_id' => $item['snippet']['resourceId']['videoId'],
+                        'title' => $item['snippet']['title'],
+                        'thumbnail' => $item['snippet']['thumbnails']['medium']['url'],
+                        'is_public' => true,
+                        'is_display' => true,
+                        'published_at' => Carbon::parse($item['snippet']['publishedAt'])->format('Y-m-d H:i:s'),
                         'comments_updated_at' => today(),
-                        'description'         => $item['snippet']['description'],
+                        'description' => $item['snippet']['description'],
                     ];
                 }
             }
@@ -132,40 +136,43 @@ class YouTubeService
         // 最低限のチェック
         if (! is_string($video_id) || ! is_string($description)) {
             // 無効なデータが来た場合、空の結果を返却
-            error_log("Invalid video_id or description: "
-                . var_export($video_id, true) . ", " . var_export($description, true));
+            error_log('Invalid video_id or description: '
+                .var_export($video_id, true).', '.var_export($description, true));
+
             return [];
         }
 
         if (! in_array($type, ['1', '2'])) {
             // タイプが不正ならデフォルト値にする（例えば1）
-            error_log("Invalid type: " . var_export($type, true));
+            error_log('Invalid type: '.var_export($type, true));
+
             return [];
         }
 
         // 正規表現でタイムスタンプを抽出 (MM:SS または HH:MM:SS)
         $pattern = '/\b(\d{1,2}:\d{2}(?::\d{2})?)\b/';
-        $lines   = explode("\n", $description); // 改行で分割
+        $lines = explode("\n", $description); // 改行で分割
         $results = [];
 
         foreach ($lines as $line) {
             // 各行からタイムスタンプを抽出
             if (preg_match($pattern, $line, $matches)) {
                 $timestamp = $matches[1];                              // タイムスタンプ部分
-                $comment   = trim(str_replace($timestamp, '', $line)); // タイムスタンプを除外した部分
+                $comment = trim(str_replace($timestamp, '', $line)); // タイムスタンプを除外した部分
 
                 // 結果に追加
                 $results[] = [
-                    'id'         => Str::ulid(),
+                    'id' => Str::ulid(),
                     'comment_id' => $comment_id,
-                    'video_id'   => $video_id,
-                    'type'       => $type,
-                    'ts_text'    => $timestamp,
-                    'ts_num'     => $this->timestampToSeconds($timestamp),
-                    'text'       => $comment,
+                    'video_id' => $video_id,
+                    'type' => $type,
+                    'ts_text' => $timestamp,
+                    'ts_num' => $this->timestampToSeconds($timestamp),
+                    'text' => $comment,
                 ];
             }
         }
+
         return $results;
     }
 
@@ -192,10 +199,10 @@ class YouTubeService
         do {
             // リクエストパラメータを設定
             $params = [
-                'videoId'    => $video_id,
-                'part'       => 'snippet,replies', // コメントのスニペットとリプライを取得
+                'videoId' => $video_id,
+                'part' => 'snippet,replies', // コメントのスニペットとリプライを取得
                 'maxResults' => 100,               // 1回のリクエストで取得するコメント数
-                'pageToken'  => $response ? $response->getNextPageToken() : "",
+                'pageToken' => $response ? $response->getNextPageToken() : '',
             ];
 
             try {
@@ -212,10 +219,10 @@ class YouTubeService
 
             // 各コメントを処理
             foreach ($response->getItems() as $item) {
-                $commentId       = $item['id'];
+                $commentId = $item['id'];
                 $topLevelComment = $item['snippet']['topLevelComment']['snippet']['textOriginal'];
-                $comments[]      = [
-                    'id'          => $commentId,
+                $comments[] = [
+                    'id' => $commentId,
                     'description' => $topLevelComment,
                 ];
 
@@ -255,6 +262,7 @@ class YouTubeService
                 return true;
             }
         }
+
         return false;
     }
 
@@ -267,8 +275,8 @@ class YouTubeService
         // comment_idごとの出現回数をカウント
         $count_by_comment_id = [];
         foreach ($ts_items as &$item) {
-            $item['is_display']               = '0';
-            $comment_id                       = $item['comment_id'];
+            $item['is_display'] = '0';
+            $comment_id = $item['comment_id'];
             $count_by_comment_id[$comment_id] = ($count_by_comment_id[$comment_id] ?? 0) + 1;
         }
 

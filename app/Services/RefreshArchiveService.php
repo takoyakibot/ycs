@@ -1,11 +1,11 @@
 <?php
+
 namespace App\Services;
 
 use App\Models\Archive;
 use App\Models\Channel;
 use App\Models\TsItem;
 use App\Models\User;
-use App\Services\YouTubeService;
 use Exception;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -35,7 +35,7 @@ class RefreshArchiveService
                     ->getArchivesAndTsItems($channel->channel_id);
             } catch (Exception $e) {
                 error_log($e->getMessage());
-                throw new Exception("youtubeとの接続でエラーが発生しました");
+                throw new Exception('youtubeとの接続でエラーが発生しました');
             }
             // そのままDBに取り込めるように、ts_itemsは別のリストにまとめて、archivesからは削除する
             $rtn_ts_items = [];
@@ -96,13 +96,13 @@ class RefreshArchiveService
                     $this->refreshTimeStampsFromComments($video_id);
                 } catch (Exception $e) {
                     error_log($e->getMessage());
-                    throw new Exception("youtubeとの接続でエラーが発生しました");
+                    throw new Exception('youtubeとの接続でエラーが発生しました');
                 }
             }
 
             // 4.2.履歴情報から、タイムスタンプの表示非表示を反映させる
             // change_list.is_displayが登録されている値と異なる場合、ts_itemsに反映
-            DB::statement("
+            DB::statement('
                 UPDATE ts_items t1
                 INNER JOIN change_list t2
                   ON t2.video_id = t1.video_id
@@ -110,11 +110,11 @@ class RefreshArchiveService
                 SET t1.is_display = t2.is_display
                 WHERE t1.is_display <> t2.is_display
                   AND t2.channel_id = ?
-            ", [$channel->channel_id]);
+            ', [$channel->channel_id]);
 
             // 4.3.履歴情報から、動画の表示非表示を反映させる
             // change_list.is_displayが登録されている値と異なる場合、archivesに反映
-            DB::statement("
+            DB::statement('
                 UPDATE archives t1
                 INNER JOIN change_list t2
                   ON t2.video_id = t1.video_id
@@ -122,14 +122,14 @@ class RefreshArchiveService
                 SET t1.is_display = t2.is_display
                 WHERE t1.is_display <> t2.is_display
                   AND t1.channel_id = ?
-            ", [$channel->channel_id]);
+            ', [$channel->channel_id]);
 
             // 4.4.不要な履歴は削除する
             // archivesとts_itemsを外部結合したときに、結合先が存在しないchange_listを削除、条件は以下
             // a. タイムスタンプ(コメント<>null)でts_itemsに紐づかないレコード
             // b. アーカイブ(コメント==null)でarvhivesに紐づかないレコード
             // c. ts_itemsにもarchivesにも紐づかないレコード
-            DB::statement("
+            DB::statement('
                 DELETE t1 FROM change_list t1
                 LEFT JOIN ts_items t2 ON t2.video_id = t1.video_id AND t2.comment_id = t1.comment_id
                 LEFT JOIN archives t3 ON t3.video_id = t1.video_id AND t1.comment_id IS NULL
@@ -146,7 +146,7 @@ class RefreshArchiveService
                             t2.id IS NULL AND t3.id IS NULL
                         )
                     )
-            ", [$channel->channel_id]);
+            ', [$channel->channel_id]);
 
             return count($rtn_archives);
         });
@@ -156,9 +156,11 @@ class RefreshArchiveService
 
     /**
      * コメントを取得して、現在登録されているコメントを削除して再登録
-     * @param mixed $videoId
-     * @throws \Exception
+     *
+     * @param  mixed  $videoId
      * @return void
+     *
+     * @throws \Exception
      */
     public function refreshTimeStampsFromComments($videoId)
     {
@@ -166,7 +168,7 @@ class RefreshArchiveService
             $ts_items = $this->youtubeService->getTimeStampsFromComments($videoId);
         } catch (Exception $e) {
             error_log($e->getMessage());
-            throw new Exception("youtubeとの接続でエラーが発生しました");
+            throw new Exception('youtubeとの接続でエラーが発生しました');
         }
         TsItem::where('video_id', $videoId)
             ->where('type', '2')
@@ -180,6 +182,7 @@ class RefreshArchiveService
     {
         $archive = Archive::orderBy('created_at', 'asc')->firstOrFail();
         $channel = Channel::where('channel_id', '=', $archive->channel_id)->firstOrFail();
+
         return $channel;
     }
 
