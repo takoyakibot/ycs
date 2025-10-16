@@ -17,13 +17,12 @@ echo ""
 
 # 2. Laravel Pint (コードスタイル) をチェック
 echo "2️⃣ Checking code style with Laravel Pint..."
-echo "⚠️  Code style check temporarily disabled"
-# ./vendor/bin/pint --test
-# if [ $? -ne 0 ]; then
-#     echo "❌ Code style issues found! Run './vendor/bin/pint' to fix them."
-#     exit 1
-# fi
-echo "✅ Code style check skipped!"
+./vendor/bin/pint --test
+if [ $? -ne 0 ]; then
+    echo "❌ Code style issues found! Run './vendor/bin/pint' to fix them."
+    exit 1
+fi
+echo "✅ Code style is good!"
 echo ""
 
 # 3. フロントエンドビルドをチェック
