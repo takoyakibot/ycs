@@ -54,5 +54,15 @@
         "**/node_modules/**": true,
         "**/public/build/**": true,
         "**/storage/logs/**": true
+    },
+    // .gitフォルダを表示する（デバッグ・管理用）
+    "files.exclude": {
+        "**/.git/objects/**": true,
+        "**/.git/refs/**": true,
+        "**/.git/logs/**": true,
+        "**/.git/index": true,
+        "**/.git/HEAD": true,
+        "**/.git/config": true
+        // .git/hooksは表示される
     }
 }
