@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -9,7 +10,8 @@ class TsItem extends Model
     use HasFactory;
 
     public $incrementing = false;
-    protected $keyType   = 'string';
+
+    protected $keyType = 'string';
 
     protected $fillable = [
         'id',

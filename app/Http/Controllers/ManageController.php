@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Http\Controllers;
 
 use App\Exceptions\NotFoundException;
@@ -19,8 +20,11 @@ use Illuminate\Support\Facades\DB;
 class ManageController extends Controller
 {
     protected $youtubeService;
+
     protected $imageService;
+
     protected $refreshArchiveService;
+
     protected $getArchiveService;
 
     public function __construct(
@@ -29,15 +33,16 @@ class ManageController extends Controller
         RefreshArchiveService $refreshArchiveService,
         GetArchiveService $getArchiveService
     ) {
-        $this->youtubeService        = $youtubeService;
-        $this->imageService          = $imageService;
+        $this->youtubeService = $youtubeService;
+        $this->imageService = $imageService;
         $this->refreshArchiveService = $refreshArchiveService;
-        $this->getArchiveService     = $getArchiveService;
+        $this->getArchiveService = $getArchiveService;
     }
 
     public function index()
     {
         $api_key_flg = Auth::user()->api_key ? '1' : '';
+
         return view('manage.index', compact('api_key_flg'));
     }
 
@@ -51,12 +56,14 @@ class ManageController extends Controller
             return redirect()->route('manage.index');
         }
         $crypt_handle = Crypt::encryptString($channel->handle);
+
         return view('manage.show', compact('channel', 'crypt_handle'));
     }
 
     public function fetchChannel(Request $request)
     {
         $channels = Channel::all();
+
         return response()->json($channels);
     }
 
@@ -70,20 +77,20 @@ class ManageController extends Controller
             $channel = $this->youtubeService->getChannelByHandle($request->handle);
         } catch (Exception $e) {
             error_log($e->getMessage());
-            throw new Exception("youtubeとの接続でエラーが発生しました");
+            throw new Exception('youtubeとの接続でエラーが発生しました');
         }
         if (! $channel || ! isset($channel['title']) || ! $channel['title']) {
-            throw new NotFoundException("チャンネルが存在しません");
+            throw new NotFoundException('チャンネルが存在しません');
         }
 
         Channel::create([
-            'handle'     => $request->handle,
+            'handle' => $request->handle,
             'channel_id' => $channel['channel_id'],
-            'title'      => $channel['title'],
-            'thumbnail'  => $channel['thumbnail'],
+            'title' => $channel['title'],
+            'thumbnail' => $channel['thumbnail'],
         ]);
 
-        return response()->json("チャンネルを登録しました");
+        return response()->json('チャンネルを登録しました');
     }
 
     public function fetchArchives(string $id, Request $request)
@@ -110,7 +117,7 @@ class ManageController extends Controller
 
         $this->refreshArchiveService->refreshArchives($channel);
 
-        return response()->json("アーカイブを登録しました");
+        return response()->json('アーカイブを登録しました');
     }
 
     // 動画の表示非表示切り替え
@@ -118,7 +125,7 @@ class ManageController extends Controller
     public function toggleDisplay(Request $request)
     {
         $request->validate([
-            'id'         => ['required', 'string'],
+            'id' => ['required', 'string'],
             'is_display' => ['required', 'in:0,1'],
         ]);
 
@@ -127,13 +134,13 @@ class ManageController extends Controller
             // archivesとchange_listを更新
             // Archive::where('id', $request->id)->update(['is_display' => $new_display]);
             // return response()->json($new_display);
-            $archive             = Archive::findOrFail($request->id);
+            $archive = Archive::findOrFail($request->id);
             $archive->is_display = $new_display;
             $archive->save();
             ChangeList::updateOrCreate(
                 [
                     'channel_id' => $archive->channel_id,
-                    'video_id'   => $archive->video_id,
+                    'video_id' => $archive->video_id,
                     'comment_id' => null,
                 ],
                 ['is_display' => $new_display]
@@ -156,6 +163,7 @@ class ManageController extends Controller
             $this->refreshArchiveService->refreshTimeStampsFromComments($videoId);
         });
         $ts_items = TsItem::where('video_id', $videoId)->orderBy('comment_id')->get();
+
         return response()->json($ts_items);
     }
 
@@ -163,20 +171,20 @@ class ManageController extends Controller
      * 画面からのリクエストでタイムスタンプの表示非表示を編集する
      * ひとつの動画に対してのタイムスタンプの表示非表示を、コメント単位で設定する（タイムスタンプをコメント単位にまとめるのは、画面側で実施している）
      * デフォルト状態から変わっていない内容は登録しないとか考えたかったけど無駄に複雑になりそうなのでやめよう
-     * @param \Illuminate\Http\Request $request
+     *
      * @return \Illuminate\Http\JsonResponse
      */
     public function editTimestamps(Request $request)
     {
         $validatedData = $request->validate([
-            '*.id'         => 'required|string|exists:ts_items,id',
+            '*.id' => 'required|string|exists:ts_items,id',
             '*.comment_id' => 'required|string|exists:ts_items,comment_id',
             '*.is_display' => 'required|boolean',
         ]);
         DB::transaction(function () use ($validatedData) {
             // リクエストで渡されたコメントIDに紐づくarchiveを取得
             $commentIds = array_column($validatedData, 'comment_id');
-            $tsItem     = TsItem::where('comment_id', $commentIds[0])
+            $tsItem = TsItem::where('comment_id', $commentIds[0])
                 ->with(['archive'])->first();
             if (! $tsItem) {
                 throw new NotFoundException('tsItem is not found');
@@ -184,7 +192,7 @@ class ManageController extends Controller
 
             // 取得したarchiveからchannelIdとvideoIdを取得
             $channelId = $tsItem->archive->channel_id;
-            $videoId   = $tsItem->video_id;
+            $videoId = $tsItem->video_id;
             if (! $channelId || ! $videoId) {
                 throw new NotFoundException('channelId or videoId is not found');
             }
@@ -207,7 +215,7 @@ class ManageController extends Controller
                 if ($lastCommentId !== $item['comment_id']) {
                     ChangeList::create([
                         'channel_id' => $channelId,
-                        'video_id'   => $videoId,
+                        'video_id' => $videoId,
                         'comment_id' => $item['comment_id'],
                         'is_display' => $item['is_display'],
                     ]);
@@ -215,6 +223,7 @@ class ManageController extends Controller
                 $lastCommentId = $item['comment_id'];
             }
         });
-        return response()->json(['message' => "タイムスタンプの編集が完了しました"]);
+
+        return response()->json(['message' => 'タイムスタンプの編集が完了しました']);
     }
 }
