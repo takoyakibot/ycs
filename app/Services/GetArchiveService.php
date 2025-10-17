@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Services;
 
 use App\Models\Archive;
@@ -9,8 +10,8 @@ class GetArchiveService
 {
     public function getArchivesForManage(string $id, string $params, string $visibleFlg, string $tsFlg)
     {
-        $handle   = Crypt::decryptString($id);
-        $channel  = Channel::where('handle', $handle)->firstOrFail();
+        $handle = Crypt::decryptString($id);
+        $channel = Channel::where('handle', $handle)->firstOrFail();
         $archives = Archive::with('tsItems');
 
         $archives = $this->setQueryWhereParams($archives, $params, 'title');
@@ -20,7 +21,7 @@ class GetArchiveService
 
     public function getArchives(string $handle, string $params, string $visibleFlg, string $tsFlg)
     {
-        $channel  = Channel::where('handle', $handle)->firstOrFail();
+        $channel = Channel::where('handle', $handle)->firstOrFail();
         $archives = Archive::with(['tsItemsDisplay' => function ($query) use ($params) {
             return $this->setQueryWhereParams($query, $params, 'text');
         }]);
@@ -38,10 +39,8 @@ class GetArchiveService
 
     /**
      * getArchive関連で共通の処理を付加する
-     * @param mixed $archives
-     * @param string $channelId
-     * @param string $visibleFlg
-     * @param string $tsFlg
+     *
+     * @param  mixed  $archives
      */
     private function getArchiveCommon($archives, string $channelId, string $visibleFlg, string $tsFlg)
     {
@@ -73,9 +72,8 @@ class GetArchiveService
     /**
      * 検索ワードとして渡された単語をスペースで分割してand条件の部分一致whereに変換する。
      * trim($params)='' の場合は何もしない。
-     * @param mixed $query
-     * @param string $params
-     * @param string $column
+     *
+     * @param  mixed  $query
      */
     private function setQueryWhereParams($query, string $params, string $column)
     {

@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -23,8 +24,10 @@ class Archive extends Model
     protected $hidden = ['channel_id'];
 
     protected $primaryKey = 'id';
-    public $incrementing  = false;
-    protected $keyType    = 'string';
+
+    public $incrementing = false;
+
+    protected $keyType = 'string';
 
     public function tsItems()
     {

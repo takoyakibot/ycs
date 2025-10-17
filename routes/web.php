@@ -18,7 +18,7 @@ use Illuminate\Support\Facades\Route;
  */
 
 Route::middleware(['auth', 'verified'])->group(function () {
-    //TODO: 別のサービスができるまでは自動的に歌枠検索に飛ばす
+    // TODO: 別のサービスができるまでは自動的に歌枠検索に飛ばす
     Route::redirect('/manage', '/channels/manage', 301);
 
     Route::get('/channels/manage', [ManageController::class, 'index'])->name('manage.index');
@@ -47,4 +47,4 @@ Route::get('api/channels/{id}', [ChannelController::class, 'fetchArchives'])->na
 
 Route::get('/terms', [MarkdownController::class, 'show'])->name('markdown.show');
 
-require __DIR__ . '/auth.php';
+require __DIR__.'/auth.php';
