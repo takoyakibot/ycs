@@ -4,8 +4,8 @@ namespace App\Services;
 
 use Carbon\Carbon;
 use Exception;
-use Google_Client;
-use Google_Service_YouTube;
+use Google\Client as Google_Client;
+use Google\Service\YouTube as Google_Service_YouTube;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Str;
@@ -44,10 +44,15 @@ class YouTubeService
         if (count($response->getItems()) > 0) {
             $channel = $response->getItems()[0];
 
+            // 安全なアクセサーメソッドを使用
+            $snippet = $channel->getSnippet();
+            $thumbnails = $snippet ? $snippet->getThumbnails() : null;
+            $defaultThumb = $thumbnails ? ($thumbnails->getDefault() ? $thumbnails->getDefault()->getUrl() : null) : null;
+
             return [
-                'title' => $channel['snippet']['title'] ?? '',
-                'channel_id' => $channel['id'],
-                'thumbnail' => $channel['snippet']['thumbnails']['default']['url'] ?? '',
+                'title' => $snippet ? $snippet->getTitle() : '',
+                'channel_id' => $channel->getId(),
+                'thumbnail' => $defaultThumb ?? '',
             ];
         }
 
