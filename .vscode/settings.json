@@ -1,0 +1,68 @@
+{
+    // ===========================================
+    // Laravel プロジェクト統一設定
+    // ===========================================
+    // ファイル保存時の自動フォーマット
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+        "source.organizeImports": "explicit"
+    },
+    // PHP関連設定
+    "[php]": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "open-southeners.laravel-pint",
+        "editor.tabSize": 4,
+        "editor.insertSpaces": true
+    },
+    // Blade関連設定
+    "[blade]": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "open-southeners.laravel-pint",
+        "editor.tabSize": 4,
+        "editor.insertSpaces": true
+    },
+    // JavaScript/CSS関連設定
+    "[javascript]": {
+        "editor.tabSize": 2,
+        "editor.insertSpaces": true
+    },
+    "[css]": {
+        "editor.tabSize": 2,
+        "editor.insertSpaces": true
+    },
+    // ファイル関連付け
+    "files.associations": {
+        "*.blade.php": "blade",
+        ".env.example": "dotenv",
+        ".env.local": "dotenv",
+        ".env.testing": "dotenv"
+    },
+    // Laravel Pint設定
+    "laravel-pint.enable": true,
+    "laravel-pint.runOnSave": true,
+    "laravel-pint.showOutput": false,
+    // 検索・除外設定
+    "search.exclude": {
+        "**/vendor": true,
+        "**/node_modules": true,
+        "**/public/build": true,
+        "**/storage/logs": true
+    },
+    // ファイル監視除外
+    "files.watcherExclude": {
+        "**/vendor/**": true,
+        "**/node_modules/**": true,
+        "**/public/build/**": true,
+        "**/storage/logs/**": true
+    },
+    // .gitフォルダを表示する（デバッグ・管理用）
+    "files.exclude": {
+        "**/.git/objects/**": true,
+        "**/.git/refs/**": true,
+        "**/.git/logs/**": true,
+        "**/.git/index": true,
+        "**/.git/HEAD": true,
+        "**/.git/config": true
+        // .git/hooksは表示される
+    }
+}

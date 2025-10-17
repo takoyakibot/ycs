@@ -1,0 +1,6 @@
+#!/bin/bash
+
+# Shared pre-commit hook
+# このファイルはプロジェクトで共有されるGit Hook
+
+./pre-commit-check.sh

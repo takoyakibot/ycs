@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Http\Controllers;
 
 use Illuminate\Support\Facades\File;
@@ -8,7 +9,7 @@ class MarkdownController extends Controller
 {
     public function show()
     {
-        $terms         = $this->markdownToHtml('lang/ja/terms.md');
+        $terms = $this->markdownToHtml('lang/ja/terms.md');
         $privacyPolicy = $this->markdownToHtml('lang/ja/privacyPolicy.md');
 
         // ビューに渡して表示
@@ -29,6 +30,7 @@ class MarkdownController extends Controller
 
         // MarkdownをHTMLに変換
         $converter = new CommonMarkConverter(['html_input' => 'strip']);
+
         return $converter->convertToHtml($markdownContent);
     }
 }

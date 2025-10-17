@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Http\Controllers;
 
 use App\Models\Channel;
@@ -20,8 +21,9 @@ class ChannelController extends Controller
     public function index()
     {
         // チャンネル情報を取得して表示
-        $page     = config('utils.page');
+        $page = config('utils.page');
         $channels = Channel::paginate($page)->toArray();
+
         return view('channels.index', compact('channels'));
     }
 
@@ -32,6 +34,7 @@ class ChannelController extends Controller
     {
         // チャンネル情報を取得して表示
         $channel = Channel::where('handle', $id)->firstOrFail();
+
         return view('channels.show', compact('channel'));
     }
 

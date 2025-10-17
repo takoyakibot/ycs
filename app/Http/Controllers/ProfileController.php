@@ -20,6 +20,7 @@ class ProfileController extends Controller
     {
         $user = $request->user();
         $user->api_key = $user->api_key ? '1' : '';
+
         return view('profile.edit', [
             'user' => $user,
         ]);

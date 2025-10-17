@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Console\Commands;
 
 use App\Services\RefreshArchiveService;
@@ -32,12 +33,12 @@ class RefreshArchives extends Command
             $service->cliLogin($userId);
 
             $channelCount = $service->getChannelCount();
-            $count        = 0;
+            $count = 0;
 
             while ($count < 4000 && $channelCount > 0) {
                 // 一番古いアーカイブを取得し、そのチャンネルの情報を再作成する
                 $channel = $service->getOldestUpdatedChannel();
-                echo now() . ' 更新対象：' . $channel->title;
+                echo now().' 更新対象：'.$channel->title;
 
                 // アーカイブ更新、動画数を返却させる
                 $count += $service->refreshArchives($channel);
@@ -50,7 +51,8 @@ class RefreshArchives extends Command
 
             return 0;
         } catch (Exception $e) {
-            echo " 更新失敗: " . $e->getMessage() . "\n";
+            echo ' 更新失敗: '.$e->getMessage()."\n";
+
             return 1;
         }
 

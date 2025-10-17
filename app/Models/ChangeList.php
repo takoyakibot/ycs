@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -22,6 +23,7 @@ class ChangeList extends Model
     {
         return $this->belongsTo(Archive::class, 'video_id', 'video_id');
     }
+
     public function comment()
     {
         return $this->hasOne(TsItem::class, 'comment_id', 'comment_id');

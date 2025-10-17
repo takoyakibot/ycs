@@ -3,8 +3,8 @@
 namespace App\Services;
 
 use Illuminate\Support\Facades\Http;
-use Intervention\Image\ImageManager;
 use Intervention\Image\Drivers\Gd\Driver;
+use Intervention\Image\ImageManager;
 
 class ImageService
 {
