@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ChannelController;
+use App\Http\Controllers\LogController;
 use App\Http\Controllers\ManageController;
 use App\Http\Controllers\MarkdownController;
 use App\Http\Controllers\ProfileController;
@@ -23,6 +24,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('/channels/manage', [ManageController::class, 'index'])->name('manage.index');
     Route::get('/channels/manage/{id}', [ManageController::class, 'show'])->name('manage.show');
+
+    // ログ管理
+    Route::get('/manage/logs', [LogController::class, 'index'])->name('logs.index');
+    Route::get('/manage/logs/{filename}', [LogController::class, 'show'])->name('logs.show');
+    Route::get('/manage/logs/{filename}/download', [LogController::class, 'download'])->name('logs.download');
+    Route::delete('/manage/logs/{filename}', [LogController::class, 'delete'])->name('logs.delete');
 
     Route::get('api/manage/channels', [ManageController::class, 'fetchChannel'])->name('manage.fetchChannel');
     Route::post('api/manage/channels', [ManageController::class, 'addChannel'])->name('manage.addChannel');
