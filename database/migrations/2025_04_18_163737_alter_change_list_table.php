@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -15,18 +16,27 @@ return new class extends Migration
         Schema::table('change_list', function (Blueprint $table) {
             $table->dropIndex('change_list_channel_id_video_id_comment_id_index');
         });
+
         // video_idの桁数を11に変更
         Schema::table('change_list', function (Blueprint $table) {
             $table->string('video_id', 11)->change();
         });
+
         // comment_idの桁数を26、nullableに変更
         Schema::table('change_list', function (Blueprint $table) {
-            $table->string('comment_id', 26)->nullable()->after('video_id')->change();
+            // SQLiteでは after() がサポートされていないため条件分岐
+            if (DB::getDriverName() === 'sqlite') {
+                $table->string('comment_id', 26)->nullable()->change();
+            } else {
+                $table->string('comment_id', 26)->nullable()->after('video_id')->change();
+            }
         });
+
         // channel_idのインデックスを追加
         Schema::table('change_list', function (Blueprint $table) {
             $table->index(['channel_id'], 'change_list_channel_id_index');
         });
+
         // video_id,comment_idのインデックスを追加
         Schema::table('change_list', function (Blueprint $table) {
             $table->index(['video_id', 'comment_id'], 'change_list_video_id_comment_id_index');

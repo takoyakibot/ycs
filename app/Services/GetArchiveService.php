@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Archive;
 use App\Models\Channel;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Log;
 
 class GetArchiveService
 {
@@ -21,6 +22,8 @@ class GetArchiveService
 
     public function getArchives(string $handle, string $params, string $visibleFlg, string $tsFlg)
     {
+        $this->logSearch($handle, ['params' => $params, 'visible' => $visibleFlg, 'ts' => $tsFlg]);
+
         $channel = Channel::where('handle', $handle)->firstOrFail();
         $archives = Archive::with(['tsItemsDisplay' => function ($query) use ($params) {
             return $this->setQueryWhereParams($query, $params, 'text');
@@ -28,7 +31,7 @@ class GetArchiveService
 
         // 「タイムスタンプなし」以外が選ばれている場合
         // ifの中に入った時点でwhereHasが効いてしまうので、絞り込みをしない場合はifには入らないようにする
-        if ($params != '' && $tsFlg != '2') {
+        if (trim($params) != '' && $tsFlg != '2') {
             $archives->whereHas('tsItemsDisplay', function ($query) use ($params) {
                 $query = $this->setQueryWhereParams($query, $params, 'text');
             });
@@ -87,5 +90,10 @@ class GetArchiveService
         }
 
         return $query;
+    }
+
+    private function logSearch(string $s, mixed $c = [])
+    {
+        Log::channel('search')->info($s, $c);
     }
 }
