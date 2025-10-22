@@ -114,21 +114,22 @@ class YouTubeService
             if (is_array($response->getItems())) {
                 foreach ($response->getItems() as $item) {
                     $snippet = $item->getSnippet();
-                    $resourceId = $snippet ? $snippet->getResourceId() : null;
-                    $thumbnails = $snippet ? $snippet->getThumbnails() : null;
-                    $mediumThumb = $thumbnails ? ($thumbnails->getMedium() ? $thumbnails->getMedium()->getUrl() : '') : '';
+                    $resourceId = $snippet?->getResourceId();
+                    $mediumThumb = $snippet?->getThumbnails()?->getMedium()?->getUrl() ?? '';
 
                     $archives[] = [
                         'id' => Str::ulid(),
                         'channel_id' => $channel_id,
-                        'video_id' => $resourceId ? $resourceId->getVideoId() : '',
-                        'title' => $snippet ? $snippet->getTitle() : '',
+                        'video_id' => $resourceId?->getVideoId() ?? '',
+                        'title' => $snippet?->getTitle() ?? '',
                         'thumbnail' => $mediumThumb,
                         'is_public' => true,
                         'is_display' => true,
-                        'published_at' => $snippet ? Carbon::parse($snippet->getPublishedAt())->format('Y-m-d H:i:s') : now()->format('Y-m-d H:i:s'),
+                        'published_at' => ($snippet && ($publishedAt = $snippet->getPublishedAt()))
+                            ? Carbon::parse($publishedAt)->format('Y-m-d H:i:s')
+                            : now()->format('Y-m-d H:i:s'),
                         'comments_updated_at' => today(),
-                        'description' => $snippet ? $snippet->getDescription() : '',
+                        'description' => $snippet?->getDescription() ?? '',
                     ];
                 }
             }
