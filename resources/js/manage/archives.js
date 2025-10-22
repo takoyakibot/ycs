@@ -350,7 +350,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
             // エラーメッセージをクリア
             const errorMessage = target.parentElement.querySelector('.error-message');
-            errorMessage.textContent = '';
+            if (errorMessage) {
+                errorMessage.textContent = '';
+            }
         }
 
         // ページネーションボタン押下時
