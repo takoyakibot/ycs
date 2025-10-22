@@ -80,6 +80,11 @@
                                                         削除
                                                     </button>
                                                 </form>
+                                            @else
+                                                <span class="text-gray-400 dark:text-gray-600 px-3 py-1 border border-gray-300 dark:border-gray-600 rounded cursor-not-allowed bg-gray-100 dark:bg-gray-800" 
+                                                      title="重要なログファイルのため削除できません">
+                                                    削除
+                                                </span>
                                             @endif
                                         </div>
                                     </td>
