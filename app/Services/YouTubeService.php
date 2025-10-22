@@ -113,17 +113,22 @@ class YouTubeService
 
             if (is_array($response->getItems())) {
                 foreach ($response->getItems() as $item) {
+                    $snippet = $item->getSnippet();
+                    $resourceId = $snippet ? $snippet->getResourceId() : null;
+                    $thumbnails = $snippet ? $snippet->getThumbnails() : null;
+                    $mediumThumb = $thumbnails ? ($thumbnails->getMedium() ? $thumbnails->getMedium()->getUrl() : '') : '';
+
                     $archives[] = [
                         'id' => Str::ulid(),
                         'channel_id' => $channel_id,
-                        'video_id' => $item['snippet']['resourceId']['videoId'],
-                        'title' => $item['snippet']['title'],
-                        'thumbnail' => $item['snippet']['thumbnails']['medium']['url'],
+                        'video_id' => $resourceId ? $resourceId->getVideoId() : '',
+                        'title' => $snippet ? $snippet->getTitle() : '',
+                        'thumbnail' => $mediumThumb,
                         'is_public' => true,
                         'is_display' => true,
-                        'published_at' => Carbon::parse($item['snippet']['publishedAt'])->format('Y-m-d H:i:s'),
+                        'published_at' => $snippet ? Carbon::parse($snippet->getPublishedAt())->format('Y-m-d H:i:s') : now()->format('Y-m-d H:i:s'),
                         'comments_updated_at' => today(),
-                        'description' => $item['snippet']['description'],
+                        'description' => $snippet ? $snippet->getDescription() : '',
                     ];
                 }
             }
@@ -224,16 +229,21 @@ class YouTubeService
 
             // 各コメントを処理
             foreach ($response->getItems() as $item) {
-                $commentId = $item['id'];
-                $topLevelComment = $item['snippet']['topLevelComment']['snippet']['textOriginal'];
+                $commentId = $item->getId();
+                $snippet = $item->getSnippet();
+                $topLevelComment = $snippet ? $snippet->getTopLevelComment() : null;
+                $topLevelSnippet = $topLevelComment ? $topLevelComment->getSnippet() : null;
+                $textOriginal = $topLevelSnippet ? $topLevelSnippet->getTextOriginal() : '';
+
                 $comments[] = [
                     'id' => $commentId,
-                    'description' => $topLevelComment,
+                    'description' => $textOriginal,
                 ];
 
                 // // リプライコメントがある場合
-                // if (! empty($item['replies']['comments'])) {
-                //     foreach ($item['replies']['comments'] as $reply) {
+                // $replies = $item->getReplies();
+                // if ($replies && $replies->getComments()) {
+                //     foreach ($replies->getComments() as $reply) {
                 //         $comments[] = $reply['snippet']['textOriginal'];
                 //     }
                 // }

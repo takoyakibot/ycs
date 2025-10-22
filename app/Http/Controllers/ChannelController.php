@@ -22,7 +22,14 @@ class ChannelController extends Controller
     {
         // チャンネル情報を取得して表示
         $page = config('utils.page');
-        $channels = Channel::paginate($page)->toArray();
+        $paginatedChannels = Channel::paginate($page);
+        $channels = [
+            'data' => $paginatedChannels->items(),
+            'current_page' => $paginatedChannels->currentPage(),
+            'last_page' => $paginatedChannels->lastPage(),
+            'per_page' => $paginatedChannels->perPage(),
+            'total' => $paginatedChannels->total(),
+        ];
 
         return view('channels.index', compact('channels'));
     }
