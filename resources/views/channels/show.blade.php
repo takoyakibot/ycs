@@ -37,7 +37,11 @@
                 manage-flg=""
                 alpine-parent="archiveListComponent"
             />
-            <x-pagination></x-pagination>
+            <x-pagination
+                :total="0"
+                :current-page="1"
+                :last-page="1"
+            ></x-pagination>
             <div id="archives" x-data="{ isFiltered : false }"
              @filter-changed.window="isFiltered = $event.detail"
              class="flex flex-col items-center w-[100%]">
@@ -72,7 +76,11 @@
                     </div>
                 </template>
             </div>
-            <x-pagination></x-pagination>
+            <x-pagination
+                :total="0"
+                :current-page="1"
+                :last-page="1"
+            ></x-pagination>
         </div>
     </div>
 
