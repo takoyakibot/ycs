@@ -128,7 +128,8 @@ return [
         ],
 
         'search' => [
-            'driver' => 'single',
+            'driver' => 'daily',
+            'days' => 28,
             'path' => storage_path('logs/search.log'),
             'level' => env('LOG_SEARCH_LEVEL', 'info'),
             'replace_placeholders' => true,
