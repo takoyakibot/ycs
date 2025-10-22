@@ -177,7 +177,7 @@ document.addEventListener('DOMContentLoaded', function () {
         };
 
         const cleanup = (target) => {
-            const isProcessing = false;
+            isProcessing = false;
             toggleButtonDisabled(target, isProcessing);
         };
 
@@ -347,6 +347,10 @@ document.addEventListener('DOMContentLoaded', function () {
             // 編集時しか表示しないので固定値
             alert('タイムスタンプの編集をキャンセルしました');
             toggleTsItemsStyle(target, '1');
+
+            // エラーメッセージをクリア
+            const errorMessage = target.parentElement.querySelector('.error-message');
+            errorMessage.textContent = '';
         }
 
         // ページネーションボタン押下時
