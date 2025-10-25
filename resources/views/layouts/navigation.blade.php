@@ -53,6 +53,9 @@
                             <x-dropdown-link :href="route('logs.index')" :active="request()->routeIs('logs.*')">
                                 {{ __('ログ管理') }}
                             </x-dropdown-link>
+                            <x-dropdown-link :href="route('timestamp-normalization.index')" :active="request()->routeIs('timestamp-normalization.*')">
+                                {{ __('タイムスタンプ正規化') }}
+                            </x-dropdown-link>
 
                             <!-- Authentication -->
                             <form method="POST" action="{{ route('logout') }}">

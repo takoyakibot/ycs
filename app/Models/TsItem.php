@@ -21,6 +21,8 @@ class TsItem extends Model
         'ts_text',
         'ts_num',
         'text',
+        'song_id',
+        'is_not_song',
     ];
 
     public function archive()
@@ -31,5 +33,10 @@ class TsItem extends Model
     public function changeList()
     {
         return $this->hasMany(ChangeList::class, 'comment_id', 'comment_id');
+    }
+
+    public function song()
+    {
+        return $this->belongsTo(Song::class);
     }
 }

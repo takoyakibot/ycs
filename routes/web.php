@@ -5,6 +5,7 @@ use App\Http\Controllers\LogController;
 use App\Http\Controllers\ManageController;
 use App\Http\Controllers\MarkdownController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\TimestampNormalizationController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -30,6 +31,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/manage/logs/{filename}', [LogController::class, 'show'])->name('logs.show');
     Route::get('/manage/logs/{filename}/download', [LogController::class, 'download'])->name('logs.download');
     Route::delete('/manage/logs/{filename}', [LogController::class, 'delete'])->name('logs.delete');
+
+    // タイムスタンプ正規化
+    Route::get('/manage/timestamp-normalization', [TimestampNormalizationController::class, 'index'])->name('timestamp-normalization.index');
+    Route::get('/api/manage/timestamps', [TimestampNormalizationController::class, 'getTimestamps'])->name('api.timestamps.index');
+    Route::get('/api/manage/songs', [TimestampNormalizationController::class, 'getSongs'])->name('api.songs.index');
+    Route::post('/api/manage/songs', [TimestampNormalizationController::class, 'createSong'])->name('api.songs.create');
+    Route::post('/api/manage/songs/spotify', [TimestampNormalizationController::class, 'createSongFromSpotify'])->name('api.songs.create-from-spotify');
+    Route::post('/api/manage/timestamps/link', [TimestampNormalizationController::class, 'linkTimestamp'])->name('api.timestamps.link');
+    Route::get('/api/manage/spotify/search', [TimestampNormalizationController::class, 'searchSpotify'])->name('api.spotify.search');
 
     Route::get('api/manage/channels', [ManageController::class, 'fetchChannel'])->name('manage.fetchChannel');
     Route::post('api/manage/channels', [ManageController::class, 'addChannel'])->name('manage.addChannel');
