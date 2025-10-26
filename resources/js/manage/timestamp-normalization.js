@@ -156,6 +156,19 @@ class TimestampNormalization {
     this.selectedTimestamp = timestamp;
     this.updateSelectedTimestampDisplay();
     this.updateActionButtons();
+
+    // Spotify検索窓に文字列を反映
+    const spotifySearchInput = document.getElementById('spotifySearch');
+    if (spotifySearchInput && timestamp.text) {
+      // タイムスタンプのテキストからSpotify検索に適した文字列を抽出
+      let searchText = timestamp.text;
+
+      if (searchText && searchText.length > 0) {
+        spotifySearchInput.value = searchText;
+        // Spotifyタブをアクティブにする
+        this.showTab('spotifyTab');
+      }
+    }
   }
 
   updateSelectedTimestampDisplay() {
