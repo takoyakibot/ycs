@@ -1,11 +1,5 @@
 <x-app-layout>
-    <x-slot name="header">
-        <h2 class="font-semibold sm:text-xl text-gray-800 dark:text-gray-200 leading-tight">
-            {{ __('タイムスタンプ正規化') }}
-        </h2>
-    </x-slot>
-
-    <div class="py-12">
+    <div class="py-2">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
             <!-- 検索エリア -->
             <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg mb-6">
@@ -40,8 +34,8 @@
                 <!-- タイムスタンプ一覧 -->
                 <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
                     <div class="p-6 text-gray-900 dark:text-gray-100">
-                        <h3 class="text-lg font-semibold mb-4">タイムスタンプ一覧</h3>
-                        <div id="timestampsList" class="space-y-3 max-h-96 overflow-y-auto">
+                        <h3 class="text-lg font-semibold mb-3">タイムスタンプ一覧</h3>
+                        <div id="timestampsList" class="space-y-1 max-h-[500px] overflow-y-auto">
                             <!-- タイムスタンプリストがここに表示される -->
                         </div>
                         <div id="timestampPagination" class="mt-4">
@@ -61,7 +55,7 @@
                         </div>
                         
                         <!-- 選択中のタイムスタンプ表示 -->
-                        <div id="selectedTimestamp" class="mb-4 p-3 bg-gray-100 dark:bg-gray-700 rounded hidden">
+                        <div id="selectedTimestamp" class="mb-3 p-2 bg-gray-100 dark:bg-gray-700 rounded hidden">
                             <!-- 選択されたタイムスタンプ情報 -->
                         </div>
 

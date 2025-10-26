@@ -114,29 +114,28 @@ class TimestampNormalization {
 
     timestamps.forEach(timestamp => {
       const div = document.createElement('div');
-      div.className = `p-3 border rounded cursor-pointer hover:bg-gray-50 ${timestamp.song_id ? 'bg-green-50 border-green-200' : timestamp.is_not_song ? 'bg-red-50 border-red-200' : 'bg-gray-50'}`;
+      div.className = `p-2 border rounded cursor-pointer hover:bg-gray-50 ${timestamp.song_id ? 'bg-green-50 border-green-200' : timestamp.is_not_song ? 'bg-red-50 border-red-200' : 'bg-gray-50'}`;
 
-      let statusBadge = '';
+      let statusIcon = '';
       if (timestamp.song_id) {
-        statusBadge = '<span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">紐づけ済み</span>';
+        statusIcon = '<span class="text-green-600 font-bold text-xs mr-1">✓</span>';
       } else if (timestamp.is_not_song) {
-        statusBadge = '<span class="text-xs bg-red-100 text-red-800 px-2 py-1 rounded">楽曲以外</span>';
+        statusIcon = '<span class="text-red-600 font-bold text-xs mr-1">✗</span>';
       } else {
-        statusBadge = '<span class="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">未分類</span>';
+        statusIcon = '<span class="text-yellow-600 font-bold text-xs mr-1">?</span>';
       }
 
+      // 楽曲情報がある場合は楽曲名を、ない場合はタイムスタンプのテキストを表示
+      const displayText = timestamp.song
+        ? `♪ ${this.escapeHtml(timestamp.song.title)} - ${this.escapeHtml(timestamp.song.artist)}`
+        : this.escapeHtml(timestamp.text || '').substring(0, 60) + ((timestamp.text || '').length > 60 ? '...' : '');
+
       div.innerHTML = `
-                <div class="flex justify-between items-start">
-                    <div class="flex-1">
-                        <div class="font-medium text-sm">${this.escapeHtml(timestamp.ts_text)}</div>
-                        <div class="text-xs text-gray-600 mt-1">${this.escapeHtml(timestamp.text || '')}</div>
-                        ${timestamp.song ? `<div class="text-xs text-blue-600 mt-1">♪ ${this.escapeHtml(timestamp.song.title)} - ${this.escapeHtml(timestamp.song.artist)}</div>` : ''}
-                    </div>
-                    <div class="ml-2">
-                        ${statusBadge}
-                    </div>
-                </div>
-            `;
+        <div class="flex items-center text-sm">
+          ${statusIcon}
+          <span class="flex-1 truncate ${timestamp.song ? 'text-blue-600 font-medium' : 'text-gray-700'}">${displayText}</span>
+        </div>
+      `;
 
       div.addEventListener('click', () => {
         this.selectTimestamp(timestamp);
@@ -160,11 +159,11 @@ class TimestampNormalization {
     }
 
     container.classList.remove('hidden');
+    const displayText = this.escapeHtml(this.selectedTimestamp.text || '').substring(0, 100) +
+      ((this.selectedTimestamp.text || '').length > 100 ? '...' : '');
     container.innerHTML = `
-            <div class="font-medium">選択中のタイムスタンプ</div>
-            <div class="text-sm text-gray-600 mt-1">${this.escapeHtml(this.selectedTimestamp.ts_text)}</div>
-            <div class="text-xs text-gray-500">${this.escapeHtml(this.selectedTimestamp.text || '')}</div>
-        `;
+      <div class="font-medium text-sm">選択中: ${displayText}</div>
+    `;
   }
 
   updateActionButtons() {
@@ -547,8 +546,8 @@ class TimestampNormalization {
   showNotification(message, type = 'info') {
     const notification = document.createElement('div');
     notification.className = `fixed top-4 right-4 p-4 rounded-md z-50 ${type === 'success' ? 'bg-green-100 border border-green-400 text-green-700' :
-        type === 'error' ? 'bg-red-100 border border-red-400 text-red-700' :
-          'bg-blue-100 border border-blue-400 text-blue-700'
+      type === 'error' ? 'bg-red-100 border border-red-400 text-red-700' :
+        'bg-blue-100 border border-blue-400 text-blue-700'
       }`;
     notification.textContent = message;
 

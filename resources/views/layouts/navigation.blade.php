@@ -50,7 +50,7 @@
                             <x-dropdown-link :href="route('profile.edit')">
                                 {{ __('ユーザー情報') }}
                             </x-dropdown-link>
-                            <x-dropdown-link :href="route('logs.index')" :active="request()->routeIs('logs.*')">
+                            <x-dropdown-link :href="route('logs.index')" :active="request()->routeIs('logs.index')">
                                 {{ __('ログ管理') }}
                             </x-dropdown-link>
                             <x-dropdown-link :href="route('timestamp-normalization.index')" :active="request()->routeIs('timestamp-normalization.*')">
@@ -117,7 +117,7 @@
                     <x-responsive-nav-link :href="route('profile.edit')">
                         {{ __('ユーザー情報') }}
                     </x-responsive-nav-link>
-                    <x-responsive-nav-link :href="route('logs.index')" :active="request()->routeIs('logs.*')">
+                    <x-responsive-nav-link :href="route('logs.index')" :active="request()->routeIs('logs.index')">
                         {{ __('ログ管理') }}
                     </x-responsive-nav-link>
 
