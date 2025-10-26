@@ -112,7 +112,14 @@ class TimestampNormalization {
     const container = document.getElementById('timestampsList');
     container.innerHTML = '';
 
-    timestamps.forEach(timestamp => {
+    // 表示文字列でソート
+    const sortedTimestamps = timestamps.sort((a, b) => {
+      const textA = a.song ? `${a.song.title} - ${a.song.artist}` : (a.text || '');
+      const textB = b.song ? `${b.song.title} - ${b.song.artist}` : (b.text || '');
+      return textA.localeCompare(textB, 'ja');
+    });
+
+    sortedTimestamps.forEach(timestamp => {
       const div = document.createElement('div');
       div.className = `p-2 border rounded cursor-pointer hover:bg-gray-50 ${timestamp.song_id ? 'bg-green-50 border-green-200' : timestamp.is_not_song ? 'bg-red-50 border-red-200' : 'bg-gray-50'}`;
 
