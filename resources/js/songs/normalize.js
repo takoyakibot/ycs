@@ -1,5 +1,9 @@
 import axios from 'axios';
 
+// axiosの設定: クロスオリジンリクエストでクッキーを送信
+axios.defaults.withCredentials = true;
+axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
+
 /**
  * タイムスタンプ正規化機能
  */
@@ -506,10 +510,21 @@ class TimestampNormalization {
 
     displaySongs(songs) {
         const container = document.getElementById('songsResults');
+        if (!container) {
+            console.error('songsResults element not found');
+            return;
+        }
+
         container.innerHTML = '';
 
+        if (!Array.isArray(songs)) {
+            console.error('songs is not an array:', songs);
+            container.innerHTML = '<p class="text-red-500 dark:text-red-400 text-sm">データの形式が正しくありません。</p>';
+            return;
+        }
+
         if (songs.length === 0) {
-            container.innerHTML = '<p class="text-gray-500 text-sm">楽曲マスタがありません。</p>';
+            container.innerHTML = '<p class="text-gray-500 dark:text-gray-400 text-sm">楽曲マスタがありません。</p>';
             return;
         }
 
