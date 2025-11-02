@@ -32,7 +32,18 @@ class SongController extends Controller
 
         $query = TsItem::with(['archive'])
             ->whereNotNull('text')
-            ->where('text', '!=', '');
+            ->where('text', '!=', '')
+            // archiveのis_displayが0のものを除外
+            ->whereHas('archive', function ($q) {
+                $q->where('is_display', 1);
+            })
+            // change_listのis_displayが0のものを除外（change_listが存在する場合のみ）
+            ->where(function ($q) {
+                $q->whereDoesntHave('changeList')
+                    ->orWhereHas('changeList', function ($subQ) {
+                        $subQ->where('is_display', 1);
+                    });
+            });
 
         // 検索条件
         if ($search) {
