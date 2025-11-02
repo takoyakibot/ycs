@@ -170,6 +170,8 @@ class YouTubeService
             if (preg_match($pattern, $line, $matches)) {
                 $timestamp = $matches[1];                              // タイムスタンプ部分
                 $comment = trim(str_replace($timestamp, '', $line)); // タイムスタンプを除外した部分
+                // 先頭の全角スペースを除外
+                $comment = \App\Helpers\TextNormalizer::trimFullwidthSpace($comment);
 
                 // 結果に追加
                 $results[] = [
