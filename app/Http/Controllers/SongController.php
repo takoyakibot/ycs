@@ -34,17 +34,12 @@ class SongController extends Controller
             ->whereNotNull('text')
             ->where('text', '!=', '')
             // ts_items自体のis_displayが0のものを除外
+            // （change_listの内容はRefreshArchiveServiceによりis_displayに反映済み）
             ->where('is_display', 1)
             // archiveのis_displayが0のものを除外
+            // （change_listの内容はRefreshArchiveServiceによりis_displayに反映済み）
             ->whereHas('archive', function ($q) {
                 $q->where('is_display', 1);
-            })
-            // change_listのis_displayが0のものを除外（change_listが存在する場合のみ）
-            ->where(function ($q) {
-                $q->whereDoesntHave('changeList')
-                    ->orWhereHas('changeList', function ($subQ) {
-                        $subQ->where('is_display', 1);
-                    });
             });
 
         // 検索条件
