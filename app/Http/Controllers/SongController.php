@@ -30,7 +30,9 @@ class SongController extends Controller
         $search = $request->input('search', '');
         $unlinkedOnly = $request->input('unlinked_only', false);
 
-        $query = TsItem::with(['archive']);
+        $query = TsItem::with(['archive'])
+            ->whereNotNull('text')
+            ->where('text', '!=', '');
 
         // 検索条件
         if ($search) {
