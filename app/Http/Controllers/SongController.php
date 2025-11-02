@@ -41,13 +41,16 @@ class SongController extends Controller
 
         // 各タイムスタンプにマッピング情報を追加
         $timestamps->getCollection()->transform(function ($item) {
-            $normalizedText = TextNormalizer::normalize($item->text);
+            // textが空の場合はts_textを使用
+            $text = !empty($item->text) ? $item->text : $item->ts_text;
+            $normalizedText = TextNormalizer::normalize($text);
             $mapping = TimestampSongMapping::where('normalized_text', $normalizedText)
                 ->with('song')
                 ->first();
 
             // モデルを配列に変換して、追加のフィールドをマージ
             $data = $item->toArray();
+            $data['text'] = $text; // 実際のテキストを設定
             $data['normalized_text'] = $normalizedText;
             $data['mapping'] = $mapping ? $mapping->toArray() : null;
             $data['song'] = $mapping && $mapping->song ? $mapping->song->toArray() : null;
