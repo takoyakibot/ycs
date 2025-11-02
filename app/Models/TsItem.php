@@ -34,6 +34,14 @@ class TsItem extends Model
     }
 
     /**
+     * textフィールドを取得する際に先頭の全角スペースを除外
+     */
+    public function getTextAttribute($value)
+    {
+        return \App\Helpers\TextNormalizer::trimFullwidthSpace($value);
+    }
+
+    /**
      * タイムスタンプテキストを正規化して取得
      */
     public function getNormalizedTextAttribute()
