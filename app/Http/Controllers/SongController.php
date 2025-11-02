@@ -66,7 +66,34 @@ class SongController extends Controller
             return $data;
         });
 
-        // 未連携フィルター
+        // 紐づけた楽曲を最後に表示するようにソート
+        // 未紐づけ → is_not_song → 紐づけ済み の順
+        $timestamps->setCollection(
+            $timestamps->getCollection()->sort(function ($a, $b) {
+                $aMapped = !empty($a['mapping']);
+                $bMapped = !empty($b['mapping']);
+
+                // 未紐づけを先に
+                if ($aMapped !== $bMapped) {
+                    return $aMapped ? 1 : -1;
+                }
+
+                // 両方とも紐づけ済みの場合、is_not_songを優先
+                if ($aMapped && $bMapped) {
+                    $aIsNotSong = $a['is_not_song'];
+                    $bIsNotSong = $b['is_not_song'];
+
+                    if ($aIsNotSong !== $bIsNotSong) {
+                        return $aIsNotSong ? -1 : 1;
+                    }
+                }
+
+                // 同じ状態の場合はtextでソート
+                return strcmp($a['text'], $b['text']);
+            })->values()
+        );
+
+        // 未連携フィルター（ソート後に適用）
         if ($unlinkedOnly) {
             $timestamps->setCollection(
                 $timestamps->getCollection()->filter(function ($item) {
