@@ -1,11 +1,141 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# 歌枠履歴er:D
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+YouTubeアーカイブのタイムスタンプ管理システム
+
+## プロジェクト概要
+
+このプロジェクトは、YouTubeアーカイブのタイムスタンプを収集・管理し、楽曲マスタと紐づけて正規化する機能を提供するWebアプリケーションです。
+
+## 主な機能
+
+### チャンネル管理
+- YouTubeチャンネルの登録・管理
+- アーカイブ（動画）の自動取得
+- タイムスタンプの抽出と管理
+
+### タイムスタンプ正規化
+- 楽曲マスタ(songs)の作成・管理
+- タイムスタンプと楽曲マスタの紐づけ
+- Spotify API連携による楽曲情報の検索・登録
+- 楽曲ではないタイムスタンプのフラグ管理
+
+## 技術スタック
+
+- **バックエンド**: Laravel 10.10
+- **フロントエンド**: Blade + Alpine.js + Tailwind CSS
+- **データベース**: MySQL
+- **API連携**: YouTube Data API v3, Spotify Web API
+
+## セットアップ
+
+### 必要な環境
+
+- PHP 8.1以上
+- Composer
+- MySQL 5.7以上
+- Node.js & npm
+
+### インストール手順
+
+1. リポジトリをクローン
+```bash
+git clone <repository-url>
+cd ycs
+```
+
+2. 依存関係のインストール
+```bash
+composer install
+npm install
+```
+
+3. 環境設定
+```bash
+cp .env.example .env
+php artisan key:generate
+```
+
+4. `.env` ファイルを編集してデータベース接続とAPI認証情報を設定
+```env
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=your_database_name
+DB_USERNAME=your_username
+DB_PASSWORD=your_password
+
+SPOTIFY_CLIENT_ID=your_spotify_client_id
+SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
+```
+
+5. データベースマイグレーション
+```bash
+php artisan migrate
+```
+
+6. フロントエンドのビルド
+```bash
+npm run build
+# または開発環境で
+npm run dev
+```
+
+7. アプリケーションの起動
+```bash
+php artisan serve
+```
+
+### Spotify API設定
+
+1. [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)にアクセス
+2. アプリを作成してClient IDとClient Secretを取得
+3. `.env`ファイルに認証情報を設定
+
+## データベース構造
+
+### songs テーブル
+楽曲マスタを管理するテーブル
+
+| カラム名 | 型 | 説明 |
+|---------|-----|------|
+| id | string(26) | ULID |
+| title | string | 楽曲名 |
+| artist | string | アーティスト名 |
+| spotify_track_id | string(22) | Spotify Track ID (nullable) |
+| is_not_song | boolean | 楽曲ではないフラグ |
+| created_at | timestamp | 作成日時 |
+| updated_at | timestamp | 更新日時 |
+
+### ts_items テーブル（更新）
+タイムスタンプ情報を管理するテーブル
+
+- `song_id` カラムを追加（外部キー: songs.id）
+
+## 使い方
+
+### タイムスタンプ正規化画面
+
+1. ログイン後、ナビゲーションから「タイムスタンプ正規化」を選択
+2. タイムスタンプ一覧が表示されます
+
+#### 楽曲マスタの登録
+
+**方法1: Spotify検索から登録**
+1. 検索キーワードを入力して検索
+2. 検索結果から楽曲を選択
+3. 自動的に楽曲名・アーティスト名が入力されます
+4. 「楽曲マスタに登録」ボタンをクリック
+
+**方法2: 手動入力**
+1. 楽曲名とアーティスト名を直接入力
+2. 「楽曲ではない」チェックボックスで楽曲でないことを示すことも可能
+3. 「楽曲マスタに登録」ボタンをクリック
+
+#### タイムスタンプの紐づけ
+
+1. タイムスタンプ一覧から紐づけたいタイムスタンプをチェック
+2. 紐づける楽曲マスタをドロップダウンから選択
+3. 「選択したタイムスタンプを紐づける」ボタンをクリック
 
 ## About Laravel
 
