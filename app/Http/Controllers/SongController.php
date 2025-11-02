@@ -60,7 +60,7 @@ class SongController extends Controller
         if ($unlinkedOnly) {
             $timestamps->setCollection(
                 $timestamps->getCollection()->filter(function ($item) {
-                    return !$item->mapping;
+                    return !$item['mapping'];
                 })->values()
             );
         }
