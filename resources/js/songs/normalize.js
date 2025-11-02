@@ -139,6 +139,9 @@ class TimestampNormalization {
                 }
             });
 
+            console.log('Timestamps response:', response.data);
+            console.log('First timestamp:', response.data.data[0]);
+
             this.currentPage = response.data.current_page;
             this.displayTimestamps(response.data.data);
             this.displayPagination(response.data);
@@ -628,6 +631,9 @@ class TimestampNormalization {
             this.showLoading();
 
             for (const ts of this.selectedTimestamps) {
+                console.log('Selected timestamp:', ts);
+                console.log('normalized_text:', ts.normalized_text);
+
                 await axios.post('/api/songs/mark-not-song', {
                     normalized_text: ts.normalized_text
                 });
