@@ -67,28 +67,25 @@ class SongController extends Controller
         });
 
         // 紐づけた楽曲を最後に表示するようにソート
-        // 未紐づけ → is_not_song → 紐づけ済み の順
+        // 未紐づけ → 楽曲ではない → 紐づけ済み の順、それぞれtext昇順
         $timestamps->setCollection(
             $timestamps->getCollection()->sort(function ($a, $b) {
                 $aMapped = !empty($a['mapping']);
                 $bMapped = !empty($b['mapping']);
+                $aIsNotSong = $a['is_not_song'];
+                $bIsNotSong = $b['is_not_song'];
 
-                // 未紐づけを先に
-                if ($aMapped !== $bMapped) {
-                    return $aMapped ? 1 : -1;
+                // 優先順位を決定（数値が小さいほど先に表示）
+                // 0: 未紐づけ, 1: 楽曲ではない, 2: 紐づけ済み
+                $aPriority = $aMapped ? ($aIsNotSong ? 1 : 2) : 0;
+                $bPriority = $bMapped ? ($bIsNotSong ? 1 : 2) : 0;
+
+                // 優先順位が異なる場合
+                if ($aPriority !== $bPriority) {
+                    return $aPriority - $bPriority;
                 }
 
-                // 両方とも紐づけ済みの場合、is_not_songを優先
-                if ($aMapped && $bMapped) {
-                    $aIsNotSong = $a['is_not_song'];
-                    $bIsNotSong = $b['is_not_song'];
-
-                    if ($aIsNotSong !== $bIsNotSong) {
-                        return $aIsNotSong ? -1 : 1;
-                    }
-                }
-
-                // 同じ状態の場合はtextでソート
+                // 同じ優先順位の場合はtextで昇順ソート
                 return strcmp($a['text'], $b['text']);
             })->values()
         );
