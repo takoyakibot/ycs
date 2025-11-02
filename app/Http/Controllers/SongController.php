@@ -46,12 +46,14 @@ class SongController extends Controller
                 ->with('song')
                 ->first();
 
-            $item->normalized_text = $normalizedText;
-            $item->mapping = $mapping;
-            $item->song = $mapping ? $mapping->song : null;
-            $item->is_not_song = $mapping ? $mapping->is_not_song : false;
+            // モデルを配列に変換して、追加のフィールドをマージ
+            $data = $item->toArray();
+            $data['normalized_text'] = $normalizedText;
+            $data['mapping'] = $mapping ? $mapping->toArray() : null;
+            $data['song'] = $mapping && $mapping->song ? $mapping->song->toArray() : null;
+            $data['is_not_song'] = $mapping ? $mapping->is_not_song : false;
 
-            return $item;
+            return $data;
         });
 
         // 未連携フィルター
