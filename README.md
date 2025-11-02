@@ -93,6 +93,27 @@ php artisan serve
 
 ## データベース構造
 
+### 表示状態管理の仕様
+
+本システムでは、archives（動画）とts_items（タイムスタンプ）の表示状態を`change_list`テーブルで管理しています。
+
+#### 重要な仕様
+- **change_list**: 表示状態の変更履歴を管理する**マスターテーブル**
+  - `video_id` + `comment_id IS NULL`: 動画レベルの表示状態
+  - `video_id` + `comment_id`: タイムスタンプレベルの表示状態
+- **archives.is_display**: 動画の表示状態（change_listの内容が反映済み）
+- **ts_items.is_display**: タイムスタンプの表示状態（change_listの内容が反映済み）
+
+#### データフロー
+1. YouTubeから最新データを取得（is_displayはデフォルト値）
+2. `RefreshArchiveService`が`change_list`の内容を`archives`と`ts_items`に反映
+3. 表示判定は`archives.is_display`と`ts_items.is_display`のみを確認すれば良い
+
+#### 実装上の注意
+- 表示判定で`change_list`を直接JOINする必要はありません
+- `archives.is_display = 1`かつ`ts_items.is_display = 1`のみ表示されます
+- 変更履歴は`RefreshArchiveService::refreshArchives()`で自動的に反映されます
+
 ### songs テーブル
 楽曲マスタを管理するテーブル
 
@@ -106,10 +127,45 @@ php artisan serve
 | created_at | timestamp | 作成日時 |
 | updated_at | timestamp | 更新日時 |
 
-### ts_items テーブル（更新）
+### archives テーブル
+動画情報を管理するテーブル
+
+| カラム名 | 型 | 説明 |
+|---------|-----|------|
+| id | string(26) | ULID |
+| channel_id | string | チャンネルID |
+| video_id | string(11) | YouTube動画ID |
+| title | string | 動画タイトル |
+| thumbnail | string | サムネイルURL |
+| is_public | boolean | 公開状態 |
+| is_display | boolean | 表示フラグ（change_listの内容が反映済み） |
+| published_at | timestamp | 公開日時 |
+| comments_updated_at | timestamp | コメント更新日時 |
+
+### ts_items テーブル
 タイムスタンプ情報を管理するテーブル
 
-- `song_id` カラムを追加（外部キー: songs.id）
+| カラム名 | 型 | 説明 |
+|---------|-----|------|
+| id | string(26) | ULID |
+| video_id | string(11) | YouTube動画ID |
+| comment_id | string(26) | コメントID (nullable) |
+| type | enum('1','2') | 1:概要欄, 2:コメント |
+| ts_text | string(8) | タイムスタンプテキスト (HH:MM:SS) |
+| ts_num | integer | タイムスタンプ秒数 |
+| text | string | タイムスタンプのテキスト |
+| is_display | boolean | 表示フラグ（change_listの内容が反映済み） |
+
+### change_list テーブル
+表示状態の変更履歴を管理するマスターテーブル
+
+| カラム名 | 型 | 説明 |
+|---------|-----|------|
+| id | bigint | 主キー |
+| channel_id | string | チャンネルID |
+| video_id | string(11) | YouTube動画ID |
+| comment_id | string(26) | コメントID (nullable、nullの場合は動画レベルの変更) |
+| is_display | boolean | 表示フラグ |
 
 ## 使い方
 
