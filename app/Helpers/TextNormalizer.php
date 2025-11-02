@@ -53,6 +53,22 @@ class TextNormalizer
     }
 
     /**
+     * 先頭の全角スペース（および半角スペース）を除外
+     *
+     * @param string $text
+     * @return string
+     */
+    public static function trimFullwidthSpace($text)
+    {
+        if (empty($text)) {
+            return '';
+        }
+
+        // 先頭の全角スペース（U+3000）と半角スペース、その他の空白文字を除去
+        return preg_replace('/^[\s\x{3000}]+/u', '', $text);
+    }
+
+    /**
      * テキストから楽曲名とアーティスト名を抽出を試みる
      *
      * @return array ['title' => string, 'artist' => string|null]
