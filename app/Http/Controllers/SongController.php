@@ -30,7 +30,9 @@ class SongController extends Controller
         $search = $request->input('search', '');
         $unlinkedOnly = $request->input('unlinked_only', false);
 
-        $query = TsItem::with(['archive']);
+        $query = TsItem::with(['archive'])
+            ->whereNotNull('text')
+            ->where('text', '!=', '');
 
         // 検索条件
         if ($search) {
@@ -46,19 +48,21 @@ class SongController extends Controller
                 ->with('song')
                 ->first();
 
-            $item->normalized_text = $normalizedText;
-            $item->mapping = $mapping;
-            $item->song = $mapping ? $mapping->song : null;
-            $item->is_not_song = $mapping ? $mapping->is_not_song : false;
+            // モデルを配列に変換して、追加のフィールドをマージ
+            $data = $item->toArray();
+            $data['normalized_text'] = $normalizedText;
+            $data['mapping'] = $mapping ? $mapping->toArray() : null;
+            $data['song'] = $mapping && $mapping->song ? $mapping->song->toArray() : null;
+            $data['is_not_song'] = $mapping ? $mapping->is_not_song : false;
 
-            return $item;
+            return $data;
         });
 
         // 未連携フィルター
         if ($unlinkedOnly) {
             $timestamps->setCollection(
                 $timestamps->getCollection()->filter(function ($item) {
-                    return !$item->mapping;
+                    return !$item['mapping'];
                 })->values()
             );
         }
