@@ -22,6 +22,9 @@
                         <x-nav-link :href="route('manage.index')" :active="request()->routeIs('manage.index')">
                             {{ __('チャンネル管理') }}
                         </x-nav-link>
+                        <x-nav-link :href="route('songs.index')" :active="request()->routeIs('songs.index')">
+                            {{ __('タイムスタンプ正規化') }}
+                        </x-nav-link>
                     @endif
                     <x-nav-link :href="route('markdown.show')" :active="request()->routeIs('markdown.show')" class="text-center">
                         {{ __('利用規約・') }}<br/>
@@ -49,6 +52,9 @@
                         <x-slot name="content">
                             <x-dropdown-link :href="route('profile.edit')">
                                 {{ __('ユーザー情報') }}
+                            </x-dropdown-link>
+                            <x-dropdown-link :href="route('songs.index')" :active="request()->routeIs('songs.index')">
+                                {{ __('タイムスタンプ正規化') }}
                             </x-dropdown-link>
                             <x-dropdown-link :href="route('logs.index')" :active="request()->routeIs('logs.*')">
                                 {{ __('ログ管理') }}
@@ -95,6 +101,9 @@
                 <x-responsive-nav-link :href="route('manage.index')" :active="request()->routeIs('manage.index')">
                     {{ __('チャンネル管理') }}
                 </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('songs.index')" :active="request()->routeIs('songs.index')">
+                    {{ __('タイムスタンプ正規化') }}
+                </x-responsive-nav-link>
                 <x-responsive-nav-link :href="route('channels.index')" :active="request()->routeIs('channels.index')">
                     {{ __('チャンネル一覧') }}
                 </x-responsive-nav-link>
@@ -113,6 +122,9 @@
                 <div class="mt-3 space-y-1">
                     <x-responsive-nav-link :href="route('profile.edit')">
                         {{ __('ユーザー情報') }}
+                    </x-responsive-nav-link>
+                    <x-responsive-nav-link :href="route('songs.index')" :active="request()->routeIs('songs.index')">
+                        {{ __('タイムスタンプ正規化') }}
                     </x-responsive-nav-link>
                     <x-responsive-nav-link :href="route('logs.index')" :active="request()->routeIs('logs.*')">
                         {{ __('ログ管理') }}
