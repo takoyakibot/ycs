@@ -36,11 +36,11 @@ class TimestampNormalization {
             this.unlinkedOnly = !this.unlinkedOnly;
             const btn = document.getElementById('unlinkedOnlyBtn');
             if (this.unlinkedOnly) {
-                btn.classList.add('bg-blue-600', 'text-white');
-                btn.classList.remove('bg-gray-200', 'dark:bg-gray-700');
+                btn.classList.add('bg-blue-600', 'text-white', 'hover:bg-blue-700', 'dark:hover:bg-blue-700');
+                btn.classList.remove('bg-gray-200', 'dark:bg-gray-700', 'hover:bg-gray-300', 'dark:hover:bg-gray-600');
             } else {
-                btn.classList.remove('bg-blue-600', 'text-white');
-                btn.classList.add('bg-gray-200', 'dark:bg-gray-700');
+                btn.classList.remove('bg-blue-600', 'text-white', 'hover:bg-blue-700', 'dark:hover:bg-blue-700');
+                btn.classList.add('bg-gray-200', 'dark:bg-gray-700', 'hover:bg-gray-300', 'dark:hover:bg-gray-600');
             }
             this.loadTimestamps(1);
         });
