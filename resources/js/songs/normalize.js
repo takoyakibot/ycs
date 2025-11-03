@@ -16,6 +16,7 @@ class TimestampNormalization {
         this.searchTimeout = null;
         this.unlinkedOnly = false;
         this.currentSearch = ''; // 現在の検索条件を保持
+        this.displayedTimestamps = []; // 現在表示中のタイムスタンプ
 
         this.init();
     }
@@ -164,6 +165,9 @@ class TimestampNormalization {
         const container = document.getElementById('timestampsList');
         container.innerHTML = '';
 
+        // 表示中のタイムスタンプを保存
+        this.displayedTimestamps = timestamps;
+
         if (timestamps.length === 0) {
             container.innerHTML = '<p class="text-gray-500 dark:text-gray-400 text-sm">タイムスタンプがありません。</p>';
             return;
@@ -308,13 +312,16 @@ class TimestampNormalization {
 
     selectAll() {
         // 現在表示中のタイムスタンプを全て選択
-        const timestampItems = document.querySelectorAll('#timestampsList > div');
-        timestampItems.forEach((item, index) => {
-            const checkbox = item.querySelector('input[type="checkbox"]');
-            if (checkbox && !checkbox.checked) {
-                checkbox.click();
+        this.displayedTimestamps.forEach(ts => {
+            // まだ選択されていないタイムスタンプのみ追加
+            const index = this.selectedTimestamps.findIndex(t => t.id === ts.id);
+            if (index < 0) {
+                this.selectedTimestamps.push(ts);
             }
         });
+
+        this.updateSelectionDisplay();
+        this.loadTimestamps(this.currentPage);
     }
 
     deselectAll() {
