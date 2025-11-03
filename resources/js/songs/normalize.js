@@ -15,6 +15,7 @@ class TimestampNormalization {
         this.currentPage = 1;
         this.searchTimeout = null;
         this.unlinkedOnly = false;
+        this.currentSearch = ''; // 現在の検索条件を保持
 
         this.init();
     }
@@ -131,14 +132,19 @@ class TimestampNormalization {
         });
     }
 
-    async loadTimestamps(page = 1, search = '') {
+    async loadTimestamps(page = 1, search = null) {
+        // searchがnullの場合は現在の検索条件を維持
+        if (search !== null) {
+            this.currentSearch = search;
+        }
+
         try {
             this.showLoading();
             const response = await axios.get('/api/songs/timestamps', {
                 params: {
                     page,
                     per_page: 50,
-                    search,
+                    search: this.currentSearch,
                     unlinked_only: this.unlinkedOnly
                 }
             });

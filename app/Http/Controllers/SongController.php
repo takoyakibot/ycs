@@ -69,7 +69,8 @@ class SongController extends Controller
         });
 
         // 未連携フィルター（ソート前に適用）
-        if ($unlinkedOnly) {
+        // 検索条件が指定されている場合は、未連携フィルターを無視して全てのタイムスタンプを対象とする
+        if ($unlinkedOnly && empty($search)) {
             $timestampsWithMapping = $timestampsWithMapping->filter(function ($item) {
                 return !$item['mapping'];
             })->values();
