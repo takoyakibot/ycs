@@ -29,6 +29,7 @@ class SongController extends Controller
         $perPage = $request->input('per_page', 50);
         $search = $request->input('search', '');
         $unlinkedOnly = $request->input('unlinked_only', false);
+        $currentPage = $request->input('page', 1);
 
         $query = TsItem::with(['archive'])
             ->whereNotNull('text')
@@ -47,10 +48,11 @@ class SongController extends Controller
             $query->where('text', 'like', "%{$search}%");
         }
 
-        $timestamps = $query->orderBy('text')->paginate($perPage);
+        // 全件取得（ページネーション前）
+        $allTimestamps = $query->get();
 
         // 各タイムスタンプにマッピング情報を追加
-        $timestamps->getCollection()->transform(function ($item) {
+        $timestampsWithMapping = $allTimestamps->map(function ($item) {
             $normalizedText = TextNormalizer::normalize($item->text);
             $mapping = TimestampSongMapping::where('normalized_text', $normalizedText)
                 ->with('song')
@@ -66,16 +68,50 @@ class SongController extends Controller
             return $data;
         });
 
-        // 未連携フィルター
+        // 未連携フィルター（ソート前に適用）
         if ($unlinkedOnly) {
-            $timestamps->setCollection(
-                $timestamps->getCollection()->filter(function ($item) {
-                    return !$item['mapping'];
-                })->values()
-            );
+            $timestampsWithMapping = $timestampsWithMapping->filter(function ($item) {
+                return !$item['mapping'];
+            })->values();
         }
 
-        return response()->json($timestamps);
+        // 紐づけた楽曲を最後に表示するようにソート
+        // 未紐づけ → 楽曲ではない → 紐づけ済み の順、それぞれtext昇順
+        $sorted = $timestampsWithMapping->sort(function ($a, $b) {
+            $aMapped = !empty($a['mapping']);
+            $bMapped = !empty($b['mapping']);
+            $aIsNotSong = $a['is_not_song'];
+            $bIsNotSong = $b['is_not_song'];
+
+            // 優先順位を決定（数値が小さいほど先に表示）
+            // 0: 未紐づけ, 1: 楽曲ではない, 2: 紐づけ済み
+            $aPriority = $aMapped ? ($aIsNotSong ? 1 : 2) : 0;
+            $bPriority = $bMapped ? ($bIsNotSong ? 1 : 2) : 0;
+
+            // 優先順位が異なる場合
+            if ($aPriority !== $bPriority) {
+                return $aPriority - $bPriority;
+            }
+
+            // 同じ優先順位の場合はtextで昇順ソート
+            return strcmp($a['text'], $b['text']);
+        })->values();
+
+        // 手動でページネーション
+        $total = $sorted->count();
+        $lastPage = (int) ceil($total / $perPage);
+        $offset = ($currentPage - 1) * $perPage;
+        $items = $sorted->slice($offset, $perPage)->values();
+
+        return response()->json([
+            'data' => $items,
+            'current_page' => $currentPage,
+            'last_page' => $lastPage,
+            'per_page' => $perPage,
+            'total' => $total,
+            'from' => $total > 0 ? $offset + 1 : null,
+            'to' => $total > 0 ? min($offset + $perPage, $total) : null,
+        ]);
     }
 
     /**

@@ -619,6 +619,14 @@ class TimestampNormalization {
             this.selectedSpotifyTrack = null;
             // this.selectedSong は維持
 
+            // 紐づけた結果を確認できるように「未連携のみ」フィルタを解除
+            if (this.unlinkedOnly) {
+                this.unlinkedOnly = false;
+                const btn = document.getElementById('unlinkedOnlyBtn');
+                btn.classList.remove('bg-blue-600', 'text-white', 'hover:bg-blue-700', 'dark:hover:bg-blue-700');
+                btn.classList.add('bg-gray-200', 'dark:bg-gray-700', 'hover:bg-gray-300', 'dark:hover:bg-gray-600');
+            }
+
             await this.loadTimestamps(this.currentPage);
             this.updateSelectionDisplay();
         } catch (error) {
@@ -650,6 +658,15 @@ class TimestampNormalization {
 
             alert('楽曲ではないとマークしました。');
             this.selectedTimestamps = [];
+
+            // マークした結果を確認できるように「未連携のみ」フィルタを解除
+            if (this.unlinkedOnly) {
+                this.unlinkedOnly = false;
+                const btn = document.getElementById('unlinkedOnlyBtn');
+                btn.classList.remove('bg-blue-600', 'text-white', 'hover:bg-blue-700', 'dark:hover:bg-blue-700');
+                btn.classList.add('bg-gray-200', 'dark:bg-gray-700', 'hover:bg-gray-300', 'dark:hover:bg-gray-600');
+            }
+
             await this.loadTimestamps(this.currentPage);
             this.updateSelectionDisplay();
         } catch (error) {
@@ -681,6 +698,11 @@ class TimestampNormalization {
 
             alert('紐づけを解除しました。');
             this.selectedTimestamps = [];
+
+            // 紐づけを解除したタイムスタンプは未連携になるため、
+            // 「未連携のみ」フィルタがオンでも表示される
+            // （フィルタは維持）
+
             await this.loadTimestamps(this.currentPage);
             this.updateSelectionDisplay();
         } catch (error) {
