@@ -153,6 +153,32 @@ class SongController extends Controller
         $title = mb_substr($validated['title'], 0, 255);
         $artist = mb_substr($validated['artist'], 0, 255);
 
+        // 重複チェック
+        $existingSong = null;
+
+        // Spotify Track IDが指定されている場合はそれで重複チェック
+        if (!empty($validated['spotify_track_id'])) {
+            $existingSong = Song::where('spotify_track_id', $validated['spotify_track_id'])->first();
+            if ($existingSong) {
+                return response()->json([
+                    'error' => 'この楽曲は既に登録されています（Spotify Track ID が重複）。',
+                    'existing_song' => $existingSong
+                ], 409);
+            }
+        }
+
+        // Title + Artist の組み合わせで重複チェック
+        $existingSong = Song::where('title', $title)
+            ->where('artist', $artist)
+            ->first();
+
+        if ($existingSong) {
+            return response()->json([
+                'error' => 'この楽曲は既に登録されています（楽曲名とアーティスト名が重複）。',
+                'existing_song' => $existingSong
+            ], 409);
+        }
+
         $song = Song::create([
             'id' => Str::ulid(),
             'title' => $title,
