@@ -167,7 +167,7 @@ class TimestampNormalization {
             const div = document.createElement('div');
             const isSelected = this.selectedTimestamps.some(t => t.id === ts.id);
 
-            div.className = `p-2 border rounded flex items-start gap-2 ${
+            div.className = `p-2 border rounded flex items-center gap-2 ${
                 isSelected ? 'bg-blue-100 dark:bg-blue-900 border-blue-500' : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
             }`;
 
@@ -175,64 +175,69 @@ class TimestampNormalization {
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
             checkbox.checked = isSelected;
-            checkbox.className = 'mt-1';
+            checkbox.className = 'flex-shrink-0';
             checkbox.addEventListener('change', (e) => {
                 e.stopPropagation();
                 this.toggleTimestampSelection(ts);
             });
 
             const contentDiv = document.createElement('div');
-            contentDiv.className = 'flex-1 cursor-pointer';
+            contentDiv.className = 'flex-1 cursor-pointer min-w-0 flex items-center gap-2 overflow-hidden';
             contentDiv.addEventListener('click', () => {
                 this.toggleTimestampSelection(ts);
             });
 
             // タイムスタンプテキスト
             const textDiv = document.createElement('div');
-            textDiv.className = 'font-medium text-sm';
+            textDiv.className = 'font-medium text-sm truncate flex-shrink-0';
+            textDiv.style.maxWidth = '200px';
             textDiv.textContent = ts.text;
+            textDiv.title = ts.text; // ホバーで全文表示
 
-            // 動画リンクとホバー情報
-            const metaDiv = document.createElement('div');
-            metaDiv.className = 'text-xs text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-2';
-
+            // 動画リンク
             if (ts.archive?.youtube_video_id) {
                 const videoLink = document.createElement('a');
                 videoLink.href = `https://www.youtube.com/live/${ts.archive.youtube_video_id}?t=${ts.start_at}`;
                 videoLink.target = '_blank';
-                videoLink.className = 'text-blue-600 dark:text-blue-400 hover:underline';
+                videoLink.className = 'text-xs text-blue-600 dark:text-blue-400 hover:underline flex-shrink-0';
                 videoLink.textContent = '動画';
                 videoLink.title = `${ts.archive.title}\n開始位置: ${ts.start_at}秒`;
-                metaDiv.appendChild(videoLink);
+                contentDiv.appendChild(textDiv);
+                contentDiv.appendChild(videoLink);
+            } else {
+                contentDiv.appendChild(textDiv);
             }
 
+            // 動画タイトル
             const archiveTitle = document.createElement('span');
             archiveTitle.textContent = ts.archive?.title || '';
-            archiveTitle.className = 'truncate';
-            metaDiv.appendChild(archiveTitle);
+            archiveTitle.className = 'text-xs text-gray-500 dark:text-gray-400 truncate';
+            archiveTitle.style.maxWidth = '150px';
+            archiveTitle.title = ts.archive?.title || '';
+            contentDiv.appendChild(archiveTitle);
 
             // ステータス
             const statusDiv = document.createElement('div');
-            statusDiv.className = 'text-xs mt-1';
+            statusDiv.className = 'text-xs flex-shrink-0';
 
             if (ts.is_not_song) {
                 statusDiv.className += ' text-red-600 dark:text-red-400';
                 statusDiv.textContent = '楽曲ではない';
             } else if (ts.song) {
                 statusDiv.className += ' text-green-600 dark:text-green-400';
-                statusDiv.textContent = `${ts.song.title} / ${ts.song.artist}`;
+                const statusText = `${ts.song.title} / ${ts.song.artist}`;
+                statusDiv.textContent = statusText.length > 30 ? statusText.substring(0, 30) + '...' : statusText;
+                statusDiv.title = `${ts.song.title} / ${ts.song.artist}`;
             } else {
                 statusDiv.className += ' text-gray-400';
                 statusDiv.textContent = '未紐づけ';
             }
 
-            contentDiv.appendChild(textDiv);
-            contentDiv.appendChild(metaDiv);
             contentDiv.appendChild(statusDiv);
 
             // コピーボタン
             const copyBtn = document.createElement('button');
-            copyBtn.className = 'px-2 py-1 text-xs bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600';
+            copyBtn.className = 'px-2 py-1 text-xs bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600 flex-shrink-0';
             copyBtn.textContent = 'コピー';
             copyBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -337,12 +342,21 @@ class TimestampNormalization {
             const ts = this.selectedTimestamps[0];
             countSpan.textContent = '1件選択中';
             textSpan.textContent = ts.text;
+            textSpan.title = ts.text; // ホバーで全文表示
             normalizedSpan.textContent = `正規化: ${ts.normalized_text}`;
             document.getElementById('markAsNotSongBtn').disabled = false;
             document.getElementById('unlinkBtn').disabled = !ts.mapping;
         } else {
             countSpan.textContent = `${this.selectedTimestamps.length}件選択中`;
-            textSpan.textContent = this.selectedTimestamps.map(t => t.text).join(', ');
+            const joinedText = this.selectedTimestamps.map(t => t.text).join(', ');
+            // 長い文字列は切り詰める
+            if (joinedText.length > 100) {
+                textSpan.textContent = joinedText.substring(0, 100) + '...';
+                textSpan.title = joinedText; // ホバーで全文表示
+            } else {
+                textSpan.textContent = joinedText;
+                textSpan.title = joinedText;
+            }
             normalizedSpan.textContent = '';
             document.getElementById('markAsNotSongBtn').disabled = false;
             document.getElementById('unlinkBtn').disabled = false;

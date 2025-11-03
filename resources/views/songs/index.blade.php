@@ -84,8 +84,8 @@
                             <div class="text-sm text-gray-600 dark:text-gray-400 mb-1">
                                 <span id="selectedCount">未選択</span>
                             </div>
-                            <div id="selectedText" class="font-medium">タイムスタンプを選択してください</div>
-                            <div id="selectedNormalized" class="text-xs text-gray-500 dark:text-gray-400 mt-1"></div>
+                            <div id="selectedText" class="font-medium break-words overflow-hidden" style="word-break: break-word; overflow-wrap: break-word;">タイムスタンプを選択してください</div>
+                            <div id="selectedNormalized" class="text-xs text-gray-500 dark:text-gray-400 mt-1 break-words" style="word-break: break-word; overflow-wrap: break-word;"></div>
                         </div>
 
                         <!-- Spotify選択楽曲情報表示 -->
