@@ -194,7 +194,19 @@ class TimestampNormalization {
             textDiv.textContent = ts.text;
             textDiv.title = ts.text; // ホバーで全文表示
 
-            contentDiv.appendChild(textDiv);
+            // 動画リンク
+            if (ts.archive?.youtube_video_id) {
+                const videoLink = document.createElement('a');
+                videoLink.href = `https://www.youtube.com/live/${ts.archive.youtube_video_id}?t=${ts.start_at}`;
+                videoLink.target = '_blank';
+                videoLink.className = 'text-xs text-blue-600 dark:text-blue-400 hover:underline flex-shrink-0';
+                videoLink.textContent = '動画';
+                videoLink.title = `${ts.archive.title}\n開始位置: ${ts.start_at}秒`;
+                contentDiv.appendChild(textDiv);
+                contentDiv.appendChild(videoLink);
+            } else {
+                contentDiv.appendChild(textDiv);
+            }
 
             // 動画タイトル
             const archiveTitle = document.createElement('span');
