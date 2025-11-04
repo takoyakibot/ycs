@@ -167,7 +167,7 @@ class TimestampNormalization {
             const div = document.createElement('div');
             const isSelected = this.selectedTimestamps.some(t => t.id === ts.id);
 
-            div.className = `p-2 border rounded flex items-center gap-2 ${
+            div.className = `p-2 border rounded flex items-center gap-2 relative group ${
                 isSelected ? 'bg-blue-100 dark:bg-blue-900 border-blue-500' : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
             }`;
 
@@ -183,8 +183,15 @@ class TimestampNormalization {
 
             const contentDiv = document.createElement('div');
             contentDiv.className = 'flex-1 cursor-pointer min-w-0 flex items-center gap-2 overflow-hidden';
-            contentDiv.addEventListener('click', () => {
-                this.toggleTimestampSelection(ts);
+            contentDiv.addEventListener('click', (e) => {
+                // Ctrl/Cmd + クリックで動画を開く
+                if ((e.ctrlKey || e.metaKey) && ts.archive?.youtube_video_id) {
+                    e.preventDefault();
+                    const url = `https://www.youtube.com/live/${ts.archive.youtube_video_id}?t=${ts.start_at}`;
+                    window.open(url, '_blank');
+                } else {
+                    this.toggleTimestampSelection(ts);
+                }
             });
 
             // タイムスタンプテキスト
@@ -194,19 +201,7 @@ class TimestampNormalization {
             textDiv.textContent = ts.text;
             textDiv.title = ts.text; // ホバーで全文表示
 
-            // 動画リンク
-            if (ts.archive?.youtube_video_id) {
-                const videoLink = document.createElement('a');
-                videoLink.href = `https://www.youtube.com/live/${ts.archive.youtube_video_id}?t=${ts.start_at}`;
-                videoLink.target = '_blank';
-                videoLink.className = 'text-xs text-blue-600 dark:text-blue-400 hover:underline flex-shrink-0';
-                videoLink.textContent = '動画';
-                videoLink.title = `${ts.archive.title}\n開始位置: ${ts.start_at}秒`;
-                contentDiv.appendChild(textDiv);
-                contentDiv.appendChild(videoLink);
-            } else {
-                contentDiv.appendChild(textDiv);
-            }
+            contentDiv.appendChild(textDiv);
 
             // 動画タイトル
             const archiveTitle = document.createElement('span');
@@ -234,6 +229,20 @@ class TimestampNormalization {
             }
 
             contentDiv.appendChild(statusDiv);
+
+            // ホバー時に表示される動画再生ボタン
+            if (ts.archive?.youtube_video_id) {
+                const playBtn = document.createElement('button');
+                playBtn.className = 'absolute right-16 px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1';
+                playBtn.innerHTML = '▶ 動画';
+                playBtn.title = `${ts.archive.title}\n開始位置: ${ts.start_at}秒\n\nCtrl/Cmd + クリックでも開けます`;
+                playBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const url = `https://www.youtube.com/live/${ts.archive.youtube_video_id}?t=${ts.start_at}`;
+                    window.open(url, '_blank');
+                });
+                div.appendChild(playBtn);
+            }
 
             // コピーボタン
             const copyBtn = document.createElement('button');
