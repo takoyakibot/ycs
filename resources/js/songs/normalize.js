@@ -329,7 +329,13 @@ class TimestampNormalization {
             document.getElementById('linkSongBtn').disabled = true;
             document.getElementById('markAsNotSongBtn').disabled = true;
             document.getElementById('unlinkBtn').disabled = true;
-            videoInfoArea.classList.add('hidden');
+
+            // 動画ボタンを無効化
+            videoTitle.textContent = '';
+            videoTitle.title = '';
+            videoLinkBtn.disabled = true;
+            videoLinkBtn.classList.add('bg-gray-400', 'cursor-not-allowed');
+            videoLinkBtn.classList.remove('bg-red-600', 'hover:bg-red-700', 'cursor-pointer');
         } else if (this.selectedTimestamps.length === 1) {
             const ts = this.selectedTimestamps[0];
             countSpan.textContent = '1件選択中';
@@ -341,13 +347,24 @@ class TimestampNormalization {
 
             // 動画情報の表示
             if (ts.archive?.video_id) {
-                videoInfoArea.classList.remove('hidden');
                 videoTitle.textContent = ts.archive.title || '';
                 videoTitle.title = ts.archive.title || '';
-                const videoUrl = `https://www.youtube.com/live/${ts.archive.video_id}?t=${ts.ts_num}`;
-                videoLinkBtn.href = videoUrl;
+                videoLinkBtn.disabled = false;
+                videoLinkBtn.classList.remove('bg-gray-400', 'cursor-not-allowed');
+                videoLinkBtn.classList.add('bg-red-600', 'hover:bg-red-700', 'cursor-pointer');
+
+                // ボタンクリック時の処理
+                videoLinkBtn.onclick = () => {
+                    const videoUrl = `https://www.youtube.com/live/${ts.archive.video_id}?t=${ts.ts_num}`;
+                    window.open(videoUrl, '_blank');
+                };
             } else {
-                videoInfoArea.classList.add('hidden');
+                videoTitle.textContent = '動画情報なし';
+                videoTitle.title = '';
+                videoLinkBtn.disabled = true;
+                videoLinkBtn.classList.add('bg-gray-400', 'cursor-not-allowed');
+                videoLinkBtn.classList.remove('bg-red-600', 'hover:bg-red-700', 'cursor-pointer');
+                videoLinkBtn.onclick = null;
             }
         } else {
             countSpan.textContent = `${this.selectedTimestamps.length}件選択中`;
@@ -363,7 +380,14 @@ class TimestampNormalization {
             normalizedSpan.textContent = '';
             document.getElementById('markAsNotSongBtn').disabled = false;
             document.getElementById('unlinkBtn').disabled = false;
-            videoInfoArea.classList.add('hidden');
+
+            // 動画ボタンを無効化
+            videoTitle.textContent = '';
+            videoTitle.title = '';
+            videoLinkBtn.disabled = true;
+            videoLinkBtn.classList.add('bg-gray-400', 'cursor-not-allowed');
+            videoLinkBtn.classList.remove('bg-red-600', 'hover:bg-red-700', 'cursor-pointer');
+            videoLinkBtn.onclick = null;
         }
 
         // Spotify選択楽曲情報の表示
