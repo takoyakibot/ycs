@@ -344,7 +344,7 @@ class TimestampNormalization {
                 videoInfoArea.classList.remove('hidden');
                 videoTitle.textContent = ts.archive.title || '';
                 videoTitle.title = ts.archive.title || '';
-                const videoUrl = `https://www.youtube.com/live/${ts.archive.video_id}?t=${ts.start_at}`;
+                const videoUrl = `https://www.youtube.com/live/${ts.archive.video_id}?t=${ts.ts_num}`;
                 videoLinkBtn.href = videoUrl;
             } else {
                 videoInfoArea.classList.add('hidden');
