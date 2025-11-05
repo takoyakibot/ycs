@@ -143,25 +143,228 @@ class SongController extends Controller
     public function storeSong(Request $request)
     {
         $validated = $request->validate([
-            'title' => 'required|string',
-            'artist' => 'required|string',
-            'spotify_track_id' => 'nullable|string|max:22',
+            'title' => 'required|string|max:255',
+            'artist' => 'required|string|max:255',
+            'spotify_track_id' => 'nullable|string|max:22|regex:/^[a-zA-Z0-9]+$/',
             'spotify_data' => 'nullable|array',
+            'force_create' => 'nullable|boolean', // 類似曲があっても強制的に新規登録
+            'use_existing_id' => 'nullable|string|exists:songs,id', // 類似曲の中から選択した既存曲ID
         ]);
 
-        // 文字数制限対応（255文字以内に切り詰め）
-        $title = mb_substr($validated['title'], 0, 255);
-        $artist = mb_substr($validated['artist'], 0, 255);
+        $title = trim($validated['title']);
+        $artist = trim($validated['artist']);
 
-        $song = Song::create([
-            'id' => Str::ulid(),
-            'title' => $title,
-            'artist' => $artist,
-            'spotify_track_id' => $validated['spotify_track_id'] ?? null,
-            'spotify_data' => $validated['spotify_data'] ?? null,
-        ]);
+        // 既存曲を使用する場合
+        if (! empty($validated['use_existing_id'])) {
+            $existingSong = Song::findOrFail($validated['use_existing_id']);
 
-        return response()->json($song, 201);
+            return response()->json([
+                'status' => 'existing_used',
+                'song' => $existingSong,
+                'message' => '既存の楽曲マスタを使用します。',
+            ], 200);
+        }
+
+        // 強制新規登録フラグがある場合はチェックをスキップ
+        if (! empty($validated['force_create'])) {
+            try {
+                $song = Song::create([
+                    'id' => Str::ulid(),
+                    'title' => $title,
+                    'artist' => $artist,
+                    'spotify_track_id' => $validated['spotify_track_id'] ?? null,
+                    'spotify_data' => $validated['spotify_data'] ?? null,
+                ]);
+
+                return response()->json([
+                    'status' => 'created',
+                    'song' => $song,
+                    'message' => '新規の楽曲マスタを作成しました。',
+                ], 201);
+            } catch (\Illuminate\Database\QueryException $e) {
+                // ユニーク制約違反の場合は既存レコードを返す
+                if ($e->getCode() == 23000 || str_contains($e->getMessage(), 'Duplicate entry')) {
+                    $existingSong = Song::where('title', $title)
+                        ->where('artist', $artist)
+                        ->orWhere('spotify_track_id', $validated['spotify_track_id'])
+                        ->first();
+
+                    if ($existingSong) {
+                        return response()->json([
+                            'status' => 'exact_match',
+                            'song' => $existingSong,
+                            'message' => '既に登録されている楽曲マスタが見つかりました。',
+                        ], 200);
+                    }
+                }
+                throw $e;
+            }
+        }
+
+        // 完全一致チェック
+        $existingSong = null;
+
+        // Spotify Track IDが指定されている場合はそれで完全一致チェック
+        if (! empty($validated['spotify_track_id'])) {
+            $existingSong = Song::where('spotify_track_id', $validated['spotify_track_id'])->first();
+            if ($existingSong) {
+                return response()->json([
+                    'status' => 'exact_match',
+                    'song' => $existingSong,
+                    'message' => '既に登録されている楽曲マスタが見つかりました。',
+                ], 200);
+            }
+        }
+
+        // Title + Artist の正規化後の完全一致チェック
+        $normalizedTitle = TextNormalizer::normalize($title);
+        $normalizedArtist = TextNormalizer::normalize($artist);
+
+        // 正規化後のテキストで比較するため、全曲を取得して比較
+        $allSongs = Song::all();
+        foreach ($allSongs as $song) {
+            $songNormalizedTitle = TextNormalizer::normalize($song->title);
+            $songNormalizedArtist = TextNormalizer::normalize($song->artist);
+
+            if ($songNormalizedTitle === $normalizedTitle && $songNormalizedArtist === $normalizedArtist) {
+                return response()->json([
+                    'status' => 'exact_match',
+                    'song' => $song,
+                    'message' => '既に登録されている楽曲マスタが見つかりました。',
+                ], 200);
+            }
+        }
+
+        // 類似度チェック
+        $threshold = config('songs.similarity_threshold', 0.75);
+        $similarSongs = $this->findSimilarSongs($normalizedTitle, $normalizedArtist, $threshold);
+
+        if (count($similarSongs) > 0) {
+            return response()->json([
+                'status' => 'similar_found',
+                'similar_songs' => $similarSongs,
+                'input' => [
+                    'title' => $title,
+                    'artist' => $artist,
+                    'spotify_track_id' => $validated['spotify_track_id'] ?? null,
+                    'spotify_data' => $validated['spotify_data'] ?? null,
+                ],
+                'message' => '類似する楽曲マスタが見つかりました。既存のマスタを使用するか、新規登録するか選択してください。',
+            ], 200);
+        }
+
+        // 新規登録
+        try {
+            $song = Song::create([
+                'id' => Str::ulid(),
+                'title' => $title,
+                'artist' => $artist,
+                'spotify_track_id' => $validated['spotify_track_id'] ?? null,
+                'spotify_data' => $validated['spotify_data'] ?? null,
+            ]);
+
+            return response()->json([
+                'status' => 'created',
+                'song' => $song,
+                'message' => '新規の楽曲マスタを作成しました。',
+            ], 201);
+        } catch (\Illuminate\Database\QueryException $e) {
+            // ユニーク制約違反の場合は既存レコードを返す
+            if ($e->getCode() == 23000 || str_contains($e->getMessage(), 'Duplicate entry')) {
+                $existingSong = Song::where('title', $title)
+                    ->where('artist', $artist)
+                    ->orWhere('spotify_track_id', $validated['spotify_track_id'])
+                    ->first();
+
+                if ($existingSong) {
+                    return response()->json([
+                        'status' => 'exact_match',
+                        'song' => $existingSong,
+                        'message' => '既に登録されている楽曲マスタが見つかりました。',
+                    ], 200);
+                }
+            }
+            throw $e;
+        }
+    }
+
+    /**
+     * 類似する楽曲を検索
+     */
+    private function findSimilarSongs($normalizedTitle, $normalizedArtist, $threshold = 0.75)
+    {
+        // パフォーマンス最適化：部分一致で候補を絞り込んでから類似度計算
+        // 正規化後のタイトル・アーティストの最初の3文字で絞り込み
+        $titlePrefix = mb_substr($normalizedTitle, 0, 3);
+        $artistPrefix = mb_substr($normalizedArtist, 0, 3);
+
+        $candidateSongs = Song::where(function ($query) use ($titlePrefix, $artistPrefix) {
+            $query->where('title', 'like', "{$titlePrefix}%")
+                ->orWhere('artist', 'like', "{$artistPrefix}%");
+        })->limit(100)->get();
+
+        $similarSongs = [];
+
+        foreach ($candidateSongs as $song) {
+            $songNormalizedTitle = TextNormalizer::normalize($song->title);
+            $songNormalizedArtist = TextNormalizer::normalize($song->artist);
+
+            // タイトルとアーティスト名の類似度を計算
+            $titleSimilarity = $this->calculateSimilarity($normalizedTitle, $songNormalizedTitle);
+            $artistSimilarity = $this->calculateSimilarity($normalizedArtist, $songNormalizedArtist);
+
+            // 両方の平均が閾値以上の場合に類似とみなす
+            $averageSimilarity = ($titleSimilarity + $artistSimilarity) / 2;
+
+            if ($averageSimilarity >= $threshold) {
+                $similarSongs[] = [
+                    'song' => $song,
+                    'similarity' => round($averageSimilarity * 100, 1),
+                    'title_similarity' => round($titleSimilarity * 100, 1),
+                    'artist_similarity' => round($artistSimilarity * 100, 1),
+                ];
+            }
+        }
+
+        // 類似度の高い順にソート
+        usort($similarSongs, function ($a, $b) {
+            return $b['similarity'] <=> $a['similarity'];
+        });
+
+        return $similarSongs;
+    }
+
+    /**
+     * 2つの文字列の類似度を計算（0.0 ~ 1.0）
+     */
+    private function calculateSimilarity($str1, $str2)
+    {
+        if (empty($str1) || empty($str2)) {
+            return 0.0;
+        }
+
+        // Levenshtein距離を使用（255文字制限あり）
+        $maxLen = max(mb_strlen($str1), mb_strlen($str2));
+        if ($maxLen === 0) {
+            return 1.0;
+        }
+
+        // levenshtein()は255文字までしか対応していないため、超える場合は切り詰める
+        if (strlen($str1) > 255 || strlen($str2) > 255) {
+            $str1 = substr($str1, 0, 255);
+            $str2 = substr($str2, 0, 255);
+        }
+
+        $distance = levenshtein($str1, $str2);
+
+        // levenshtein()が失敗した場合（-1を返す）は類似度0とする
+        if ($distance === -1) {
+            return 0.0;
+        }
+
+        $similarity = 1 - ($distance / $maxLen);
+
+        return max(0.0, min(1.0, $similarity));
     }
 
     /**
@@ -239,7 +442,7 @@ class SongController extends Controller
             'threshold' => 'numeric|min:0|max:1',
         ]);
 
-        $threshold = $validated['threshold'] ?? 0.7;
+        $threshold = $validated['threshold'] ?? config('songs.fuzzy_search_threshold', 0.7);
         $mapping = TimestampSongMapping::fuzzySearch($validated['text'], $threshold);
 
         if ($mapping) {
@@ -276,17 +479,48 @@ class SongController extends Controller
             }
 
             $spotifyService = new SpotifyService;
-            $spotifyService->authenticate($clientId, $clientSecret);
 
-            $tracks = $spotifyService->searchTracks(
-                $validated['query'],
-                $validated['limit'] ?? 10
-            );
+            // 認証処理
+            try {
+                $spotifyService->authenticate($clientId, $clientSecret);
+            } catch (\Exception $e) {
+                \Log::error('Spotify authentication failed', [
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
+
+                return response()->json([
+                    'error' => 'Spotify API authentication failed. Please check your credentials.',
+                ], 500);
+            }
+
+            // 検索処理
+            try {
+                $tracks = $spotifyService->searchTracks(
+                    $validated['query'],
+                    $validated['limit'] ?? 10
+                );
+            } catch (\Exception $e) {
+                \Log::error('Spotify search failed', [
+                    'query' => $validated['query'],
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
+
+                return response()->json([
+                    'error' => 'Spotify API search failed. Please try again later.',
+                ], 500);
+            }
 
             return response()->json($tracks);
         } catch (\Exception $e) {
+            \Log::error('Unexpected error in searchSpotify', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
             return response()->json([
-                'error' => 'Spotify API search failed: '.$e->getMessage(),
+                'error' => 'An unexpected error occurred.',
             ], 500);
         }
     }

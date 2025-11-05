@@ -490,32 +490,12 @@ class TimestampNormalization {
         const artist = track.artists.map(a => a.name).join(', ');
         const spotifyTrackId = track.id;
 
-        try {
-            this.showLoading();
-            const response = await axios.post('/api/songs', {
-                title,
-                artist,
-                spotify_track_id: spotifyTrackId,
-                spotify_data: track
-            });
-
-            this.selectedSong = response.data;
-            this.updateSelectionDisplay();
-            alert(`楽曲マスタに登録しました: ${title} / ${artist}`);
-
-            // タイムスタンプが選択されていれば紐づける
-            if (this.selectedTimestamps.length > 0) {
-                await this.linkTimestamps();
-            }
-
-            // Spotify検索結果を再描画して選択状態を反映
-            this.searchSpotify();
-        } catch (error) {
-            console.error('楽曲マスタの登録に失敗しました:', error);
-            alert('登録に失敗しました。');
-        } finally {
-            this.hideLoading();
-        }
+        await this.registerSong({
+            title,
+            artist,
+            spotify_track_id: spotifyTrackId,
+            spotify_data: track
+        });
     }
 
     async createSong() {
@@ -527,29 +507,205 @@ class TimestampNormalization {
             return;
         }
 
+        await this.registerSong({ title, artist });
+    }
+
+    /**
+     * 楽曲マスタを登録（完全一致・類似度チェック対応）
+     */
+    async registerSong(songData, options = {}) {
         try {
             this.showLoading();
             const response = await axios.post('/api/songs', {
-                title,
-                artist
+                ...songData,
+                ...options
             });
 
-            this.selectedSong = response.data;
-            this.updateSelectionDisplay();
-            alert(`楽曲マスタに登録しました: ${title} / ${artist}`);
+            const { status, song, similar_songs, input, message } = response.data;
 
-            document.getElementById('createSongForm').reset();
+            if (status === 'exact_match' || status === 'existing_used') {
+                // 完全一致または既存マスタ使用
+                this.selectedSong = song;
+                this.updateSelectionDisplay();
+                alert(`既存の楽曲マスタを使用します: ${song.title} / ${song.artist}`);
 
-            // タイムスタンプが選択されていれば紐づける
-            if (this.selectedTimestamps.length > 0) {
-                await this.linkTimestamps();
+                // フォームをリセット
+                if (document.getElementById('createSongForm')) {
+                    document.getElementById('createSongForm').reset();
+                }
+
+                // タイムスタンプが選択されていれば紐づける
+                if (this.selectedTimestamps.length > 0) {
+                    await this.linkTimestamps();
+                }
+
+                // Spotify検索結果を再描画（Spotifyから登録の場合）
+                if (songData.spotify_track_id) {
+                    this.searchSpotify();
+                }
+
+            } else if (status === 'similar_found') {
+                // 類似曲が見つかった場合
+                this.hideLoading();
+                await this.showSimilarSongsDialog(similar_songs, input);
+
+            } else if (status === 'created') {
+                // 新規登録
+                this.selectedSong = song;
+                this.updateSelectionDisplay();
+                alert(`楽曲マスタに登録しました: ${song.title} / ${song.artist}`);
+
+                // フォームをリセット
+                if (document.getElementById('createSongForm')) {
+                    document.getElementById('createSongForm').reset();
+                }
+
+                // タイムスタンプが選択されていれば紐づける
+                if (this.selectedTimestamps.length > 0) {
+                    await this.linkTimestamps();
+                }
+
+                // Spotify検索結果を再描画（Spotifyから登録の場合）
+                if (songData.spotify_track_id) {
+                    this.searchSpotify();
+                }
             }
+
         } catch (error) {
             console.error('楽曲マスタの登録に失敗しました:', error);
             alert('登録に失敗しました。');
         } finally {
             this.hideLoading();
         }
+    }
+
+    /**
+     * 類似曲確認ダイアログを表示
+     */
+    async showSimilarSongsDialog(similarSongs, inputData) {
+        return new Promise((resolve) => {
+            // HTMLエスケープ関数
+            const escapeHtml = (str) => {
+                const div = document.createElement('div');
+                div.textContent = str;
+                return div.innerHTML;
+            };
+
+            // ダイアログのHTMLを動的に作成
+            const dialogHtml = `
+                <div id="similarSongsDialog" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+                        <h3 class="text-lg font-bold mb-4 text-gray-900 dark:text-white">類似する楽曲マスタが見つかりました</h3>
+
+                        <div class="mb-4 p-3 bg-blue-50 dark:bg-blue-900 rounded">
+                            <p class="text-sm text-gray-700 dark:text-gray-300">
+                                登録しようとしている楽曲: <strong>${escapeHtml(inputData.title)} / ${escapeHtml(inputData.artist)}</strong>
+                            </p>
+                        </div>
+
+                        <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                            類似度の高い楽曲が ${escapeHtml(String(similarSongs.length))} 件見つかりました。既存のマスタを使用するか、新規登録するか選択してください。
+                        </p>
+
+                        <div id="similarSongsList" class="space-y-2 mb-6 max-h-60 overflow-y-auto">
+                            ${similarSongs.map((item, index) => `
+                                <div class="similar-song-item p-3 border rounded cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 dark:border-gray-600" data-song-id="${escapeHtml(item.song.id)}" data-index="${escapeHtml(String(index))}">
+                                    <div class="flex justify-between items-start">
+                                        <div>
+                                            <div class="font-medium text-sm text-gray-900 dark:text-white">${escapeHtml(item.song.title)}</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400">${escapeHtml(item.song.artist)}</div>
+                                        </div>
+                                        <div class="text-right">
+                                            <div class="text-xs font-medium text-green-600 dark:text-green-400">類似度: ${escapeHtml(String(item.similarity))}%</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400">
+                                                曲名: ${escapeHtml(String(item.title_similarity))}% / アーティスト: ${escapeHtml(String(item.artist_similarity))}%
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+
+                        <div class="flex gap-2 justify-end">
+                            <button id="useExistingSongBtn" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50" disabled>
+                                選択した楽曲を使用
+                            </button>
+                            <button id="forceCreateNewBtn" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+                                新規登録
+                            </button>
+                            <button id="cancelDialogBtn" class="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded hover:bg-gray-400 dark:hover:bg-gray-500">
+                                キャンセル
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // ダイアログを追加
+            document.body.insertAdjacentHTML('beforeend', dialogHtml);
+
+            const dialog = document.getElementById('similarSongsDialog');
+            const useExistingBtn = document.getElementById('useExistingSongBtn');
+            const forceCreateBtn = document.getElementById('forceCreateNewBtn');
+            const cancelBtn = document.getElementById('cancelDialogBtn');
+
+            let selectedSongId = null;
+
+            // 楽曲選択
+            dialog.querySelectorAll('.similar-song-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    // 選択状態をリセット
+                    dialog.querySelectorAll('.similar-song-item').forEach(i => {
+                        i.classList.remove('bg-blue-100', 'dark:bg-blue-900', 'border-blue-500');
+                    });
+
+                    // 選択状態を適用
+                    item.classList.add('bg-blue-100', 'dark:bg-blue-900', 'border-blue-500');
+                    selectedSongId = item.dataset.songId;
+                    useExistingBtn.disabled = false;
+                });
+            });
+
+            // 既存楽曲を使用
+            useExistingBtn.addEventListener('click', async () => {
+                if (!selectedSongId) return;
+
+                dialog.remove();
+                this.showLoading();
+
+                try {
+                    await this.registerSong(inputData, { use_existing_id: selectedSongId });
+                    resolve();
+                } catch (error) {
+                    console.error('楽曲の使用に失敗しました:', error);
+                    alert('楽曲の使用に失敗しました。');
+                } finally {
+                    this.hideLoading();
+                }
+            });
+
+            // 新規登録
+            forceCreateBtn.addEventListener('click', async () => {
+                dialog.remove();
+                this.showLoading();
+
+                try {
+                    await this.registerSong(inputData, { force_create: true });
+                    resolve();
+                } catch (error) {
+                    console.error('新規登録に失敗しました:', error);
+                    alert('新規登録に失敗しました。');
+                } finally {
+                    this.hideLoading();
+                }
+            });
+
+            // キャンセル
+            cancelBtn.addEventListener('click', () => {
+                dialog.remove();
+                resolve();
+            });
+        });
     }
 
     async loadSongs(search = '') {
