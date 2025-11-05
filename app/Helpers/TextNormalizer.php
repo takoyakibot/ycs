@@ -55,7 +55,7 @@ class TextNormalizer
     /**
      * 先頭の全角スペース（および半角スペース）を除外
      *
-     * @param string $text
+     * @param  string  $text
      * @return string
      */
     public static function trimFullwidthSpace($text)

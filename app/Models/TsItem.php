@@ -55,6 +55,7 @@ class TsItem extends Model
     public function getSongAttribute()
     {
         $mapping = TimestampSongMapping::where('normalized_text', $this->normalized_text)->first();
+
         return $mapping ? $mapping->song : null;
     }
 
@@ -64,6 +65,7 @@ class TsItem extends Model
     public function getIsNotSongAttribute()
     {
         $mapping = TimestampSongMapping::where('normalized_text', $this->normalized_text)->first();
+
         return $mapping ? $mapping->is_not_song : false;
     }
 }
