@@ -167,7 +167,7 @@ class TimestampNormalization {
             const div = document.createElement('div');
             const isSelected = this.selectedTimestamps.some(t => t.id === ts.id);
 
-            div.className = `p-2 border rounded flex items-start gap-2 ${
+            div.className = `p-2 border rounded flex items-center gap-2 ${
                 isSelected ? 'bg-blue-100 dark:bg-blue-900 border-blue-500' : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
             }`;
 
@@ -175,71 +175,79 @@ class TimestampNormalization {
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
             checkbox.checked = isSelected;
-            checkbox.className = 'mt-1';
+            checkbox.className = 'flex-shrink-0';
             checkbox.addEventListener('change', (e) => {
                 e.stopPropagation();
                 this.toggleTimestampSelection(ts);
             });
 
             const contentDiv = document.createElement('div');
-            contentDiv.className = 'flex-1 cursor-pointer';
+            contentDiv.className = 'flex-1 cursor-pointer min-w-0 flex items-center gap-2 overflow-hidden';
             contentDiv.addEventListener('click', () => {
                 this.toggleTimestampSelection(ts);
             });
 
             // タイムスタンプテキスト
             const textDiv = document.createElement('div');
-            textDiv.className = 'font-medium text-sm';
+            textDiv.className = 'font-medium text-sm truncate flex-shrink-0';
+            textDiv.style.maxWidth = '200px';
             textDiv.textContent = ts.text;
+            textDiv.title = ts.text; // ホバーで全文表示
 
-            // 動画リンクとホバー情報
-            const metaDiv = document.createElement('div');
-            metaDiv.className = 'text-xs text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-2';
+            contentDiv.appendChild(textDiv);
 
-            if (ts.archive?.youtube_video_id) {
-                const videoLink = document.createElement('a');
-                videoLink.href = `https://www.youtube.com/live/${ts.archive.youtube_video_id}?t=${ts.start_at}`;
-                videoLink.target = '_blank';
-                videoLink.className = 'text-blue-600 dark:text-blue-400 hover:underline';
-                videoLink.textContent = '動画';
-                videoLink.title = `${ts.archive.title}\n開始位置: ${ts.start_at}秒`;
-                metaDiv.appendChild(videoLink);
-            }
-
+            // 動画タイトル
             const archiveTitle = document.createElement('span');
             archiveTitle.textContent = ts.archive?.title || '';
-            archiveTitle.className = 'truncate';
-            metaDiv.appendChild(archiveTitle);
+            archiveTitle.className = 'text-xs text-gray-500 dark:text-gray-400 truncate';
+            archiveTitle.style.maxWidth = '150px';
+            archiveTitle.title = ts.archive?.title || '';
+            contentDiv.appendChild(archiveTitle);
 
             // ステータス
             const statusDiv = document.createElement('div');
-            statusDiv.className = 'text-xs mt-1';
+            statusDiv.className = 'text-xs flex-shrink-0';
 
             if (ts.is_not_song) {
                 statusDiv.className += ' text-red-600 dark:text-red-400';
                 statusDiv.textContent = '楽曲ではない';
             } else if (ts.song) {
                 statusDiv.className += ' text-green-600 dark:text-green-400';
-                statusDiv.textContent = `${ts.song.title} / ${ts.song.artist}`;
+                const statusText = `${ts.song.title} / ${ts.song.artist}`;
+                statusDiv.textContent = statusText.length > 30 ? statusText.substring(0, 30) + '...' : statusText;
+                statusDiv.title = `${ts.song.title} / ${ts.song.artist}`;
             } else {
                 statusDiv.className += ' text-gray-400';
                 statusDiv.textContent = '未紐づけ';
             }
 
-            contentDiv.appendChild(textDiv);
-            contentDiv.appendChild(metaDiv);
             contentDiv.appendChild(statusDiv);
 
             // コピーボタン
             const copyBtn = document.createElement('button');
-            copyBtn.className = 'px-2 py-1 text-xs bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600';
-            copyBtn.textContent = 'コピー';
+            copyBtn.className = 'p-1.5 text-gray-600 dark:text-gray-400 bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600 flex-shrink-0 transition-colors';
+            copyBtn.title = 'コピー';
+            copyBtn.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+            `;
+
+            const originalIcon = copyBtn.innerHTML;
+            const checkIcon = `
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+            `;
+
             copyBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 navigator.clipboard.writeText(ts.text);
-                copyBtn.textContent = 'コピー済';
+                copyBtn.innerHTML = checkIcon;
+                copyBtn.title = 'コピー済';
                 setTimeout(() => {
-                    copyBtn.textContent = 'コピー';
+                    copyBtn.innerHTML = originalIcon;
+                    copyBtn.title = 'コピー';
                 }, 1000);
             });
 
@@ -322,6 +330,9 @@ class TimestampNormalization {
         const countSpan = document.getElementById('selectedCount');
         const textSpan = document.getElementById('selectedText');
         const normalizedSpan = document.getElementById('selectedNormalized');
+        const videoInfoArea = document.getElementById('videoInfoArea');
+        const videoTitle = document.getElementById('videoTitle');
+        const videoLinkBtn = document.getElementById('videoLinkBtn');
 
         // 常に表示
         container.classList.remove('hidden');
@@ -333,19 +344,65 @@ class TimestampNormalization {
             document.getElementById('linkSongBtn').disabled = true;
             document.getElementById('markAsNotSongBtn').disabled = true;
             document.getElementById('unlinkBtn').disabled = true;
+
+            // 動画ボタンを無効化
+            videoTitle.textContent = '';
+            videoTitle.title = '';
+            videoLinkBtn.disabled = true;
+            videoLinkBtn.classList.add('bg-gray-400', 'cursor-not-allowed');
+            videoLinkBtn.classList.remove('bg-red-600', 'hover:bg-red-700', 'cursor-pointer');
         } else if (this.selectedTimestamps.length === 1) {
             const ts = this.selectedTimestamps[0];
             countSpan.textContent = '1件選択中';
             textSpan.textContent = ts.text;
+            textSpan.title = ts.text; // ホバーで全文表示
             normalizedSpan.textContent = `正規化: ${ts.normalized_text}`;
             document.getElementById('markAsNotSongBtn').disabled = false;
             document.getElementById('unlinkBtn').disabled = !ts.mapping;
+
+            // 動画情報の表示
+            if (ts.archive?.video_id) {
+                videoTitle.textContent = ts.archive.title || '';
+                videoTitle.title = ts.archive.title || '';
+                videoLinkBtn.disabled = false;
+                videoLinkBtn.classList.remove('bg-gray-400', 'cursor-not-allowed');
+                videoLinkBtn.classList.add('bg-red-600', 'hover:bg-red-700', 'cursor-pointer');
+
+                // ボタンクリック時の処理
+                videoLinkBtn.onclick = () => {
+                    const videoUrl = `https://youtube.com/watch?v=${ts.archive.video_id}&t=${ts.ts_num}s`;
+                    window.open(videoUrl, '_blank');
+                };
+            } else {
+                videoTitle.textContent = '動画情報なし';
+                videoTitle.title = '';
+                videoLinkBtn.disabled = true;
+                videoLinkBtn.classList.add('bg-gray-400', 'cursor-not-allowed');
+                videoLinkBtn.classList.remove('bg-red-600', 'hover:bg-red-700', 'cursor-pointer');
+                videoLinkBtn.onclick = null;
+            }
         } else {
             countSpan.textContent = `${this.selectedTimestamps.length}件選択中`;
-            textSpan.textContent = this.selectedTimestamps.map(t => t.text).join(', ');
+            const joinedText = this.selectedTimestamps.map(t => t.text).join(', ');
+            // 長い文字列は切り詰める
+            if (joinedText.length > 100) {
+                textSpan.textContent = joinedText.substring(0, 100) + '...';
+                textSpan.title = joinedText; // ホバーで全文表示
+            } else {
+                textSpan.textContent = joinedText;
+                textSpan.title = joinedText;
+            }
             normalizedSpan.textContent = '';
             document.getElementById('markAsNotSongBtn').disabled = false;
             document.getElementById('unlinkBtn').disabled = false;
+
+            // 動画ボタンを無効化
+            videoTitle.textContent = '';
+            videoTitle.title = '';
+            videoLinkBtn.disabled = true;
+            videoLinkBtn.classList.add('bg-gray-400', 'cursor-not-allowed');
+            videoLinkBtn.classList.remove('bg-red-600', 'hover:bg-red-700', 'cursor-pointer');
+            videoLinkBtn.onclick = null;
         }
 
         // Spotify選択楽曲情報の表示

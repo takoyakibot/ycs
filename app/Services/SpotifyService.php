@@ -21,6 +21,7 @@ class SpotifyService
 
         if ($response->successful()) {
             $this->accessToken = $response->json()['access_token'];
+
             return true;
         }
 
@@ -32,7 +33,7 @@ class SpotifyService
      */
     public function searchTracks($query, $limit = 10)
     {
-        if (!$this->accessToken) {
+        if (! $this->accessToken) {
             throw new \Exception('Spotify API is not authenticated.');
         }
 
@@ -54,7 +55,7 @@ class SpotifyService
      */
     public function getTrack($trackId)
     {
-        if (!$this->accessToken) {
+        if (! $this->accessToken) {
             throw new \Exception('Spotify API is not authenticated.');
         }
 

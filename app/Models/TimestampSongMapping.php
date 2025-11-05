@@ -39,6 +39,7 @@ class TimestampSongMapping extends Model
     public static function findByText($text)
     {
         $normalized = \App\Helpers\TextNormalizer::normalize($text);
+
         return static::where('normalized_text', $normalized)->first();
     }
 
@@ -57,7 +58,7 @@ class TimestampSongMapping extends Model
 
         // 部分一致とLike検索
         $candidates = static::where('normalized_text', 'like', "%{$normalized}%")
-            ->orWhere('normalized_text', 'like', substr($normalized, 0, 20) . '%')
+            ->orWhere('normalized_text', 'like', substr($normalized, 0, 20).'%')
             ->get();
 
         if ($candidates->isEmpty()) {

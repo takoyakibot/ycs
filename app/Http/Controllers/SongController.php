@@ -71,15 +71,15 @@ class SongController extends Controller
         // 未連携フィルター（ソート前に適用）
         if ($unlinkedOnly) {
             $timestampsWithMapping = $timestampsWithMapping->filter(function ($item) {
-                return !$item['mapping'];
+                return ! $item['mapping'];
             })->values();
         }
 
         // 紐づけた楽曲を最後に表示するようにソート
         // 未紐づけ → 楽曲ではない → 紐づけ済み の順、それぞれtext昇順
         $sorted = $timestampsWithMapping->sort(function ($a, $b) {
-            $aMapped = !empty($a['mapping']);
-            $bMapped = !empty($b['mapping']);
+            $aMapped = ! empty($a['mapping']);
+            $bMapped = ! empty($b['mapping']);
             $aIsNotSong = $a['is_not_song'];
             $bIsNotSong = $b['is_not_song'];
 
@@ -244,6 +244,7 @@ class SongController extends Controller
 
         if ($mapping) {
             $mapping->load('song');
+
             return response()->json([
                 'found' => true,
                 'mapping' => $mapping,
@@ -268,13 +269,13 @@ class SongController extends Controller
             $clientId = config('services.spotify.client_id');
             $clientSecret = config('services.spotify.client_secret');
 
-            if (!$clientId || !$clientSecret) {
+            if (! $clientId || ! $clientSecret) {
                 return response()->json([
-                    'error' => 'Spotify API credentials are not configured.'
+                    'error' => 'Spotify API credentials are not configured.',
                 ], 500);
             }
 
-            $spotifyService = new SpotifyService();
+            $spotifyService = new SpotifyService;
             $spotifyService->authenticate($clientId, $clientSecret);
 
             $tracks = $spotifyService->searchTracks(
@@ -285,7 +286,7 @@ class SongController extends Controller
             return response()->json($tracks);
         } catch (\Exception $e) {
             return response()->json([
-                'error' => 'Spotify API search failed: ' . $e->getMessage()
+                'error' => 'Spotify API search failed: '.$e->getMessage(),
             ], 500);
         }
     }

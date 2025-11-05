@@ -50,14 +50,25 @@
                             </button>
                         </div>
 
-                        <!-- 全選択・全選択解除ボタン -->
-                        <div class="flex gap-2 mb-3">
-                            <button id="selectAllBtn" class="px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600">
-                                全選択
-                            </button>
-                            <button id="deselectAllBtn" class="px-3 py-1 bg-gray-500 text-white text-sm rounded hover:bg-gray-600">
-                                全選択解除
-                            </button>
+                        <!-- 全選択・全選択解除ボタンと動画情報 -->
+                        <div class="flex justify-between items-center gap-4 mb-3">
+                            <div class="flex gap-2">
+                                <button id="selectAllBtn" class="px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600">
+                                    全選択
+                                </button>
+                                <button id="deselectAllBtn" class="px-3 py-1 bg-gray-500 text-white text-sm rounded hover:bg-gray-600">
+                                    全選択解除
+                                </button>
+                            </div>
+
+                            <!-- 動画情報表示エリア -->
+                            <div id="videoInfoArea" class="flex-1 flex items-center justify-end gap-2">
+                                <div class="text-xs text-gray-600 dark:text-gray-400 truncate max-w-[200px]" id="videoTitle" title="">
+                                </div>
+                                <button id="videoLinkBtn" class="px-3 py-1 text-white text-xs rounded flex-shrink-0 flex items-center gap-1 transition-colors bg-gray-400 cursor-not-allowed" disabled>
+                                    ▶ 動画を開く
+                                </button>
+                            </div>
                         </div>
 
                         <div id="timestampsList" class="space-y-1 max-h-[500px] overflow-y-auto">
@@ -84,8 +95,8 @@
                             <div class="text-sm text-gray-600 dark:text-gray-400 mb-1">
                                 <span id="selectedCount">未選択</span>
                             </div>
-                            <div id="selectedText" class="font-medium">タイムスタンプを選択してください</div>
-                            <div id="selectedNormalized" class="text-xs text-gray-500 dark:text-gray-400 mt-1"></div>
+                            <div id="selectedText" class="font-medium break-words overflow-hidden" style="word-break: break-word; overflow-wrap: break-word;">タイムスタンプを選択してください</div>
+                            <div id="selectedNormalized" class="text-xs text-gray-500 dark:text-gray-400 mt-1 break-words" style="word-break: break-word; overflow-wrap: break-word;"></div>
                         </div>
 
                         <!-- Spotify選択楽曲情報表示 -->
