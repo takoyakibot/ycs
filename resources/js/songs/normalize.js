@@ -1,4 +1,5 @@
 import axios from 'axios';
+import toast from '../utils/toast.js';
 
 // axiosの設定: クロスオリジンリクエストでクッキーを送信
 axios.defaults.withCredentials = true;
@@ -148,7 +149,7 @@ class TimestampNormalization {
             this.displayPagination(response.data);
         } catch (error) {
             console.error('タイムスタンプの取得に失敗しました:', error);
-            alert('タイムスタンプの取得に失敗しました。');
+            toast.error('タイムスタンプの取得に失敗しました。');
         } finally {
             this.hideLoading();
         }
@@ -373,7 +374,7 @@ class TimestampNormalization {
     async searchSpotify() {
         const query = document.getElementById('spotifySearch').value.trim();
         if (!query) {
-            alert('検索キーワードを入力してください。');
+            toast.warning('検索キーワードを入力してください。');
             return;
         }
 
@@ -444,7 +445,7 @@ class TimestampNormalization {
 
             this.selectedSong = response.data;
             this.updateSelectionDisplay();
-            alert(`楽曲マスタに登録しました: ${title} / ${artist}`);
+            toast.success(`楽曲マスタに登録しました: ${title} / ${artist}`);
 
             // タイムスタンプが選択されていれば紐づける
             if (this.selectedTimestamps.length > 0) {
@@ -455,7 +456,7 @@ class TimestampNormalization {
             this.searchSpotify();
         } catch (error) {
             console.error('楽曲マスタの登録に失敗しました:', error);
-            alert('登録に失敗しました。');
+            toast.error('登録に失敗しました。');
         } finally {
             this.hideLoading();
         }
@@ -466,7 +467,7 @@ class TimestampNormalization {
         const artist = document.getElementById('songArtist').value.trim();
 
         if (!title || !artist) {
-            alert('楽曲名とアーティスト名を入力してください。');
+            toast.warning('楽曲名とアーティスト名を入力してください。');
             return;
         }
 
@@ -479,7 +480,7 @@ class TimestampNormalization {
 
             this.selectedSong = response.data;
             this.updateSelectionDisplay();
-            alert(`楽曲マスタに登録しました: ${title} / ${artist}`);
+            toast.success(`楽曲マスタに登録しました: ${title} / ${artist}`);
 
             document.getElementById('createSongForm').reset();
 
@@ -489,7 +490,7 @@ class TimestampNormalization {
             }
         } catch (error) {
             console.error('楽曲マスタの登録に失敗しました:', error);
-            alert('登録に失敗しました。');
+            toast.error('登録に失敗しました。');
         } finally {
             this.hideLoading();
         }
@@ -504,7 +505,7 @@ class TimestampNormalization {
             this.displaySongs(response.data);
         } catch (error) {
             console.error('楽曲マスタの取得に失敗しました:', error);
-            alert('楽曲マスタの取得に失敗しました。');
+            toast.error('楽曲マスタの取得に失敗しました。');
         }
     }
 
@@ -579,7 +580,7 @@ class TimestampNormalization {
         try {
             this.showLoading();
             await axios.delete(`/api/songs/${songId}`);
-            alert('楽曲マスタを削除しました。');
+            toast.success('楽曲マスタを削除しました。');
             await this.loadSongs();
             await this.loadTimestamps(this.currentPage);
 
@@ -589,7 +590,7 @@ class TimestampNormalization {
             }
         } catch (error) {
             console.error('削除に失敗しました:', error);
-            alert('削除に失敗しました。');
+            toast.error('削除に失敗しました。');
         } finally {
             this.hideLoading();
         }
@@ -597,7 +598,7 @@ class TimestampNormalization {
 
     async linkTimestamps() {
         if (this.selectedTimestamps.length === 0 || !this.selectedSong) {
-            alert('タイムスタンプと楽曲を選択してください。');
+            toast.warning('タイムスタンプと楽曲を選択してください。');
             return;
         }
 
@@ -612,7 +613,7 @@ class TimestampNormalization {
                 });
             }
 
-            alert(`${this.selectedTimestamps.length}件のタイムスタンプを紐づけました。`);
+            toast.success(`${this.selectedTimestamps.length}件のタイムスタンプを紐づけました。`);
 
             // タイムスタンプの選択をクリア、楽曲の選択は維持
             this.selectedTimestamps = [];
@@ -631,7 +632,7 @@ class TimestampNormalization {
             this.updateSelectionDisplay();
         } catch (error) {
             console.error('紐づけに失敗しました:', error);
-            alert('紐づけに失敗しました。');
+            toast.error('紐づけに失敗しました。');
         } finally {
             this.hideLoading();
         }
@@ -639,7 +640,7 @@ class TimestampNormalization {
 
     async markAsNotSong() {
         if (this.selectedTimestamps.length === 0) {
-            alert('タイムスタンプを選択してください。');
+            toast.warning('タイムスタンプを選択してください。');
             return;
         }
 
@@ -656,7 +657,7 @@ class TimestampNormalization {
                 });
             }
 
-            alert('楽曲ではないとマークしました。');
+            toast.success('楽曲ではないとマークしました。');
             this.selectedTimestamps = [];
 
             // マークした結果を確認できるように「未連携のみ」フィルタを解除
@@ -671,7 +672,7 @@ class TimestampNormalization {
             this.updateSelectionDisplay();
         } catch (error) {
             console.error('マークに失敗しました:', error);
-            alert('マークに失敗しました。');
+            toast.error('マークに失敗しました。');
         } finally {
             this.hideLoading();
         }
@@ -679,7 +680,7 @@ class TimestampNormalization {
 
     async unlinkTimestamps() {
         if (this.selectedTimestamps.length === 0) {
-            alert('タイムスタンプを選択してください。');
+            toast.warning('タイムスタンプを選択してください。');
             return;
         }
 
@@ -696,7 +697,7 @@ class TimestampNormalization {
                 });
             }
 
-            alert('紐づけを解除しました。');
+            toast.success('紐づけを解除しました。');
             this.selectedTimestamps = [];
 
             // 紐づけを解除したタイムスタンプは未連携になるため、
@@ -707,7 +708,7 @@ class TimestampNormalization {
             this.updateSelectionDisplay();
         } catch (error) {
             console.error('解除に失敗しました:', error);
-            alert('解除に失敗しました。');
+            toast.error('解除に失敗しました。');
         } finally {
             this.hideLoading();
         }
