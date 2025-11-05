@@ -61,13 +61,13 @@
                                 </button>
                             </div>
 
-                            <!-- 動画情報表示エリア（1つ選択時のみ表示） -->
-                            <div id="videoInfoArea" class="hidden flex-1 flex items-center justify-end gap-2">
+                            <!-- 動画情報表示エリア -->
+                            <div id="videoInfoArea" class="flex-1 flex items-center justify-end gap-2">
                                 <div class="text-xs text-gray-600 dark:text-gray-400 truncate max-w-[200px]" id="videoTitle" title="">
                                 </div>
-                                <a id="videoLinkBtn" href="#" target="_blank" class="px-3 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 flex-shrink-0 flex items-center gap-1">
+                                <button id="videoLinkBtn" class="px-3 py-1 text-white text-xs rounded flex-shrink-0 flex items-center gap-1 transition-colors bg-gray-400 cursor-not-allowed" disabled>
                                     ▶ 動画を開く
-                                </a>
+                                </button>
                             </div>
                         </div>
 
