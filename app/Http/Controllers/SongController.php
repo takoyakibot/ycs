@@ -156,17 +156,18 @@ class SongController extends Controller
         $artist = mb_substr($validated['artist'], 0, 255);
 
         // 既存曲を使用する場合
-        if (!empty($validated['use_existing_id'])) {
+        if (! empty($validated['use_existing_id'])) {
             $existingSong = Song::findOrFail($validated['use_existing_id']);
+
             return response()->json([
                 'status' => 'existing_used',
                 'song' => $existingSong,
-                'message' => '既存の楽曲マスタを使用します。'
+                'message' => '既存の楽曲マスタを使用します。',
             ], 200);
         }
 
         // 強制新規登録フラグがある場合はチェックをスキップ
-        if (!empty($validated['force_create'])) {
+        if (! empty($validated['force_create'])) {
             $song = Song::create([
                 'id' => Str::ulid(),
                 'title' => $title,
@@ -178,7 +179,7 @@ class SongController extends Controller
             return response()->json([
                 'status' => 'created',
                 'song' => $song,
-                'message' => '新規の楽曲マスタを作成しました。'
+                'message' => '新規の楽曲マスタを作成しました。',
             ], 201);
         }
 
@@ -186,13 +187,13 @@ class SongController extends Controller
         $existingSong = null;
 
         // Spotify Track IDが指定されている場合はそれで完全一致チェック
-        if (!empty($validated['spotify_track_id'])) {
+        if (! empty($validated['spotify_track_id'])) {
             $existingSong = Song::where('spotify_track_id', $validated['spotify_track_id'])->first();
             if ($existingSong) {
                 return response()->json([
                     'status' => 'exact_match',
                     'song' => $existingSong,
-                    'message' => '既に登録されている楽曲マスタが見つかりました。'
+                    'message' => '既に登録されている楽曲マスタが見つかりました。',
                 ], 200);
             }
         }
@@ -209,7 +210,7 @@ class SongController extends Controller
             return response()->json([
                 'status' => 'exact_match',
                 'song' => $existingSong,
-                'message' => '既に登録されている楽曲マスタが見つかりました。'
+                'message' => '既に登録されている楽曲マスタが見つかりました。',
             ], 200);
         }
 
@@ -226,7 +227,7 @@ class SongController extends Controller
                     'spotify_track_id' => $validated['spotify_track_id'] ?? null,
                     'spotify_data' => $validated['spotify_data'] ?? null,
                 ],
-                'message' => '類似する楽曲マスタが見つかりました。既存のマスタを使用するか、新規登録するか選択してください。'
+                'message' => '類似する楽曲マスタが見つかりました。既存のマスタを使用するか、新規登録するか選択してください。',
             ], 200);
         }
 
@@ -242,7 +243,7 @@ class SongController extends Controller
         return response()->json([
             'status' => 'created',
             'song' => $song,
-            'message' => '新規の楽曲マスタを作成しました。'
+            'message' => '新規の楽曲マスタを作成しました。',
         ], 201);
     }
 
