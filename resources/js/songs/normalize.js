@@ -584,6 +584,13 @@ class TimestampNormalization {
      */
     async showSimilarSongsDialog(similarSongs, inputData) {
         return new Promise((resolve) => {
+            // HTMLエスケープ関数
+            const escapeHtml = (str) => {
+                const div = document.createElement('div');
+                div.textContent = str;
+                return div.innerHTML;
+            };
+
             // ダイアログのHTMLを動的に作成
             const dialogHtml = `
                 <div id="similarSongsDialog" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -592,26 +599,26 @@ class TimestampNormalization {
 
                         <div class="mb-4 p-3 bg-blue-50 dark:bg-blue-900 rounded">
                             <p class="text-sm text-gray-700 dark:text-gray-300">
-                                登録しようとしている楽曲: <strong>${inputData.title} / ${inputData.artist}</strong>
+                                登録しようとしている楽曲: <strong>${escapeHtml(inputData.title)} / ${escapeHtml(inputData.artist)}</strong>
                             </p>
                         </div>
 
                         <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                            類似度の高い楽曲が ${similarSongs.length} 件見つかりました。既存のマスタを使用するか、新規登録するか選択してください。
+                            類似度の高い楽曲が ${escapeHtml(String(similarSongs.length))} 件見つかりました。既存のマスタを使用するか、新規登録するか選択してください。
                         </p>
 
                         <div id="similarSongsList" class="space-y-2 mb-6 max-h-60 overflow-y-auto">
                             ${similarSongs.map((item, index) => `
-                                <div class="similar-song-item p-3 border rounded cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 dark:border-gray-600" data-song-id="${item.song.id}" data-index="${index}">
+                                <div class="similar-song-item p-3 border rounded cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 dark:border-gray-600" data-song-id="${escapeHtml(item.song.id)}" data-index="${escapeHtml(String(index))}">
                                     <div class="flex justify-between items-start">
                                         <div>
-                                            <div class="font-medium text-sm text-gray-900 dark:text-white">${item.song.title}</div>
-                                            <div class="text-xs text-gray-500 dark:text-gray-400">${item.song.artist}</div>
+                                            <div class="font-medium text-sm text-gray-900 dark:text-white">${escapeHtml(item.song.title)}</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400">${escapeHtml(item.song.artist)}</div>
                                         </div>
                                         <div class="text-right">
-                                            <div class="text-xs font-medium text-green-600 dark:text-green-400">類似度: ${item.similarity}%</div>
+                                            <div class="text-xs font-medium text-green-600 dark:text-green-400">類似度: ${escapeHtml(String(item.similarity))}%</div>
                                             <div class="text-xs text-gray-500 dark:text-gray-400">
-                                                曲名: ${item.title_similarity}% / アーティスト: ${item.artist_similarity}%
+                                                曲名: ${escapeHtml(String(item.title_similarity))}% / アーティスト: ${escapeHtml(String(item.artist_similarity))}%
                                             </div>
                                         </div>
                                     </div>

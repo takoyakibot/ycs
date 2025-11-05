@@ -42,6 +42,17 @@ return new class extends Migration
             ->get();
 
         foreach ($duplicates as $duplicate) {
+            // 削除対象のIDを取得
+            $deleteIds = DB::table('songs')
+                ->where('spotify_track_id', $duplicate->spotify_track_id)
+                ->where('id', '!=', $duplicate->keep_id)
+                ->pluck('id');
+
+            // 外部キー参照を保持する楽曲に更新
+            DB::table('timestamp_song_mappings')
+                ->whereIn('song_id', $deleteIds)
+                ->update(['song_id' => $duplicate->keep_id]);
+
             // 最も古いレコード以外を削除
             DB::table('songs')
                 ->where('spotify_track_id', $duplicate->spotify_track_id)
@@ -65,6 +76,18 @@ return new class extends Migration
             ->get();
 
         foreach ($duplicates as $duplicate) {
+            // 削除対象のIDを取得
+            $deleteIds = DB::table('songs')
+                ->where('title', $duplicate->title)
+                ->where('artist', $duplicate->artist)
+                ->where('id', '!=', $duplicate->keep_id)
+                ->pluck('id');
+
+            // 外部キー参照を保持する楽曲に更新
+            DB::table('timestamp_song_mappings')
+                ->whereIn('song_id', $deleteIds)
+                ->update(['song_id' => $duplicate->keep_id]);
+
             // 最も古いレコード以外を削除
             DB::table('songs')
                 ->where('title', $duplicate->title)
