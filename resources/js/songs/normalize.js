@@ -340,11 +340,11 @@ class TimestampNormalization {
             document.getElementById('unlinkBtn').disabled = !ts.mapping;
 
             // 動画情報の表示
-            if (ts.archive?.youtube_video_id) {
+            if (ts.archive?.video_id) {
                 videoInfoArea.classList.remove('hidden');
                 videoTitle.textContent = ts.archive.title || '';
                 videoTitle.title = ts.archive.title || '';
-                const videoUrl = `https://www.youtube.com/live/${ts.archive.youtube_video_id}?t=${ts.start_at}`;
+                const videoUrl = `https://www.youtube.com/live/${ts.archive.video_id}?t=${ts.start_at}`;
                 videoLinkBtn.href = videoUrl;
             } else {
                 videoInfoArea.classList.add('hidden');
