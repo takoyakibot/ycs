@@ -370,7 +370,7 @@ class TimestampNormalization {
 
                 // ボタンクリック時の処理
                 videoLinkBtn.onclick = () => {
-                    const videoUrl = `https://www.youtube.com/live/${ts.archive.video_id}?t=${ts.ts_num}`;
+                    const videoUrl = `https://youtube.com/watch?v=${ts.archive.video_id}&t=${ts.ts_num}s`;
                     window.open(videoUrl, '_blank');
                 };
             } else {
