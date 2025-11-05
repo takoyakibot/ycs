@@ -50,14 +50,25 @@
                             </button>
                         </div>
 
-                        <!-- 全選択・全選択解除ボタン -->
-                        <div class="flex gap-2 mb-3">
-                            <button id="selectAllBtn" class="px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600">
-                                全選択
-                            </button>
-                            <button id="deselectAllBtn" class="px-3 py-1 bg-gray-500 text-white text-sm rounded hover:bg-gray-600">
-                                全選択解除
-                            </button>
+                        <!-- 全選択・全選択解除ボタンと動画情報 -->
+                        <div class="flex justify-between items-center gap-4 mb-3">
+                            <div class="flex gap-2">
+                                <button id="selectAllBtn" class="px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600">
+                                    全選択
+                                </button>
+                                <button id="deselectAllBtn" class="px-3 py-1 bg-gray-500 text-white text-sm rounded hover:bg-gray-600">
+                                    全選択解除
+                                </button>
+                            </div>
+
+                            <!-- 動画情報表示エリア（1つ選択時のみ表示） -->
+                            <div id="videoInfoArea" class="hidden flex-1 flex items-center justify-end gap-2">
+                                <div class="text-xs text-gray-600 dark:text-gray-400 truncate max-w-[200px]" id="videoTitle" title="">
+                                </div>
+                                <a id="videoLinkBtn" href="#" target="_blank" class="px-3 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 flex-shrink-0 flex items-center gap-1">
+                                    ▶ 動画を開く
+                                </a>
+                            </div>
                         </div>
 
                         <div id="timestampsList" class="space-y-1 max-h-[500px] overflow-y-auto">
