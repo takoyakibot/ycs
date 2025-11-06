@@ -16,6 +16,15 @@ class TimestampNormalization {
         this.searchTimeout = null;
         this.unlinkedOnly = false;
 
+        // 定数定義
+        this.CONSTANTS = {
+            MAX_TIMESTAMP_WIDTH: '200px',
+            MAX_ARCHIVE_TITLE_WIDTH: '150px',
+            MAX_STATUS_LENGTH: 30,
+            MAX_SELECTION_TEXT_LENGTH: 100,
+            YOUTUBE_BASE_URL: 'https://youtube.com/watch?v='
+        };
+
         this.init();
     }
 
@@ -187,10 +196,10 @@ class TimestampNormalization {
                 this.toggleTimestampSelection(ts);
             });
 
-            // タイムスタンプテキスト
+            // タイムスタンプテキスト（最大200px、他の要素より優先的に表示）
             const textDiv = document.createElement('div');
             textDiv.className = 'font-medium text-sm truncate flex-shrink-0';
-            textDiv.style.maxWidth = '200px';
+            textDiv.style.maxWidth = this.CONSTANTS.MAX_TIMESTAMP_WIDTH;
             textDiv.textContent = ts.text;
             textDiv.title = ts.text; // ホバーで全文表示
 
@@ -200,7 +209,7 @@ class TimestampNormalization {
             const archiveTitle = document.createElement('span');
             archiveTitle.textContent = ts.archive?.title || '';
             archiveTitle.className = 'text-xs text-gray-500 dark:text-gray-400 truncate';
-            archiveTitle.style.maxWidth = '150px';
+            archiveTitle.style.maxWidth = this.CONSTANTS.MAX_ARCHIVE_TITLE_WIDTH;
             archiveTitle.title = ts.archive?.title || '';
             contentDiv.appendChild(archiveTitle);
 
@@ -214,7 +223,9 @@ class TimestampNormalization {
             } else if (ts.song) {
                 statusDiv.className += ' text-green-600 dark:text-green-400';
                 const statusText = `${ts.song.title} / ${ts.song.artist}`;
-                statusDiv.textContent = statusText.length > 30 ? statusText.substring(0, 30) + '...' : statusText;
+                statusDiv.textContent = statusText.length > this.CONSTANTS.MAX_STATUS_LENGTH
+                    ? statusText.substring(0, this.CONSTANTS.MAX_STATUS_LENGTH) + '...'
+                    : statusText;
                 statusDiv.title = `${ts.song.title} / ${ts.song.artist}`;
             } else {
                 statusDiv.className += ' text-gray-400';
@@ -330,9 +341,6 @@ class TimestampNormalization {
         const countSpan = document.getElementById('selectedCount');
         const textSpan = document.getElementById('selectedText');
         const normalizedSpan = document.getElementById('selectedNormalized');
-        const videoInfoArea = document.getElementById('videoInfoArea');
-        const videoTitle = document.getElementById('videoTitle');
-        const videoLinkBtn = document.getElementById('videoLinkBtn');
 
         // 常に表示
         container.classList.remove('hidden');
@@ -346,11 +354,7 @@ class TimestampNormalization {
             document.getElementById('unlinkBtn').disabled = true;
 
             // 動画ボタンを無効化
-            videoTitle.textContent = '';
-            videoTitle.title = '';
-            videoLinkBtn.disabled = true;
-            videoLinkBtn.classList.add('bg-gray-400', 'cursor-not-allowed');
-            videoLinkBtn.classList.remove('bg-red-600', 'hover:bg-red-700', 'cursor-pointer');
+            this.updateVideoButton(false);
         } else if (this.selectedTimestamps.length === 1) {
             const ts = this.selectedTimestamps[0];
             countSpan.textContent = '1件選択中';
@@ -362,31 +366,16 @@ class TimestampNormalization {
 
             // 動画情報の表示
             if (ts.archive?.video_id) {
-                videoTitle.textContent = ts.archive.title || '';
-                videoTitle.title = ts.archive.title || '';
-                videoLinkBtn.disabled = false;
-                videoLinkBtn.classList.remove('bg-gray-400', 'cursor-not-allowed');
-                videoLinkBtn.classList.add('bg-red-600', 'hover:bg-red-700', 'cursor-pointer');
-
-                // ボタンクリック時の処理
-                videoLinkBtn.onclick = () => {
-                    const videoUrl = `https://youtube.com/watch?v=${ts.archive.video_id}&t=${ts.ts_num}s`;
-                    window.open(videoUrl, '_blank');
-                };
+                this.updateVideoButton(true, ts.archive.video_id, ts.ts_num, ts.archive.title || '');
             } else {
-                videoTitle.textContent = '動画情報なし';
-                videoTitle.title = '';
-                videoLinkBtn.disabled = true;
-                videoLinkBtn.classList.add('bg-gray-400', 'cursor-not-allowed');
-                videoLinkBtn.classList.remove('bg-red-600', 'hover:bg-red-700', 'cursor-pointer');
-                videoLinkBtn.onclick = null;
+                this.updateVideoButton(false, null, null, '動画情報なし');
             }
         } else {
             countSpan.textContent = `${this.selectedTimestamps.length}件選択中`;
             const joinedText = this.selectedTimestamps.map(t => t.text).join(', ');
             // 長い文字列は切り詰める
-            if (joinedText.length > 100) {
-                textSpan.textContent = joinedText.substring(0, 100) + '...';
+            if (joinedText.length > this.CONSTANTS.MAX_SELECTION_TEXT_LENGTH) {
+                textSpan.textContent = joinedText.substring(0, this.CONSTANTS.MAX_SELECTION_TEXT_LENGTH) + '...';
                 textSpan.title = joinedText; // ホバーで全文表示
             } else {
                 textSpan.textContent = joinedText;
@@ -397,12 +386,7 @@ class TimestampNormalization {
             document.getElementById('unlinkBtn').disabled = false;
 
             // 動画ボタンを無効化
-            videoTitle.textContent = '';
-            videoTitle.title = '';
-            videoLinkBtn.disabled = true;
-            videoLinkBtn.classList.add('bg-gray-400', 'cursor-not-allowed');
-            videoLinkBtn.classList.remove('bg-red-600', 'hover:bg-red-700', 'cursor-pointer');
-            videoLinkBtn.onclick = null;
+            this.updateVideoButton(false);
         }
 
         // Spotify選択楽曲情報の表示
@@ -960,6 +944,61 @@ class TimestampNormalization {
 
     hideLoading() {
         document.getElementById('loadingModal').classList.add('hidden');
+    }
+
+    /**
+     * 動画URLを生成する
+     * @param {string} videoId - 動画ID
+     * @param {number|null} tsNum - タイムスタンプ秒数
+     * @returns {string|null} 生成されたURL、またはvideoIdがない場合はnull
+     */
+    generateVideoUrl(videoId, tsNum) {
+        if (!videoId) return null;
+        const timeParam = tsNum ? `&t=${tsNum}s` : '';
+        return `${this.CONSTANTS.YOUTUBE_BASE_URL}${videoId}${timeParam}`;
+    }
+
+    /**
+     * 動画ボタンの状態を更新する
+     * @param {boolean} enabled - ボタンを有効化するか
+     * @param {string|null} videoId - 動画ID
+     * @param {number|null} tsNum - タイムスタンプ秒数
+     * @param {string} title - 動画タイトル
+     */
+    updateVideoButton(enabled, videoId = null, tsNum = null, title = '') {
+        const videoTitle = document.getElementById('videoTitle');
+        const videoLinkBtn = document.getElementById('videoLinkBtn');
+
+        videoTitle.textContent = title;
+        videoTitle.title = title;
+        videoLinkBtn.disabled = !enabled;
+        videoLinkBtn.setAttribute('aria-disabled', enabled ? 'false' : 'true');
+
+        // 既存のイベントリスナーをクリア
+        videoLinkBtn.onclick = null;
+
+        if (enabled && videoId) {
+            videoLinkBtn.classList.remove('bg-gray-400', 'cursor-not-allowed');
+            videoLinkBtn.classList.add('bg-red-600', 'hover:bg-red-700', 'cursor-pointer');
+
+            videoLinkBtn.onclick = () => {
+                const videoUrl = this.generateVideoUrl(videoId, tsNum);
+                if (!videoUrl) {
+                    console.error('Failed to generate video URL');
+                    return;
+                }
+
+                const newWindow = window.open(videoUrl, '_blank');
+
+                // ポップアップブロック検出
+                if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+                    alert('ポップアップがブロックされました。ブラウザの設定を確認してください。');
+                }
+            };
+        } else {
+            videoLinkBtn.classList.add('bg-gray-400', 'cursor-not-allowed');
+            videoLinkBtn.classList.remove('bg-red-600', 'hover:bg-red-700', 'cursor-pointer');
+        }
     }
 }
 
