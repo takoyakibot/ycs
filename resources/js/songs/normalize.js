@@ -13,6 +13,7 @@ class TimestampNormalization {
         this.selectedSong = null;
         this.selectedSpotifyTrack = null; // Spotify選択楽曲情報
         this.currentPage = 1;
+        this.currentSearchQuery = ''; // 検索条件を保持
         this.searchTimeout = null;
         this.unlinkedOnly = false;
 
@@ -30,8 +31,9 @@ class TimestampNormalization {
         // タイムスタンプ検索
         document.getElementById('timestampSearch').addEventListener('input', (e) => {
             clearTimeout(this.searchTimeout);
+            this.currentSearchQuery = e.target.value;
             this.searchTimeout = setTimeout(() => {
-                this.loadTimestamps(1, e.target.value);
+                this.loadTimestamps(1, this.currentSearchQuery);
             }, 500);
         });
 
@@ -46,7 +48,7 @@ class TimestampNormalization {
                 btn.classList.remove('bg-blue-600', 'text-white', 'hover:bg-blue-700', 'dark:hover:bg-blue-700');
                 btn.classList.add('bg-gray-200', 'dark:bg-gray-700', 'hover:bg-gray-300', 'dark:hover:bg-gray-600');
             }
-            this.loadTimestamps(1);
+            this.loadTimestamps(1, this.currentSearchQuery);
         });
 
         // 全選択・全選択解除
@@ -78,7 +80,7 @@ class TimestampNormalization {
 
         // 更新ボタン
         document.getElementById('refreshTimestampsBtn').addEventListener('click', () => {
-            this.loadTimestamps(this.currentPage);
+            this.loadTimestamps(this.currentPage, this.currentSearchQuery);
         });
 
         // 楽曲マスタ一覧表示
@@ -143,7 +145,8 @@ class TimestampNormalization {
                 }
             });
 
-            this.currentPage = response.data.current_page;
+            const parsedPage = parseInt(response.data.current_page, 10);
+            this.currentPage = Number.isNaN(parsedPage) ? 1 : parsedPage;
             this.displayTimestamps(response.data.data);
             this.displayPagination(response.data);
         } catch (error) {
@@ -265,29 +268,67 @@ class TimestampNormalization {
 
         if (data.last_page <= 1) return;
 
-        // 前へボタン
-        if (data.current_page > 1) {
-            const prevBtn = document.createElement('button');
-            prevBtn.textContent = '前へ';
-            prevBtn.className = 'px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600';
-            prevBtn.addEventListener('click', () => this.loadTimestamps(data.current_page - 1));
-            container.appendChild(prevBtn);
+        const currentPage = parseInt(data.current_page, 10);
+        const lastPage = parseInt(data.last_page, 10);
+
+        // バリデーション
+        if (Number.isNaN(currentPage) || Number.isNaN(lastPage)) {
+            console.error('Invalid page numbers:', { currentPage, lastPage });
+            return;
         }
+
+        // ボタンのスタイル
+        const btnClass = 'px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 text-sm';
+        const disabledBtnClass = 'px-3 py-1 bg-gray-100 dark:bg-gray-800 rounded-md text-gray-400 dark:text-gray-600 cursor-not-allowed text-sm';
+
+        // ボタン作成ヘルパー関数
+        const createButton = (label, targetPage, isEnabled) => {
+            const btn = document.createElement('button');
+            btn.textContent = label;
+            btn.className = isEnabled ? btnClass : disabledBtnClass;
+            btn.disabled = !isEnabled;
+
+            if (isEnabled) {
+                btn.addEventListener('click', () => this.loadTimestamps(targetPage, this.currentSearchQuery));
+            }
+
+            return btn;
+        };
+
+        // ボタン定義
+        const buttons = [
+            { label: '最初', targetPage: 1, showCondition: true, enableCondition: currentPage > 1 },
+            { label: '-10', targetPage: currentPage - 10, showCondition: true, enableCondition: currentPage > 10 },
+            { label: '-5', targetPage: currentPage - 5, showCondition: true, enableCondition: currentPage > 5 },
+            { label: '前へ', targetPage: currentPage - 1, showCondition: true, enableCondition: currentPage > 1 },
+        ];
+
+        // ボタンを追加
+        buttons.forEach(({ label, targetPage, showCondition, enableCondition }) => {
+            if (showCondition) {
+                container.appendChild(createButton(label, targetPage, enableCondition));
+            }
+        });
 
         // ページ情報
         const pageInfo = document.createElement('span');
-        pageInfo.textContent = `${data.current_page} / ${data.last_page}`;
-        pageInfo.className = 'px-3 py-1 text-sm';
+        pageInfo.textContent = `${currentPage} / ${lastPage}`;
+        pageInfo.className = 'px-3 py-1 text-sm font-medium';
         container.appendChild(pageInfo);
 
-        // 次へボタン
-        if (data.current_page < data.last_page) {
-            const nextBtn = document.createElement('button');
-            nextBtn.textContent = '次へ';
-            nextBtn.className = 'px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600';
-            nextBtn.addEventListener('click', () => this.loadTimestamps(data.current_page + 1));
-            container.appendChild(nextBtn);
-        }
+        // 次へ系のボタン
+        const nextButtons = [
+            { label: '次へ', targetPage: currentPage + 1, showCondition: true, enableCondition: currentPage < lastPage },
+            { label: '+5', targetPage: currentPage + 5, showCondition: true, enableCondition: currentPage + 5 <= lastPage },
+            { label: '+10', targetPage: currentPage + 10, showCondition: true, enableCondition: currentPage + 10 <= lastPage },
+            { label: '最後', targetPage: lastPage, showCondition: true, enableCondition: currentPage < lastPage },
+        ];
+
+        nextButtons.forEach(({ label, targetPage, showCondition, enableCondition }) => {
+            if (showCondition) {
+                container.appendChild(createButton(label, targetPage, enableCondition));
+            }
+        });
     }
 
     toggleTimestampSelection(timestamp) {
@@ -300,7 +341,7 @@ class TimestampNormalization {
         }
 
         this.updateSelectionDisplay();
-        this.loadTimestamps(this.currentPage);
+        this.loadTimestamps(this.currentPage, this.currentSearchQuery);
 
         // 最初のタイムスタンプが選択された時、Spotify検索窓に反映
         if (this.selectedTimestamps.length === 1) {
@@ -322,7 +363,7 @@ class TimestampNormalization {
     deselectAll() {
         this.selectedTimestamps = [];
         this.updateSelectionDisplay();
-        this.loadTimestamps(this.currentPage);
+        this.loadTimestamps(this.currentPage, this.currentSearchQuery);
     }
 
     updateSelectionDisplay() {
@@ -424,7 +465,7 @@ class TimestampNormalization {
         this.selectedSong = null;
         this.selectedSpotifyTrack = null;
         this.updateSelectionDisplay();
-        this.loadTimestamps(this.currentPage);
+        this.loadTimestamps(this.currentPage, this.currentSearchQuery);
     }
 
     async searchSpotify() {
@@ -794,7 +835,7 @@ class TimestampNormalization {
             await axios.delete(`/api/songs/${songId}`);
             alert('楽曲マスタを削除しました。');
             await this.loadSongs();
-            await this.loadTimestamps(this.currentPage);
+            await this.loadTimestamps(this.currentPage, this.currentSearchQuery);
 
             if (this.selectedSong?.id === songId) {
                 this.selectedSong = null;
@@ -840,7 +881,7 @@ class TimestampNormalization {
                 btn.classList.add('bg-gray-200', 'dark:bg-gray-700', 'hover:bg-gray-300', 'dark:hover:bg-gray-600');
             }
 
-            await this.loadTimestamps(this.currentPage);
+            await this.loadTimestamps(this.currentPage, this.currentSearchQuery);
             this.updateSelectionDisplay();
         } catch (error) {
             console.error('紐づけに失敗しました:', error);
@@ -880,7 +921,7 @@ class TimestampNormalization {
                 btn.classList.add('bg-gray-200', 'dark:bg-gray-700', 'hover:bg-gray-300', 'dark:hover:bg-gray-600');
             }
 
-            await this.loadTimestamps(this.currentPage);
+            await this.loadTimestamps(this.currentPage, this.currentSearchQuery);
             this.updateSelectionDisplay();
         } catch (error) {
             console.error('マークに失敗しました:', error);
@@ -916,7 +957,7 @@ class TimestampNormalization {
             // 「未連携のみ」フィルタがオンでも表示される
             // （フィルタは維持）
 
-            await this.loadTimestamps(this.currentPage);
+            await this.loadTimestamps(this.currentPage, this.currentSearchQuery);
             this.updateSelectionDisplay();
         } catch (error) {
             console.error('解除に失敗しました:', error);
