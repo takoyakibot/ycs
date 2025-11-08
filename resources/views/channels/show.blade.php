@@ -225,7 +225,7 @@
                                 </div>
 
                                 <!-- 動画リンク: モバイルではコンパクト -->
-                                <a :href="`https://youtube.com/watch?v=${ts.video_id}&t=${ts.ts_num}s`"
+                                <a :href="getYoutubeUrl(ts.video_id, ts.ts_num)"
                                    class="text-blue-500 hover:underline whitespace-nowrap tabular-nums text-xs sm:text-sm"
                                    target="_blank"
                                    x-text="ts.ts_text + ' ↗'">
@@ -308,6 +308,13 @@
 
                 firstUrl(params) {
                     return `/api/channels/${this.channel.handle}?page=1` + (params ? `&${params}` : '');
+                },
+
+                // YouTube URLを安全に構築するヘルパー
+                getYoutubeUrl(videoId, tsNum) {
+                    const safeVideoId = encodeURIComponent(videoId || '');
+                    const safeTsNum = parseInt(tsNum) || 0;
+                    return `https://youtube.com/watch?v=${safeVideoId}&t=${safeTsNum}s`;
                 },
 
                 // タイムスタンプデータを取得するメソッド（検索・ソート対応）

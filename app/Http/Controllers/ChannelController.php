@@ -69,10 +69,18 @@ class ChannelController extends Controller
         // チャンネル取得
         $channel = Channel::where('handle', $id)->firstOrFail();
 
-        $perPage = $request->input('per_page', 50);
-        $currentPage = $request->input('page', 1);
-        $search = $request->input('search', '');
-        $sort = $request->input('sort', 'time_desc');
+        // バリデーション
+        $validated = $request->validate([
+            'per_page' => 'integer|min:1|max:100',
+            'page' => 'integer|min:1',
+            'search' => 'string|max:255',
+            'sort' => 'string|in:time_desc,time_asc,song_asc,archive_desc',
+        ]);
+
+        $perPage = $validated['per_page'] ?? 50;
+        $currentPage = $validated['page'] ?? 1;
+        $search = $validated['search'] ?? '';
+        $sort = $validated['sort'] ?? 'time_desc';
 
         // タイムスタンプ取得（チャンネルフィルタ付き）
         $query = TsItem::with(['archive'])
@@ -86,7 +94,9 @@ class ChannelController extends Controller
 
         // 検索条件の追加（タイムスタンプテキスト）
         if ($search) {
-            $query->where('text', 'like', "%{$search}%");
+            // LIKEの特殊文字をエスケープ
+            $escapedSearch = addcslashes($search, '%_\\');
+            $query->where('text', 'like', "%{$escapedSearch}%");
         }
 
         // 全件取得（ページネーション前）
