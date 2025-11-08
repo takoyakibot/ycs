@@ -37,6 +37,25 @@
                 manage-flg=""
                 alpine-parent="archiveListComponent"
             />
+
+            <!-- タブUI -->
+            <div class="mb-4">
+                <nav class="flex space-x-4 border-b border-gray-200 dark:border-gray-700">
+                    <button @click="activeTab = 'archives'"
+                            :class="activeTab === 'archives' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 dark:text-gray-400'"
+                            class="px-3 py-2 text-sm font-medium border-b-2 -mb-px hover:text-gray-700 dark:hover:text-gray-300">
+                        アーカイブ
+                    </button>
+                    <button @click="activeTab = 'timestamps'"
+                            :class="activeTab === 'timestamps' ? 'border-green-500 text-green-600 dark:text-green-400' : 'border-transparent text-gray-500 dark:text-gray-400'"
+                            class="px-3 py-2 text-sm font-medium border-b-2 -mb-px hover:text-gray-700 dark:hover:text-gray-300">
+                        タイムスタンプ
+                    </button>
+                </nav>
+            </div>
+
+            <!-- アーカイブタブ -->
+            <div x-show="activeTab === 'archives'">
             <x-pagination
                 :total="0"
                 :current-page="1"
@@ -81,6 +100,117 @@
                 :current-page="1"
                 :last-page="1"
             ></x-pagination>
+            </div>
+
+            <!-- タイムスタンプタブ -->
+            <div x-show="activeTab === 'timestamps'">
+                <!-- ページネーション（上） -->
+                <div class="flex justify-center gap-2 mb-4">
+                    <button @click="fetchTimestamps(1)"
+                            :disabled="timestamps.current_page <= 1"
+                            :class="timestamps.current_page <= 1 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-300 dark:hover:bg-gray-600'"
+                            class="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded text-sm">
+                        最初
+                    </button>
+                    <button @click="fetchTimestamps(timestamps.current_page - 1)"
+                            :disabled="timestamps.current_page <= 1"
+                            :class="timestamps.current_page <= 1 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-300 dark:hover:bg-gray-600'"
+                            class="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded text-sm">
+                        前へ
+                    </button>
+                    <span class="px-3 py-1 text-sm font-medium" x-text="`${timestamps.current_page || 1} / ${timestamps.last_page || 1}`"></span>
+                    <button @click="fetchTimestamps(timestamps.current_page + 1)"
+                            :disabled="timestamps.current_page >= timestamps.last_page"
+                            :class="timestamps.current_page >= timestamps.last_page ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-300 dark:hover:bg-gray-600'"
+                            class="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded text-sm">
+                        次へ
+                    </button>
+                    <button @click="fetchTimestamps(timestamps.last_page)"
+                            :disabled="timestamps.current_page >= timestamps.last_page"
+                            :class="timestamps.current_page >= timestamps.last_page ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-300 dark:hover:bg-gray-600'"
+                            class="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded text-sm">
+                        最後
+                    </button>
+                </div>
+
+                <!-- タイムスタンプ一覧 -->
+                <div class="flex flex-col gap-2">
+                    <template x-for="ts in (timestamps.data || [])" :key="ts.id">
+                        <div class="p-2 border rounded hover:bg-gray-50 dark:hover:bg-gray-700 dark:border-gray-600"
+                             :class="{'bg-green-50 dark:bg-green-900/20': ts.mapping?.song}">
+                            <div class="flex items-center gap-3">
+                                <!-- ステータスアイコン -->
+                                <div class="flex-shrink-0">
+                                    <template x-if="ts.mapping?.song">
+                                        <span class="text-green-600 dark:text-green-400" title="楽曲紐づけ済み">✓</span>
+                                    </template>
+                                    <template x-if="!ts.mapping">
+                                        <span class="text-gray-400" title="未紐づけ">○</span>
+                                    </template>
+                                </div>
+
+                                <!-- 楽曲情報 (max 40%) -->
+                                <div class="truncate flex-shrink-0"
+                                     style="max-width: 40%"
+                                     :title="ts.mapping?.song ? `${ts.mapping.song.title} / ${ts.mapping.song.artist}` : ts.text">
+                                    <template x-if="ts.mapping?.song">
+                                        <span>
+                                            <span class="font-medium text-sm" x-text="ts.mapping.song.title"></span>
+                                            <span class="text-gray-500 dark:text-gray-400 text-sm"> / </span>
+                                            <span class="text-gray-500 dark:text-gray-400 text-sm" x-text="ts.mapping.song.artist"></span>
+                                        </span>
+                                    </template>
+                                    <template x-if="!ts.mapping?.song">
+                                        <span class="text-sm text-gray-700 dark:text-gray-300" x-text="ts.text"></span>
+                                    </template>
+                                </div>
+
+                                <!-- アーカイブタイトル (flex-1) -->
+                                <div class="text-sm text-gray-600 dark:text-gray-400 truncate flex-1"
+                                     :title="ts.archive.title"
+                                     x-text="ts.archive.title">
+                                </div>
+
+                                <!-- 動画リンク -->
+                                <a :href="`https://youtube.com/watch?v=${ts.video_id}&t=${ts.ts_num}s`"
+                                   class="text-blue-500 hover:underline whitespace-nowrap tabular-nums text-sm"
+                                   target="_blank"
+                                   x-text="ts.ts_text + ' ↗'">
+                                </a>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- ページネーション（下） -->
+                <div class="flex justify-center gap-2 mt-4">
+                    <button @click="fetchTimestamps(1); document.querySelector('#archives').scrollIntoView({ behavior: 'auto' })"
+                            :disabled="timestamps.current_page <= 1"
+                            :class="timestamps.current_page <= 1 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-300 dark:hover:bg-gray-600'"
+                            class="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded text-sm">
+                        最初
+                    </button>
+                    <button @click="fetchTimestamps(timestamps.current_page - 1); document.querySelector('#archives').scrollIntoView({ behavior: 'auto' })"
+                            :disabled="timestamps.current_page <= 1"
+                            :class="timestamps.current_page <= 1 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-300 dark:hover:bg-gray-600'"
+                            class="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded text-sm">
+                        前へ
+                    </button>
+                    <span class="px-3 py-1 text-sm font-medium" x-text="`${timestamps.current_page || 1} / ${timestamps.last_page || 1}`"></span>
+                    <button @click="fetchTimestamps(timestamps.current_page + 1); document.querySelector('#archives').scrollIntoView({ behavior: 'auto' })"
+                            :disabled="timestamps.current_page >= timestamps.last_page"
+                            :class="timestamps.current_page >= timestamps.last_page ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-300 dark:hover:bg-gray-600'"
+                            class="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded text-sm">
+                        次へ
+                    </button>
+                    <button @click="fetchTimestamps(timestamps.last_page); document.querySelector('#archives').scrollIntoView({ behavior: 'auto' })"
+                            :disabled="timestamps.current_page >= timestamps.last_page"
+                            :class="timestamps.current_page >= timestamps.last_page ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-300 dark:hover:bg-gray-600'"
+                            class="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded text-sm">
+                        最後
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -90,6 +220,8 @@
             Alpine.data('archiveListComponent', () => ({
                 channel: window.channel || {},
                 archives: window.archives || {},
+                timestamps: {},
+                activeTab: 'archives',
                 isFiltered: false,
 
                 // ページのデータを取得するメソッド
@@ -117,6 +249,17 @@
 
                 firstUrl(params) {
                     return `/api/channels/${this.channel.handle}?page=1` + (params ? `&${params}` : '');
+                },
+
+                // タイムスタンプデータを取得するメソッド
+                async fetchTimestamps(page = 1) {
+                    try {
+                        const response = await fetch(`/api/channels/${this.channel.handle}/timestamps?page=${page}&per_page=50`);
+                        if (!response.ok) throw new Error('データ取得エラー');
+                        this.timestamps = await response.json();
+                    } catch (error) {
+                        console.error('タイムスタンプの取得に失敗しました:', error);
+                    }
                 },
 
                 // ページ遷移の処理
@@ -148,6 +291,13 @@
                     const paginationButtons = document.querySelectorAll('#paginationButtons button');
                     paginationButtons.forEach(button => {
                         button.addEventListener('click', this.handlePaginationClick.bind(this));
+                    });
+
+                    // タブ切り替え監視
+                    this.$watch('activeTab', (newTab) => {
+                        if (newTab === 'timestamps' && !this.timestamps.data) {
+                            this.fetchTimestamps();
+                        }
                     });
                 }
             }));
