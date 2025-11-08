@@ -72,6 +72,7 @@ class ChannelController extends Controller
         $perPage = $request->input('per_page', 50);
         $currentPage = $request->input('page', 1);
         $search = $request->input('search', '');
+        $sort = $request->input('sort', 'time_desc');
 
         // タイムスタンプ取得（チャンネルフィルタ付き）
         $query = TsItem::with(['archive'])
@@ -150,6 +151,32 @@ class ChannelController extends Controller
         $timestampsWithMapping = $timestampsWithMapping->filter(function ($ts) {
             return ! ($ts['mapping'] && $ts['mapping']['is_not_song']);
         })->values();
+
+        // ソート処理
+        switch ($sort) {
+            case 'time_asc':
+                $timestampsWithMapping = $timestampsWithMapping->sortBy('ts_num');
+                break;
+            case 'time_desc':
+                $timestampsWithMapping = $timestampsWithMapping->sortByDesc('ts_num');
+                break;
+            case 'song_asc':
+                $timestampsWithMapping = $timestampsWithMapping->sort(function ($a, $b) {
+                    // 楽曲紐づけ済みは楽曲名、未紐づけはテキストでソート
+                    $aTitle = $a['mapping']['song']['title'] ?? $a['text'] ?? '';
+                    $bTitle = $b['mapping']['song']['title'] ?? $b['text'] ?? '';
+
+                    return strcasecmp($aTitle, $bTitle);
+                });
+                break;
+            case 'archive_desc':
+                $timestampsWithMapping = $timestampsWithMapping->sortByDesc(function ($ts) {
+                    return $ts['archive']['published_at'];
+                });
+                break;
+        }
+
+        $timestampsWithMapping = $timestampsWithMapping->values();
 
         // 手動でページネーション
         $total = $timestampsWithMapping->count();
