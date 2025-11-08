@@ -48,24 +48,4 @@ class TsItem extends Model
     {
         return \App\Helpers\TextNormalizer::normalize($this->text);
     }
-
-    /**
-     * マッピングを通じて楽曲を取得
-     */
-    public function getSongAttribute()
-    {
-        $mapping = TimestampSongMapping::where('normalized_text', $this->normalized_text)->first();
-
-        return $mapping ? $mapping->song : null;
-    }
-
-    /**
-     * マッピングを通じて is_not_song フラグを取得
-     */
-    public function getIsNotSongAttribute()
-    {
-        $mapping = TimestampSongMapping::where('normalized_text', $this->normalized_text)->first();
-
-        return $mapping ? $mapping->is_not_song : false;
-    }
 }
