@@ -51,12 +51,21 @@ class SongController extends Controller
         // 全件取得（ページネーション前）
         $allTimestamps = $query->get();
 
+        // N+1クエリ問題を回避: 全タイムスタンプの正規化テキストを事前に取得
+        $normalizedTexts = $allTimestamps->map(function ($item) {
+            return TextNormalizer::normalize($item->text);
+        })->unique()->values()->toArray();
+
+        // 一度にすべてのマッピングを取得
+        $mappings = TimestampSongMapping::whereIn('normalized_text', $normalizedTexts)
+            ->with('song')
+            ->get()
+            ->keyBy('normalized_text');
+
         // 各タイムスタンプにマッピング情報を追加
-        $timestampsWithMapping = $allTimestamps->map(function ($item) {
+        $timestampsWithMapping = $allTimestamps->map(function ($item) use ($mappings) {
             $normalizedText = TextNormalizer::normalize($item->text);
-            $mapping = TimestampSongMapping::where('normalized_text', $normalizedText)
-                ->with('song')
-                ->first();
+            $mapping = $mappings->get($normalizedText);
 
             // モデルを配列に変換して、追加のフィールドをマージ
             $data = $item->toArray();
