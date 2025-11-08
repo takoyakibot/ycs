@@ -368,7 +368,7 @@ class TimestampNormalization {
     selectAll() {
         // 現在表示中のタイムスタンプを全て選択
         const timestampItems = document.querySelectorAll('#timestampsList > div');
-        timestampItems.forEach((item, index) => {
+        timestampItems.forEach((item) => {
             const checkbox = item.querySelector('input[type="checkbox"]');
             if (checkbox && !checkbox.checked) {
                 checkbox.click();
@@ -551,7 +551,7 @@ class TimestampNormalization {
                 ...options
             });
 
-            const { status, song, similar_songs, input, message } = response.data;
+            const { status, song, similar_songs, input } = response.data;
 
             if (status === 'exact_match' || status === 'existing_used') {
                 // 完全一致または既存マスタ使用
