@@ -378,16 +378,27 @@ class SongController extends Controller
         ]);
 
         DB::transaction(function () use ($validated) {
-            TimestampSongMapping::updateOrCreate(
-                ['normalized_text' => $validated['normalized_text']],
-                [
-                    'id' => Str::ulid(),
+            $mapping = TimestampSongMapping::where('normalized_text', $validated['normalized_text'])->first();
+
+            if ($mapping) {
+                // 既存レコードを更新（IDは変更しない）
+                $mapping->update([
                     'song_id' => $validated['song_id'],
                     'is_not_song' => false,
                     'is_manual' => true,
                     'confidence' => 1.0,
-                ]
-            );
+                ]);
+            } else {
+                // 新規レコードを作成
+                TimestampSongMapping::create([
+                    'id' => Str::ulid(),
+                    'normalized_text' => $validated['normalized_text'],
+                    'song_id' => $validated['song_id'],
+                    'is_not_song' => false,
+                    'is_manual' => true,
+                    'confidence' => 1.0,
+                ]);
+            }
         });
 
         return response()->json(['message' => 'タイムスタンプと楽曲を紐づけました。']);
@@ -403,16 +414,27 @@ class SongController extends Controller
         ]);
 
         DB::transaction(function () use ($validated) {
-            TimestampSongMapping::updateOrCreate(
-                ['normalized_text' => $validated['normalized_text']],
-                [
-                    'id' => Str::ulid(),
+            $mapping = TimestampSongMapping::where('normalized_text', $validated['normalized_text'])->first();
+
+            if ($mapping) {
+                // 既存レコードを更新（IDは変更しない）
+                $mapping->update([
                     'song_id' => null,
                     'is_not_song' => true,
                     'is_manual' => true,
                     'confidence' => 1.0,
-                ]
-            );
+                ]);
+            } else {
+                // 新規レコードを作成
+                TimestampSongMapping::create([
+                    'id' => Str::ulid(),
+                    'normalized_text' => $validated['normalized_text'],
+                    'song_id' => null,
+                    'is_not_song' => true,
+                    'is_manual' => true,
+                    'confidence' => 1.0,
+                ]);
+            }
         });
 
         return response()->json(['message' => '楽曲ではないとマークしました。']);
