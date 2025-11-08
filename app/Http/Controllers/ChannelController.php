@@ -71,6 +71,7 @@ class ChannelController extends Controller
 
         $perPage = $request->input('per_page', 50);
         $currentPage = $request->input('page', 1);
+        $search = $request->input('search', '');
 
         // タイムスタンプ取得（チャンネルフィルタ付き）
         $query = TsItem::with(['archive'])
@@ -81,6 +82,11 @@ class ChannelController extends Controller
             ->whereNotNull('text')
             ->where('text', '!=', '')
             ->where('is_display', 1);
+
+        // 検索条件の追加（タイムスタンプテキスト）
+        if ($search) {
+            $query->where('text', 'like', "%{$search}%");
+        }
 
         // 全件取得（ページネーション前）
         $allTimestamps = $query->get();
@@ -120,6 +126,25 @@ class ChannelController extends Controller
                 ] : null,
             ];
         });
+
+        // 楽曲名・アーティスト名での検索フィルタリング
+        if ($search) {
+            $timestampsWithMapping = $timestampsWithMapping->filter(function ($ts) use ($search) {
+                // タイムスタンプテキストで一致（既にDBレベルでフィルタ済みだが念のため）
+                if (stripos($ts['text'], $search) !== false) {
+                    return true;
+                }
+
+                // 楽曲紐づけ済みの場合は楽曲名・アーティスト名でも検索
+                if ($ts['mapping'] && $ts['mapping']['song']) {
+                    $songText = $ts['mapping']['song']['title'].' '.$ts['mapping']['song']['artist'];
+
+                    return stripos($songText, $search) !== false;
+                }
+
+                return false;
+            });
+        }
 
         // 「楽曲ではない」タイムスタンプを除外
         $timestampsWithMapping = $timestampsWithMapping->filter(function ($ts) {
