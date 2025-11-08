@@ -26,10 +26,18 @@ class SongController extends Controller
      */
     public function fetchTimestamps(Request $request)
     {
-        $perPage = $request->input('per_page', 50);
-        $search = $request->input('search', '');
-        $unlinkedOnly = $request->boolean('unlinked_only', false);
-        $currentPage = $request->input('page', 1);
+        // バリデーション
+        $validated = $request->validate([
+            'per_page' => 'integer|min:1|max:100',
+            'page' => 'integer|min:1',
+            'search' => 'string|max:255',
+            'unlinked_only' => 'boolean',
+        ]);
+
+        $perPage = $validated['per_page'] ?? 50;
+        $search = $validated['search'] ?? '';
+        $unlinkedOnly = $validated['unlinked_only'] ?? false;
+        $currentPage = $validated['page'] ?? 1;
 
         $query = TsItem::with(['archive'])
             ->whereNotNull('text')
@@ -45,7 +53,9 @@ class SongController extends Controller
 
         // 検索条件
         if ($search) {
-            $query->where('text', 'like', "%{$search}%");
+            // LIKEの特殊文字をエスケープ
+            $escapedSearch = addcslashes($search, '%_\\');
+            $query->where('text', 'like', "%{$escapedSearch}%");
         }
 
         // 全件取得（ページネーション前）
@@ -128,14 +138,21 @@ class SongController extends Controller
      */
     public function fetchSongs(Request $request)
     {
-        $search = $request->input('search', '');
+        // バリデーション
+        $validated = $request->validate([
+            'search' => 'string|max:255',
+        ]);
+
+        $search = $validated['search'] ?? '';
 
         $query = Song::query();
 
         if ($search) {
-            $query->where(function ($q) use ($search) {
-                $q->where('title', 'like', "%{$search}%")
-                    ->orWhere('artist', 'like', "%{$search}%");
+            // LIKEの特殊文字をエスケープ
+            $escapedSearch = addcslashes($search, '%_\\');
+            $query->where(function ($q) use ($escapedSearch) {
+                $q->where('title', 'like', "%{$escapedSearch}%")
+                    ->orWhere('artist', 'like', "%{$escapedSearch}%");
             });
         }
 
