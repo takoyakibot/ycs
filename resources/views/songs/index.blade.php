@@ -102,8 +102,7 @@
                         <!-- Spotify選択楽曲情報表示 -->
                         <div id="spotifySelected" class="mb-3 p-3 bg-green-50 dark:bg-gray-700 rounded hidden">
                             <div class="text-sm text-gray-600 dark:text-gray-400 mb-1">Spotify選択楽曲</div>
-                            <div id="spotifySelectedTitle" class="font-medium"></div>
-                            <div id="spotifySelectedArtist" class="text-xs text-gray-500 dark:text-gray-400 mt-1"></div>
+                            <div id="spotifySelectedInfo" class="text-sm truncate" title=""></div>
                         </div>
 
                         <!-- タブ -->
