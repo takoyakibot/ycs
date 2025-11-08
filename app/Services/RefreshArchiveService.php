@@ -28,25 +28,61 @@ class RefreshArchiveService
 
     public function refreshArchives(Channel $channel): int
     {
-        $count = DB::transaction(function () use ($channel): int {
-            // 1.archivesとts_itemsの取得および整形
+        // 外部API呼び出しを全てトランザクション外で事前に実行
+        // 1. archivesとts_itemsの取得および整形
+        try {
+            $rtn_archives = $this->youtubeService
+                ->getArchivesAndTsItems($channel->channel_id);
+        } catch (Exception $e) {
+            error_log($e->getMessage());
+            throw new Exception('youtubeとの接続でエラーが発生しました');
+        }
+
+        // そのままDBに取り込めるように、ts_itemsは別のリストにまとめて、archivesからは削除する
+        $rtn_ts_items = [];
+        foreach ($rtn_archives as &$archive) {
+            foreach ($archive['ts_items'] as $ts_item) {
+                $rtn_ts_items[] = $ts_item;
+            }
+            unset($archive['description']);
+            unset($archive['ts_items']);
+        }
+
+        // コメントから取得が必要なvideo_idを事前に特定し、API呼び出しを実行
+        $comment_ts_items_map = [];
+        $results = DB::select("
+            SELECT t1.video_id
+            FROM archives t1
+            WHERE
+                NOT EXISTS (
+                    SELECT 1
+                    FROM ts_items t2
+                    WHERE t2.video_id = t1.video_id
+                    AND t2.type = '2'
+                )
+                AND EXISTS (
+                    SELECT 1
+                    FROM change_list t3
+                    WHERE t3.video_id = t1.video_id
+                    AND t3.comment_id IS NOT NULL
+                    AND t3.comment_id <> t3.video_id
+                )
+                AND t1.channel_id = ?
+        ", [$channel->channel_id]);
+
+        foreach ($results as $result) {
+            $video_id = $result->video_id;
             try {
-                $rtn_archives = $this->youtubeService
-                    ->getArchivesAndTsItems($channel->channel_id);
+                // API呼び出しのみ実行し、結果を保存
+                $comment_ts_items_map[$video_id] = $this->youtubeService->getTimeStampsFromComments($video_id);
             } catch (Exception $e) {
                 error_log($e->getMessage());
                 throw new Exception('youtubeとの接続でエラーが発生しました');
             }
-            // そのままDBに取り込めるように、ts_itemsは別のリストにまとめて、archivesからは削除する
-            $rtn_ts_items = [];
-            foreach ($rtn_archives as &$archive) {
-                foreach ($archive['ts_items'] as $ts_item) {
-                    $rtn_ts_items[] = $ts_item;
-                }
-                unset($archive['description']);
-                unset($archive['ts_items']);
-            }
+        }
 
+        // 全てのDB操作を1つのトランザクションで実行（原子性を保証）
+        DB::transaction(function () use ($channel, $rtn_archives, $rtn_ts_items, $comment_ts_items_map) {
             // 2.一度関連情報を削除（cascadeでTsItemsも消える）
             Archive::where('channel_id', $channel->channel_id)->delete();
 
@@ -64,39 +100,14 @@ class RefreshArchiveService
                     DB::table('ts_items')->insert($chunk);
                 }
             }
-            // 以下でSQLを実行
-            // 4.表示非表示の履歴情報を反映させつつ不要な情報を削除していく
-            // 4.1.履歴でコメントを取得しているが現時点ではコメントがない場合、コメントを取得
-            // 4.1.1.ts_itemsにcommentがない、かつchangeListにcommentが存在するvideo_idを取得
-            $results = DB::select("
-                SELECT t1.video_id
-                FROM archives t1
-                WHERE
-                    NOT EXISTS (
-                        SELECT 1
-                        FROM ts_items t2
-                        WHERE t2.video_id = t1.video_id
-                        AND t2.type = '2'
-                    )
-                    AND EXISTS (
-                        SELECT 1
-                        FROM change_list t3
-                        WHERE t3.video_id = t1.video_id
-                        AND t3.comment_id IS NOT NULL
-                        AND t3.comment_id <> t3.video_id
-                    )
-                    AND t1.channel_id = ?
-            ", [$channel->channel_id]);
 
-            // 4.1.2.取得したvideo_id（コメントを取得する必要のあるアーカイブ）について、コメントを洗替え
-            // cascadeで消えてるはずなので登録だけでいいような気もするが、ほか処理でも使うので冗長さは目を瞑る
-            foreach ($results as $result) {
-                $video_id = $result->video_id;
-                try {
-                    $this->refreshTimeStampsFromComments($video_id);
-                } catch (Exception $e) {
-                    error_log($e->getMessage());
-                    throw new Exception('youtubeとの接続でエラーが発生しました');
+            // 4.1.2.コメントから取得したts_itemsを登録
+            foreach ($comment_ts_items_map as $video_id => $ts_items) {
+                TsItem::where('video_id', $video_id)
+                    ->where('type', '2')
+                    ->delete();
+                if ($ts_items) {
+                    DB::table('ts_items')->insert($ts_items);
                 }
             }
 
@@ -147,11 +158,9 @@ class RefreshArchiveService
                         )
                     )
             ', [$channel->channel_id]);
-
-            return count($rtn_archives);
         });
 
-        return $count;
+        return count($rtn_archives);
     }
 
     /**
