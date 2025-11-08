@@ -104,28 +104,45 @@
 
             <!-- タイムスタンプタブ -->
             <div x-show="activeTab === 'timestamps'">
+                <!-- 検索エリア -->
+                <div class="mb-4">
+                    <div class="flex gap-2">
+                        <input type="text"
+                               x-model="searchQuery"
+                               placeholder="楽曲名・アーティスト名・タイムスタンプで検索..."
+                               class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                        <button @click="searchQuery = ''"
+                                class="px-3 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 text-sm">
+                            クリア
+                        </button>
+                    </div>
+                    <div class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                        <span x-text="timestamps.total !== undefined ? `${timestamps.total}件のタイムスタンプ` : ''"></span>
+                    </div>
+                </div>
+
                 <!-- ページネーション（上） -->
                 <div class="flex justify-center gap-2 mb-4">
-                    <button @click="fetchTimestamps(1)"
+                    <button @click="fetchTimestamps(1, searchQuery)"
                             :disabled="timestamps.current_page <= 1"
                             :class="timestamps.current_page <= 1 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-300 dark:hover:bg-gray-600'"
                             class="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded text-sm">
                         最初
                     </button>
-                    <button @click="fetchTimestamps(timestamps.current_page - 1)"
+                    <button @click="fetchTimestamps(timestamps.current_page - 1, searchQuery)"
                             :disabled="timestamps.current_page <= 1"
                             :class="timestamps.current_page <= 1 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-300 dark:hover:bg-gray-600'"
                             class="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded text-sm">
                         前へ
                     </button>
                     <span class="px-3 py-1 text-sm font-medium" x-text="`${timestamps.current_page || 1} / ${timestamps.last_page || 1}`"></span>
-                    <button @click="fetchTimestamps(timestamps.current_page + 1)"
+                    <button @click="fetchTimestamps(timestamps.current_page + 1, searchQuery)"
                             :disabled="timestamps.current_page >= timestamps.last_page"
                             :class="timestamps.current_page >= timestamps.last_page ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-300 dark:hover:bg-gray-600'"
                             class="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded text-sm">
                         次へ
                     </button>
-                    <button @click="fetchTimestamps(timestamps.last_page)"
+                    <button @click="fetchTimestamps(timestamps.last_page, searchQuery)"
                             :disabled="timestamps.current_page >= timestamps.last_page"
                             :class="timestamps.current_page >= timestamps.last_page ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-300 dark:hover:bg-gray-600'"
                             class="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded text-sm">
@@ -135,6 +152,13 @@
 
                 <!-- タイムスタンプ一覧 -->
                 <div class="flex flex-col gap-2">
+                    <!-- 空状態メッセージ -->
+                    <template x-if="timestamps.data && timestamps.data.length === 0">
+                        <div class="text-center py-8 text-gray-500 dark:text-gray-400">
+                            <p>タイムスタンプが見つかりませんでした</p>
+                        </div>
+                    </template>
+
                     <template x-for="ts in (timestamps.data || [])" :key="ts.id">
                         <div class="p-2 border rounded hover:bg-gray-50 dark:hover:bg-gray-700 dark:border-gray-600"
                              :class="{'bg-green-50 dark:bg-green-900/20': ts.mapping?.song}">
@@ -184,26 +208,26 @@
 
                 <!-- ページネーション（下） -->
                 <div class="flex justify-center gap-2 mt-4">
-                    <button @click="fetchTimestamps(1); document.querySelector('#archives').scrollIntoView({ behavior: 'auto' })"
+                    <button @click="fetchTimestamps(1, searchQuery); document.querySelector('#archives').scrollIntoView({ behavior: 'auto' })"
                             :disabled="timestamps.current_page <= 1"
                             :class="timestamps.current_page <= 1 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-300 dark:hover:bg-gray-600'"
                             class="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded text-sm">
                         最初
                     </button>
-                    <button @click="fetchTimestamps(timestamps.current_page - 1); document.querySelector('#archives').scrollIntoView({ behavior: 'auto' })"
+                    <button @click="fetchTimestamps(timestamps.current_page - 1, searchQuery); document.querySelector('#archives').scrollIntoView({ behavior: 'auto' })"
                             :disabled="timestamps.current_page <= 1"
                             :class="timestamps.current_page <= 1 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-300 dark:hover:bg-gray-600'"
                             class="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded text-sm">
                         前へ
                     </button>
                     <span class="px-3 py-1 text-sm font-medium" x-text="`${timestamps.current_page || 1} / ${timestamps.last_page || 1}`"></span>
-                    <button @click="fetchTimestamps(timestamps.current_page + 1); document.querySelector('#archives').scrollIntoView({ behavior: 'auto' })"
+                    <button @click="fetchTimestamps(timestamps.current_page + 1, searchQuery); document.querySelector('#archives').scrollIntoView({ behavior: 'auto' })"
                             :disabled="timestamps.current_page >= timestamps.last_page"
                             :class="timestamps.current_page >= timestamps.last_page ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-300 dark:hover:bg-gray-600'"
                             class="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded text-sm">
                         次へ
                     </button>
-                    <button @click="fetchTimestamps(timestamps.last_page); document.querySelector('#archives').scrollIntoView({ behavior: 'auto' })"
+                    <button @click="fetchTimestamps(timestamps.last_page, searchQuery); document.querySelector('#archives').scrollIntoView({ behavior: 'auto' })"
                             :disabled="timestamps.current_page >= timestamps.last_page"
                             :class="timestamps.current_page >= timestamps.last_page ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-300 dark:hover:bg-gray-600'"
                             class="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded text-sm">
@@ -222,6 +246,9 @@
                 archives: window.archives || {},
                 timestamps: {},
                 activeTab: 'archives',
+                searchQuery: '',
+                searchTimeout: null,
+                currentTimestampPage: 1,
                 isFiltered: false,
 
                 // ページのデータを取得するメソッド
@@ -251,15 +278,57 @@
                     return `/api/channels/${this.channel.handle}?page=1` + (params ? `&${params}` : '');
                 },
 
-                // タイムスタンプデータを取得するメソッド
-                async fetchTimestamps(page = 1) {
+                // タイムスタンプデータを取得するメソッド（検索対応）
+                async fetchTimestamps(page = 1, search = '') {
                     try {
-                        const response = await fetch(`/api/channels/${this.channel.handle}/timestamps?page=${page}&per_page=50`);
+                        const params = new URLSearchParams({
+                            page: page,
+                            per_page: 50
+                        });
+
+                        if (search) {
+                            params.set('search', search);
+                        }
+
+                        const response = await fetch(`/api/channels/${this.channel.handle}/timestamps?${params}`);
                         if (!response.ok) throw new Error('データ取得エラー');
                         this.timestamps = await response.json();
+                        this.currentTimestampPage = page;
+                        this.updateURL();
                     } catch (error) {
                         console.error('タイムスタンプの取得に失敗しました:', error);
                     }
+                },
+
+                // 検索実行
+                searchTimestamps() {
+                    this.currentTimestampPage = 1;
+                    this.fetchTimestamps(1, this.searchQuery);
+                },
+
+                // URLパラメータを更新
+                updateURL() {
+                    const params = new URLSearchParams();
+
+                    // タブ
+                    if (this.activeTab !== 'archives') {
+                        params.set('view', this.activeTab);
+                    }
+
+                    // 検索キーワード
+                    if (this.searchQuery) {
+                        params.set('search', this.searchQuery);
+                    }
+
+                    // ページ番号
+                    const page = this.activeTab === 'timestamps' ? this.currentTimestampPage : this.archives.current_page;
+                    if (page && page > 1) {
+                        params.set('page', page);
+                    }
+
+                    const paramString = params.toString();
+                    const newURL = paramString ? `${window.location.pathname}?${paramString}` : window.location.pathname;
+                    window.history.pushState({}, '', newURL);
                 },
 
                 // ページ遷移の処理
@@ -278,8 +347,21 @@
 
                 // Alpine.js初期化後にイベントリスナーを設定
                 init() {
-                    // 初回呼び出し
-                    this.fetchData(this.firstUrl());
+                    // URLパラメータを読み取って初期化
+                    const params = new URLSearchParams(window.location.search);
+                    const view = params.get('view');
+                    const search = params.get('search');
+                    const page = parseInt(params.get('page')) || 1;
+
+                    if (view === 'timestamps') {
+                        this.activeTab = 'timestamps';
+                        this.searchQuery = search || '';
+                        this.currentTimestampPage = page;
+                        this.fetchTimestamps(page, this.searchQuery);
+                    } else {
+                        // 初回呼び出し（アーカイブタブ）
+                        this.fetchData(this.firstUrl());
+                    }
 
                     // 検索コンポーネントのイベントのリスナーを定義
                     this.$el.addEventListener('search-results', (e) => {
@@ -296,7 +378,32 @@
                     // タブ切り替え監視
                     this.$watch('activeTab', (newTab) => {
                         if (newTab === 'timestamps' && !this.timestamps.data) {
-                            this.fetchTimestamps();
+                            this.fetchTimestamps(1, this.searchQuery);
+                        }
+                        this.updateURL();
+                    });
+
+                    // 検索キーワード監視（debounce）
+                    this.$watch('searchQuery', () => {
+                        clearTimeout(this.searchTimeout);
+                        this.searchTimeout = setTimeout(() => {
+                            this.searchTimestamps();
+                        }, 300);
+                    });
+
+                    // ブラウザの戻る/進むボタン対応
+                    window.addEventListener('popstate', () => {
+                        const params = new URLSearchParams(window.location.search);
+                        const view = params.get('view');
+                        const search = params.get('search');
+                        const page = parseInt(params.get('page')) || 1;
+
+                        this.activeTab = view || 'archives';
+
+                        if (view === 'timestamps') {
+                            this.searchQuery = search || '';
+                            this.currentTimestampPage = page;
+                            this.fetchTimestamps(page, search || '');
                         }
                     });
                 }
