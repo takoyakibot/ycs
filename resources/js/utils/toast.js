@@ -12,7 +12,7 @@ class ToastManager {
         // Toast表示用のコンテナを作成
         this.container = document.createElement('div');
         this.container.id = 'toast-container';
-        this.container.className = 'fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none';
+        this.container.className = 'fixed top-4 right-4 z-[60] flex flex-col gap-2 pointer-events-none';
         document.body.appendChild(this.container);
     }
 
