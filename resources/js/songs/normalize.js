@@ -439,8 +439,21 @@ class TimestampNormalization {
         const spotifySelectedDiv = document.getElementById('spotifySelected');
         if (this.selectedSpotifyTrack) {
             spotifySelectedDiv.classList.remove('hidden');
-            document.getElementById('spotifySelectedTitle').textContent = this.selectedSpotifyTrack.name;
-            document.getElementById('spotifySelectedArtist').textContent = this.selectedSpotifyTrack.artists.map(a => a.name).join(', ');
+            const spotifyInfoDiv = document.getElementById('spotifySelectedInfo');
+            spotifyInfoDiv.textContent = '';  // クリア
+
+            const titleSpan = document.createElement('span');
+            titleSpan.className = 'font-medium';
+            titleSpan.textContent = this.selectedSpotifyTrack.name;
+
+            const artistNames = this.selectedSpotifyTrack.artists.map(a => a.name).join(', ');
+            const separatorSpan = document.createElement('span');
+            separatorSpan.className = 'text-gray-500 dark:text-gray-400';
+            separatorSpan.textContent = ' / ' + artistNames;
+
+            spotifyInfoDiv.appendChild(titleSpan);
+            spotifyInfoDiv.appendChild(separatorSpan);
+            spotifyInfoDiv.title = `${this.selectedSpotifyTrack.name} / ${artistNames}`;
         } else {
             spotifySelectedDiv.classList.add('hidden');
         }
@@ -489,16 +502,23 @@ class TimestampNormalization {
                         : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
                 }`;
 
-                const title = document.createElement('div');
-                title.className = 'font-medium text-sm';
-                title.textContent = track.name;
+                const songInfo = document.createElement('div');
+                songInfo.className = 'text-sm truncate';
 
-                const artist = document.createElement('div');
-                artist.className = 'text-xs text-gray-500 dark:text-gray-400';
-                artist.textContent = track.artists.map(a => a.name).join(', ');
+                const titleSpan = document.createElement('span');
+                titleSpan.className = 'font-medium';
+                titleSpan.textContent = track.name;
 
-                div.appendChild(title);
-                div.appendChild(artist);
+                const artistNames = track.artists.map(a => a.name).join(', ');
+                const separatorSpan = document.createElement('span');
+                separatorSpan.className = 'text-gray-500 dark:text-gray-400';
+                separatorSpan.textContent = ' / ' + artistNames;
+
+                songInfo.appendChild(titleSpan);
+                songInfo.appendChild(separatorSpan);
+                songInfo.title = `${track.name} / ${artistNames}`;
+
+                div.appendChild(songInfo);
 
                 div.addEventListener('click', () => {
                     this.selectSpotifyTrack(track);
@@ -783,16 +803,22 @@ class TimestampNormalization {
             const contentDiv = document.createElement('div');
             contentDiv.className = 'flex-1';
 
-            const title = document.createElement('div');
-            title.className = 'font-medium text-sm';
-            title.textContent = song.title;
+            const songInfo = document.createElement('div');
+            songInfo.className = 'text-sm truncate';
 
-            const artist = document.createElement('div');
-            artist.className = 'text-xs text-gray-500 dark:text-gray-400';
-            artist.textContent = song.artist;
+            const titleSpan = document.createElement('span');
+            titleSpan.className = 'font-medium';
+            titleSpan.textContent = song.title;
 
-            contentDiv.appendChild(title);
-            contentDiv.appendChild(artist);
+            const separatorSpan = document.createElement('span');
+            separatorSpan.className = 'text-gray-500 dark:text-gray-400';
+            separatorSpan.textContent = ' / ' + song.artist;
+
+            songInfo.appendChild(titleSpan);
+            songInfo.appendChild(separatorSpan);
+            songInfo.title = `${song.title} / ${song.artist}`;
+
+            contentDiv.appendChild(songInfo);
 
             // 削除ボタン
             const deleteBtn = document.createElement('button');
