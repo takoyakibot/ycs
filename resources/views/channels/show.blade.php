@@ -336,7 +336,16 @@
                         const response = await fetch(`/api/channels/${this.channel.handle}/timestamps?${params}`);
                         if (!response.ok) throw new Error('タイムスタンプの取得に失敗しました');
 
-                        this.timestamps = await response.json();
+                        const data = await response.json();
+
+                        // ページ番号を数値として保存（文字列連結バグの防止）
+                        const parsedPage = parseInt(data.current_page, 10);
+                        data.current_page = Number.isNaN(parsedPage) ? 1 : parsedPage;
+
+                        const parsedLastPage = parseInt(data.last_page, 10);
+                        data.last_page = Number.isNaN(parsedLastPage) ? 1 : parsedLastPage;
+
+                        this.timestamps = data;
                         this.currentTimestampPage = page;
                         this.updateURL();
                     } catch (error) {
