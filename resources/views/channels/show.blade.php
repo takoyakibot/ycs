@@ -116,8 +116,22 @@
                             クリア
                         </button>
                     </div>
-                    <div class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                        <span x-text="timestamps.total !== undefined ? `${timestamps.total}件のタイムスタンプ` : ''"></span>
+                    <div class="mt-2 flex justify-between items-center">
+                        <div class="text-sm text-gray-600 dark:text-gray-400">
+                            <span x-show="searchQuery">検索結果: </span>
+                            <span x-text="timestamps.total !== undefined ? `${timestamps.total}件` : ''"></span>
+                        </div>
+                        <div class="flex gap-2 items-center">
+                            <label class="text-xs sm:text-sm text-gray-600 dark:text-gray-400">並び替え:</label>
+                            <select x-model="timestampSort"
+                                    @change="fetchTimestamps(1, searchQuery)"
+                                    class="px-2 py-1 sm:px-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="time_desc">時刻↓</option>
+                                <option value="time_asc">時刻↑</option>
+                                <option value="song_asc">楽曲名</option>
+                                <option value="archive_desc">公開日</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
 
@@ -150,21 +164,37 @@
                     </button>
                 </div>
 
+                <!-- エラー表示 -->
+                <div x-show="error" class="bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-800 rounded p-4 mb-4">
+                    <p class="text-red-800 dark:text-red-200" x-text="error"></p>
+                </div>
+
+                <!-- ローディング表示 -->
+                <div x-show="loading" class="flex justify-center items-center py-8">
+                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                    <span class="ml-2 text-gray-600 dark:text-gray-400">読み込み中...</span>
+                </div>
+
                 <!-- タイムスタンプ一覧 -->
-                <div class="flex flex-col gap-2">
+                <div x-show="!loading" class="flex flex-col gap-2">
                     <!-- 空状態メッセージ -->
                     <template x-if="timestamps.data && timestamps.data.length === 0">
                         <div class="text-center py-8 text-gray-500 dark:text-gray-400">
-                            <p>タイムスタンプが見つかりませんでした</p>
+                            <template x-if="searchQuery">
+                                <p>「<span x-text="searchQuery"></span>」に一致するタイムスタンプが見つかりませんでした</p>
+                            </template>
+                            <template x-if="!searchQuery">
+                                <p>タイムスタンプが見つかりませんでした</p>
+                            </template>
                         </div>
                     </template>
 
                     <template x-for="ts in (timestamps.data || [])" :key="ts.id">
-                        <div class="p-2 border rounded hover:bg-gray-50 dark:hover:bg-gray-700 dark:border-gray-600"
+                        <div class="p-2 border rounded hover:bg-gray-50 dark:hover:bg-gray-700 active:bg-gray-100 dark:active:bg-gray-600 dark:border-gray-600 transition-colors"
                              :class="{'bg-green-50 dark:bg-green-900/20': ts.mapping?.song}">
-                            <div class="flex items-center gap-3">
+                            <div class="flex items-center gap-2 sm:gap-3">
                                 <!-- ステータスアイコン -->
-                                <div class="flex-shrink-0">
+                                <div class="flex-shrink-0 text-xs sm:text-base">
                                     <template x-if="ts.mapping?.song">
                                         <span class="text-green-600 dark:text-green-400" title="楽曲紐づけ済み">✓</span>
                                     </template>
@@ -173,31 +203,30 @@
                                     </template>
                                 </div>
 
-                                <!-- 楽曲情報 (max 40%) -->
-                                <div class="truncate flex-shrink-0"
-                                     style="max-width: 40%"
+                                <!-- 楽曲情報: モバイル30%, タブレット以上40% -->
+                                <div class="truncate flex-shrink-0 w-[30%] sm:w-[40%]"
                                      :title="ts.mapping?.song ? `${ts.mapping.song.title} / ${ts.mapping.song.artist}` : ts.text">
                                     <template x-if="ts.mapping?.song">
                                         <span>
-                                            <span class="font-medium text-sm" x-text="ts.mapping.song.title"></span>
-                                            <span class="text-gray-500 dark:text-gray-400 text-sm"> / </span>
-                                            <span class="text-gray-500 dark:text-gray-400 text-sm" x-text="ts.mapping.song.artist"></span>
+                                            <span class="font-medium text-xs sm:text-sm" x-text="ts.mapping.song.title"></span>
+                                            <span class="text-gray-500 dark:text-gray-400 text-xs sm:text-sm"> / </span>
+                                            <span class="text-gray-500 dark:text-gray-400 text-xs sm:text-sm" x-text="ts.mapping.song.artist"></span>
                                         </span>
                                     </template>
                                     <template x-if="!ts.mapping?.song">
-                                        <span class="text-sm text-gray-700 dark:text-gray-300" x-text="ts.text"></span>
+                                        <span class="text-xs sm:text-sm text-gray-700 dark:text-gray-300" x-text="ts.text"></span>
                                     </template>
                                 </div>
 
-                                <!-- アーカイブタイトル (flex-1) -->
-                                <div class="text-sm text-gray-600 dark:text-gray-400 truncate flex-1"
+                                <!-- アーカイブタイトル: モバイルでは非表示 -->
+                                <div class="hidden sm:block text-sm text-gray-600 dark:text-gray-400 truncate flex-1"
                                      :title="ts.archive.title"
                                      x-text="ts.archive.title">
                                 </div>
 
-                                <!-- 動画リンク -->
+                                <!-- 動画リンク: モバイルではコンパクト -->
                                 <a :href="`https://youtube.com/watch?v=${ts.video_id}&t=${ts.ts_num}s`"
-                                   class="text-blue-500 hover:underline whitespace-nowrap tabular-nums text-sm"
+                                   class="text-blue-500 hover:underline whitespace-nowrap tabular-nums text-xs sm:text-sm"
                                    target="_blank"
                                    x-text="ts.ts_text + ' ↗'">
                                 </a>
@@ -249,6 +278,9 @@
                 searchQuery: '',
                 searchTimeout: null,
                 currentTimestampPage: 1,
+                timestampSort: 'time_desc',
+                loading: false,
+                error: null,
                 isFiltered: false,
 
                 // ページのデータを取得するメソッド
@@ -278,12 +310,16 @@
                     return `/api/channels/${this.channel.handle}?page=1` + (params ? `&${params}` : '');
                 },
 
-                // タイムスタンプデータを取得するメソッド（検索対応）
+                // タイムスタンプデータを取得するメソッド（検索・ソート対応）
                 async fetchTimestamps(page = 1, search = '') {
                     try {
+                        this.loading = true;
+                        this.error = null;
+
                         const params = new URLSearchParams({
                             page: page,
-                            per_page: 50
+                            per_page: 50,
+                            sort: this.timestampSort
                         });
 
                         if (search) {
@@ -291,12 +327,16 @@
                         }
 
                         const response = await fetch(`/api/channels/${this.channel.handle}/timestamps?${params}`);
-                        if (!response.ok) throw new Error('データ取得エラー');
+                        if (!response.ok) throw new Error('タイムスタンプの取得に失敗しました');
+
                         this.timestamps = await response.json();
                         this.currentTimestampPage = page;
                         this.updateURL();
                     } catch (error) {
                         console.error('タイムスタンプの取得に失敗しました:', error);
+                        this.error = error.message;
+                    } finally {
+                        this.loading = false;
                     }
                 },
 
@@ -318,6 +358,11 @@
                     // 検索キーワード
                     if (this.searchQuery) {
                         params.set('search', this.searchQuery);
+                    }
+
+                    // ソート（デフォルト以外の場合のみ）
+                    if (this.timestampSort && this.timestampSort !== 'time_desc') {
+                        params.set('sort', this.timestampSort);
                     }
 
                     // ページ番号
@@ -351,11 +396,13 @@
                     const params = new URLSearchParams(window.location.search);
                     const view = params.get('view');
                     const search = params.get('search');
+                    const sort = params.get('sort');
                     const page = parseInt(params.get('page')) || 1;
 
                     if (view === 'timestamps') {
                         this.activeTab = 'timestamps';
                         this.searchQuery = search || '';
+                        this.timestampSort = sort || 'time_desc';
                         this.currentTimestampPage = page;
                         this.fetchTimestamps(page, this.searchQuery);
                     } else {
@@ -396,12 +443,14 @@
                         const params = new URLSearchParams(window.location.search);
                         const view = params.get('view');
                         const search = params.get('search');
+                        const sort = params.get('sort');
                         const page = parseInt(params.get('page')) || 1;
 
                         this.activeTab = view || 'archives';
 
                         if (view === 'timestamps') {
                             this.searchQuery = search || '';
+                            this.timestampSort = sort || 'time_desc';
                             this.currentTimestampPage = page;
                             this.fetchTimestamps(page, search || '');
                         }
