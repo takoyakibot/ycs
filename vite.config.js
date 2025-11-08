@@ -11,6 +11,7 @@ export default defineConfig(() => {
                     'resources/js/show.js',
                     'resources/js/manage/archives.js',
                     'resources/js/manage/channels.js',
+                    'resources/js/channels/archive-list.js',
                 ],
                 refresh: true,
             }),
