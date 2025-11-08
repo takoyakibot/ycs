@@ -1,240 +1,214 @@
+import { escapeHTML } from '../utils.js';
+
 /**
- * アーカイブ一覧とタイムスタンプ管理
+ * アーカイブ一覧とタイムスタンプ管理コンポーネント
+ * Alpine.jsコンポーネント登録
  */
-class ArchiveListComponent {
-    constructor() {
-        // 状態管理
-        this.channel = window.channel || {};
-        this.archives = window.archives || {};
-        this.timestamps = {};
-        this.activeTab = 'archives';
-        this.searchQuery = '';
-        this.searchTimeout = null;
-        this.currentTimestampPage = 1;
-        this.timestampSort = 'time_desc';
-        this.loading = false;
-        this.error = null;
-        this.isFiltered = false;
-    }
+function registerArchiveListComponent() {
+    if (typeof Alpine !== 'undefined') {
+        Alpine.data('archiveListComponent', function() {
+            return {
+                // 状態管理
+                channel: window.channel || {},
+                archives: window.archives || {},
+                timestamps: {},
+                activeTab: 'archives',
+                searchQuery: '',
+                searchTimeout: null,
+                currentTimestampPage: 1,
+                timestampSort: 'time_desc',
+                loading: false,
+                error: null,
+                isFiltered: false,
 
-    /**
-     * ページのデータを取得
-     */
-    async fetchData(url) {
-        try {
-            const response = await fetch(url);
-            if (!response.ok) throw new Error('データ取得エラー');
-            this.archives = await response.json();
+                // computed property
+                get maxPage() {
+                    if (!this.archives.total || !this.archives.per_page) return 1;
+                    return Math.ceil(this.archives.total / this.archives.per_page);
+                },
 
-            const paginationButtons = document.querySelectorAll('#paginationButtons button');
-            paginationButtons.forEach(button => {
-                window.togglePaginationButtonDisabled(button, this.archives.current_page, this.maxPage);
-            });
-        } catch (error) {
-            console.error('データの取得に失敗しました:', error);
-        }
-    }
+                // メソッド
+                async fetchData(url) {
+                    try {
+                        const response = await fetch(url);
+                        if (!response.ok) throw new Error('データ取得エラー');
+                        this.archives = await response.json();
 
-    /**
-     * 最大ページ数を計算
-     */
-    get maxPage() {
-        if (!this.archives.total || !this.archives.per_page) return 1;
-        return Math.ceil(this.archives.total / this.archives.per_page);
-    }
+                        const paginationButtons = document.querySelectorAll('#paginationButtons button');
+                        paginationButtons.forEach(button => {
+                            window.togglePaginationButtonDisabled(button, this.archives.current_page, this.maxPage);
+                        });
+                    } catch (error) {
+                        console.error('データの取得に失敗しました:', error);
+                    }
+                },
 
-    /**
-     * 初回URL生成
-     */
-    firstUrl(params) {
-        return `/api/channels/${this.channel.handle}?page=1` + (params ? `&${params}` : '');
-    }
+                firstUrl(params) {
+                    return `/api/channels/${this.channel.handle}?page=1` + (params ? `&${params}` : '');
+                },
 
-    /**
-     * YouTube URLを安全に構築
-     */
-    getYoutubeUrl(videoId, tsNum) {
-        const safeVideoId = encodeURIComponent(videoId || '');
-        const safeTsNum = parseInt(tsNum) || 0;
-        return `https://youtube.com/watch?v=${safeVideoId}&t=${safeTsNum}s`;
-    }
+                getYoutubeUrl(videoId, tsNum) {
+                    const safeVideoId = encodeURIComponent(videoId || '');
+                    const safeTsNum = parseInt(tsNum) || 0;
+                    return `https://youtube.com/watch?v=${safeVideoId}&t=${safeTsNum}s`;
+                },
 
-    /**
-     * タイムスタンプデータを取得（検索・ソート対応）
-     */
-    async fetchTimestamps(page = 1, search = '') {
-        try {
-            this.loading = true;
-            this.error = null;
+                getArchiveUrl(videoId, tsNum) {
+                    return this.getYoutubeUrl(videoId, tsNum);
+                },
 
-            const params = new URLSearchParams({
-                page: page,
-                per_page: 50,
-                sort: this.timestampSort
-            });
+                escapeHTML(str) {
+                    return escapeHTML(str);
+                },
 
-            if (search) {
-                params.set('search', search);
-            }
+                async fetchTimestamps(page = 1, search = '') {
+                    try {
+                        this.loading = true;
+                        this.error = null;
 
-            const response = await fetch(`/api/channels/${this.channel.handle}/timestamps?${params}`);
-            if (!response.ok) throw new Error('タイムスタンプの取得に失敗しました');
+                        const params = new URLSearchParams({
+                            page: page,
+                            per_page: 50,
+                            sort: this.timestampSort
+                        });
 
-            const data = await response.json();
+                        if (search) {
+                            params.set('search', search);
+                        }
 
-            // ページ番号を数値として保存（文字列連結バグの防止）
-            const parsedPage = parseInt(data.current_page, 10);
-            data.current_page = Number.isNaN(parsedPage) ? 1 : parsedPage;
+                        const response = await fetch(`/api/channels/${this.channel.handle}/timestamps?${params}`);
+                        if (!response.ok) throw new Error('タイムスタンプの取得に失敗しました');
 
-            const parsedLastPage = parseInt(data.last_page, 10);
-            data.last_page = Number.isNaN(parsedLastPage) ? 1 : parsedLastPage;
+                        const data = await response.json();
 
-            this.timestamps = data;
-            this.currentTimestampPage = page;
-            this.updateURL();
-        } catch (error) {
-            console.error('タイムスタンプの取得に失敗しました:', error);
-            this.error = error.message;
-        } finally {
-            this.loading = false;
-        }
-    }
+                        const parsedPage = parseInt(data.current_page, 10);
+                        data.current_page = Number.isNaN(parsedPage) ? 1 : parsedPage;
 
-    /**
-     * 検索実行
-     */
-    searchTimestamps() {
-        this.currentTimestampPage = 1;
-        this.fetchTimestamps(1, this.searchQuery);
-    }
+                        const parsedLastPage = parseInt(data.last_page, 10);
+                        data.last_page = Number.isNaN(parsedLastPage) ? 1 : parsedLastPage;
 
-    /**
-     * URLパラメータを更新
-     */
-    updateURL() {
-        const params = new URLSearchParams();
+                        this.timestamps = data;
+                        this.currentTimestampPage = page;
+                        this.updateURL();
+                    } catch (error) {
+                        console.error('タイムスタンプの取得に失敗しました:', error);
+                        this.error = error.message;
+                    } finally {
+                        this.loading = false;
+                    }
+                },
 
-        // タブ
-        if (this.activeTab !== 'archives') {
-            params.set('view', this.activeTab);
-        }
+                searchTimestamps() {
+                    this.currentTimestampPage = 1;
+                    this.fetchTimestamps(1, this.searchQuery);
+                },
 
-        // 検索キーワード
-        if (this.searchQuery) {
-            params.set('search', this.searchQuery);
-        }
+                updateURL() {
+                    const params = new URLSearchParams();
 
-        // ソート（デフォルト以外の場合のみ）
-        if (this.timestampSort && this.timestampSort !== 'time_desc') {
-            params.set('sort', this.timestampSort);
-        }
+                    if (this.activeTab !== 'archives') {
+                        params.set('view', this.activeTab);
+                    }
 
-        // ページ番号
-        const page = this.activeTab === 'timestamps' ? this.currentTimestampPage : this.archives.current_page;
-        if (page && page > 1) {
-            params.set('page', page);
-        }
+                    if (this.searchQuery) {
+                        params.set('search', this.searchQuery);
+                    }
 
-        const paramString = params.toString();
-        const newURL = paramString ? `${window.location.pathname}?${paramString}` : window.location.pathname;
-        window.history.pushState({}, '', newURL);
-    }
+                    if (this.timestampSort && this.timestampSort !== 'time_desc') {
+                        params.set('sort', this.timestampSort);
+                    }
 
-    /**
-     * ページネーションクリック処理
-     */
-    handlePaginationClick(event) {
-        const button = event.target;
-        const isNext = button.classList.contains('next');
-        const url = isNext ? this.archives.next_page_url : this.archives.prev_page_url;
+                    const page = this.activeTab === 'timestamps' ? this.currentTimestampPage : this.archives.current_page;
+                    if (page && page > 1) {
+                        params.set('page', page);
+                    }
 
-        if (!url) return;
-        this.fetchData(url);
-        window.scroll({top: 0, behavior: 'auto'});
-    }
+                    const paramString = params.toString();
+                    const newURL = paramString ? `${window.location.pathname}?${paramString}` : window.location.pathname;
+                    window.history.pushState({}, '', newURL);
+                },
 
-    /**
-     * 初期化処理
-     */
-    init() {
-        // URLパラメータから状態を復元
-        const params = new URLSearchParams(window.location.search);
-        const view = params.get('view');
-        const search = params.get('search');
-        const sort = params.get('sort');
-        const page = parseInt(params.get('page')) || 1;
+                handlePaginationClick(event) {
+                    const button = event.target;
+                    const isNext = button.classList.contains('next');
+                    const url = isNext ? this.archives.next_page_url : this.archives.prev_page_url;
 
-        if (view === 'timestamps') {
-            this.activeTab = 'timestamps';
-            this.searchQuery = search || '';
-            this.timestampSort = sort || 'time_desc';
-            this.currentTimestampPage = page;
-            this.fetchTimestamps(page, this.searchQuery);
-        } else {
-            this.fetchData(this.firstUrl());
-        }
+                    if (!url) return;
+                    this.fetchData(url);
+                    window.scroll({top: 0, behavior: 'auto'});
+                },
 
-        // 検索コンポーネントのイベントリスナー
-        this.$el.addEventListener('search-results', (e) => {
-            this.fetchData(this.firstUrl(e.detail));
-        });
+                init() {
+                    const params = new URLSearchParams(window.location.search);
+                    const view = params.get('view');
+                    const search = params.get('search');
+                    const sort = params.get('sort');
+                    const page = parseInt(params.get('page')) || 1;
 
-        // ページネーションボタンのイベント設定
-        const paginationButtons = document.querySelectorAll('#paginationButtons button');
-        paginationButtons.forEach(button => {
-            button.addEventListener('click', this.handlePaginationClick.bind(this));
-        });
+                    if (view === 'timestamps') {
+                        this.activeTab = 'timestamps';
+                        this.searchQuery = search || '';
+                        this.timestampSort = sort || 'time_desc';
+                        this.currentTimestampPage = page;
+                        this.fetchTimestamps(page, this.searchQuery);
+                    } else {
+                        this.fetchData(this.firstUrl());
+                    }
 
-        // タブ切り替え監視
-        this.$watch('activeTab', (newTab) => {
-            if (newTab === 'timestamps' && !this.timestamps.data) {
-                this.fetchTimestamps(1, this.searchQuery);
-            }
-            this.updateURL();
-        });
+                    this.$el.addEventListener('search-results', (e) => {
+                        this.fetchData(this.firstUrl(e.detail));
+                    });
 
-        // 検索キーワード監視（debounce）
-        this.$watch('searchQuery', () => {
-            clearTimeout(this.searchTimeout);
-            this.searchTimeout = setTimeout(() => {
-                this.searchTimestamps();
-            }, 300);
-        });
+                    const paginationButtons = document.querySelectorAll('#paginationButtons button');
+                    paginationButtons.forEach(button => {
+                        button.addEventListener('click', this.handlePaginationClick.bind(this));
+                    });
 
-        // ブラウザバック/フォワード対応
-        window.addEventListener('popstate', () => {
-            const params = new URLSearchParams(window.location.search);
-            const view = params.get('view');
-            const search = params.get('search');
-            const sort = params.get('sort');
-            const page = parseInt(params.get('page')) || 1;
+                    this.$watch('activeTab', (newTab) => {
+                        if (newTab === 'timestamps' && !this.timestamps.data) {
+                            this.fetchTimestamps(1, this.searchQuery);
+                        } else if (newTab === 'archives' && !this.archives.data) {
+                            this.fetchData(this.firstUrl());
+                        }
+                        this.updateURL();
+                    });
 
-            this.activeTab = view || 'archives';
+                    this.$watch('searchQuery', () => {
+                        clearTimeout(this.searchTimeout);
+                        this.searchTimeout = setTimeout(() => {
+                            this.searchTimestamps();
+                        }, 300);
+                    });
 
-            if (view === 'timestamps') {
-                this.searchQuery = search || '';
-                this.timestampSort = sort || 'time_desc';
-                this.currentTimestampPage = page;
-                this.fetchTimestamps(page, search || '');
-            }
+                    window.addEventListener('popstate', () => {
+                        const params = new URLSearchParams(window.location.search);
+                        const view = params.get('view');
+                        const search = params.get('search');
+                        const sort = params.get('sort');
+                        const page = parseInt(params.get('page')) || 1;
+
+                        this.activeTab = view || 'archives';
+
+                        if (view === 'timestamps') {
+                            this.searchQuery = search || '';
+                            this.timestampSort = sort || 'time_desc';
+                            this.currentTimestampPage = page;
+                            this.fetchTimestamps(page, search || '');
+                        }
+                    });
+                }
+            };
         });
     }
 }
 
-// Alpine.jsコンポーネント登録
-window.addEventListener('alpine:init', () => {
-    Alpine.data('archiveListComponent', () => {
-        const component = new ArchiveListComponent();
-        return new Proxy(component, {
-            get(target, prop) {
-                if (typeof target[prop] === 'function') {
-                    return target[prop].bind(target);
-                }
-                return target[prop];
-            }
-        });
-    });
-});
+// Alpine.jsが既に読み込まれている場合はすぐに登録
+if (typeof Alpine !== 'undefined') {
+    registerArchiveListComponent();
+} else {
+    // Alpine.jsの初期化を待つ
+    window.addEventListener('alpine:init', registerArchiveListComponent);
+}
 
 // グローバル関数（ページネーション用）
 window.togglePaginationButtonDisabled = function(button, newPage, maxPage) {
