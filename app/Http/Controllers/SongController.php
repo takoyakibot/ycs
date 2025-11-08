@@ -28,7 +28,7 @@ class SongController extends Controller
     {
         $perPage = $request->input('per_page', 50);
         $search = $request->input('search', '');
-        $unlinkedOnly = $request->input('unlinked_only', false);
+        $unlinkedOnly = $request->boolean('unlinked_only', false);
         $currentPage = $request->input('page', 1);
 
         $query = TsItem::with(['archive'])
