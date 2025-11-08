@@ -301,7 +301,11 @@ class TimestampNormalization {
             btn.disabled = !isEnabled;
 
             if (isEnabled) {
-                btn.addEventListener('click', () => this.loadTimestamps(targetPage, this.currentSearchQuery));
+                btn.addEventListener('click', () => {
+                    this.loadTimestamps(targetPage, this.currentSearchQuery);
+                    // ページ切り替え時に一覧の先頭へスクロール
+                    document.getElementById('timestampsList').scrollTop = 0;
+                });
             }
 
             return btn;
