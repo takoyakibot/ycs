@@ -5,6 +5,7 @@
             // initで取得するのでこちらはコメントアウト
             // window.archives = @json($archives ?? []);
         </script>
+        @vite('resources/js/channels/archive-list.js')
     </x-slot>
     <x-slot name="header">
         <h2 class="font-semibold sm:text-xl text-gray-800 dark:text-gray-200 leading-tight">
@@ -266,6 +267,4 @@
             </div>
         </div>
     </div>
-
-    @vite('resources/js/channels/archive-list.js')
 </x-app-layout>
