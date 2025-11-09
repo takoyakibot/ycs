@@ -5,8 +5,25 @@
 echo "🔍 Pre-commit checks starting..."
 echo ""
 
-# 1. PHPUnit テストを実行
-echo "1️⃣ Running PHPUnit tests..."
+# 1. 設定キャッシュをクリア
+# Note: config:cacheを実行した環境でテストを実行すると、
+# APP_ENVがhardcodeされテストが失敗する問題を防ぐため (Issue #141)
+echo "1️⃣ Clearing config cache..."
+OUTPUT=$(php artisan config:clear 2>&1)
+EXIT_CODE=$?
+
+if [ $EXIT_CODE -ne 0 ]; then
+    echo "❌ Failed to clear config cache!"
+    echo "   Error details:"
+    echo "$OUTPUT"
+    echo "   Please check your Laravel installation."
+    exit 1
+fi
+echo "✅ Config cache cleared!"
+echo ""
+
+# 2. PHPUnit テストを実行
+echo "2️⃣ Running PHPUnit tests..."
 
 # .env.testingの存在チェック（警告のみ、ブロックはしない）
 if [ ! -f .env.testing ]; then
@@ -26,8 +43,8 @@ fi
 echo "✅ Tests passed!"
 echo ""
 
-# 2. Laravel Pint (コードスタイル) をチェック
-echo "2️⃣ Checking code style with Laravel Pint..."
+# 3. Laravel Pint (コードスタイル) をチェック
+echo "3️⃣ Checking code style with Laravel Pint..."
 ./vendor/bin/pint --test
 if [ $? -ne 0 ]; then
     echo "❌ Code style issues found! Run './vendor/bin/pint' to fix them."
@@ -36,8 +53,8 @@ fi
 echo "✅ Code style is good!"
 echo ""
 
-# 3. フロントエンドビルドをチェック
-echo "3️⃣ Building frontend assets..."
+# 4. フロントエンドビルドをチェック
+echo "4️⃣ Building frontend assets..."
 npm run build
 if [ $? -ne 0 ]; then
     echo "❌ Frontend build failed! Please fix before committing."
