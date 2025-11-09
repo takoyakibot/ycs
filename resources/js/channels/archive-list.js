@@ -14,6 +14,8 @@ function registerArchiveListComponent() {
                 timestamps: {},
                 activeTab: 'archives',
                 searchQuery: '',
+                archiveQuery: '',
+                tsFlg: '',
                 searchTimeout: null,
                 currentTimestampPage: 1,
                 timestampSort: 'time_desc',
@@ -59,6 +61,19 @@ function registerArchiveListComponent() {
 
                 escapeHTML(str) {
                     return escapeHTML(str);
+                },
+
+                archiveSearch() {
+                    const params = new URLSearchParams();
+                    params.append('baramutsu', this.archiveQuery);
+                    params.append('visible', '');
+                    params.append('ts', this.tsFlg);
+
+                    const hasQuery = this.archiveQuery.length > 0;
+                    this.$dispatch('filter-changed', hasQuery);
+
+                    this.fetchData(this.firstUrl(params.toString()));
+                    this.updateURL();
                 },
 
                 async fetchTimestamps(page = 1, search = '') {
@@ -134,17 +149,32 @@ function registerArchiveListComponent() {
                         params.set('view', this.activeTab);
                     }
 
-                    if (this.searchQuery) {
-                        params.set('search', this.searchQuery);
-                    }
+                    // タイムスタンプタブのパラメータ
+                    if (this.activeTab === 'timestamps') {
+                        if (this.searchQuery) {
+                            params.set('search', this.searchQuery);
+                        }
 
-                    if (this.timestampSort && this.timestampSort !== 'time_desc') {
-                        params.set('sort', this.timestampSort);
-                    }
+                        if (this.timestampSort && this.timestampSort !== 'time_desc') {
+                            params.set('sort', this.timestampSort);
+                        }
 
-                    const page = this.activeTab === 'timestamps' ? this.currentTimestampPage : this.archives.current_page;
-                    if (page && page > 1) {
-                        params.set('page', page);
+                        if (this.currentTimestampPage && this.currentTimestampPage > 1) {
+                            params.set('page', this.currentTimestampPage);
+                        }
+                    } else {
+                        // アーカイブタブのパラメータ
+                        if (this.archiveQuery) {
+                            params.set('baramutsu', this.archiveQuery);
+                        }
+
+                        if (this.tsFlg) {
+                            params.set('ts', this.tsFlg);
+                        }
+
+                        if (this.archives.current_page && this.archives.current_page > 1) {
+                            params.set('page', this.archives.current_page);
+                        }
                     }
 
                     const paramString = params.toString();
@@ -176,12 +206,18 @@ function registerArchiveListComponent() {
                         this.currentTimestampPage = page;
                         this.fetchTimestamps(page, this.searchQuery);
                     } else {
-                        this.fetchData(this.firstUrl());
-                    }
+                        // アーカイブタブの状態を復元
+                        const archiveQuery = params.get('baramutsu') || '';
+                        const tsFlg = params.get('ts') || '';
+                        this.archiveQuery = archiveQuery;
+                        this.tsFlg = tsFlg;
 
-                    this.$el.addEventListener('search-results', (e) => {
-                        this.fetchData(this.firstUrl(e.detail));
-                    });
+                        if (archiveQuery || tsFlg) {
+                            this.archiveSearch();
+                        } else {
+                            this.fetchData(this.firstUrl());
+                        }
+                    }
 
                     const paginationButtons = document.querySelectorAll('#paginationButtons button');
                     paginationButtons.forEach(button => {
@@ -218,6 +254,18 @@ function registerArchiveListComponent() {
                             this.timestampSort = sort || 'time_desc';
                             this.currentTimestampPage = page;
                             this.fetchTimestamps(page, search || '');
+                        } else {
+                            // アーカイブタブの状態を復元
+                            const archiveQuery = params.get('baramutsu') || '';
+                            const tsFlg = params.get('ts') || '';
+                            this.archiveQuery = archiveQuery;
+                            this.tsFlg = tsFlg;
+
+                            if (archiveQuery || tsFlg) {
+                                this.archiveSearch();
+                            } else {
+                                this.fetchData(this.firstUrl());
+                            }
                         }
                     });
                 }
