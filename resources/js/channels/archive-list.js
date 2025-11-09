@@ -14,6 +14,8 @@ function registerArchiveListComponent() {
                 timestamps: {},
                 activeTab: 'archives',
                 searchQuery: '',
+                archiveQuery: '',
+                tsFlg: '',
                 searchTimeout: null,
                 currentTimestampPage: 1,
                 timestampSort: 'time_desc',
@@ -59,6 +61,19 @@ function registerArchiveListComponent() {
 
                 escapeHTML(str) {
                     return escapeHTML(str);
+                },
+
+                archiveSearch() {
+                    const params = new URLSearchParams();
+                    params.append('baramutsu', this.archiveQuery);
+                    params.append('visible', '');
+                    params.append('ts', this.tsFlg);
+
+                    const hasQuery = this.archiveQuery.length > 0;
+                    const filterEvent = new CustomEvent('filter-changed', { detail: hasQuery });
+                    window.dispatchEvent(filterEvent);
+
+                    this.fetchData(this.firstUrl(params.toString()));
                 },
 
                 async fetchTimestamps(page = 1, search = '') {
@@ -178,10 +193,6 @@ function registerArchiveListComponent() {
                     } else {
                         this.fetchData(this.firstUrl());
                     }
-
-                    this.$el.addEventListener('search-results', (e) => {
-                        this.fetchData(this.firstUrl(e.detail));
-                    });
 
                     const paginationButtons = document.querySelectorAll('#paginationButtons button');
                     paginationButtons.forEach(button => {

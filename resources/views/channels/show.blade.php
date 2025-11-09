@@ -31,13 +31,47 @@
         </div>
 
         <div class="p-2 flex flex-col justify-self-center w-[100%] max-w-5xl gap-2">
-            <x-search
-                :channel-id="$channel->handle"
-                placeholder="タイムスタンプを検索"
-                button-text="検索"
-                manage-flg=""
-                alpine-parent="archiveListComponent"
-            />
+            <!-- 統一検索ボックス -->
+            <div class="search-unified">
+                <form @submit.prevent="activeTab === 'archives' ? archiveSearch() : null" class="flex items-stretch sm:items-center gap-2 max-w-7lg">
+                    <div class="flex gap-2 w-full sm:flex-grow flex-col sm:flex-row">
+                        <!-- アーカイブタブ用の検索ボックス -->
+                        <input
+                            x-show="activeTab === 'archives'"
+                            type="text"
+                            x-model="archiveQuery"
+                            placeholder="タイムスタンプを検索"
+                            class="border p-2 rounded w-full dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100" />
+                        <!-- タイムスタンプタブ用の検索ボックス -->
+                        <input
+                            x-show="activeTab === 'timestamps'"
+                            type="text"
+                            x-model="searchQuery"
+                            placeholder="楽曲名・アーティスト名・タイムスタンプで検索..."
+                            class="border p-2 rounded w-full dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100" />
+                        <div class="flex flex-row gap-2" x-show="activeTab === 'archives'">
+                            <select x-model="tsFlg" class="border p-2 pr-8 rounded dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100">
+                                <option value="">タイムスタンプ</option>
+                                <option value="1">有のみ</option>
+                                <option value="2">無のみ</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button
+                        type="submit"
+                        x-show="activeTab === 'archives'"
+                        class="bg-blue-500 text-white px-4 py-2 rounded sm:min-w-[100px] hover:bg-blue-600">
+                        検索
+                    </button>
+                    <button
+                        type="button"
+                        x-show="activeTab === 'timestamps'"
+                        @click="searchQuery = ''"
+                        class="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">
+                        クリア
+                    </button>
+                </form>
+            </div>
 
             <!-- タブUI -->
             <div class="mb-4">
@@ -105,19 +139,9 @@
 
             <!-- タイムスタンプタブ -->
             <div x-show="activeTab === 'timestamps'">
-                <!-- 検索エリア -->
+                <!-- 検索結果とソート -->
                 <div class="mb-4">
-                    <div class="flex gap-2">
-                        <input type="text"
-                               x-model="searchQuery"
-                               placeholder="楽曲名・アーティスト名・タイムスタンプで検索..."
-                               class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
-                        <button @click="searchQuery = ''"
-                                class="px-3 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 text-sm">
-                            クリア
-                        </button>
-                    </div>
-                    <div class="mt-2 flex justify-between items-center">
+                    <div class="flex justify-between items-center">
                         <div class="text-sm text-gray-600 dark:text-gray-400">
                             <span x-show="searchQuery">検索結果: </span>
                             <span x-text="timestamps.total !== undefined ? `${timestamps.total}件` : ''"></span>
