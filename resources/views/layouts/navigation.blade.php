@@ -15,7 +15,7 @@
                     <x-nav-link :href="route('top')">
                         {{ config('app.name') }}
                     </x-nav-link>
-                    <x-nav-link :href="route('channels.index')" :active="request()->routeIs('channels.index')">
+                    <x-nav-link :href="route('channels.index')" :active="request()->routeIs('channels.*')">
                         {{ __('チャンネル一覧') }}
                     </x-nav-link>
                     @if (Auth::check())
@@ -104,7 +104,7 @@
                 <x-responsive-nav-link :href="route('songs.index')" :active="request()->routeIs('songs.index')">
                     {{ __('タイムスタンプ正規化') }}
                 </x-responsive-nav-link>
-                <x-responsive-nav-link :href="route('channels.index')" :active="request()->routeIs('channels.index')">
+                <x-responsive-nav-link :href="route('channels.index')" :active="request()->routeIs('channels.*')">
                     {{ __('チャンネル一覧') }}
                 </x-responsive-nav-link>
                 <x-responsive-nav-link :href="route('markdown.show')" :active="request()->routeIs('markdown.show')">
@@ -153,7 +153,7 @@
                     </x-responsive-nav-link>
                 </div>
                 <div class="pt-2 pb-3 space-y-1">
-                    <x-responsive-nav-link :href="route('channels.index')" :active="request()->routeIs('channels.index')">
+                    <x-responsive-nav-link :href="route('channels.index')" :active="request()->routeIs('channels.*')">
                         {{ __('チャンネル一覧') }}
                     </x-responsive-nav-link>
                     <x-responsive-nav-link :href="route('markdown.show')" :active="request()->routeIs('markdown.show')">

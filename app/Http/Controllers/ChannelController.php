@@ -80,7 +80,7 @@ class ChannelController extends Controller
         $perPage = $validated['per_page'] ?? 50;
         $currentPage = $validated['page'] ?? 1;
         $search = $validated['search'] ?? '';
-        $sort = $validated['sort'] ?? 'time_desc';
+        $sort = $validated['sort'] ?? 'song_asc';
 
         // タイムスタンプ取得（チャンネルフィルタ付き）
         $query = TsItem::with(['archive'])
