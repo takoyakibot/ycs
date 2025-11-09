@@ -7,6 +7,17 @@ echo ""
 
 # 1. PHPUnit テストを実行
 echo "1️⃣ Running PHPUnit tests..."
+
+# .env.testingの存在チェック（警告のみ、ブロックはしない）
+if [ ! -f .env.testing ]; then
+    echo "⚠️  WARNING: .env.testing が存在しません"
+    echo "   phpunit.xmlのデフォルト設定（インメモリDB）を使用します"
+    echo "   新しいワークツリーの場合は以下を実行してください:"
+    echo "   cp .env.testing.example .env.testing"
+    echo "   php artisan key:generate --env=testing"
+    echo ""
+fi
+
 php artisan test
 if [ $? -ne 0 ]; then
     echo "❌ Tests failed! Please fix before committing."
