@@ -31,7 +31,7 @@ class SongController extends Controller
             'per_page' => 'integer|min:1|max:100',
             'page' => 'integer|min:1',
             'search' => 'nullable|string|max:255',
-            'unlinked_only' => 'nullable',
+            'unlinked_only' => 'nullable|in:true,false,1,0',
         ]);
 
         $perPage = $validated['per_page'] ?? 50;
@@ -40,7 +40,7 @@ class SongController extends Controller
         // boolean validation rule doesn't accept. Use filter_var to handle both
         // true booleans and string representations.
         $unlinkedOnly = filter_var(
-            $request->input('unlinked_only', false),
+            $validated['unlinked_only'] ?? false,
             FILTER_VALIDATE_BOOLEAN,
             FILTER_NULL_ON_FAILURE
         ) ?? false;
@@ -147,7 +147,7 @@ class SongController extends Controller
     {
         // バリデーション
         $validated = $request->validate([
-            'search' => 'string|max:255',
+            'search' => 'nullable|string|max:255',
         ]);
 
         $search = $validated['search'] ?? '';
