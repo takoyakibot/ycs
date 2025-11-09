@@ -191,21 +191,10 @@
                     </template>
 
                     <template x-for="ts in (timestamps.data || [])" :key="ts.id">
-                        <div class="p-2 border rounded hover:bg-gray-50 dark:hover:bg-gray-700 active:bg-gray-100 dark:active:bg-gray-600 dark:border-gray-600 transition-colors"
-                             :class="{'bg-green-50 dark:bg-green-900/20': ts.mapping?.song}">
-                            <div class="flex items-center gap-2 sm:gap-3">
-                                <!-- ステータスアイコン -->
-                                <div class="flex-shrink-0 text-xs sm:text-base">
-                                    <template x-if="ts.mapping?.song">
-                                        <span class="text-green-600 dark:text-green-400" title="楽曲紐づけ済み">✓</span>
-                                    </template>
-                                    <template x-if="!ts.mapping">
-                                        <span class="text-gray-400" title="未紐づけ">○</span>
-                                    </template>
-                                </div>
-
-                                <!-- 楽曲情報: モバイル30%, タブレット以上40% -->
-                                <div class="truncate flex-shrink-0 w-[30%] sm:w-[40%]"
+                        <div class="p-2 border rounded hover:bg-gray-50 dark:hover:bg-gray-700 active:bg-gray-100 dark:active:bg-gray-600 dark:border-gray-600 transition-colors">
+                            <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                                <!-- 楽曲情報 -->
+                                <div class="truncate flex-shrink-0 w-full sm:w-[300px]"
                                      :title="ts.mapping?.song ? `${ts.mapping.song.title} / ${ts.mapping.song.artist}` : ts.text">
                                     <template x-if="ts.mapping?.song">
                                         <span>
