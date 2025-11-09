@@ -188,6 +188,32 @@ class ChannelController extends Controller
 
         $timestampsWithMapping = $timestampsWithMapping->values();
 
+        // 頭文字インデックスマップを生成（楽曲名ソート時のみ）
+        $indexMap = [];
+        $availableIndexes = [];
+        if ($sort === 'song_asc') {
+            foreach ($timestampsWithMapping as $index => $ts) {
+                $title = $ts['mapping']['song']['title'] ?? $ts['text'] ?? '';
+                if (empty($title)) {
+                    continue;
+                }
+
+                // 頭文字を取得
+                $firstChar = mb_substr($title, 0, 1, 'UTF-8');
+                $firstChar = mb_strtoupper($firstChar, 'UTF-8');
+
+                // カテゴリ分け
+                $category = $this->categorizeFirstChar($firstChar);
+
+                // まだ記録されていないカテゴリの場合、ページ番号を記録
+                if (! isset($indexMap[$category])) {
+                    $pageNum = (int) floor($index / $perPage) + 1;
+                    $indexMap[$category] = $pageNum;
+                    $availableIndexes[] = $category;
+                }
+            }
+        }
+
         // 手動でページネーション
         $total = $timestampsWithMapping->count();
         $lastPage = (int) ceil($total / $perPage);
@@ -200,6 +226,53 @@ class ChannelController extends Controller
             'last_page' => $lastPage,
             'per_page' => $perPage,
             'total' => $total,
+            'index_map' => $indexMap,
+            'available_indexes' => $availableIndexes,
         ]);
+    }
+
+    /**
+     * 頭文字をカテゴリに分類
+     */
+    private function categorizeFirstChar($char)
+    {
+        // アルファベット（A-Z）
+        if (preg_match('/^[A-Z]$/i', $char)) {
+            return strtoupper($char);
+        }
+
+        // ひらがな・カタカナ（五十音行に分類）
+        $kanaMap = [
+            'あ' => ['あ', 'い', 'う', 'え', 'お', 'ア', 'イ', 'ウ', 'エ', 'オ'],
+            'か' => ['か', 'き', 'く', 'け', 'こ', 'が', 'ぎ', 'ぐ', 'げ', 'ご',
+                'カ', 'キ', 'ク', 'ケ', 'コ', 'ガ', 'ギ', 'グ', 'ゲ', 'ゴ'],
+            'さ' => ['さ', 'し', 'す', 'せ', 'そ', 'ざ', 'じ', 'ず', 'ぜ', 'ぞ',
+                'サ', 'シ', 'ス', 'セ', 'ソ', 'ザ', 'ジ', 'ズ', 'ゼ', 'ゾ'],
+            'た' => ['た', 'ち', 'つ', 'て', 'と', 'だ', 'ぢ', 'づ', 'で', 'ど',
+                'タ', 'チ', 'ツ', 'テ', 'ト', 'ダ', 'ヂ', 'ヅ', 'デ', 'ド'],
+            'な' => ['な', 'に', 'ぬ', 'ね', 'の', 'ナ', 'ニ', 'ヌ', 'ネ', 'ノ'],
+            'は' => ['は', 'ひ', 'ふ', 'へ', 'ほ', 'ば', 'び', 'ぶ', 'べ', 'ぼ',
+                'ぱ', 'ぴ', 'ぷ', 'ぺ', 'ぽ',
+                'ハ', 'ヒ', 'フ', 'ヘ', 'ホ', 'バ', 'ビ', 'ブ', 'ベ', 'ボ',
+                'パ', 'ピ', 'プ', 'ペ', 'ポ'],
+            'ま' => ['ま', 'み', 'む', 'め', 'も', 'マ', 'ミ', 'ム', 'メ', 'モ'],
+            'や' => ['や', 'ゆ', 'よ', 'ヤ', 'ユ', 'ヨ'],
+            'ら' => ['ら', 'り', 'る', 'れ', 'ろ', 'ラ', 'リ', 'ル', 'レ', 'ロ'],
+            'わ' => ['わ', 'を', 'ん', 'ワ', 'ヲ', 'ン'],
+        ];
+
+        foreach ($kanaMap as $category => $chars) {
+            if (in_array($char, $chars)) {
+                return $category;
+            }
+        }
+
+        // 数字（0-9）
+        if (preg_match('/^[0-9]$/', $char)) {
+            return '0-9';
+        }
+
+        // その他（記号など）
+        return 'その他';
     }
 }
