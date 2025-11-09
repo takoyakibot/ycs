@@ -30,13 +30,20 @@ class SongController extends Controller
         $validated = $request->validate([
             'per_page' => 'integer|min:1|max:100',
             'page' => 'integer|min:1',
-            'search' => 'string|max:255',
-            'unlinked_only' => 'boolean',
+            'search' => 'nullable|string|max:255',
+            'unlinked_only' => 'nullable',
         ]);
 
         $perPage = $validated['per_page'] ?? 50;
         $search = $validated['search'] ?? '';
-        $unlinkedOnly = $validated['unlinked_only'] ?? false;
+        // Axios sends boolean false as "false" in query params, which Laravel's
+        // boolean validation rule doesn't accept. Use filter_var to handle both
+        // true booleans and string representations.
+        $unlinkedOnly = filter_var(
+            $request->input('unlinked_only', false),
+            FILTER_VALIDATE_BOOLEAN,
+            FILTER_NULL_ON_FAILURE
+        ) ?? false;
         $currentPage = $validated['page'] ?? 1;
 
         $query = TsItem::with(['archive'])
