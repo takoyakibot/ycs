@@ -9,14 +9,14 @@ echo ""
 # Note: config:cacheを実行した環境でテストを実行すると、
 # APP_ENVがhardcodeされテストが失敗する問題を防ぐため (Issue #141)
 echo "1️⃣ Clearing config cache..."
-OUTPUT=$(php artisan config:clear 2>&1)
+OUTPUT=$(php artisan config:clear --quiet 2>&1)
 EXIT_CODE=$?
 
 if [ $EXIT_CODE -ne 0 ]; then
     echo "❌ Failed to clear config cache!"
     echo "   Error details:"
     echo "$OUTPUT"
-    echo "   Please check your Laravel installation."
+    echo "   Please ensure Laravel is properly installed and bootstrap/cache is writable."
     exit 1
 fi
 echo "✅ Config cache cleared!"
