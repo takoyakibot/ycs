@@ -18,7 +18,7 @@ function registerArchiveListComponent() {
                 tsFlg: '',
                 searchTimeout: null,
                 currentTimestampPage: 1,
-                timestampSort: 'time_desc',
+                timestampSort: 'song_asc',
                 loading: false,
                 error: null,
                 isFiltered: false,
@@ -155,7 +155,7 @@ function registerArchiveListComponent() {
                             params.set('search', this.searchQuery);
                         }
 
-                        if (this.timestampSort && this.timestampSort !== 'time_desc') {
+                        if (this.timestampSort && this.timestampSort !== 'song_asc') {
                             params.set('sort', this.timestampSort);
                         }
 
@@ -202,7 +202,7 @@ function registerArchiveListComponent() {
                     if (view === 'timestamps') {
                         this.activeTab = 'timestamps';
                         this.searchQuery = search || '';
-                        this.timestampSort = sort || 'time_desc';
+                        this.timestampSort = sort || 'song_asc';
                         this.currentTimestampPage = page;
                         this.fetchTimestamps(page, this.searchQuery);
                     } else {
@@ -251,7 +251,7 @@ function registerArchiveListComponent() {
 
                         if (view === 'timestamps') {
                             this.searchQuery = search || '';
-                            this.timestampSort = sort || 'time_desc';
+                            this.timestampSort = sort || 'song_asc';
                             this.currentTimestampPage = page;
                             this.fetchTimestamps(page, search || '');
                         } else {

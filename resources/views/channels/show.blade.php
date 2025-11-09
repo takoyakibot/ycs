@@ -7,13 +7,8 @@
         </script>
         @vite('resources/js/channels/archive-list.js')
     </x-slot>
-    <x-slot name="header">
-        <h2 class="font-semibold sm:text-xl text-gray-800 dark:text-gray-200 leading-tight">
-            {{ __('アーカイブ一覧') }}
-        </h2>
-    </x-slot>
 
-    <div class="px-2 sm:px-6 py-4 sm:py-12" x-data="archiveListComponent">
+    <div class="px-2 sm:px-6 py-2 sm:py-6" x-data="archiveListComponent">
         <div class="p-2">
             <h2 class="text-gray-500 items-center justify-center gap-4 hidden sm:flex">
                 <img :src="escapeHTML(channel.thumbnail || '')" alt="アイコン" class="w-20 h-20 rounded-full">
@@ -31,6 +26,22 @@
         </div>
 
         <div class="p-2 flex flex-col justify-self-center w-[100%] max-w-5xl gap-2">
+            <!-- タブUI -->
+            <div class="mb-4">
+                <nav class="flex space-x-4 border-b border-gray-200 dark:border-gray-700">
+                    <button @click="activeTab = 'archives'"
+                            :class="activeTab === 'archives' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 dark:text-gray-400'"
+                            class="px-3 py-2 text-sm font-medium border-b-2 -mb-px hover:text-gray-700 dark:hover:text-gray-300">
+                        アーカイブ
+                    </button>
+                    <button @click="activeTab = 'timestamps'"
+                            :class="activeTab === 'timestamps' ? 'border-green-500 text-green-600 dark:text-green-400' : 'border-transparent text-gray-500 dark:text-gray-400'"
+                            class="px-3 py-2 text-sm font-medium border-b-2 -mb-px hover:text-gray-700 dark:hover:text-gray-300">
+                        タイムスタンプ
+                    </button>
+                </nav>
+            </div>
+
             <!-- 統一検索ボックス -->
             <div class="search-unified">
                 <form @submit.prevent="activeTab === 'archives' ? archiveSearch() : searchTimestamps()" class="flex items-stretch sm:items-center gap-2 max-w-7lg">
@@ -79,22 +90,6 @@
                         </button>
                     </template>
                 </form>
-            </div>
-
-            <!-- タブUI -->
-            <div class="mb-4">
-                <nav class="flex space-x-4 border-b border-gray-200 dark:border-gray-700">
-                    <button @click="activeTab = 'archives'"
-                            :class="activeTab === 'archives' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 dark:text-gray-400'"
-                            class="px-3 py-2 text-sm font-medium border-b-2 -mb-px hover:text-gray-700 dark:hover:text-gray-300">
-                        アーカイブ
-                    </button>
-                    <button @click="activeTab = 'timestamps'"
-                            :class="activeTab === 'timestamps' ? 'border-green-500 text-green-600 dark:text-green-400' : 'border-transparent text-gray-500 dark:text-gray-400'"
-                            class="px-3 py-2 text-sm font-medium border-b-2 -mb-px hover:text-gray-700 dark:hover:text-gray-300">
-                        タイムスタンプ
-                    </button>
-                </nav>
             </div>
 
             <!-- アーカイブタブ -->
@@ -147,24 +142,11 @@
 
             <!-- タイムスタンプタブ -->
             <div x-show="activeTab === 'timestamps'">
-                <!-- 検索結果とソート -->
+                <!-- 検索結果 -->
                 <div class="mb-4">
-                    <div class="flex justify-between items-center">
-                        <div class="text-sm text-gray-600 dark:text-gray-400">
-                            <span x-show="searchQuery">検索結果: </span>
-                            <span x-text="timestamps.total !== undefined ? `${timestamps.total}件` : ''"></span>
-                        </div>
-                        <div class="flex gap-2 items-center">
-                            <label class="text-xs sm:text-sm text-gray-600 dark:text-gray-400">並び替え:</label>
-                            <select x-model="timestampSort"
-                                    @change="fetchTimestamps(1, searchQuery)"
-                                    class="px-2 py-1 sm:px-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                <option value="time_desc">時刻↓</option>
-                                <option value="time_asc">時刻↑</option>
-                                <option value="song_asc">楽曲名</option>
-                                <option value="archive_desc">公開日</option>
-                            </select>
-                        </div>
+                    <div class="text-sm text-gray-600 dark:text-gray-400">
+                        <span x-show="searchQuery">検索結果: </span>
+                        <span x-text="timestamps.total !== undefined ? `${timestamps.total}件` : ''"></span>
                     </div>
                 </div>
 
