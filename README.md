@@ -55,7 +55,15 @@ cp .env.example .env
 php artisan key:generate
 ```
 
-4. `.env` ファイルを編集してデータベース接続とAPI認証情報を設定
+4. テスト環境の設定（重要）
+```bash
+cp .env.testing.example .env.testing
+php artisan key:generate --env=testing
+```
+
+**注意**: `.env.testing`が存在しない場合、テスト実行時に本番データベースが削除される危険があります。新しいワークツリーを作成した際は必ず上記コマンドを実行してください。
+
+5. `.env` ファイルを編集してデータベース接続とAPI認証情報を設定
 ```env
 DB_CONNECTION=mysql
 DB_HOST=127.0.0.1
@@ -68,22 +76,39 @@ SPOTIFY_CLIENT_ID=your_spotify_client_id
 SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
 ```
 
-5. データベースマイグレーション
+6. データベースマイグレーション
 ```bash
 php artisan migrate
 ```
 
-6. フロントエンドのビルド
+7. フロントエンドのビルド
 ```bash
 npm run build
 # または開発環境で
 npm run dev
 ```
 
-7. アプリケーションの起動
+8. アプリケーションの起動
 ```bash
 php artisan serve
 ```
+
+### 新しいワークツリーを作成する場合
+
+```bash
+git worktree add ../new-branch feature-branch
+cd ../new-branch
+
+# 必ずテスト環境を設定
+cp .env.testing.example .env.testing
+php artisan key:generate --env=testing
+
+# 依存関係のインストール
+composer install
+npm install
+```
+
+**重要**: ワークツリーごとに`.env.testing`の作成が必要です。これを忘れると、テスト実行時に本番データベースが削除される危険があります。
 
 ### Spotify API設定
 

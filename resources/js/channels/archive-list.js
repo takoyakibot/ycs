@@ -103,6 +103,30 @@ function registerArchiveListComponent() {
                     this.fetchTimestamps(1, this.searchQuery);
                 },
 
+                jumpToIndex(letter) {
+                    if (!this.timestamps.index_map || !this.timestamps.index_map[letter]) {
+                        return;
+                    }
+
+                    const targetPage = this.timestamps.index_map[letter];
+                    this.fetchTimestamps(targetPage, this.searchQuery);
+
+                    // スムーズスクロール + オフセット
+                    setTimeout(() => {
+                        const tabElement = document.querySelector('#archives');
+                        if (tabElement) {
+                            const offset = 100; // 100pxの余白
+                            const elementPosition = tabElement.getBoundingClientRect().top;
+                            const offsetPosition = elementPosition + window.pageYOffset - offset;
+
+                            window.scrollTo({
+                                top: offsetPosition,
+                                behavior: 'smooth'
+                            });
+                        }
+                    }, 100); // データ取得待ち
+                },
+
                 updateURL() {
                     const params = new URLSearchParams();
 

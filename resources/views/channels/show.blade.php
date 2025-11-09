@@ -165,6 +165,63 @@
                     </button>
                 </div>
 
+                <!-- 頭文字ジャンプナビゲーション（楽曲名ソート時のみ表示） -->
+                <div x-show="timestampSort === 'song_asc' && timestamps.available_indexes && timestamps.available_indexes.length > 0" class="mb-4 border-b border-gray-200 dark:border-gray-700 pb-4">
+                    <div class="text-xs text-gray-600 dark:text-gray-400 mb-2">頭文字でジャンプ:</div>
+
+                    <!-- アルファベット -->
+                    <div class="flex flex-wrap gap-1 mb-2">
+                        <template x-for="letter in ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z']" :key="letter">
+                            <button
+                                @click="jumpToIndex(letter)"
+                                :disabled="!timestamps.available_indexes?.includes(letter)"
+                                :class="timestamps.available_indexes?.includes(letter)
+                                    ? 'bg-blue-500 hover:bg-blue-600 text-white cursor-pointer'
+                                    : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'"
+                                class="w-8 h-8 text-xs rounded transition-colors">
+                                <span x-text="letter"></span>
+                            </button>
+                        </template>
+                    </div>
+
+                    <!-- 五十音 -->
+                    <div class="flex flex-wrap gap-1 mb-2">
+                        <template x-for="kana in ['あ','か','さ','た','な','は','ま','や','ら','わ']" :key="kana">
+                            <button
+                                @click="jumpToIndex(kana)"
+                                :disabled="!timestamps.available_indexes?.includes(kana)"
+                                :class="timestamps.available_indexes?.includes(kana)
+                                    ? 'bg-green-500 hover:bg-green-600 text-white cursor-pointer'
+                                    : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'"
+                                class="w-8 h-8 text-xs rounded transition-colors">
+                                <span x-text="kana"></span>
+                            </button>
+                        </template>
+                    </div>
+
+                    <!-- その他 -->
+                    <div class="flex gap-1">
+                        <button
+                            @click="jumpToIndex('0-9')"
+                            :disabled="!timestamps.available_indexes?.includes('0-9')"
+                            :class="timestamps.available_indexes?.includes('0-9')
+                                ? 'bg-purple-500 hover:bg-purple-600 text-white cursor-pointer'
+                                : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'"
+                            class="px-3 py-1 text-xs rounded transition-colors">
+                            0-9
+                        </button>
+                        <button
+                            @click="jumpToIndex('その他')"
+                            :disabled="!timestamps.available_indexes?.includes('その他')"
+                            :class="timestamps.available_indexes?.includes('その他')
+                                    ? 'bg-gray-500 hover:bg-gray-600 text-white cursor-pointer'
+                                    : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'"
+                            class="px-3 py-1 text-xs rounded transition-colors">
+                            その他
+                        </button>
+                    </div>
+                </div>
+
                 <!-- エラー表示 -->
                 <div x-show="error" class="bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-800 rounded p-4 mb-4">
                     <p class="text-red-800 dark:text-red-200" x-text="error"></p>
