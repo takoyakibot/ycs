@@ -6,6 +6,7 @@ use Carbon\Carbon;
 use Exception;
 use Google\Client as Google_Client;
 use Google\Service\YouTube as Google_Service_YouTube;
+use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Str;
@@ -101,7 +102,7 @@ class YouTubeService
         $playlist_id = 'UU'.substr($channel_id, 2);
 
         // nextPageTokenが取得できなくなるまでループ
-        $maxResults = config('app.debug') ? config('utils.page') : 50;
+        $maxResults = App::environment('local') ? config('utils.page') : 50;
         $response = null;
         $archives = [];
         do {
@@ -133,7 +134,7 @@ class YouTubeService
                     ];
                 }
             }
-            if (config('app.debug') && count($archives) >= config('utils.max_archive_count')) {
+            if (App::environment('local') && count($archives) >= config('utils.max_archive_count')) {
                 break;
             }
         } while ($response->getNextPageToken());
