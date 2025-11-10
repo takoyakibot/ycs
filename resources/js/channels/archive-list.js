@@ -19,6 +19,8 @@ function registerArchiveListComponent() {
                 searchTimeout: null,
                 currentTimestampPage: 1,
                 timestampSort: 'song_asc',
+                yearFilter: '',
+                monthFilter: '',
                 loading: false,
                 error: null,
                 isFiltered: false,
@@ -91,6 +93,14 @@ function registerArchiveListComponent() {
                             params.set('search', search);
                         }
 
+                        if (this.yearFilter) {
+                            params.set('year', this.yearFilter);
+                        }
+
+                        if (this.monthFilter) {
+                            params.set('month', this.monthFilter);
+                        }
+
                         const response = await fetch(`/api/channels/${this.channel.handle}/timestamps?${params}`);
                         if (!response.ok) throw new Error('タイムスタンプの取得に失敗しました');
 
@@ -159,6 +169,14 @@ function registerArchiveListComponent() {
                             params.set('sort', this.timestampSort);
                         }
 
+                        if (this.yearFilter) {
+                            params.set('year', this.yearFilter);
+                        }
+
+                        if (this.monthFilter) {
+                            params.set('month', this.monthFilter);
+                        }
+
                         if (this.currentTimestampPage && this.currentTimestampPage > 1) {
                             params.set('page', this.currentTimestampPage);
                         }
@@ -197,12 +215,16 @@ function registerArchiveListComponent() {
                     const view = params.get('view');
                     const search = params.get('search');
                     const sort = params.get('sort');
+                    const year = params.get('year');
+                    const month = params.get('month');
                     const page = parseInt(params.get('page')) || 1;
 
                     if (view === 'timestamps') {
                         this.activeTab = 'timestamps';
                         this.searchQuery = search || '';
                         this.timestampSort = sort || 'song_asc';
+                        this.yearFilter = year || '';
+                        this.monthFilter = month || '';
                         this.currentTimestampPage = page;
                         this.fetchTimestamps(page, this.searchQuery);
                     } else {
@@ -240,11 +262,25 @@ function registerArchiveListComponent() {
                         }, 300);
                     });
 
+                    this.$watch('yearFilter', () => {
+                        if (this.activeTab === 'timestamps') {
+                            this.searchTimestamps();
+                        }
+                    });
+
+                    this.$watch('monthFilter', () => {
+                        if (this.activeTab === 'timestamps') {
+                            this.searchTimestamps();
+                        }
+                    });
+
                     window.addEventListener('popstate', () => {
                         const params = new URLSearchParams(window.location.search);
                         const view = params.get('view');
                         const search = params.get('search');
                         const sort = params.get('sort');
+                        const year = params.get('year');
+                        const month = params.get('month');
                         const page = parseInt(params.get('page')) || 1;
 
                         this.activeTab = view || 'archives';
@@ -252,6 +288,8 @@ function registerArchiveListComponent() {
                         if (view === 'timestamps') {
                             this.searchQuery = search || '';
                             this.timestampSort = sort || 'song_asc';
+                            this.yearFilter = year || '';
+                            this.monthFilter = month || '';
                             this.currentTimestampPage = page;
                             this.fetchTimestamps(page, search || '');
                         } else {

@@ -75,18 +75,32 @@ class ChannelController extends Controller
             'page' => 'integer|min:1',
             'search' => 'string|max:255',
             'sort' => 'string|in:time_desc,time_asc,song_asc,archive_desc',
+            'year' => 'nullable|integer|min:2000|max:2100',
+            'month' => 'nullable|integer|min:1|max:12',
         ]);
 
         $perPage = $validated['per_page'] ?? 50;
         $currentPage = $validated['page'] ?? 1;
         $search = $validated['search'] ?? '';
         $sort = $validated['sort'] ?? 'song_asc';
+        $year = $validated['year'] ?? null;
+        $month = $validated['month'] ?? null;
 
         // タイムスタンプ取得（チャンネルフィルタ付き）
         $query = TsItem::with(['archive'])
-            ->whereHas('archive', function ($q) use ($channel) {
+            ->whereHas('archive', function ($q) use ($channel, $year, $month) {
                 $q->where('channel_id', $channel->channel_id)
                     ->where('is_display', 1);
+
+                // 公開日の年フィルタ
+                if ($year !== null) {
+                    $q->whereYear('published_at', $year);
+                }
+
+                // 公開日の月フィルタ
+                if ($month !== null) {
+                    $q->whereMonth('published_at', $month);
+                }
             })
             ->whereNotNull('text')
             ->where('text', '!=', '')
@@ -220,6 +234,17 @@ class ChannelController extends Controller
         $offset = ($currentPage - 1) * $perPage;
         $items = $timestampsWithMapping->slice($offset, $perPage)->values();
 
+        // 利用可能な年・月のリストを取得（チャンネル内の全アーカイブから）
+        $availableDates = Archive::where('channel_id', $channel->channel_id)
+            ->where('is_display', 1)
+            ->selectRaw('DISTINCT YEAR(published_at) as year, MONTH(published_at) as month')
+            ->orderByDesc('year')
+            ->orderByDesc('month')
+            ->get();
+
+        $availableYears = $availableDates->pluck('year')->unique()->values();
+        $availableMonths = collect(range(1, 12));
+
         return response()->json([
             'data' => $items,
             'current_page' => $currentPage,
@@ -228,6 +253,8 @@ class ChannelController extends Controller
             'total' => $total,
             'index_map' => $indexMap,
             'available_indexes' => $availableIndexes,
+            'available_years' => $availableYears,
+            'available_months' => $availableMonths,
         ]);
     }
 

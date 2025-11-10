@@ -64,6 +64,23 @@
                                 aria-label="楽曲名・アーティスト名・タイムスタンプで検索"
                                 class="border p-2 rounded w-full dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100" />
                         </template>
+                        <!-- タイムスタンプタブ用の年・月フィルター -->
+                        <template x-if="activeTab === 'timestamps'">
+                            <div class="flex flex-row gap-2">
+                                <select x-model="yearFilter" aria-label="公開年フィルター" class="border p-2 pr-8 rounded dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100">
+                                    <option value="">全ての年</option>
+                                    <template x-for="year in (timestamps.available_years || [])" :key="year">
+                                        <option :value="year" x-text="year + '年'"></option>
+                                    </template>
+                                </select>
+                                <select x-model="monthFilter" aria-label="公開月フィルター" class="border p-2 pr-8 rounded dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100">
+                                    <option value="">全ての月</option>
+                                    <template x-for="month in (timestamps.available_months || [])" :key="month">
+                                        <option :value="month" x-text="month + '月'"></option>
+                                    </template>
+                                </select>
+                            </div>
+                        </template>
                         <template x-if="activeTab === 'archives'">
                             <div class="flex flex-row gap-2">
                                 <select x-model="tsFlg" aria-label="タイムスタンプフィルター" class="border p-2 pr-8 rounded dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100">
