@@ -121,11 +121,14 @@
                         <div class="flex flex-col flex-grow gap-2" :class="isFiltered ? 'sm:w-1/2' : 'sm:w-2/3'">
                             <div class="timestamps flex flex-col gap-2 sm:gap-0">
                                 <template x-for="tsItem in archive.ts_items_display" :key="tsItem.id">
-                                    <div class="timestamp text-sm text-gray-700">
+                                    <div class="timestamp text-sm text-gray-700 flex items-center gap-2">
                                         <a :href="getArchiveUrl(tsItem.video_id, tsItem.ts_num)"
-                                            target="_blank" rel="noopener noreferrer" class="text-blue-500 tabular-nums hover:underline"
-                                            x-text="tsItem.ts_text || '0:00:00'">
-                                        </a> <span class="ml-2" x-text="tsItem.text || ''"></span>
+                                            target="_blank" rel="noopener noreferrer"
+                                            class="inline-flex items-center gap-1 bg-red-600 text-white px-2 py-1 rounded tabular-nums hover:bg-red-700 transition-colors">
+                                            <span class="text-xs">▶</span>
+                                            <span x-text="tsItem.ts_text || '0:00:00'"></span>
+                                        </a>
+                                        <span x-text="tsItem.text || ''"></span>
                                     </div>
                                 </template>
                             </div>
@@ -287,9 +290,10 @@
 
                                 <!-- 動画リンク: モバイルではコンパクト -->
                                 <a :href="getYoutubeUrl(ts.video_id, ts.ts_num)"
-                                   class="text-blue-500 hover:underline whitespace-nowrap tabular-nums text-xs sm:text-sm"
-                                   target="_blank"
-                                   x-text="ts.ts_text + ' ↗'">
+                                   class="inline-flex items-center gap-1 bg-red-600 text-white px-2 py-1 rounded whitespace-nowrap tabular-nums text-xs sm:text-sm hover:bg-red-700 transition-colors"
+                                   target="_blank">
+                                    <span class="text-xs">▶</span>
+                                    <span x-text="ts.ts_text"></span>
                                 </a>
                             </div>
                         </div>
