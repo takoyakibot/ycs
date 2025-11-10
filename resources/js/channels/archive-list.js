@@ -145,6 +145,7 @@ function registerArchiveListComponent() {
                 updateURL() {
                     const params = new URLSearchParams();
 
+                    // Only add 'view' parameter when not on default tab (timestamps)
                     if (this.activeTab !== 'timestamps') {
                         params.set('view', this.activeTab);
                     }
@@ -192,8 +193,7 @@ function registerArchiveListComponent() {
                     window.scroll({top: 0, behavior: 'auto'});
                 },
 
-                init() {
-                    const params = new URLSearchParams(window.location.search);
+                restoreStateFromURL(params) {
                     const view = params.get('view');
                     const search = params.get('search');
                     const sort = params.get('sort');
@@ -201,7 +201,6 @@ function registerArchiveListComponent() {
 
                     if (view === 'archives') {
                         this.activeTab = 'archives';
-                        // アーカイブタブの状態を復元
                         const archiveQuery = params.get('baramutsu') || '';
                         const tsFlg = params.get('ts') || '';
                         this.archiveQuery = archiveQuery;
@@ -220,6 +219,11 @@ function registerArchiveListComponent() {
                         this.currentTimestampPage = page;
                         this.fetchTimestamps(page, this.searchQuery);
                     }
+                },
+
+                init() {
+                    const params = new URLSearchParams(window.location.search);
+                    this.restoreStateFromURL(params);
 
                     const paginationButtons = document.querySelectorAll('#paginationButtons button');
                     paginationButtons.forEach(button => {
@@ -244,32 +248,7 @@ function registerArchiveListComponent() {
 
                     window.addEventListener('popstate', () => {
                         const params = new URLSearchParams(window.location.search);
-                        const view = params.get('view');
-                        const search = params.get('search');
-                        const sort = params.get('sort');
-                        const page = parseInt(params.get('page')) || 1;
-
-                        this.activeTab = view || 'timestamps';
-
-                        if (view === 'archives') {
-                            // アーカイブタブの状態を復元
-                            const archiveQuery = params.get('baramutsu') || '';
-                            const tsFlg = params.get('ts') || '';
-                            this.archiveQuery = archiveQuery;
-                            this.tsFlg = tsFlg;
-
-                            if (archiveQuery || tsFlg) {
-                                this.archiveSearch();
-                            } else {
-                                this.fetchData(this.firstUrl());
-                            }
-                        } else {
-                            // タイムスタンプタブの状態を復元（デフォルト）
-                            this.searchQuery = search || '';
-                            this.timestampSort = sort || 'song_asc';
-                            this.currentTimestampPage = page;
-                            this.fetchTimestamps(page, search || '');
-                        }
+                        this.restoreStateFromURL(params);
                     });
                 }
             };

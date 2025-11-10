@@ -17,14 +17,20 @@
                     Youtubeチャンネルはこちら
                 </a>
                 <!-- デスクトップ用切り替えボタン -->
-                <div class="flex gap-2 ml-auto">
+                <div class="flex gap-2 ml-auto hidden sm:flex">
                     <button @click="activeTab = 'timestamps'"
                             :class="activeTab === 'timestamps' ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'"
+                            :aria-pressed="activeTab === 'timestamps'"
+                            role="tab"
+                            aria-label="タイムスタンプタブに切り替え"
                             class="px-4 py-2 rounded-lg font-medium text-sm transition-colors hover:opacity-80">
                         タイムスタンプ
                     </button>
                     <button @click="activeTab = 'archives'"
                             :class="activeTab === 'archives' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'"
+                            :aria-pressed="activeTab === 'archives'"
+                            role="tab"
+                            aria-label="アーカイブタブに切り替え"
                             class="px-4 py-2 rounded-lg font-medium text-sm transition-colors hover:opacity-80">
                         アーカイブ
                     </button>
