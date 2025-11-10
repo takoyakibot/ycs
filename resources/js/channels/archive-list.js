@@ -23,6 +23,12 @@ function registerArchiveListComponent() {
                 error: null,
                 isFiltered: false,
 
+                // 報告機能の状態管理
+                showReportModal: false,
+                reportTarget: null,
+                reportType: '',
+                reportComment: '',
+
                 // computed property
                 get maxPage() {
                     if (!this.archives.total || !this.archives.per_page) return 1;
@@ -250,6 +256,56 @@ function registerArchiveListComponent() {
                         const params = new URLSearchParams(window.location.search);
                         this.restoreStateFromURL(params);
                     });
+                },
+
+                // 報告モーダルを開く
+                openReportModal(timestamp) {
+                    this.reportTarget = timestamp;
+                    this.reportType = '';
+                    this.reportComment = '';
+                    this.showReportModal = true;
+                },
+
+                // 報告を送信（暫定実装：コンソールに出力）
+                submitReport() {
+                    if (!this.reportType) {
+                        alert('報告の種類を選択してください');
+                        return;
+                    }
+
+                    const reportData = {
+                        timestamp_id: this.reportTarget.id,
+                        video_id: this.reportTarget.video_id,
+                        timestamp_text: this.reportTarget.text,
+                        timestamp_time: this.reportTarget.ts_text,
+                        report_type: this.reportType,
+                        comment: this.reportComment,
+                        reported_at: new Date().toISOString(),
+                    };
+
+                    // 暫定実装：コンソールに出力
+                    console.log('=== タイムスタンプ報告 ===');
+                    console.log('タイムスタンプID:', reportData.timestamp_id);
+                    console.log('動画ID:', reportData.video_id);
+                    console.log('タイムスタンプテキスト:', reportData.timestamp_text);
+                    console.log('タイムスタンプ時刻:', reportData.timestamp_time);
+                    console.log('報告種別:', reportData.report_type);
+                    console.log('詳細:', reportData.comment);
+                    console.log('報告日時:', reportData.reported_at);
+                    console.log('========================');
+
+                    // TODO: 将来的にはAPIエンドポイントに送信
+                    // await fetch('/api/timestamp-reports', {
+                    //     method: 'POST',
+                    //     headers: {
+                    //         'Content-Type': 'application/json',
+                    //         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    //     },
+                    //     body: JSON.stringify(reportData),
+                    // });
+
+                    alert('報告を受け付けました。（現在は暫定実装のため、コンソールに出力されています）');
+                    this.showReportModal = false;
                 }
             };
         });
