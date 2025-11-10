@@ -24,7 +24,7 @@ class TimestampNormalization {
             MAX_ARCHIVE_TITLE_WIDTH: '150px',
             MAX_STATUS_LENGTH: 30,
             MAX_SELECTION_TEXT_LENGTH: 100,
-            YOUTUBE_BASE_URL: 'https://youtube.com/watch?v='
+            YOUTUBE_BASE_URL: 'https://youtu.be/'
         };
 
         this.init();
@@ -1128,7 +1128,7 @@ class TimestampNormalization {
      */
     generateVideoUrl(videoId, tsNum) {
         if (!videoId) return null;
-        const timeParam = tsNum ? `&t=${tsNum}s` : '';
+        const timeParam = tsNum ? `?t=${tsNum}s` : '';
         return `${this.CONSTANTS.YOUTUBE_BASE_URL}${videoId}${timeParam}`;
     }
 
