@@ -58,7 +58,50 @@ class ChannelController extends Controller
         )
             ->appends($request->query());
 
-        return response()->json($archives);
+        // 楽曲マッピング情報を付与
+        $archivesArray = $archives->toArray();
+
+        // 全タイムスタンプの正規化テキストを収集
+        $allNormalizedTexts = [];
+        foreach ($archivesArray['data'] as $archive) {
+            if (isset($archive['ts_items_display'])) {
+                foreach ($archive['ts_items_display'] as $tsItem) {
+                    if (!empty($tsItem['text'])) {
+                        $allNormalizedTexts[] = TextNormalizer::normalize($tsItem['text']);
+                    }
+                }
+            }
+        }
+
+        // 一度にすべてのマッピングを取得
+        $mappings = TimestampSongMapping::whereIn('normalized_text', array_unique($allNormalizedTexts))
+            ->with('song')
+            ->get()
+            ->keyBy('normalized_text');
+
+        // 各タイムスタンプに楽曲情報を追加
+        foreach ($archivesArray['data'] as &$archive) {
+            if (isset($archive['ts_items_display'])) {
+                foreach ($archive['ts_items_display'] as &$tsItem) {
+                    if (!empty($tsItem['text'])) {
+                        $normalizedText = TextNormalizer::normalize($tsItem['text']);
+                        $mapping = $mappings->get($normalizedText);
+
+                        if ($mapping && $mapping->song && !$mapping->is_not_song) {
+                            $tsItem['song'] = [
+                                'title' => $mapping->song->title,
+                                'artist' => $mapping->song->artist,
+                                'spotify_track_id' => $mapping->song->spotify_track_id,
+                            ];
+                        } else {
+                            $tsItem['song'] = null;
+                        }
+                    }
+                }
+            }
+        }
+
+        return response()->json($archivesArray);
     }
 
     /**
@@ -132,6 +175,7 @@ class ChannelController extends Controller
                     'song' => $mapping->song ? [
                         'title' => $mapping->song->title,
                         'artist' => $mapping->song->artist,
+                        'spotify_track_id' => $mapping->song->spotify_track_id,
                     ] : null,
                     'is_not_song' => $mapping->is_not_song,
                 ] : null,
