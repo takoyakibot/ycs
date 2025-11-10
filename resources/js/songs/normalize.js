@@ -1043,6 +1043,11 @@ class TimestampNormalization {
 
         videoTitle.textContent = title;
         videoTitle.title = title;
+        // 初期状態でtruncateクラスを適用
+        if (!videoTitle.classList.contains('truncate')) {
+            videoTitle.classList.add('truncate');
+            videoTitle.style.maxWidth = '300px';
+        }
         videoLinkBtn.disabled = !enabled;
         videoLinkBtn.setAttribute('aria-disabled', enabled ? 'false' : 'true');
 

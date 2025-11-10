@@ -57,7 +57,11 @@
 
                             <!-- 動画情報表示エリア -->
                             <div id="videoInfoArea" class="flex-1 flex items-center justify-end gap-2">
-                                <div class="text-xs text-gray-600 dark:text-gray-400 truncate max-w-[200px]" id="videoTitle" title="">
+                                <div class="text-xs text-gray-600 dark:text-gray-400 cursor-pointer hover:text-blue-600 transition-colors"
+                                     id="videoTitle"
+                                     title=""
+                                     style="max-width: 300px;"
+                                     onclick="this.classList.toggle('truncate'); if(!this.classList.contains('truncate')) { this.style.maxWidth = 'none'; } else { this.style.maxWidth = '300px'; }">
                                 </div>
                                 <button id="videoLinkBtn" class="px-3 py-1 text-white text-xs rounded flex-shrink-0 flex items-center gap-1 transition-colors bg-gray-400 cursor-not-allowed" disabled aria-label="動画を開く" aria-disabled="true">
                                     ▶ 動画を開く

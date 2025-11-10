@@ -131,7 +131,13 @@
                                         class="rounded-md object-cover flex flex-shrink-0"/>
                                 </a>
                                 <div :class="isFiltered ? 'w-3/4' : ''">
-                                    <h4 class="font-semibold text-gray-800 line-clamp-2" x-text="archive.title || ''"></h4>
+                                    <h4 class="font-semibold text-gray-800 cursor-pointer hover:text-blue-600 transition-colors"
+                                        x-data="{ expanded: false }"
+                                        :class="expanded ? '' : 'truncate'"
+                                        :title="archive.title || ''"
+                                        @click="expanded = !expanded"
+                                        x-text="archive.title || ''">
+                                    </h4>
                                     <p class="text-sm text-gray-600"
                                         :title="'元の値: ' + (archive.published_at || '')"
                                         x-text="'公開日: ' + formatPublishedDate(archive.published_at)"></p>
