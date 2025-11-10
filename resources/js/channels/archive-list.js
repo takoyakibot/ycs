@@ -12,7 +12,7 @@ function registerArchiveListComponent() {
                 channel: window.channel || {},
                 archives: window.archives || {},
                 timestamps: {},
-                activeTab: 'archives',
+                activeTab: 'timestamps',
                 searchQuery: '',
                 archiveQuery: '',
                 tsFlg: '',
@@ -145,7 +145,7 @@ function registerArchiveListComponent() {
                 updateURL() {
                     const params = new URLSearchParams();
 
-                    if (this.activeTab !== 'archives') {
+                    if (this.activeTab !== 'timestamps') {
                         params.set('view', this.activeTab);
                     }
 
@@ -199,13 +199,8 @@ function registerArchiveListComponent() {
                     const sort = params.get('sort');
                     const page = parseInt(params.get('page')) || 1;
 
-                    if (view === 'timestamps') {
-                        this.activeTab = 'timestamps';
-                        this.searchQuery = search || '';
-                        this.timestampSort = sort || 'song_asc';
-                        this.currentTimestampPage = page;
-                        this.fetchTimestamps(page, this.searchQuery);
-                    } else {
+                    if (view === 'archives') {
+                        this.activeTab = 'archives';
                         // アーカイブタブの状態を復元
                         const archiveQuery = params.get('baramutsu') || '';
                         const tsFlg = params.get('ts') || '';
@@ -217,6 +212,13 @@ function registerArchiveListComponent() {
                         } else {
                             this.fetchData(this.firstUrl());
                         }
+                    } else {
+                        // タイムスタンプタブの状態を復元（デフォルト）
+                        this.activeTab = 'timestamps';
+                        this.searchQuery = search || '';
+                        this.timestampSort = sort || 'song_asc';
+                        this.currentTimestampPage = page;
+                        this.fetchTimestamps(page, this.searchQuery);
                     }
 
                     const paginationButtons = document.querySelectorAll('#paginationButtons button');
@@ -247,14 +249,9 @@ function registerArchiveListComponent() {
                         const sort = params.get('sort');
                         const page = parseInt(params.get('page')) || 1;
 
-                        this.activeTab = view || 'archives';
+                        this.activeTab = view || 'timestamps';
 
-                        if (view === 'timestamps') {
-                            this.searchQuery = search || '';
-                            this.timestampSort = sort || 'song_asc';
-                            this.currentTimestampPage = page;
-                            this.fetchTimestamps(page, search || '');
-                        } else {
+                        if (view === 'archives') {
                             // アーカイブタブの状態を復元
                             const archiveQuery = params.get('baramutsu') || '';
                             const tsFlg = params.get('ts') || '';
@@ -266,6 +263,12 @@ function registerArchiveListComponent() {
                             } else {
                                 this.fetchData(this.firstUrl());
                             }
+                        } else {
+                            // タイムスタンプタブの状態を復元（デフォルト）
+                            this.searchQuery = search || '';
+                            this.timestampSort = sort || 'song_asc';
+                            this.currentTimestampPage = page;
+                            this.fetchTimestamps(page, search || '');
                         }
                     });
                 }
