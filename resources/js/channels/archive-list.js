@@ -1,4 +1,4 @@
-import { escapeHTML } from '../utils.js';
+import { escapeHTML, formatDate } from '../utils.js';
 import toast from '../utils/toast.js';
 
 // 報告タイプ定数
@@ -77,6 +77,10 @@ function registerArchiveListComponent() {
 
                 escapeHTML(str) {
                     return escapeHTML(str);
+                },
+
+                formatPublishedDate(dateStr) {
+                    return formatDate(dateStr);
                 },
 
                 archiveSearch() {

@@ -1,6 +1,6 @@
 import axios from 'axios';
 import DOMPurify from 'dompurify';
-import { escapeHTML, toggleButtonDisabled } from "../utils";
+import { escapeHTML, toggleButtonDisabled, formatDate } from "../utils";
 
 document.addEventListener('DOMContentLoaded', function () {
     const registerForm = document.getElementById('archiveRegisterForm');
@@ -58,8 +58,8 @@ document.addEventListener('DOMContentLoaded', function () {
                                         <h4 class="font-semibold ${archive.is_display ? 'text-gray-800' : 'text-gray-500'}">
                                             ${escapeHTML(archive.title || '')}
                                         </h4>
-                                        <p class="text-sm text-gray-600">
-                                            公開日: ${new Date(archive.published_at || 0).toLocaleString().split(' ')[0]}
+                                        <p class="text-sm text-gray-600" title="元の値: ${escapeHTML(archive.published_at || '')}">
+                                            公開日: ${formatDate(archive.published_at)}
                                         </p>
                                     </div>
                                     <div class="flex flex-col">
