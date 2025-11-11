@@ -133,7 +133,8 @@
                                 <div :class="isFiltered ? 'w-3/4' : ''">
                                     <h4 class="font-semibold text-gray-800 line-clamp-2" x-text="archive.title || ''"></h4>
                                     <p class="text-sm text-gray-600"
-                                        x-text="'公開日: ' + (new Date(archive.published_at || 0)).toLocaleString().split(' ')[0]"></p>
+                                        :title="'元の値: ' + (archive.published_at || '')"
+                                        x-text="'公開日: ' + formatPublishedDate(archive.published_at)"></p>
                                 </div>
                             </div>
                         </div>
@@ -305,7 +306,8 @@
                                          x-text="ts.archive.title">
                                     </div>
                                     <div class="text-xs text-gray-500 dark:text-gray-500 mt-0.5"
-                                         x-text="'公開日: ' + (ts.archive.published_at ? new Date(ts.archive.published_at).toLocaleDateString() : '不明')">
+                                         :title="'元の値: ' + (ts.archive.published_at || '')"
+                                         x-text="'公開日: ' + (ts.archive.published_at ? formatPublishedDate(ts.archive.published_at) : '不明')">
                                     </div>
                                 </div>
 
