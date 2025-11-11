@@ -306,7 +306,8 @@
                                          x-text="ts.archive.title">
                                     </div>
                                     <div class="text-xs text-gray-500 dark:text-gray-500 mt-0.5"
-                                         x-text="'公開日: ' + (ts.archive.published_at ? new Date(ts.archive.published_at).toLocaleDateString() : '不明')">
+                                         :title="'元の値: ' + (ts.archive.published_at || '')"
+                                         x-text="'公開日: ' + (ts.archive.published_at ? formatPublishedDate(ts.archive.published_at) : '不明')">
                                     </div>
                                 </div>
 

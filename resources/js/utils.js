@@ -13,7 +13,11 @@ export function toggleButtonDisabled(target, flg) {
 /**
  * 日付を正規化してフォーマットする
  * @param {string|Date} dateStr - 日付文字列またはDateオブジェクト
- * @returns {string} - YYYY年MM月DD日 形式の文字列
+ * @returns {string} - YYYY年MM月DD日 形式の文字列。無効な入力の場合は空文字列を返す
+ * @example
+ * formatDate('2024-11-11') // '2024年11月11日'
+ * formatDate('') // ''
+ * formatDate(null) // ''
  */
 export function formatDate(dateStr) {
     if (!dateStr) return '';
