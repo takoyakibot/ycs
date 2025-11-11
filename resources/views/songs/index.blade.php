@@ -57,7 +57,19 @@
 
                             <!-- 動画情報表示エリア -->
                             <div id="videoInfoArea" class="flex-1 flex items-center justify-end gap-2">
-                                <div class="text-xs text-gray-600 dark:text-gray-400 truncate max-w-[200px]" id="videoTitle" title="">
+                                <div class="text-xs text-gray-600 dark:text-gray-400 cursor-pointer hover:text-blue-600 transition-colors transition-all duration-200 ease-in-out max-w-[300px]"
+                                     id="videoTitle"
+                                     title=""
+                                     x-data="{ expanded: false }"
+                                     :class="expanded ? '' : 'truncate'"
+                                     :style="expanded ? 'max-width: none;' : ''"
+                                     @click="expanded = !expanded"
+                                     role="button"
+                                     tabindex="0"
+                                     :aria-expanded="expanded"
+                                     aria-label="タイトルを展開/折りたたみ"
+                                     @keydown.enter="expanded = !expanded"
+                                     @keydown.space.prevent="expanded = !expanded">
                                 </div>
                                 <button id="videoLinkBtn" class="px-3 py-1 text-white text-xs rounded flex-shrink-0 flex items-center gap-1 transition-colors bg-gray-400 cursor-not-allowed" disabled aria-label="動画を開く" aria-disabled="true">
                                     ▶ 動画を開く
