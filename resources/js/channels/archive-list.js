@@ -1,4 +1,14 @@
 import { escapeHTML } from '../utils.js';
+import toast from '../utils/toast.js';
+
+// 報告タイプ定数
+const REPORT_TYPES = {
+    WRONG_SONG: 'wrong_song',
+    NOT_SONG: 'not_song',
+    NOT_TIMESTAMP: 'not_timestamp',
+    PROBLEM: 'problem',
+    OTHER: 'other'
+};
 
 /**
  * アーカイブ一覧とタイムスタンプ管理コンポーネント
@@ -22,6 +32,12 @@ function registerArchiveListComponent() {
                 loading: false,
                 error: null,
                 isFiltered: false,
+
+                // 報告機能の状態管理
+                showReportModal: false,
+                reportTarget: null,
+                reportType: '',
+                reportComment: '',
 
                 // computed property
                 get maxPage() {
@@ -250,6 +266,59 @@ function registerArchiveListComponent() {
                         const params = new URLSearchParams(window.location.search);
                         this.restoreStateFromURL(params);
                     });
+                },
+
+                // 報告モーダルを開く
+                openReportModal(timestamp) {
+                    this.reportTarget = timestamp;
+                    this.reportType = '';
+                    this.reportComment = '';
+                    this.showReportModal = true;
+                },
+
+                // 報告を送信（暫定実装：コンソールに出力）
+                submitReport() {
+                    // reportTargetの存在確認
+                    if (!this.reportTarget) {
+                        console.error('No report target set');
+                        toast.error('報告対象が見つかりません');
+                        return;
+                    }
+
+                    // 報告タイプの検証
+                    if (!this.reportType) {
+                        toast.error('報告の種類を選択してください');
+                        return;
+                    }
+
+                    const reportData = {
+                        timestamp_id: this.reportTarget.id,
+                        video_id: this.reportTarget.video_id,
+                        timestamp_text: this.reportTarget.text,
+                        timestamp_time: this.reportTarget.ts_text,
+                        report_type: this.reportType,
+                        comment: this.reportComment,
+                        reported_at: new Date().toISOString(),
+                    };
+
+                    // 暫定実装：コンソールに出力
+                    console.log('=== タイムスタンプ報告 ===', reportData);
+
+                    // TODO: 将来的にはAPIエンドポイントに送信
+                    // Expected endpoint: POST /api/timestamp-reports
+                    // Expected response: { success: boolean, message: string }
+                    // Required headers: CSRF token
+                    // await fetch('/api/timestamp-reports', {
+                    //     method: 'POST',
+                    //     headers: {
+                    //         'Content-Type': 'application/json',
+                    //         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    //     },
+                    //     body: JSON.stringify(reportData),
+                    // });
+
+                    toast.success('報告を受け付けました。（現在は暫定実装のため、コンソールに出力されています）');
+                    this.showReportModal = false;
                 }
             };
         });
