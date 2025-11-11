@@ -66,32 +66,48 @@ class ChannelController extends Controller
         foreach ($archivesArray['data'] as $archive) {
             if (isset($archive['ts_items_display'])) {
                 foreach ($archive['ts_items_display'] as $tsItem) {
-                    if (!empty($tsItem['text'])) {
+                    if (! empty($tsItem['text'])) {
                         $allNormalizedTexts[] = TextNormalizer::normalize($tsItem['text']);
                     }
                 }
             }
         }
 
+        // 早期リターン: タイムスタンプがない場合
+        if (empty($allNormalizedTexts)) {
+            return response()->json($archivesArray);
+        }
+
         // 一度にすべてのマッピングを取得
-        $mappings = TimestampSongMapping::whereIn('normalized_text', array_unique($allNormalizedTexts))
-            ->with('song')
-            ->get()
-            ->keyBy('normalized_text');
+        try {
+            $mappings = TimestampSongMapping::whereIn('normalized_text', array_unique($allNormalizedTexts))
+                ->with('song')
+                ->get()
+                ->keyBy('normalized_text');
+        } catch (\Exception $e) {
+            // ログにエラーを記録
+            \Log::error('Failed to fetch song mappings in fetchArchives', [
+                'error' => $e->getMessage(),
+                'channel_id' => $id,
+            ]);
+
+            // エラー発生時は空のコレクションを返して処理を継続
+            $mappings = collect();
+        }
 
         // 各タイムスタンプに楽曲情報を追加
         foreach ($archivesArray['data'] as &$archive) {
             if (isset($archive['ts_items_display'])) {
                 foreach ($archive['ts_items_display'] as &$tsItem) {
-                    if (!empty($tsItem['text'])) {
+                    if (! empty($tsItem['text'])) {
                         $normalizedText = TextNormalizer::normalize($tsItem['text']);
                         $mapping = $mappings->get($normalizedText);
 
-                        if ($mapping && $mapping->song && !$mapping->is_not_song) {
+                        if ($mapping && $mapping->song && ! $mapping->is_not_song) {
                             $tsItem['song'] = [
                                 'title' => $mapping->song->title,
                                 'artist' => $mapping->song->artist,
-                                'spotify_track_id' => $mapping->song->spotify_track_id,
+                                'spotify_track_id' => $this->validateSpotifyTrackId($mapping->song->spotify_track_id),
                             ];
                         } else {
                             $tsItem['song'] = null;
@@ -151,10 +167,21 @@ class ChannelController extends Controller
         })->unique()->values()->toArray();
 
         // 一度にすべてのマッピングを取得
-        $mappings = TimestampSongMapping::whereIn('normalized_text', $normalizedTexts)
-            ->with('song')
-            ->get()
-            ->keyBy('normalized_text');
+        try {
+            $mappings = TimestampSongMapping::whereIn('normalized_text', $normalizedTexts)
+                ->with('song')
+                ->get()
+                ->keyBy('normalized_text');
+        } catch (\Exception $e) {
+            // ログにエラーを記録
+            \Log::error('Failed to fetch song mappings in fetchTimestamps', [
+                'error' => $e->getMessage(),
+                'channel_id' => $id,
+            ]);
+
+            // エラー発生時は空のコレクションを返して処理を継続
+            $mappings = collect();
+        }
 
         // 各タイムスタンプにマッピング情報を追加
         $timestampsWithMapping = $allTimestamps->map(function ($item) use ($mappings) {
@@ -175,7 +202,7 @@ class ChannelController extends Controller
                     'song' => $mapping->song ? [
                         'title' => $mapping->song->title,
                         'artist' => $mapping->song->artist,
-                        'spotify_track_id' => $mapping->song->spotify_track_id,
+                        'spotify_track_id' => $this->validateSpotifyTrackId($mapping->song->spotify_track_id),
                     ] : null,
                     'is_not_song' => $mapping->is_not_song,
                 ] : null,
@@ -318,5 +345,22 @@ class ChannelController extends Controller
 
         // その他（記号など）
         return 'その他';
+    }
+
+    /**
+     * Spotify Track IDの妥当性を検証
+     */
+    private function validateSpotifyTrackId(?string $trackId): ?string
+    {
+        if (! $trackId) {
+            return null;
+        }
+
+        // Spotify track IDsは22文字の英数字
+        if (preg_match('/^[a-zA-Z0-9]{22}$/', $trackId)) {
+            return $trackId;
+        }
+
+        return null;
     }
 }
