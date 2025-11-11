@@ -131,11 +131,17 @@
                                         class="rounded-md object-cover flex flex-shrink-0"/>
                                 </a>
                                 <div :class="isFiltered ? 'w-3/4' : ''">
-                                    <h4 class="font-semibold text-gray-800 cursor-pointer hover:text-blue-600 transition-colors"
+                                    <h4 class="font-semibold text-gray-800 cursor-pointer hover:text-blue-600 transition-colors transition-all duration-200 ease-in-out"
                                         x-data="{ expanded: false }"
                                         :class="expanded ? '' : 'truncate'"
                                         :title="archive.title || ''"
                                         @click="expanded = !expanded"
+                                        role="button"
+                                        tabindex="0"
+                                        :aria-expanded="expanded"
+                                        aria-label="タイトルを展開/折りたたみ"
+                                        @keydown.enter="expanded = !expanded"
+                                        @keydown.space.prevent="expanded = !expanded"
                                         x-text="archive.title || ''">
                                     </h4>
                                     <p class="text-sm text-gray-600"
