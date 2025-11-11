@@ -176,7 +176,14 @@ class TimestampNormalization {
             return;
         }
 
-        timestamps.forEach(ts => {
+        // 楽曲名・アーティスト名、または元のテキストでソート
+        const sortedTimestamps = timestamps.sort((a, b) => {
+            const textA = a.song ? `${a.song.title} - ${a.song.artist}` : (a.text || '');
+            const textB = b.song ? `${b.song.title} - ${b.song.artist}` : (b.text || '');
+            return textA.localeCompare(textB, 'ja');
+        });
+
+        sortedTimestamps.forEach(ts => {
             const div = document.createElement('div');
             const isSelected = this.selectedTimestamps.some(t => t.id === ts.id);
 
