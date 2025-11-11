@@ -81,6 +81,7 @@
                                 x-model="searchQuery"
                                 placeholder="楽曲名・アーティスト名・タイムスタンプで検索..."
                                 aria-label="楽曲名・アーティスト名・タイムスタンプで検索"
+                                maxlength="255"
                                 class="border p-2 rounded w-full dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100" />
                         </template>
                         <template x-if="activeTab === 'archives'">

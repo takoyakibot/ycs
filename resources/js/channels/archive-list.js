@@ -127,7 +127,7 @@ function registerArchiveListComponent() {
                         this.updateURL();
                     } catch (error) {
                         console.error('タイムスタンプの取得に失敗しました:', error);
-                        this.error = error.message;
+                        this.error = 'タイムスタンプの読み込み中にエラーが発生しました。ページを再読み込みしてください。';
                     } finally {
                         this.loading = false;
                     }
@@ -217,7 +217,8 @@ function registerArchiveListComponent() {
                     const view = params.get('view');
                     const search = params.get('search');
                     const sort = params.get('sort');
-                    const page = parseInt(params.get('page')) || 1;
+                    // ページパラメータのバリデーション: 1以上の整数に制限
+                    const page = Math.max(1, parseInt(params.get('page')) || 1);
 
                     if (view === 'archives') {
                         this.activeTab = 'archives';
