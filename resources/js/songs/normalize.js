@@ -176,7 +176,27 @@ class TimestampNormalization {
             return;
         }
 
-        timestamps.forEach(ts => {
+        /**
+         * タイムスタンプをソート
+         * - 楽曲マスタに紐づいている場合: "楽曲名 - アーティスト名" でソート
+         * - 未紐づけの場合: 元のテキストでソート
+         * - 日本語対応のlocaleCompareを使用
+         * - 同一ソートキーの場合はIDで二次ソート
+         */
+        const sortedTimestamps = [...timestamps]
+            .map(ts => ({
+                timestamp: ts,
+                sortKey: ts.song
+                    ? `${ts.song.title || ''} - ${ts.song.artist || ''}`.trim()
+                    : (ts.text || '')
+            }))
+            .sort((a, b) => {
+                const comparison = a.sortKey.localeCompare(b.sortKey, 'ja');
+                return comparison !== 0 ? comparison : a.timestamp.id - b.timestamp.id;
+            })
+            .map(item => item.timestamp);
+
+        sortedTimestamps.forEach(ts => {
             const div = document.createElement('div');
             const isSelected = this.selectedTimestamps.some(t => t.id === ts.id);
 
