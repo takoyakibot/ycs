@@ -362,7 +362,11 @@
         <div x-show="showReportModal"
              x-cloak
              class="fixed inset-0 z-50 overflow-y-auto"
-             @click.self="showReportModal = false">
+             role="dialog"
+             aria-modal="true"
+             aria-labelledby="report-modal-title"
+             @click.self="showReportModal = false"
+             @keydown.escape.window="showReportModal = false">
             <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
                 <!-- 背景オーバーレイ -->
                 <div x-show="showReportModal"
@@ -386,7 +390,7 @@
                      class="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
 
                     <div class="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                        <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
+                        <h3 id="report-modal-title" class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
                             タイムスタンプの報告
                         </h3>
 

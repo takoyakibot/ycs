@@ -1,4 +1,14 @@
 import { escapeHTML } from '../utils.js';
+import toast from '../utils/toast.js';
+
+// 報告タイプ定数
+const REPORT_TYPES = {
+    WRONG_SONG: 'wrong_song',
+    NOT_SONG: 'not_song',
+    NOT_TIMESTAMP: 'not_timestamp',
+    PROBLEM: 'problem',
+    OTHER: 'other'
+};
 
 /**
  * アーカイブ一覧とタイムスタンプ管理コンポーネント
@@ -268,8 +278,16 @@ function registerArchiveListComponent() {
 
                 // 報告を送信（暫定実装：コンソールに出力）
                 submitReport() {
+                    // reportTargetの存在確認
+                    if (!this.reportTarget) {
+                        console.error('No report target set');
+                        toast.error('報告対象が見つかりません');
+                        return;
+                    }
+
+                    // 報告タイプの検証
                     if (!this.reportType) {
-                        alert('報告の種類を選択してください');
+                        toast.error('報告の種類を選択してください');
                         return;
                     }
 
@@ -284,17 +302,12 @@ function registerArchiveListComponent() {
                     };
 
                     // 暫定実装：コンソールに出力
-                    console.log('=== タイムスタンプ報告 ===');
-                    console.log('タイムスタンプID:', reportData.timestamp_id);
-                    console.log('動画ID:', reportData.video_id);
-                    console.log('タイムスタンプテキスト:', reportData.timestamp_text);
-                    console.log('タイムスタンプ時刻:', reportData.timestamp_time);
-                    console.log('報告種別:', reportData.report_type);
-                    console.log('詳細:', reportData.comment);
-                    console.log('報告日時:', reportData.reported_at);
-                    console.log('========================');
+                    console.log('=== タイムスタンプ報告 ===', reportData);
 
                     // TODO: 将来的にはAPIエンドポイントに送信
+                    // Expected endpoint: POST /api/timestamp-reports
+                    // Expected response: { success: boolean, message: string }
+                    // Required headers: CSRF token
                     // await fetch('/api/timestamp-reports', {
                     //     method: 'POST',
                     //     headers: {
@@ -304,7 +317,7 @@ function registerArchiveListComponent() {
                     //     body: JSON.stringify(reportData),
                     // });
 
-                    alert('報告を受け付けました。（現在は暫定実装のため、コンソールに出力されています）');
+                    toast.success('報告を受け付けました。（現在は暫定実装のため、コンソールに出力されています）');
                     this.showReportModal = false;
                 }
             };
