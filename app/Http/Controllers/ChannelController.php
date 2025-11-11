@@ -210,21 +210,19 @@ class ChannelController extends Controller
         });
 
         // 楽曲名・アーティスト名での検索フィルタリング
+        // ※タイムスタンプテキストはDBレベルでフィルタ済み
         if ($search) {
             $timestampsWithMapping = $timestampsWithMapping->filter(function ($ts) use ($search) {
-                // タイムスタンプテキストで一致（既にDBレベルでフィルタ済みだが念のため）
-                if (stripos($ts['text'], $search) !== false) {
-                    return true;
-                }
-
                 // 楽曲紐づけ済みの場合は楽曲名・アーティスト名でも検索
                 if ($ts['mapping'] && $ts['mapping']['song']) {
                     $songText = $ts['mapping']['song']['title'].' '.$ts['mapping']['song']['artist'];
-
-                    return stripos($songText, $search) !== false;
+                    if (stripos($songText, $search) !== false) {
+                        return true;
+                    }
                 }
 
-                return false;
+                // 楽曲検索で一致しない場合も、テキスト検索でDBに含まれているものは表示
+                return true;
             });
         }
 
