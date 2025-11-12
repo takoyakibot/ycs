@@ -370,8 +370,8 @@ class ChannelController extends Controller
         // チャンネル取得
         $channel = Channel::where('handle', $id)->firstOrFail();
 
-        // タイムスタンプ取得（チャンネルフィルタ付き）
-        $query = TsItem::with(['archive'])
+        // タイムスタンプ取得クエリ（archiveは不要なのでwith()なし）
+        $query = TsItem::query()
             ->whereHas('archive', function ($q) use ($channel) {
                 $q->where('channel_id', $channel->channel_id)
                     ->where('is_display', 1);
@@ -380,19 +380,36 @@ class ChannelController extends Controller
             ->where('text', '!=', '')
             ->where('is_display', 1);
 
-        $allTimestamps = $query->get();
+        // 出力内容を生成（重複を除外、チャンク処理でメモリ効率化）
+        $lines = [];
+        $seen = [];
+        $normalizedTexts = [];
 
-        // 正規化テキストを取得
-        $normalizedTexts = $allTimestamps->map(function ($item) {
-            return TextNormalizer::normalize($item->text);
-        })->unique()->values()->toArray();
+        // チャンク処理でタイムスタンプを取得
+        $query->chunk(1000, function ($timestamps) use (&$normalizedTexts, &$seen, &$lines) {
+            foreach ($timestamps as $item) {
+                $normalizedText = TextNormalizer::normalize($item->text);
 
-        // マッピング情報を取得
+                // 重複チェック（正規化テキストで判定）
+                if (isset($seen[$normalizedText])) {
+                    continue;
+                }
+                $seen[$normalizedText] = true;
+                $normalizedTexts[] = $normalizedText;
+                $lines[] = $normalizedText;
+            }
+        });
+
+        // マッピング情報を取得（バッチ処理で1000件ずつ）
+        $mappings = collect();
         try {
-            $mappings = TimestampSongMapping::whereIn('normalized_text', $normalizedTexts)
-                ->with('song')
-                ->get()
-                ->keyBy('normalized_text');
+            foreach (array_chunk($normalizedTexts, 1000) as $chunk) {
+                $batchMappings = TimestampSongMapping::whereIn('normalized_text', $chunk)
+                    ->with('song')
+                    ->get();
+                $mappings = $mappings->merge($batchMappings);
+            }
+            $mappings = $mappings->keyBy('normalized_text');
         } catch (\Exception $e) {
             \Log::error('Failed to fetch song mappings in downloadTimestamps', [
                 'error' => $e->getMessage(),
@@ -401,28 +418,12 @@ class ChannelController extends Controller
             $mappings = collect();
         }
 
-        // 出力内容を生成（重複を除外）
-        $lines = [];
-        $seen = [];
-
-        foreach ($allTimestamps as $item) {
-            $normalizedText = TextNormalizer::normalize($item->text);
+        // 「楽曲ではない」アイテムを除外
+        $lines = array_filter($lines, function ($normalizedText) use ($mappings) {
             $mapping = $mappings->get($normalizedText);
 
-            // 「楽曲ではない」は除外
-            if ($mapping && $mapping->is_not_song) {
-                continue;
-            }
-
-            // 重複チェック（正規化テキストで判定）
-            if (isset($seen[$normalizedText])) {
-                continue;
-            }
-            $seen[$normalizedText] = true;
-
-            // 正規化テキストを出力
-            $lines[] = $normalizedText;
-        }
+            return ! ($mapping && $mapping->is_not_song);
+        });
 
         // ソート
         sort($lines);

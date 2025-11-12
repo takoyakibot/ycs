@@ -167,10 +167,9 @@ function registerArchiveListComponent() {
                         // ダウンロード用URLを生成
                         const url = `/api/channels/${this.channel.handle}/timestamps/download`;
 
-                        // リンクを作成してクリック
+                        // リンクを作成してクリック（サーバー側のファイル名を使用）
                         const a = document.createElement('a');
                         a.href = url;
-                        a.download = `timestamps_${Date.now()}.txt`;
                         document.body.appendChild(a);
                         a.click();
                         document.body.removeChild(a);
@@ -178,7 +177,7 @@ function registerArchiveListComponent() {
                         toast.success('ダウンロードを開始しました');
                     } catch (error) {
                         console.error('ダウンロードに失敗しました:', error);
-                        toast.error('ダウンロードに失敗しました');
+                        toast.error('ダウンロードに失敗しました。時間をおいて再度お試しください。');
                     }
                 },
 
