@@ -15,12 +15,12 @@ class TsItem extends Model
 
     protected $fillable = [
         'id',
-        'archive_id',
+        'video_id',
         'type',
-        'comment_id',
         'ts_text',
         'ts_num',
         'text',
+        'is_display',
     ];
 
     public function archive()
