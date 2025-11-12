@@ -112,13 +112,13 @@
                             <button
                                 type="button"
                                 @click="searchQuery = ''"
-                                class="bg-gray-500 text-white px-6 py-2 rounded hover:bg-gray-600">
+                                class="bg-gray-500 text-white px-6 py-2 rounded hover:bg-gray-600 whitespace-nowrap">
                                 クリア
                             </button>
                             <button
                                 type="button"
                                 @click="downloadTimestamps()"
-                                class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 flex items-center gap-1">
+                                class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 flex items-center gap-1 whitespace-nowrap">
                                 📥 ダウンロード
                             </button>
                         </div>
