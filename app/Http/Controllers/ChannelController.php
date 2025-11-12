@@ -142,14 +142,7 @@ class ChannelController extends Controller
         $sort = $validated['sort'] ?? 'song_asc';
 
         // タイムスタンプ取得（チャンネルフィルタ付き）
-        $query = TsItem::with(['archive'])
-            ->whereHas('archive', function ($q) use ($channel) {
-                $q->where('channel_id', $channel->channel_id)
-                    ->where('is_display', 1);
-            })
-            ->whereNotNull('text')
-            ->where('text', '!=', '')
-            ->where('is_display', 1);
+        $query = $this->buildTimestampQuery($channel, withArchive: true);
 
         // 検索条件の追加（タイムスタンプテキスト）
         if ($search) {
@@ -346,6 +339,29 @@ class ChannelController extends Controller
     }
 
     /**
+     * タイムスタンプ取得クエリのベースを構築
+     *
+     * @param  bool  $withArchive  archiveリレーションを事前ロードするか
+     */
+    private function buildTimestampQuery(Channel $channel, bool $withArchive = false)
+    {
+        $query = TsItem::query();
+
+        if ($withArchive) {
+            $query->with(['archive']);
+        }
+
+        return $query
+            ->whereHas('archive', function ($q) use ($channel) {
+                $q->where('channel_id', $channel->channel_id)
+                    ->where('is_display', 1);
+            })
+            ->whereNotNull('text')
+            ->where('text', '!=', '')
+            ->where('is_display', 1);
+    }
+
+    /**
      * Spotify Track IDの妥当性を検証
      */
     private function validateSpotifyTrackId(?string $trackId): ?string
@@ -371,14 +387,7 @@ class ChannelController extends Controller
         $channel = Channel::where('handle', $id)->firstOrFail();
 
         // タイムスタンプ取得クエリ（archiveは不要なのでwith()なし）
-        $query = TsItem::query()
-            ->whereHas('archive', function ($q) use ($channel) {
-                $q->where('channel_id', $channel->channel_id)
-                    ->where('is_display', 1);
-            })
-            ->whereNotNull('text')
-            ->where('text', '!=', '')
-            ->where('is_display', 1);
+        $query = $this->buildTimestampQuery($channel);
 
         // 出力内容を生成（重複を除外、チャンク処理でメモリ効率化）
         $lines = [];
