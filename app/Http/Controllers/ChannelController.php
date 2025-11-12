@@ -361,4 +361,79 @@ class ChannelController extends Controller
 
         return null;
     }
+
+    /**
+     * タイムスタンプ一覧をテキストファイルとしてダウンロード
+     */
+    public function downloadTimestamps(string $id, Request $request)
+    {
+        // チャンネル取得
+        $channel = Channel::where('handle', $id)->firstOrFail();
+
+        // タイムスタンプ取得（チャンネルフィルタ付き）
+        $query = TsItem::with(['archive'])
+            ->whereHas('archive', function ($q) use ($channel) {
+                $q->where('channel_id', $channel->channel_id)
+                    ->where('is_display', 1);
+            })
+            ->whereNotNull('text')
+            ->where('text', '!=', '')
+            ->where('is_display', 1);
+
+        $allTimestamps = $query->get();
+
+        // 正規化テキストを取得
+        $normalizedTexts = $allTimestamps->map(function ($item) {
+            return TextNormalizer::normalize($item->text);
+        })->unique()->values()->toArray();
+
+        // マッピング情報を取得
+        try {
+            $mappings = TimestampSongMapping::whereIn('normalized_text', $normalizedTexts)
+                ->with('song')
+                ->get()
+                ->keyBy('normalized_text');
+        } catch (\Exception $e) {
+            \Log::error('Failed to fetch song mappings in downloadTimestamps', [
+                'error' => $e->getMessage(),
+                'channel_id' => $id,
+            ]);
+            $mappings = collect();
+        }
+
+        // 出力内容を生成（重複を除外）
+        $lines = [];
+        $seen = [];
+
+        foreach ($allTimestamps as $item) {
+            $normalizedText = TextNormalizer::normalize($item->text);
+            $mapping = $mappings->get($normalizedText);
+
+            // 「楽曲ではない」は除外
+            if ($mapping && $mapping->is_not_song) {
+                continue;
+            }
+
+            // 重複チェック（正規化テキストで判定）
+            if (isset($seen[$normalizedText])) {
+                continue;
+            }
+            $seen[$normalizedText] = true;
+
+            // 正規化テキストを出力
+            $lines[] = $normalizedText;
+        }
+
+        // ソート
+        sort($lines);
+
+        // BOM付きUTF-8でテキスト生成
+        $content = "\xEF\xBB\xBF".implode("\n", $lines);
+        $filename = 'timestamps_'.date('Ymd').'.txt';
+
+        return response($content, 200)
+            ->header('Content-Type', 'text/plain; charset=UTF-8')
+            ->header('Content-Disposition', 'attachment; filename="'.$filename.'"')
+            ->header('Content-Length', strlen($content));
+    }
 }
