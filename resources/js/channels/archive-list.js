@@ -162,6 +162,25 @@ function registerArchiveListComponent() {
                     }, 100); // データ取得待ち
                 },
 
+                downloadTimestamps() {
+                    try {
+                        // ダウンロード用URLを生成
+                        const url = `/api/channels/${this.channel.handle}/timestamps/download`;
+
+                        // リンクを作成してクリック（サーバー側のファイル名を使用）
+                        const a = document.createElement('a');
+                        a.href = url;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+
+                        toast.success('ダウンロードを開始しました');
+                    } catch (error) {
+                        console.error('ダウンロードに失敗しました:', error);
+                        toast.error('ダウンロードに失敗しました。時間をおいて再度お試しください。');
+                    }
+                },
+
                 updateURL() {
                     const params = new URLSearchParams();
 

@@ -102,12 +102,20 @@
                         </button>
                     </template>
                     <template x-if="activeTab === 'timestamps'">
-                        <button
-                            type="button"
-                            @click="searchQuery = ''"
-                            class="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">
-                            クリア
-                        </button>
+                        <div class="flex gap-2">
+                            <button
+                                type="button"
+                                @click="searchQuery = ''"
+                                class="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">
+                                クリア
+                            </button>
+                            <button
+                                type="button"
+                                @click="downloadTimestamps()"
+                                class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 flex items-center gap-1">
+                                📥 ダウンロード
+                            </button>
+                        </div>
                     </template>
                 </form>
             </div>

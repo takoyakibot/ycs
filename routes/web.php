@@ -67,6 +67,9 @@ Route::get('/channels/{id}', [ChannelController::class, 'show'])->name('channels
 
 Route::get('api/channels/{id}', [ChannelController::class, 'fetchArchives'])->name('channels.fetchArchives');
 Route::get('api/channels/{id}/timestamps', [ChannelController::class, 'fetchTimestamps'])->name('channels.fetchTimestamps');
+Route::get('api/channels/{id}/timestamps/download', [ChannelController::class, 'downloadTimestamps'])
+    ->name('channels.downloadTimestamps')
+    ->middleware('throttle:10,1'); // 1分間に10回まで
 
 Route::get('/terms', [MarkdownController::class, 'show'])->name('markdown.show');
 
