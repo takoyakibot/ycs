@@ -439,7 +439,20 @@ class ChannelController extends Controller
 
         // BOM付きUTF-8でテキスト生成
         $content = "\xEF\xBB\xBF".implode("\n", $lines);
-        $filename = 'timestamps_'.date('Ymd').'.txt';
+
+        // ファイル名生成（安全な文字のみ使用、20文字まで）
+        $identifier = $channel->handle ?: $channel->channel_id;
+        $safeIdentifier = preg_replace('/[^A-Za-z0-9\-_]/', '', $identifier);
+
+        // 空の場合のフォールバック
+        if (empty($safeIdentifier)) {
+            $safeIdentifier = 'unknown';
+        }
+
+        // 識別子を20文字に制限
+        $safeIdentifier = substr($safeIdentifier, 0, 20);
+
+        $filename = 'timestamps_'.$safeIdentifier.'_'.date('Ymd').'.txt';
 
         return response($content, 200)
             ->header('Content-Type', 'text/plain; charset=UTF-8')
