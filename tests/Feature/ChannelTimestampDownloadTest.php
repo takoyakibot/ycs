@@ -63,7 +63,7 @@ class ChannelTimestampDownloadTest extends TestCase
 
         $response->assertStatus(200);
         $response->assertHeader('Content-Type', 'text/plain; charset=UTF-8');
-        $response->assertHeader('Content-Disposition', 'attachment; filename="timestamps_'.date('Ymd').'.txt"');
+        $response->assertHeader('Content-Disposition', 'attachment; filename="timestamps_test-channel_'.date('Ymd').'.txt"');
     }
 
     /**
@@ -509,5 +509,128 @@ class ChannelTimestampDownloadTest extends TestCase
         $this->assertCount(2, $lines);
         $this->assertContains('song a', $lines);
         $this->assertContains('song b', $lines);
+    }
+
+    /**
+     * ファイル名に特殊文字を含むhandleが正しく処理されることをテスト
+     */
+    public function test_download_filename_handles_special_characters(): void
+    {
+        // @を含むhandleのチャンネルを作成
+        $channel = Channel::create([
+            'handle' => '@TestChannel',
+            'channel_id' => 'UC987654321',
+            'title' => 'Special Test Channel',
+            'thumbnail' => 'https://example.com/special.jpg',
+        ]);
+
+        Archive::create([
+            'id' => 'videoSpecial',
+            'channel_id' => 'UC987654321',
+            'video_id' => 'videoSpecial',
+            'title' => 'Special Archive',
+            'thumbnail' => 'https://example.com/special-video.jpg',
+            'is_public' => true,
+            'is_display' => true,
+            'published_at' => now(),
+            'comments_updated_at' => now(),
+        ]);
+
+        TsItem::create([
+            'id' => Str::uuid(),
+            'video_id' => 'videoSpecial',
+            'type' => '1',
+            'ts_text' => '1:00',
+            'ts_num' => 60,
+            'text' => 'Test',
+            'is_display' => true,
+        ]);
+
+        $response = $this->get("/api/channels/{$channel->handle}/timestamps/download");
+
+        // @が除去されたファイル名になることを確認
+        $response->assertHeader('Content-Disposition', 'attachment; filename="timestamps_TestChannel_'.date('Ymd').'.txt"');
+    }
+
+    /**
+     * ファイル名の長さが20文字に制限されることをテスト
+     */
+    public function test_download_filename_length_limit(): void
+    {
+        // 20文字を超えるhandleのチャンネルを作成
+        $channel = Channel::create([
+            'handle' => 'VeryLongChannelHandleNameThatExceeds20Characters',
+            'channel_id' => 'UC111222333',
+            'title' => 'Long Handle Channel',
+            'thumbnail' => 'https://example.com/long.jpg',
+        ]);
+
+        Archive::create([
+            'id' => 'videoLong',
+            'channel_id' => 'UC111222333',
+            'video_id' => 'videoLong',
+            'title' => 'Long Archive',
+            'thumbnail' => 'https://example.com/long-video.jpg',
+            'is_public' => true,
+            'is_display' => true,
+            'published_at' => now(),
+            'comments_updated_at' => now(),
+        ]);
+
+        TsItem::create([
+            'id' => Str::uuid(),
+            'video_id' => 'videoLong',
+            'type' => '1',
+            'ts_text' => '1:00',
+            'ts_num' => 60,
+            'text' => 'Test',
+            'is_display' => true,
+        ]);
+
+        $response = $this->get("/api/channels/{$channel->handle}/timestamps/download");
+
+        // 最初の20文字に切り詰められることを確認
+        $response->assertHeader('Content-Disposition', 'attachment; filename="timestamps_VeryLongChannelHandl_'.date('Ymd').'.txt"');
+    }
+
+    /**
+     * 特殊文字が完全に除去された場合にchannel_idが使用されることをテスト
+     */
+    public function test_download_filename_uses_channel_id_when_handle_becomes_empty(): void
+    {
+        // 特殊文字のみのhandleのチャンネルを作成
+        $channel = Channel::create([
+            'handle' => '@@@',
+            'channel_id' => 'UC999888777',
+            'title' => 'Special Only Channel',
+            'thumbnail' => 'https://example.com/special-only.jpg',
+        ]);
+
+        Archive::create([
+            'id' => 'videoSpecialOnly',
+            'channel_id' => 'UC999888777',
+            'video_id' => 'videoSpecialOnly',
+            'title' => 'Special Only Archive',
+            'thumbnail' => 'https://example.com/special-only-video.jpg',
+            'is_public' => true,
+            'is_display' => true,
+            'published_at' => now(),
+            'comments_updated_at' => now(),
+        ]);
+
+        TsItem::create([
+            'id' => Str::uuid(),
+            'video_id' => 'videoSpecialOnly',
+            'type' => '1',
+            'ts_text' => '1:00',
+            'ts_num' => 60,
+            'text' => 'Test',
+            'is_display' => true,
+        ]);
+
+        $response = $this->get("/api/channels/{$channel->handle}/timestamps/download");
+
+        // 特殊文字が除去されると空になり、unknownが使用されることを確認
+        $response->assertHeader('Content-Disposition', 'attachment; filename="timestamps_unknown_'.date('Ymd').'.txt"');
     }
 }
