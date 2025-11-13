@@ -20,6 +20,7 @@ class TsItem extends Model
         'ts_text',
         'ts_num',
         'text',
+        'comment_id',
         'is_display',
     ];
 
