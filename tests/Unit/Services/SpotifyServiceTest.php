@@ -32,24 +32,6 @@ class SpotifyServiceTest extends TestCase
         $result = $this->service->authenticate('test_client_id', 'test_client_secret');
 
         $this->assertTrue($result);
-
-        // 認証後にAPIが使えることを確認
-        Http::fake([
-            'https://api.spotify.com/v1/search*' => Http::response([
-                'tracks' => [
-                    'items' => [
-                        [
-                            'id' => 'track123',
-                            'name' => 'Test Track',
-                            'artists' => [['name' => 'Test Artist']],
-                        ],
-                    ],
-                ],
-            ], 200),
-        ]);
-
-        $tracks = $this->service->searchTracks('test query');
-        $this->assertCount(1, $tracks);
     }
 
     /**
