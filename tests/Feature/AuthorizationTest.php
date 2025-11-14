@@ -114,21 +114,6 @@ class AuthorizationTest extends TestCase
     /**
      * 認証済みユーザーは管理APIにアクセスできる
      */
-    public function test_verified_user_can_access_manage_pages(): void
-    {
-        $user = User::factory()->create(['email_verified_at' => now()]);
-
-        // ページアクセスではなくAPIテストに変更（Vite問題を回避）
-        $response = $this->actingAs($user)->getJson('/api/manage/channels');
-        $response->assertStatus(200);
-
-        $response = $this->actingAs($user)->getJson('/api/songs/timestamps');
-        $response->assertStatus(200);
-    }
-
-    /**
-     * 認証済みユーザーは管理APIにアクセスできる
-     */
     public function test_verified_user_can_access_manage_api(): void
     {
         $user = User::factory()->create(['email_verified_at' => now()]);
