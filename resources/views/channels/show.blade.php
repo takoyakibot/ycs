@@ -108,20 +108,12 @@
                         </button>
                     </template>
                     <template x-if="activeTab === 'timestamps'">
-                        <div class="flex gap-2">
-                            <button
-                                type="button"
-                                @click="searchQuery = ''"
-                                class="bg-gray-500 text-white px-6 py-2 rounded hover:bg-gray-600 whitespace-nowrap">
-                                クリア
-                            </button>
-                            <button
-                                type="button"
-                                @click="downloadTimestamps()"
-                                class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 hidden sm:flex items-center gap-1 whitespace-nowrap">
-                                📥 ダウンロード
-                            </button>
-                        </div>
+                        <button
+                            type="button"
+                            @click="searchQuery = ''"
+                            class="bg-gray-500 text-white px-6 py-2 rounded hover:bg-gray-600 whitespace-nowrap">
+                            クリア
+                        </button>
                     </template>
                 </form>
             </div>
@@ -208,12 +200,21 @@
 
             <!-- タイムスタンプタブ -->
             <div x-show="activeTab === 'timestamps'">
-                <!-- 検索結果 -->
-                <div class="mb-4">
+                <!-- 検索結果とダウンロードボタン -->
+                <div class="mb-4 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
                     <div class="text-sm text-gray-600 dark:text-gray-400">
                         <span x-show="searchQuery">検索結果: </span>
                         <span x-text="timestamps.total !== undefined ? `${timestamps.total}件` : ''"></span>
                     </div>
+                    <button
+                        type="button"
+                        @click="downloadTimestamps()"
+                        :disabled="loading || !timestamps.total"
+                        :class="loading || !timestamps.total ? 'opacity-50 cursor-not-allowed' : ''"
+                        class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 hidden sm:flex items-center gap-1 whitespace-nowrap text-sm"
+                        title="全タイムスタンプをテキストファイルとしてダウンロード">
+                        📥 ダウンロード
+                    </button>
                 </div>
 
                 <!-- ページネーション（上） -->
