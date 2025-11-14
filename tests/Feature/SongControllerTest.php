@@ -563,9 +563,6 @@ class SongControllerTest extends TestCase
 
     /**
      * マッピング解除のテスト
-     *
-     * Note: DELETE routes with JSON body have routing complexities in Laravel testing.
-     * This functionality is tested through the complete workflow test.
      */
     public function test_unlink_timestamp_deletes_mapping(): void
     {
@@ -575,12 +572,48 @@ class SongControllerTest extends TestCase
             ->withText('test song')
             ->create();
 
-        // Direct database operation to verify functionality
-        TimestampSongMapping::where('normalized_text', $mapping->normalized_text)->delete();
+        $response = $this->actingAs($this->user)
+            ->deleteJson('/api/songs/unlink', [
+                'normalized_text' => $mapping->normalized_text,
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'message' => 'マッピングを解除しました。',
+        ]);
 
         $this->assertDatabaseMissing('timestamp_song_mappings', [
             'id' => $mapping->id,
         ]);
+    }
+
+    /**
+     * あいまい検索のテスト（マッチあり）
+     */
+    public function test_fuzzy_search_finds_match(): void
+    {
+        $song = Song::factory()->create([
+            'title' => 'Yesterday',
+            'artist' => 'The Beatles',
+        ]);
+
+        TimestampSongMapping::factory()
+            ->withSong($song)
+            ->withText('yesterday beatles')
+            ->create();
+
+        // 微妙に異なるテキストで検索（大文字・全角・空白が異なる）
+        $response = $this->actingAs($this->user)->getJson(route('songs.fuzzySearch', [
+            'text' => 'YESTERDAY　　BEATLES',  // 全角スペース、大文字
+            'threshold' => 0.7,
+        ]));
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'found' => true,
+        ]);
+        $this->assertNotNull($response->json('mapping'));
+        $this->assertEquals($song->id, $response->json('mapping.song.id'));
     }
 
     /**
@@ -723,5 +756,39 @@ class SongControllerTest extends TestCase
 
         $this->assertDatabaseMissing('songs', ['id' => $songId]);
         $this->assertDatabaseMissing('timestamp_song_mappings', ['song_id' => $songId]);
+    }
+
+    /**
+     * 未認証アクセスのテスト
+     */
+    public function test_unauthenticated_access_is_forbidden(): void
+    {
+        // GETエンドポイント
+        $this->getJson(route('songs.fetchTimestamps'))->assertStatus(401);
+        $this->getJson(route('songs.fetchSongs'))->assertStatus(401);
+        $this->getJson(route('songs.fuzzySearch', ['text' => 'test']))->assertStatus(401);
+        $this->getJson(route('songs.searchSpotify', ['query' => 'test']))->assertStatus(401);
+
+        // POSTエンドポイント
+        $this->postJson(route('songs.storeSong'), [
+            'title' => 'Test',
+            'artist' => 'Test',
+        ])->assertStatus(401);
+
+        $this->postJson(route('songs.linkTimestamp'), [
+            'normalized_text' => 'test',
+            'song_id' => 'test-id',
+        ])->assertStatus(401);
+
+        $this->postJson(route('songs.markAsNotSong'), [
+            'normalized_text' => 'test',
+        ])->assertStatus(401);
+
+        // DELETEエンドポイント
+        $this->deleteJson(route('songs.unlinkTimestamp'), [
+            'normalized_text' => 'test',
+        ])->assertStatus(401);
+
+        $this->deleteJson(route('songs.deleteSong', 'test-id'))->assertStatus(401);
     }
 }

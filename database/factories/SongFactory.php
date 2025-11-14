@@ -20,17 +20,22 @@ class SongFactory extends Factory
      */
     public function definition(): array
     {
+        $spotifyTrackId = $this->faker->regexify('[a-zA-Z0-9]{22}');
+
         return [
             'id' => (string) Str::ulid(),
             'title' => $this->faker->words(3, true),
             'artist' => $this->faker->name(),
-            'spotify_track_id' => $this->faker->optional(0.5)->regexify('[a-zA-Z0-9]{22}'),
+            'spotify_track_id' => $this->faker->optional(0.5)->passthrough($spotifyTrackId),
             'spotify_data' => $this->faker->optional(0.5)->passthrough([
                 'album' => [
                     'name' => $this->faker->words(2, true),
                     'release_date' => $this->faker->date(),
                 ],
                 'duration_ms' => $this->faker->numberBetween(120000, 360000),
+                'external_urls' => [
+                    'spotify' => 'https://open.spotify.com/track/'.$spotifyTrackId,
+                ],
             ]),
         ];
     }

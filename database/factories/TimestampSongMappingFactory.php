@@ -41,7 +41,7 @@ class TimestampSongMappingFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'song_id' => $song ? $song->id : Song::factory(),
             'is_not_song' => false,
-            'confidence' => $this->faker->randomFloat(2, 0.7, 1.0),
+            'confidence' => fake()->randomFloat(2, 0.7, 1.0),
         ]);
     }
 
@@ -75,7 +75,7 @@ class TimestampSongMappingFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'is_manual' => false,
-            'confidence' => $this->faker->randomFloat(2, 0.7, 0.95),
+            'confidence' => fake()->randomFloat(2, 0.7, 0.95),
         ]);
     }
 

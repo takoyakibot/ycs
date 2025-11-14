@@ -47,12 +47,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('api/songs/timestamps', [SongController::class, 'fetchTimestamps'])->name('songs.fetchTimestamps');
     Route::get('api/songs', [SongController::class, 'fetchSongs'])->name('songs.fetchSongs');
     Route::post('api/songs', [SongController::class, 'storeSong'])->name('songs.storeSong');
-    Route::delete('api/songs/{id}', [SongController::class, 'deleteSong'])->name('songs.deleteSong');
     Route::post('api/songs/link', [SongController::class, 'linkTimestamp'])->name('songs.linkTimestamp');
     Route::post('api/songs/mark-not-song', [SongController::class, 'markAsNotSong'])->name('songs.markAsNotSong');
     Route::delete('api/songs/unlink', [SongController::class, 'unlinkTimestamp'])->name('songs.unlinkTimestamp');
     Route::get('api/songs/fuzzy-search', [SongController::class, 'fuzzySearch'])->name('songs.fuzzySearch');
     Route::get('api/songs/search-spotify', [SongController::class, 'searchSpotify'])->name('songs.searchSpotify');
+    Route::delete('api/songs/{id}', [SongController::class, 'deleteSong'])->name('songs.deleteSong');
 });
 
 Route::middleware('auth')->group(function () {
