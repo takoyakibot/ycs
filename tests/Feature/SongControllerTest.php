@@ -281,7 +281,7 @@ class SongControllerTest extends TestCase
         $response = $this->actingAs($this->user)->postJson(route('songs.storeSong'), [
             'title' => 'Spotify Song',
             'artist' => 'Spotify Artist',
-            'spotify_track_id' => '1234567890abcdefghij1',
+            'spotify_track_id' => '1234567890abcdefghij12', // 22 characters
             'spotify_data' => [
                 'album' => [
                     'name' => 'Test Album',
@@ -295,7 +295,7 @@ class SongControllerTest extends TestCase
         $this->assertDatabaseHas('songs', [
             'title' => 'Spotify Song',
             'artist' => 'Spotify Artist',
-            'spotify_track_id' => '1234567890abcdefghij1',
+            'spotify_track_id' => '1234567890abcdefghij12',
         ]);
     }
 

@@ -45,19 +45,23 @@ class SongFactory extends Factory
      */
     public function withSpotify(): static
     {
-        return $this->state(fn (array $attributes) => [
-            'spotify_track_id' => fake()->regexify('[a-zA-Z0-9]{22}'),
-            'spotify_data' => [
-                'album' => [
-                    'name' => fake()->words(2, true),
-                    'release_date' => fake()->date(),
+        return $this->state(function (array $attributes) {
+            $trackId = fake()->regexify('[a-zA-Z0-9]{22}');
+
+            return [
+                'spotify_track_id' => $trackId,
+                'spotify_data' => [
+                    'album' => [
+                        'name' => fake()->words(2, true),
+                        'release_date' => fake()->date(),
+                    ],
+                    'duration_ms' => fake()->numberBetween(120000, 360000),
+                    'external_urls' => [
+                        'spotify' => 'https://open.spotify.com/track/'.$trackId,
+                    ],
                 ],
-                'duration_ms' => fake()->numberBetween(120000, 360000),
-                'external_urls' => [
-                    'spotify' => 'https://open.spotify.com/track/'.fake()->regexify('[a-zA-Z0-9]{22}'),
-                ],
-            ],
-        ]);
+            ];
+        });
     }
 
     /**

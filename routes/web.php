@@ -49,9 +49,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('api/songs', [SongController::class, 'storeSong'])->name('songs.storeSong');
     Route::post('api/songs/link', [SongController::class, 'linkTimestamp'])->name('songs.linkTimestamp');
     Route::post('api/songs/mark-not-song', [SongController::class, 'markAsNotSong'])->name('songs.markAsNotSong');
+    // Specific routes must come before parameterized routes to avoid parameter capture
     Route::delete('api/songs/unlink', [SongController::class, 'unlinkTimestamp'])->name('songs.unlinkTimestamp');
     Route::get('api/songs/fuzzy-search', [SongController::class, 'fuzzySearch'])->name('songs.fuzzySearch');
     Route::get('api/songs/search-spotify', [SongController::class, 'searchSpotify'])->name('songs.searchSpotify');
+    // Parameterized route - must be last to avoid capturing specific route names
     Route::delete('api/songs/{id}', [SongController::class, 'deleteSong'])->name('songs.deleteSong');
 });
 
