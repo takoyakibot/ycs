@@ -25,7 +25,7 @@ class SpotifyService
             return true;
         }
 
-        return false;
+        throw new \Exception('Spotify authentication failed with status '.$response->status());
     }
 
     /**
@@ -47,7 +47,7 @@ class SpotifyService
             return $response->json()['tracks']['items'];
         }
 
-        return [];
+        throw new \Exception('Spotify search request failed with status '.$response->status());
     }
 
     /**
@@ -65,6 +65,6 @@ class SpotifyService
             return $response->json();
         }
 
-        return null;
+        throw new \Exception('Spotify get track request failed with status '.$response->status());
     }
 }

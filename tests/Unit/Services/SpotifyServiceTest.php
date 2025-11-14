@@ -46,9 +46,10 @@ class SpotifyServiceTest extends TestCase
             ], 401),
         ]);
 
-        $result = $this->service->authenticate('invalid_client_id', 'invalid_secret');
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessage('Spotify authentication failed with status 401');
 
-        $this->assertFalse($result);
+        $this->service->authenticate('invalid_client_id', 'invalid_secret');
     }
 
     /**
@@ -130,9 +131,10 @@ class SpotifyServiceTest extends TestCase
             ], 400),
         ]);
 
-        $tracks = $this->service->searchTracks('invalid query');
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessage('Spotify search request failed with status 400');
 
-        $this->assertEmpty($tracks);
+        $this->service->searchTracks('invalid query');
     }
 
     /**
@@ -239,9 +241,10 @@ class SpotifyServiceTest extends TestCase
             ], 404),
         ]);
 
-        $track = $this->service->getTrack('nonexistent');
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessage('Spotify get track request failed with status 404');
 
-        $this->assertNull($track);
+        $this->service->getTrack('nonexistent');
     }
 
     /**
