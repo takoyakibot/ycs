@@ -118,7 +118,7 @@
                             <button
                                 type="button"
                                 @click="downloadTimestamps()"
-                                class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 flex items-center gap-1 whitespace-nowrap">
+                                class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 hidden sm:flex items-center gap-1 whitespace-nowrap">
                                 📥 ダウンロード
                             </button>
                         </div>
@@ -246,7 +246,7 @@
                 </div>
 
                 <!-- 頭文字ジャンプナビゲーション（楽曲名ソート時のみ表示） -->
-                <div x-show="timestampSort === 'song_asc' && timestamps.available_indexes && timestamps.available_indexes.length > 0" class="mb-4 border-b border-gray-200 dark:border-gray-700 pb-4">
+                <div x-show="timestampSort === 'song_asc' && timestamps.available_indexes && timestamps.available_indexes.length > 0" class="mb-4 border-b border-gray-200 dark:border-gray-700 pb-4 hidden sm:block">
                     <div class="text-xs text-gray-600 dark:text-gray-400 mb-2">頭文字でジャンプ:</div>
 
                     <!-- アルファベット -->
