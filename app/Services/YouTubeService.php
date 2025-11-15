@@ -39,8 +39,8 @@ class YouTubeService
                 $this->client->fetchAccessTokenWithRefreshToken($user->google_refresh_token);
                 $newToken = $this->client->getAccessToken();
 
-                // 新しいトークンをDB保存
-                $user->update(['google_token' => $newToken['access_token']]);
+                // 新しいトークンをDB保存（トークン全体を保存）
+                $user->update(['google_token' => $newToken]);
             }
         } else {
             throw new Exception('Google OAuth token not found. Please log in again.');
@@ -241,10 +241,16 @@ class YouTubeService
             } catch (Exception $e) {
                 // コメントが無効な場合はスキップ
                 if (strpos($e->getMessage(), 'has disabled comments') !== false) {
-                    continue;
+                    break; // コメントが無効の場合はループを抜ける
                 } else {
                     error_log($e->getMessage());
+                    break; // その他のエラーもループを抜ける
                 }
+            }
+
+            // レスポンスがない場合はスキップ
+            if (! $response || ! $response->getItems()) {
+                break;
             }
 
             // 各コメントを処理

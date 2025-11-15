@@ -35,13 +35,20 @@ class GoogleAuthController extends Controller
         try {
             $googleUser = Socialite::driver('google')->stateless()->user();
 
+            // Google Clientが期待する形式でトークンを保存
+            $tokenArray = [
+                'access_token' => $googleUser->token,
+                'expires_in' => $googleUser->expiresIn ?? 3600,
+                'created' => time(),
+            ];
+
             $user = User::updateOrCreate(
                 ['google_id' => $googleUser->getId()],
                 [
                     'name' => $googleUser->getName(),
                     'email' => $googleUser->getEmail(),
                     'avatar' => $googleUser->getAvatar(),
-                    'google_token' => $googleUser->token,
+                    'google_token' => $tokenArray,
                     'google_refresh_token' => $googleUser->refreshToken,
                     'email_verified_at' => now(), // Google認証済みならメール認証も済みとみなす
                 ]
