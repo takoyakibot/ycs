@@ -30,6 +30,19 @@ class RefreshArchives extends Command
         try {
             // 受け取ったIDで偽装ログイン
             $userId = $this->option('user-id');
+
+            if (! $userId) {
+                // user-idが未指定の場合、google_tokenを持つ最初のユーザーを使用
+                $user = \App\Models\User::whereNotNull('google_token')->first();
+                if (! $user) {
+                    $this->error('Error: No user with Google OAuth token found. Please run with --user-id option.');
+
+                    return 1;
+                }
+                $userId = $user->id;
+                $this->info("Using user: {$user->name} (ID: {$userId})");
+            }
+
             $service->cliLogin($userId);
 
             $channelCount = $service->getChannelCount();
