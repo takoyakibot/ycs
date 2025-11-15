@@ -13,6 +13,10 @@ use Laravel\Sanctum\HasApiTokens;
  * @property string $email
  * @property string $password
  * @property string $api_key
+ * @property string|null $google_id
+ * @property string|null $google_token
+ * @property string|null $google_refresh_token
+ * @property string|null $avatar
  * @property \Illuminate\Support\Carbon|null $email_verified_at
  * @property string|null $remember_token
  * @property \Illuminate\Support\Carbon|null $created_at
@@ -32,6 +36,10 @@ class User extends Authenticatable
         'email',
         'password',
         'api_key',
+        'google_id',
+        'google_token',
+        'google_refresh_token',
+        'avatar',
     ];
 
     /**
@@ -42,6 +50,8 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        'google_token',
+        'google_refresh_token',
     ];
 
     /**
@@ -52,5 +62,7 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
+        'google_token' => 'encrypted',
+        'google_refresh_token' => 'encrypted',
     ];
 }

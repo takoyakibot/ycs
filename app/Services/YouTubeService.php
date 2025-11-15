@@ -8,7 +8,6 @@ use Google\Client as Google_Client;
 use Google\Service\YouTube as Google_Service_YouTube;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Str;
 
 class YouTubeService
@@ -22,20 +21,37 @@ class YouTubeService
         $this->client = new Google_Client;
     }
 
-    private function setApiKey()
+    private function setAuth()
     {
         // 定義済みの場合は終了
         if ($this->youtube) {
             return;
         }
-        $apiKey = Crypt::decryptString(Auth::user()->api_key);
-        $this->client->setDeveloperKey($apiKey);
+
+        $user = Auth::user();
+
+        // Google OAuthトークンを使用
+        if ($user->google_token) {
+            $this->client->setAccessToken($user->google_token);
+
+            // トークン期限切れの場合はリフレッシュ
+            if ($this->client->isAccessTokenExpired() && $user->google_refresh_token) {
+                $this->client->fetchAccessTokenWithRefreshToken($user->google_refresh_token);
+                $newToken = $this->client->getAccessToken();
+
+                // 新しいトークンをDB保存
+                $user->update(['google_token' => $newToken['access_token']]);
+            }
+        } else {
+            throw new Exception('Google OAuth token not found. Please log in again.');
+        }
+
         $this->youtube = new Google_Service_YouTube($this->client);
     }
 
     public function getChannelByHandle($handle)
     {
-        $this->setApiKey();
+        $this->setAuth();
 
         $response = $this->youtube->channels->listChannels('snippet', [
             'forHandle' => $handle,
@@ -62,7 +78,7 @@ class YouTubeService
 
     public function getArchivesAndTsItems($channel_id)
     {
-        $this->setApiKey();
+        $this->setAuth();
 
         $archives = $this->getArchives($channel_id);
         $rtn_archives = [];
@@ -206,7 +222,7 @@ class YouTubeService
 
     public function getTimeStampsFromComments($video_id)
     {
-        $this->setApiKey();
+        $this->setAuth();
 
         $comments = [];
         $response = null;
