@@ -24,6 +24,11 @@ class RefreshArchiveService
     {
         // ログインを偽装
         $user = User::where('id', '=', $userId)->firstOrFail();
+
+        if (! $user->google_token) {
+            throw new Exception("User ID {$userId} does not have a Google OAuth token. Please authenticate with Google first.");
+        }
+
         Auth::login($user);
     }
 

@@ -8,6 +8,7 @@ use Google\Client as Google_Client;
 use Google\Service\YouTube as Google_Service_YouTube;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 /**
@@ -43,17 +44,62 @@ class YouTubeService
 
         // Google OAuthトークンを使用（必須）
         if ($user->google_token) {
-            $this->client->setAccessToken($user->google_token);
+            try {
+                $this->client->setAccessToken($user->google_token);
 
-            // トークン期限切れの場合はリフレッシュ
-            if ($this->client->isAccessTokenExpired() && $user->google_refresh_token) {
-                $this->client->fetchAccessTokenWithRefreshToken($user->google_refresh_token);
-                $newToken = $this->client->getAccessToken();
+                // トークン期限切れの場合はリフレッシュ
+                if ($this->client->isAccessTokenExpired()) {
+                    if (! $user->google_refresh_token) {
+                        Log::error('Google OAuth: Refresh token not found', [
+                            'user_id' => $user->id,
+                            'user_email' => $user->email,
+                        ]);
+                        throw new Exception('Google OAuth refresh token not found. Please re-authenticate with Google.');
+                    }
 
-                // 新しいトークンをDB保存（トークン全体を保存）
-                $user->update(['google_token' => $newToken]);
+                    Log::info('Google OAuth: Refreshing access token', [
+                        'user_id' => $user->id,
+                    ]);
+
+                    try {
+                        $this->client->fetchAccessTokenWithRefreshToken($user->google_refresh_token);
+                        $newToken = $this->client->getAccessToken();
+
+                        if (isset($newToken['error'])) {
+                            Log::error('Google OAuth: Token refresh failed', [
+                                'user_id' => $user->id,
+                                'error' => $newToken['error'],
+                                'error_description' => $newToken['error_description'] ?? null,
+                            ]);
+                            throw new Exception('Failed to refresh Google OAuth token: '.$newToken['error']);
+                        }
+
+                        // 新しいトークンをDB保存（トークン全体を保存）
+                        $user->update(['google_token' => $newToken]);
+
+                        Log::info('Google OAuth: Access token refreshed successfully', [
+                            'user_id' => $user->id,
+                        ]);
+                    } catch (Exception $e) {
+                        Log::error('Google OAuth: Exception during token refresh', [
+                            'user_id' => $user->id,
+                            'exception' => $e->getMessage(),
+                        ]);
+                        throw new Exception('Failed to refresh Google OAuth token. Please re-authenticate with Google.');
+                    }
+                }
+            } catch (Exception $e) {
+                Log::error('Google OAuth: Error setting access token', [
+                    'user_id' => $user->id,
+                    'exception' => $e->getMessage(),
+                ]);
+                throw $e;
             }
         } else {
+            Log::warning('Google OAuth: Token not found', [
+                'user_id' => $user->id,
+                'user_email' => $user->email,
+            ]);
             throw new Exception('Google OAuth token not found. Please log in again.');
         }
 
@@ -252,9 +298,16 @@ class YouTubeService
             } catch (Exception $e) {
                 // コメントが無効な場合はスキップ
                 if (strpos($e->getMessage(), 'has disabled comments') !== false) {
+                    Log::info('YouTube API: Comments disabled for video', [
+                        'video_id' => $video_id,
+                    ]);
                     break; // コメントが無効の場合はループを抜ける
                 } else {
-                    error_log($e->getMessage());
+                    Log::error('YouTube API: Failed to fetch comments', [
+                        'video_id' => $video_id,
+                        'error' => $e->getMessage(),
+                        'code' => $e->getCode(),
+                    ]);
                     break; // その他のエラーもループを抜ける
                 }
             }
