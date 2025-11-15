@@ -36,7 +36,7 @@
             </div>
         @else
             <div>
-                <p class="text-gray-500">APIキーを登録してください。</p>
+                <p class="text-gray-500">Googleアカウントでログインしてください。</p>
             </div>
         @endif
     </div>

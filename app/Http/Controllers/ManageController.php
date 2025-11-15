@@ -41,15 +41,18 @@ class ManageController extends Controller
 
     public function index()
     {
-        $api_key_flg = Auth::user()->api_key ? '1' : '';
+        // Google OAuthトークンが存在すればOK
+        $user = Auth::user();
+        $api_key_flg = $user->google_token ? '1' : '';
 
         return view('manage.index', compact('api_key_flg'));
     }
 
     public function show($id)
     {
-        // APIキー未登録の場合はチャンネル管理に戻す
-        $api_key_flg = Auth::user()->api_key ? '1' : '';
+        // Google OAuthトークン未登録の場合はチャンネル管理に戻す
+        $user = Auth::user();
+        $api_key_flg = $user->google_token ? '1' : '';
         // ハンドルが存在しない場合はチャンネル管理に戻す
         $channel = Channel::where('handle', $id)->first();
         if (! $api_key_flg || ! $channel) {

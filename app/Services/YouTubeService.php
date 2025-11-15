@@ -8,9 +8,14 @@ use Google\Client as Google_Client;
 use Google\Service\YouTube as Google_Service_YouTube;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Str;
 
+/**
+ * YouTube Data API v3 サービス
+ *
+ * Google OAuth認証を使用してYouTube APIにアクセスします。
+ * 従来のAPIキー方式は廃止され、OAuth専用となっています。
+ */
 class YouTubeService
 {
     protected $client;
@@ -22,20 +27,42 @@ class YouTubeService
         $this->client = new Google_Client;
     }
 
-    private function setApiKey()
+    /**
+     * Google OAuth認証を設定
+     *
+     * トークンが期限切れの場合は自動的にリフレッシュします。
+     */
+    private function setAuth()
     {
         // 定義済みの場合は終了
         if ($this->youtube) {
             return;
         }
-        $apiKey = Crypt::decryptString(Auth::user()->api_key);
-        $this->client->setDeveloperKey($apiKey);
+
+        $user = Auth::user();
+
+        // Google OAuthトークンを使用（必須）
+        if ($user->google_token) {
+            $this->client->setAccessToken($user->google_token);
+
+            // トークン期限切れの場合はリフレッシュ
+            if ($this->client->isAccessTokenExpired() && $user->google_refresh_token) {
+                $this->client->fetchAccessTokenWithRefreshToken($user->google_refresh_token);
+                $newToken = $this->client->getAccessToken();
+
+                // 新しいトークンをDB保存（トークン全体を保存）
+                $user->update(['google_token' => $newToken]);
+            }
+        } else {
+            throw new Exception('Google OAuth token not found. Please log in again.');
+        }
+
         $this->youtube = new Google_Service_YouTube($this->client);
     }
 
     public function getChannelByHandle($handle)
     {
-        $this->setApiKey();
+        $this->setAuth();
 
         $response = $this->youtube->channels->listChannels('snippet', [
             'forHandle' => $handle,
@@ -62,7 +89,7 @@ class YouTubeService
 
     public function getArchivesAndTsItems($channel_id)
     {
-        $this->setApiKey();
+        $this->setAuth();
 
         $archives = $this->getArchives($channel_id);
         $rtn_archives = [];
@@ -206,7 +233,7 @@ class YouTubeService
 
     public function getTimeStampsFromComments($video_id)
     {
-        $this->setApiKey();
+        $this->setAuth();
 
         $comments = [];
         $response = null;
@@ -225,10 +252,16 @@ class YouTubeService
             } catch (Exception $e) {
                 // コメントが無効な場合はスキップ
                 if (strpos($e->getMessage(), 'has disabled comments') !== false) {
-                    continue;
+                    break; // コメントが無効の場合はループを抜ける
                 } else {
                     error_log($e->getMessage());
+                    break; // その他のエラーもループを抜ける
                 }
+            }
+
+            // レスポンスがない場合はスキップ
+            if (! $response || ! $response->getItems()) {
+                break;
             }
 
             // 各コメントを処理
