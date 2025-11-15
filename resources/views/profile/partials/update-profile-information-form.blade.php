@@ -49,17 +49,6 @@
             @endif
         </div>
 
-        @php
-            /** @var \App\Models\User $user */
-        @endphp
-
-        <div>
-            <x-input-label for="api_key" :value="__('Youtube Data API Key')" />
-            <x-text-input id="api_key" name="api_key" type="text" class="mt-1 block w-full" :value="old('api_key', '')"
-                :placeholder="$user->api_key ? __('登録済み（削除する場合は「削除」と入力してください）') : __('未登録')" autocomplete="apikey" />
-            <x-input-error class="mt-2" :messages="$errors->get('api_key')" />
-        </div>
-
         <div class="flex items-center gap-4">
             <x-primary-button>{{ __('Save') }}</x-primary-button>
 
