@@ -10,6 +10,12 @@ use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 
+/**
+ * YouTube Data API v3 サービス
+ *
+ * Google OAuth認証を使用してYouTube APIにアクセスします。
+ * 従来のAPIキー方式は廃止され、OAuth専用となっています。
+ */
 class YouTubeService
 {
     protected $client;
@@ -21,6 +27,11 @@ class YouTubeService
         $this->client = new Google_Client;
     }
 
+    /**
+     * Google OAuth認証を設定
+     *
+     * トークンが期限切れの場合は自動的にリフレッシュします。
+     */
     private function setAuth()
     {
         // 定義済みの場合は終了
@@ -30,7 +41,7 @@ class YouTubeService
 
         $user = Auth::user();
 
-        // Google OAuthトークンを使用
+        // Google OAuthトークンを使用（必須）
         if ($user->google_token) {
             $this->client->setAccessToken($user->google_token);
 

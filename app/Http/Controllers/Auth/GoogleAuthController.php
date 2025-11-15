@@ -22,7 +22,7 @@ class GoogleAuthController extends Controller
             ])
             ->with([
                 'access_type' => 'offline',
-                'prompt' => 'consent select_account',
+                'prompt' => 'select_account', // アカウント選択のみ（初回のみ同意画面）
             ])
             ->redirect();
     }
