@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Providers\RouteServiceProvider;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Laravel\Socialite\Facades\Socialite;
 
 class GoogleAuthController extends Controller
@@ -42,6 +43,7 @@ class GoogleAuthController extends Controller
                     'avatar' => $googleUser->getAvatar(),
                     'google_token' => $googleUser->token,
                     'google_refresh_token' => $googleUser->refreshToken,
+                    'email_verified_at' => now(), // Google認証済みならメール認証も済みとみなす
                 ]
             );
 
@@ -49,6 +51,11 @@ class GoogleAuthController extends Controller
 
             return redirect()->intended(RouteServiceProvider::HOME);
         } catch (\Exception $e) {
+            Log::error('Google OAuth callback error: '.$e->getMessage(), [
+                'exception' => $e,
+                'trace' => $e->getTraceAsString(),
+            ]);
+
             return redirect('/login')->withErrors([
                 'email' => 'Google認証に失敗しました。もう一度お試しください。',
             ]);

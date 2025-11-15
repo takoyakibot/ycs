@@ -13,8 +13,8 @@ return new class extends Migration
     {
         Schema::table('users', function (Blueprint $table) {
             $table->string('google_id')->unique()->nullable()->after('id');
-            $table->string('google_token', 500)->nullable()->after('password');
-            $table->string('google_refresh_token', 500)->nullable()->after('google_token');
+            $table->text('google_token')->nullable()->after('password');
+            $table->text('google_refresh_token')->nullable()->after('google_token');
             $table->string('avatar')->nullable()->after('email');
 
             // パスワードをnullable化
