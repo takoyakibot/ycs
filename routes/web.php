@@ -19,7 +19,7 @@ use Illuminate\Support\Facades\Route;
 |
  */
 
-Route::middleware(['auth', 'verified'])->group(function () {
+Route::middleware(['auth'])->group(function () {
     // TODO: 別のサービスができるまでは自動的に歌枠検索に飛ばす
     Route::redirect('/manage', '/channels/manage', 301);
 

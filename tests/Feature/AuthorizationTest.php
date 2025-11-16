@@ -80,32 +80,33 @@ class AuthorizationTest extends TestCase
     }
 
     /**
-     * メール未認証ユーザーでも管理画面にアクセスできる（現在の実装）
+     * メール未認証ユーザーでも管理画面にアクセスできる
      *
-     * Note: routes/web.phpでは'verified'ミドルウェアが指定されているが、
-     * テスト環境では実際にはメール認証チェックが無効化されている可能性がある。
-     * セキュリティ要件次第では、この動作を見直す必要があるかもしれない。
+     * Note: メール認証は不要としています（Issue #196でOption Bを選択）
+     * 認証（auth）のみで管理画面にアクセス可能です。
      */
     public function test_unverified_user_can_access_manage_pages(): void
     {
         $user = User::factory()->create(['email_verified_at' => null]);
 
         $response = $this->actingAs($user)->get('/channels/manage');
-        $response->assertStatus(200); // 現在の実装ではアクセス可能
+        $response->assertStatus(200);
 
         $response = $this->actingAs($user)->get('/manage/logs');
         $response->assertStatus(200);
     }
 
     /**
-     * メール未認証ユーザーでも管理APIにアクセスできる（現在の実装）
+     * メール未認証ユーザーでも管理APIにアクセスできる
+     *
+     * Note: メール認証は不要としています（Issue #196でOption Bを選択）
      */
     public function test_unverified_user_can_access_manage_api(): void
     {
         $user = User::factory()->create(['email_verified_at' => null]);
 
         $response = $this->actingAs($user)->getJson('/api/manage/channels');
-        $response->assertStatus(200); // 現在の実装ではアクセス可能
+        $response->assertStatus(200);
 
         $response = $this->actingAs($user)->getJson('/api/songs/timestamps');
         $response->assertStatus(200);
