@@ -6,6 +6,7 @@ use App\Models\Archive;
 use App\Models\Channel;
 use App\Models\TimestampSongMapping;
 use App\Models\TsItem;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -18,9 +19,14 @@ class ChannelTimestampDownloadTest extends TestCase
 
     private Archive $archive;
 
+    private User $user;
+
     protected function setUp(): void
     {
         parent::setUp();
+
+        // テスト用のユーザーを作成
+        $this->user = User::factory()->create();
 
         // テスト用のチャンネルとアーカイブを作成
         $this->channel = Channel::create([
@@ -28,6 +34,7 @@ class ChannelTimestampDownloadTest extends TestCase
             'channel_id' => 'UC123456789',
             'title' => 'Test Channel',
             'thumbnail' => 'https://example.com/thumb.jpg',
+            'user_id' => $this->user->id,
         ]);
 
         $this->archive = Archive::create([
@@ -522,6 +529,7 @@ class ChannelTimestampDownloadTest extends TestCase
             'channel_id' => 'UC987654321',
             'title' => 'Special Test Channel',
             'thumbnail' => 'https://example.com/special.jpg',
+            'user_id' => $this->user->id,
         ]);
 
         Archive::create([
@@ -563,6 +571,7 @@ class ChannelTimestampDownloadTest extends TestCase
             'channel_id' => 'UC111222333',
             'title' => 'Long Handle Channel',
             'thumbnail' => 'https://example.com/long.jpg',
+            'user_id' => $this->user->id,
         ]);
 
         Archive::create([
@@ -604,6 +613,7 @@ class ChannelTimestampDownloadTest extends TestCase
             'channel_id' => 'UC999888777',
             'title' => 'Special Only Channel',
             'thumbnail' => 'https://example.com/special-only.jpg',
+            'user_id' => $this->user->id,
         ]);
 
         Archive::create([

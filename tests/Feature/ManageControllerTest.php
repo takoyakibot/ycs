@@ -23,17 +23,21 @@ class ManageControllerTest extends TestCase
     }
 
     /**
-     * チャンネル一覧を取得できる
+     * チャンネル一覧を取得できる（自分のチャンネルのみ）
      */
     public function test_fetch_channel_returns_all_channels(): void
     {
-        $channels = Channel::factory()->count(3)->create();
+        // 自分のチャンネルを作成
+        $channels = Channel::factory()->count(3)->create(['user_id' => $this->user->id]);
+
+        // 他のユーザーのチャンネルも作成（これは表示されないはず）
+        Channel::factory()->count(2)->create();
 
         $response = $this->actingAs($this->user)
             ->getJson('/api/manage/channels');
 
         $response->assertStatus(200)
-            ->assertJsonCount(3)
+            ->assertJsonCount(3) // 自分のチャンネルのみ3件
             ->assertJsonFragment(['handle' => $channels[0]->handle])
             ->assertJsonFragment(['handle' => $channels[1]->handle])
             ->assertJsonFragment(['handle' => $channels[2]->handle]);
@@ -343,5 +347,39 @@ class ManageControllerTest extends TestCase
 
         $response->assertStatus(422)
             ->assertJsonValidationErrors(['0.is_display']);
+    }
+
+    /**
+     * 他のユーザーのチャンネルへのアクセスは拒否される（show）
+     */
+    public function test_show_denies_access_to_other_users_channel(): void
+    {
+        $otherUser = User::factory()->create(['email_verified_at' => now(), 'api_key' => 'test-api-key']);
+        $otherChannel = Channel::factory()->create(['user_id' => $otherUser->id]);
+
+        // 自分のユーザーにもapi_keyを設定
+        $this->user->api_key = 'my-api-key';
+        $this->user->save();
+
+        $response = $this->actingAs($this->user)
+            ->get("/channels/manage/{$otherChannel->handle}");
+
+        $response->assertStatus(403);
+    }
+
+    /**
+     * 他のユーザーのチャンネルのアーカイブ追加は拒否される
+     */
+    public function test_add_archives_denies_access_to_other_users_channel(): void
+    {
+        $otherUser = User::factory()->create();
+        $otherChannel = Channel::factory()->create(['user_id' => $otherUser->id]);
+
+        $response = $this->actingAs($this->user)
+            ->postJson('/api/manage/archives', [
+                'handle' => \Illuminate\Support\Facades\Crypt::encryptString($otherChannel->handle),
+            ]);
+
+        $response->assertStatus(403);
     }
 }

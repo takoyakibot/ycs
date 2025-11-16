@@ -58,6 +58,12 @@ class ManageController extends Controller
         if (! $api_key_flg || ! $channel) {
             return redirect()->route('manage.index');
         }
+
+        // 所有権チェック
+        if ($channel->user_id !== $user->id) {
+            abort(403, 'このチャンネルへのアクセス権限がありません');
+        }
+
         $crypt_handle = Crypt::encryptString($channel->handle);
 
         return view('manage.show', compact('channel', 'crypt_handle'));
@@ -65,7 +71,8 @@ class ManageController extends Controller
 
     public function fetchChannel(Request $request)
     {
-        $channels = Channel::all();
+        // 自分のチャンネルのみ取得
+        $channels = Auth::user()->channels()->get();
 
         return response()->json($channels);
     }
@@ -86,18 +93,37 @@ class ManageController extends Controller
             throw new NotFoundException('チャンネルが存在しません');
         }
 
-        Channel::create([
-            'handle' => $request->handle,
-            'channel_id' => $channel['channel_id'],
-            'title' => $channel['title'],
-            'thumbnail' => $channel['thumbnail'],
-        ]);
+        try {
+            // DB::transaction + unique constraint で安全に処理
+            DB::transaction(function () use ($request, $channel) {
+                Channel::create([
+                    'handle' => $request->handle,
+                    'channel_id' => $channel['channel_id'],
+                    'title' => $channel['title'],
+                    'thumbnail' => $channel['thumbnail'],
+                    'user_id' => Auth::id(),
+                ]);
+            });
+        } catch (\Illuminate\Database\QueryException $e) {
+            // unique constraint 違反を検出
+            if ($e->getCode() === '23000') {
+                throw new Exception('このチャンネルは既に他のユーザーによって登録されています');
+            }
+            throw $e;
+        }
 
         return response()->json('チャンネルを登録しました');
     }
 
     public function fetchArchives(string $id, Request $request)
     {
+        // 所有権チェック
+        $handle = Crypt::decryptString($id);
+        $channel = Channel::where('handle', $handle)->firstOrFail();
+        if ($channel->user_id !== Auth::id()) {
+            abort(403, 'このチャンネルへのアクセス権限がありません');
+        }
+
         $archives = $this->getArchiveService->getArchivesForManage(
             $id,
             (string) $request->query('baramutsu', ''),
@@ -117,6 +143,11 @@ class ManageController extends Controller
         $handle = Crypt::decryptString($request->handle);
 
         $channel = Channel::where('handle', $handle)->firstOrFail();
+
+        // 所有権チェック
+        if ($channel->user_id !== Auth::id()) {
+            abort(403, 'このチャンネルへのアクセス権限がありません');
+        }
 
         $this->refreshArchiveService->refreshArchives($channel);
 
