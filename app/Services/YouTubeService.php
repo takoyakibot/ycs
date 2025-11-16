@@ -32,6 +32,8 @@ class YouTubeService
 
     /**
      * APIキーを設定してYouTube APIクライアントを初期化
+     *
+     * @throws Exception APIキーが設定されていない、または無効な場合
      */
     private function setApiKey()
     {
@@ -40,8 +42,14 @@ class YouTubeService
             return;
         }
 
-        $apiKey = Crypt::decryptString(Auth::user()->api_key);
-        $this->client->setDeveloperKey($apiKey);
+        $user = Auth::user();
+
+        if (! $user || ! $user->api_key) {
+            throw new Exception('APIキーが設定されていません。プロフィール画面でYouTube Data APIキーを登録してください。');
+        }
+
+        // モデルのcastsで自動復号化されるため、Crypt::decryptString()は不要
+        $this->client->setDeveloperKey($user->api_key);
         $this->youtube = new Google_Service_YouTube($this->client);
     }
 
