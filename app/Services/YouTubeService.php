@@ -8,7 +8,6 @@ use Google\Client as Google_Client;
 use Google\Service\YouTube as Google_Service_YouTube;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
