@@ -5,7 +5,7 @@
         </h2>
 
         <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-            {{ __('YouTube APIへのアクセスに使用されているGoogleアカウント情報') }}
+            {{ __('ログイン用のGoogleアカウント情報（YouTube APIアクセスには上記のAPIキーを使用）') }}
         </p>
     </header>
 
@@ -53,18 +53,10 @@
                             d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     <div>
-                        <p>このGoogleアカウントを使用してYouTube Data APIにアクセスしています。</p>
-                        <p class="mt-1">アクセストークンは自動的に更新されます。</p>
+                        <p>このGoogleアカウントを使用してログインしています。</p>
+                        <p class="mt-1">YouTube APIへのアクセスには、上記で設定したAPIキーを使用します。</p>
                     </div>
                 </div>
-            </div>
-
-            <!-- 権限情報 -->
-            <div class="text-sm">
-                <div class="font-medium text-gray-700 dark:text-gray-300 mb-2">付与されている権限:</div>
-                <ul class="list-disc list-inside text-gray-600 dark:text-gray-400 space-y-1">
-                    <li>YouTube Data API v3 - 読み取り専用</li>
-                </ul>
             </div>
         </div>
     @else

@@ -32,10 +32,10 @@ class RefreshArchives extends Command
             $userId = $this->option('user-id');
 
             if (! $userId) {
-                // user-idが未指定の場合、google_tokenを持つ最初のユーザーを使用
-                $user = \App\Models\User::whereNotNull('google_token')->first();
+                // user-idが未指定の場合、api_keyを持つ最初のユーザーを使用
+                $user = \App\Models\User::whereNotNull('api_key')->first();
                 if (! $user) {
-                    $this->error('Error: No user with Google OAuth token found. Please run with --user-id option.');
+                    $this->error('Error: No user with API key found. Please run with --user-id option.');
 
                     return 1;
                 }

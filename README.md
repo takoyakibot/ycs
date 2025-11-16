@@ -110,6 +110,23 @@ npm install
 
 **重要**: ワークツリーごとに`.env.testing`の作成が必要です。これを忘れると、テスト実行時に本番データベースが削除される危険があります。
 
+### YouTube API設定（必須）
+
+**各ユーザーが独自のAPIキーを登録する必要があります。**
+
+詳細な手順は [docs/API_KEY_SETUP.md](docs/API_KEY_SETUP.md) を参照してください。
+
+#### 概要
+1. [Google Cloud Console](https://console.cloud.google.com/)で新しいプロジェクトを作成
+2. YouTube Data API v3を有効化
+3. APIキーを作成
+4. アプリケーションのプロフィール画面で作成したAPIキーを登録
+
+#### なぜ必要なのか
+- YouTube Data API v3には1日あたり10,000 unitsのquota制限があります
+- 各ユーザーが独自のAPIキーを持つことで、quotaを分離できます
+- これにより、多くのユーザーがアプリを利用してもquotaが枯渇しません
+
 ### Spotify API設定
 
 1. [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)にアクセス

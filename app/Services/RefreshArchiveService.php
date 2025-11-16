@@ -25,8 +25,8 @@ class RefreshArchiveService
         // ログインを偽装
         $user = User::where('id', '=', $userId)->firstOrFail();
 
-        if (! $user->google_token) {
-            throw new Exception("User ID {$userId} does not have a Google OAuth token. Please authenticate with Google first.");
+        if (! $user->api_key) {
+            throw new Exception("User ID {$userId} does not have an API key. Please register an API key in your profile first.");
         }
 
         Auth::login($user);
