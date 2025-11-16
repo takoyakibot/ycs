@@ -8,14 +8,16 @@ use Google\Client as Google_Client;
 use Google\Service\YouTube as Google_Service_YouTube;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 /**
  * YouTube Data API v3 サービス
  *
- * Google OAuth認証を使用してYouTube APIにアクセスします。
- * 従来のAPIキー方式は廃止され、OAuth専用となっています。
+ * APIキーを使用してYouTube APIにアクセスします。
+ * 各ユーザーが独自のGoogle Cloud ProjectとAPIキーを持つことで、
+ * quota（10,000 units/日）を分離します。
  */
 class YouTubeService
 {
@@ -29,86 +31,23 @@ class YouTubeService
     }
 
     /**
-     * Google OAuth認証を設定
-     *
-     * トークンが期限切れの場合は自動的にリフレッシュします。
+     * APIキーを設定してYouTube APIクライアントを初期化
      */
-    private function setAuth()
+    private function setApiKey()
     {
         // 定義済みの場合は終了
         if ($this->youtube) {
             return;
         }
 
-        $user = Auth::user();
-
-        // Google OAuthトークンを使用（必須）
-        if ($user->google_token) {
-            try {
-                $this->client->setAccessToken($user->google_token);
-
-                // トークン期限切れの場合はリフレッシュ
-                if ($this->client->isAccessTokenExpired()) {
-                    if (! $user->google_refresh_token) {
-                        Log::error('Google OAuth: Refresh token not found', [
-                            'user_id' => $user->id,
-                            'user_email' => $user->email,
-                        ]);
-                        throw new Exception('Google OAuth refresh token not found. Please re-authenticate with Google.');
-                    }
-
-                    Log::info('Google OAuth: Refreshing access token', [
-                        'user_id' => $user->id,
-                    ]);
-
-                    try {
-                        $this->client->fetchAccessTokenWithRefreshToken($user->google_refresh_token);
-                        $newToken = $this->client->getAccessToken();
-
-                        if (isset($newToken['error'])) {
-                            Log::error('Google OAuth: Token refresh failed', [
-                                'user_id' => $user->id,
-                                'error' => $newToken['error'],
-                                'error_description' => $newToken['error_description'] ?? null,
-                            ]);
-                            throw new Exception('Failed to refresh Google OAuth token: '.$newToken['error']);
-                        }
-
-                        // 新しいトークンをDB保存（トークン全体を保存）
-                        $user->update(['google_token' => $newToken]);
-
-                        Log::info('Google OAuth: Access token refreshed successfully', [
-                            'user_id' => $user->id,
-                        ]);
-                    } catch (Exception $e) {
-                        Log::error('Google OAuth: Exception during token refresh', [
-                            'user_id' => $user->id,
-                            'exception' => $e->getMessage(),
-                        ]);
-                        throw new Exception('Failed to refresh Google OAuth token. Please re-authenticate with Google.');
-                    }
-                }
-            } catch (Exception $e) {
-                Log::error('Google OAuth: Error setting access token', [
-                    'user_id' => $user->id,
-                    'exception' => $e->getMessage(),
-                ]);
-                throw $e;
-            }
-        } else {
-            Log::warning('Google OAuth: Token not found', [
-                'user_id' => $user->id,
-                'user_email' => $user->email,
-            ]);
-            throw new Exception('Google OAuth token not found. Please log in again.');
-        }
-
+        $apiKey = Crypt::decryptString(Auth::user()->api_key);
+        $this->client->setDeveloperKey($apiKey);
         $this->youtube = new Google_Service_YouTube($this->client);
     }
 
     public function getChannelByHandle($handle)
     {
-        $this->setAuth();
+        $this->setApiKey();
 
         $response = $this->youtube->channels->listChannels('snippet', [
             'forHandle' => $handle,
@@ -135,7 +74,7 @@ class YouTubeService
 
     public function getArchivesAndTsItems($channel_id)
     {
-        $this->setAuth();
+        $this->setApiKey();
 
         $archives = $this->getArchives($channel_id);
         $rtn_archives = [];
@@ -279,7 +218,7 @@ class YouTubeService
 
     public function getTimeStampsFromComments($video_id)
     {
-        $this->setAuth();
+        $this->setApiKey();
 
         $comments = [];
         $response = null;

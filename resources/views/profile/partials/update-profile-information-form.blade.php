@@ -49,6 +49,16 @@
             @endif
         </div>
 
+        <div>
+            <x-input-label for="api_key" value="YouTube API Key" />
+            <x-text-input id="api_key" name="api_key" type="text" class="mt-1 block w-full" :value="old('api_key')" autocomplete="api_key" placeholder="AIzaSy..." />
+            <x-input-error class="mt-2" :messages="$errors->get('api_key')" />
+            <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                YouTube Data APIアクセス用のAPIキーを入力してください。<br>
+                登録済みの場合は空欄のままで保存すると現在のキーを維持します。
+            </p>
+        </div>
+
         <div class="flex items-center gap-4">
             <x-primary-button>{{ __('Save') }}</x-primary-button>
 
