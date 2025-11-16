@@ -30,13 +30,27 @@ class RefreshArchives extends Command
         try {
             $userId = $this->option('user-id');
 
-            if ($userId) {
-                // 単一ユーザーのチャンネルを更新
-                return $this->refreshUserChannels($service, $userId);
-            } else {
-                // 全ユーザーのチャンネルを順番に更新
-                return $this->refreshAllUsersChannels($service);
+            // --user-id が指定されていない場合はエラー
+            if (! $userId) {
+                $this->error('Error: --user-id option is required.');
+                $this->info('Available users with API keys:');
+
+                $users = \App\Models\User::whereNotNull('api_key')->get(['id', 'name', 'email']);
+                if ($users->isEmpty()) {
+                    $this->warn('  No users with API keys found.');
+
+                    return 1;
+                }
+
+                foreach ($users as $user) {
+                    $this->line("  - ID: {$user->id}, Name: {$user->name}, Email: {$user->email}");
+                }
+
+                return 1;
             }
+
+            // 単一ユーザーのチャンネルを更新
+            return $this->refreshUserChannels($service, $userId);
         } catch (Exception $e) {
             echo ' 更新失敗: '.$e->getMessage()."\n";
 
@@ -66,49 +80,6 @@ class RefreshArchives extends Command
             $count += $service->refreshArchives($channel);
             $channelCount--;
             echo " 更新成功\n";
-        }
-
-        return 0;
-    }
-
-    /**
-     * 全ユーザーのチャンネルを順番に更新
-     */
-    protected function refreshAllUsersChannels(RefreshArchiveService $service): int
-    {
-        $users = \App\Models\User::whereNotNull('api_key')->get();
-
-        if ($users->isEmpty()) {
-            $this->error('Error: No user with API key found.');
-
-            return 1;
-        }
-
-        $this->info("Found {$users->count()} users with API keys");
-
-        foreach ($users as $user) {
-            $this->info("\n=== Processing user: {$user->name} (ID: {$user->id}) ===");
-
-            $service->cliLogin($user->id);
-
-            $channelCount = $service->getChannelCountForUser($user->id);
-            $count = 0;
-
-            $this->info("User has {$channelCount} channels");
-
-            while ($count < 4000 && $channelCount > 0) {
-                $channel = $service->getOldestUpdatedChannelForUser($user->id);
-                if (! $channel) {
-                    break;
-                }
-
-                echo now().' 更新対象：'.$channel->title;
-                $count += $service->refreshArchives($channel);
-                $channelCount--;
-                echo " 更新成功\n";
-            }
-
-            $this->info("User {$user->name} completed: {$count} videos updated");
         }
 
         return 0;
