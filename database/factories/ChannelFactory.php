@@ -24,6 +24,7 @@ class ChannelFactory extends Factory
             'channel_id' => 'UC'.fake()->regexify('[A-Za-z0-9_-]{20}'),
             'title' => $this->faker->company().' Channel',
             'thumbnail' => $this->faker->imageUrl(200, 200, 'people', true),
+            'user_id' => \App\Models\User::factory(),
         ];
     }
 }

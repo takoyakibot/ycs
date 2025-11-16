@@ -173,6 +173,26 @@ class RefreshArchiveService
         return Channel::count();
     }
 
+    public function getOldestUpdatedChannelForUser(int $userId): ?Channel
+    {
+        $archive = Archive::whereHas('channel', function ($query) use ($userId) {
+            $query->where('user_id', $userId);
+        })
+            ->orderBy('created_at', 'asc')
+            ->first();
+
+        if (! $archive) {
+            return null;
+        }
+
+        return Channel::where('channel_id', '=', $archive->channel_id)->first();
+    }
+
+    public function getChannelCountForUser(int $userId): int
+    {
+        return Channel::where('user_id', $userId)->count();
+    }
+
     /**
      * change_listの情報をts_itemsに反映
      *

@@ -9,12 +9,17 @@ class Channel extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['handle', 'channel_id', 'title', 'thumbnail'];
+    protected $fillable = ['handle', 'channel_id', 'title', 'thumbnail', 'user_id'];
 
     protected $hidden = ['channel_id'];
 
     public function archives()
     {
         return $this->hasMany(Archive::class, 'channel_id', 'channel_id');
+    }
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
     }
 }

@@ -28,46 +28,89 @@ class RefreshArchives extends Command
     public function handle(RefreshArchiveService $service)
     {
         try {
-            // 受け取ったIDで偽装ログイン
             $userId = $this->option('user-id');
 
-            if (! $userId) {
-                // user-idが未指定の場合、api_keyを持つ最初のユーザーを使用
-                $user = \App\Models\User::whereNotNull('api_key')->first();
-                if (! $user) {
-                    $this->error('Error: No user with API key found. Please run with --user-id option.');
-
-                    return 1;
-                }
-                $userId = $user->id;
-                $this->info("Using user: {$user->name} (ID: {$userId})");
+            if ($userId) {
+                // 単一ユーザーのチャンネルを更新
+                return $this->refreshUserChannels($service, $userId);
+            } else {
+                // 全ユーザーのチャンネルを順番に更新
+                return $this->refreshAllUsersChannels($service);
             }
-
-            $service->cliLogin($userId);
-
-            $channelCount = $service->getChannelCount();
-            $count = 0;
-
-            while ($count < 4000 && $channelCount > 0) {
-                // 一番古いアーカイブを取得し、そのチャンネルの情報を再作成する
-                $channel = $service->getOldestUpdatedChannel();
-                echo now().' 更新対象：'.$channel->title;
-
-                // アーカイブ更新、動画数を返却させる
-                $count += $service->refreshArchives($channel);
-
-                // 登録されてるチャンネル数をすべて更新したら終了
-                $channelCount--;
-
-                echo " 更新成功\n";
-            }
-
-            return 0;
         } catch (Exception $e) {
             echo ' 更新失敗: '.$e->getMessage()."\n";
 
             return 1;
         }
+    }
 
+    /**
+     * 単一ユーザーのチャンネルを更新
+     */
+    protected function refreshUserChannels(RefreshArchiveService $service, string $userId): int
+    {
+        $service->cliLogin($userId);
+
+        $channelCount = $service->getChannelCountForUser((int) $userId);
+        $count = 0;
+
+        $this->info("User ID {$userId}: {$channelCount} channels to update");
+
+        while ($count < 4000 && $channelCount > 0) {
+            $channel = $service->getOldestUpdatedChannelForUser((int) $userId);
+            if (! $channel) {
+                break;
+            }
+
+            echo now().' 更新対象：'.$channel->title;
+            $count += $service->refreshArchives($channel);
+            $channelCount--;
+            echo " 更新成功\n";
+        }
+
+        return 0;
+    }
+
+    /**
+     * 全ユーザーのチャンネルを順番に更新
+     */
+    protected function refreshAllUsersChannels(RefreshArchiveService $service): int
+    {
+        $users = \App\Models\User::whereNotNull('api_key')->get();
+
+        if ($users->isEmpty()) {
+            $this->error('Error: No user with API key found.');
+
+            return 1;
+        }
+
+        $this->info("Found {$users->count()} users with API keys");
+
+        foreach ($users as $user) {
+            $this->info("\n=== Processing user: {$user->name} (ID: {$user->id}) ===");
+
+            $service->cliLogin($user->id);
+
+            $channelCount = $service->getChannelCountForUser($user->id);
+            $count = 0;
+
+            $this->info("User has {$channelCount} channels");
+
+            while ($count < 4000 && $channelCount > 0) {
+                $channel = $service->getOldestUpdatedChannelForUser($user->id);
+                if (! $channel) {
+                    break;
+                }
+
+                echo now().' 更新対象：'.$channel->title;
+                $count += $service->refreshArchives($channel);
+                $channelCount--;
+                echo " 更新成功\n";
+            }
+
+            $this->info("User {$user->name} completed: {$count} videos updated");
+        }
+
+        return 0;
     }
 }

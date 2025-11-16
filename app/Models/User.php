@@ -65,4 +65,9 @@ class User extends Authenticatable
         'google_token' => 'encrypted:array',  // 配列として暗号化
         'google_refresh_token' => 'encrypted',
     ];
+
+    public function channels()
+    {
+        return $this->hasMany(Channel::class);
+    }
 }
