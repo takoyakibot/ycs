@@ -6,7 +6,6 @@ use App\Http\Requests\ProfileUpdateRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Redirect;
 use Illuminate\View\View;
 
@@ -29,9 +28,9 @@ class ProfileController extends Controller
     {
         $validated = $request->validated();
 
-        // APIキーが入力されている場合は暗号化して保存
-        if (isset($validated['api_key']) && $validated['api_key']) {
-            $validated['api_key'] = Crypt::encryptString($validated['api_key']);
+        // APIキーの空文字列をnullに変換（モデルのcastsで自動暗号化される）
+        if (isset($validated['api_key'])) {
+            $validated['api_key'] = trim($validated['api_key']) ?: null;
         }
 
         $request->user()->fill($validated);

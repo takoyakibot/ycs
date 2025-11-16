@@ -18,7 +18,14 @@ class ProfileUpdateRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', Rule::unique(User::class)->ignore($this->user()->id)],
-            'api_key' => ['nullable', 'string', 'max:255'],
+            'api_key' => ['nullable', 'string', 'regex:/^AIza[0-9A-Za-z_-]{35}$/'],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'api_key.regex' => 'YouTube API キーの形式が正しくありません。APIキーは "AIza" で始まる39文字の文字列である必要があります。',
         ];
     }
 }

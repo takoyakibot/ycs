@@ -50,6 +50,7 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        'api_key',
         'google_token',
         'google_refresh_token',
     ];
@@ -62,6 +63,7 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
+        'api_key' => 'encrypted',
         'google_token' => 'encrypted:array',  // 配列として暗号化
         'google_refresh_token' => 'encrypted',
     ];
