@@ -562,6 +562,53 @@ class SongControllerTest extends TestCase
     }
 
     /**
+     * 「楽曲ではない」マーク解除のテスト
+     */
+    public function test_unmark_as_not_song(): void
+    {
+        $mapping = TimestampSongMapping::factory()
+            ->notSong()
+            ->withText('not a song')
+            ->create();
+
+        $response = $this->actingAs($this->user)->postJson(route('songs.unmarkAsNotSong'), [
+            'normalized_text' => $mapping->normalized_text,
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'message' => '「楽曲ではない」マークを解除しました。',
+        ]);
+
+        $this->assertDatabaseMissing('timestamp_song_mappings', [
+            'id' => $mapping->id,
+        ]);
+    }
+
+    /**
+     * 「楽曲ではない」でないマッピングを解除しようとしても削除されないテスト
+     */
+    public function test_unmark_as_not_song_does_not_delete_normal_mapping(): void
+    {
+        $song = Song::factory()->create();
+        $mapping = TimestampSongMapping::factory()
+            ->withSong($song)
+            ->withText('test song')
+            ->create();
+
+        $response = $this->actingAs($this->user)->postJson(route('songs.unmarkAsNotSong'), [
+            'normalized_text' => $mapping->normalized_text,
+        ]);
+
+        $response->assertStatus(200);
+
+        // is_not_song=false のマッピングは削除されない
+        $this->assertDatabaseHas('timestamp_song_mappings', [
+            'id' => $mapping->id,
+        ]);
+    }
+
+    /**
      * マッピング解除のテスト
      */
     public function test_unlink_timestamp_deletes_mapping(): void

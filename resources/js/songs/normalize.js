@@ -134,6 +134,10 @@ class TimestampNormalization {
             this.markAsNotSong();
         });
 
+        document.getElementById('unmarkAsNotSongBtn').addEventListener('click', () => {
+            this.unmarkAsNotSong();
+        });
+
         document.getElementById('unlinkBtn').addEventListener('click', () => {
             this.unlinkTimestamps();
         });
@@ -417,6 +421,7 @@ class TimestampNormalization {
             normalizedSpan.textContent = '';
             document.getElementById('linkSongBtn').disabled = true;
             document.getElementById('markAsNotSongBtn').disabled = true;
+            document.getElementById('unmarkAsNotSongBtn').disabled = true;
             document.getElementById('unlinkBtn').disabled = true;
 
             // 動画ボタンを無効化
@@ -428,6 +433,7 @@ class TimestampNormalization {
             textSpan.title = ts.text; // ホバーで全文表示
             normalizedSpan.textContent = `正規化: ${ts.normalized_text}`;
             document.getElementById('markAsNotSongBtn').disabled = false;
+            document.getElementById('unmarkAsNotSongBtn').disabled = !ts.is_not_song;
             document.getElementById('unlinkBtn').disabled = !ts.mapping;
 
             // 動画情報の表示
@@ -449,6 +455,9 @@ class TimestampNormalization {
             }
             normalizedSpan.textContent = '';
             document.getElementById('markAsNotSongBtn').disabled = false;
+            // 選択されたタイムスタンプの中に is_not_song=true があるかチェック
+            const hasNotSong = this.selectedTimestamps.some(ts => ts.is_not_song);
+            document.getElementById('unmarkAsNotSongBtn').disabled = !hasNotSong;
             document.getElementById('unlinkBtn').disabled = false;
 
             // 動画ボタンを無効化
@@ -961,6 +970,46 @@ class TimestampNormalization {
         } catch (error) {
             console.error('マークに失敗しました:', error);
             toast.error('マークに失敗しました。');
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    async unmarkAsNotSong() {
+        if (this.selectedTimestamps.length === 0) {
+            toast.warning('タイムスタンプを選択してください。');
+            return;
+        }
+
+        // is_not_songのタイムスタンプのみをフィルタ
+        const notSongTimestamps = this.selectedTimestamps.filter(ts => ts.is_not_song);
+
+        if (notSongTimestamps.length === 0) {
+            toast.warning('選択されたタイムスタンプに「楽曲ではない」マークがありません。');
+            return;
+        }
+
+        if (!confirm(`${notSongTimestamps.length}件の「楽曲ではない」マークを解除しますか?`)) {
+            return;
+        }
+
+        try {
+            this.showLoading();
+
+            for (const ts of notSongTimestamps) {
+                await axios.post('/api/songs/unmark-not-song', {
+                    normalized_text: ts.normalized_text
+                });
+            }
+
+            toast.success('「楽曲ではない」マークを解除しました。');
+            this.selectedTimestamps = [];
+
+            await this.loadTimestamps(this.currentPage, this.currentSearchQuery);
+            this.updateSelectionDisplay();
+        } catch (error) {
+            console.error('解除に失敗しました:', error);
+            toast.error('解除に失敗しました。');
         } finally {
             this.hideLoading();
         }

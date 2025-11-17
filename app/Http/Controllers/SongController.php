@@ -474,6 +474,27 @@ class SongController extends Controller
     }
 
     /**
+     * 「楽曲ではない」フラグを解除
+     */
+    public function unmarkAsNotSong(Request $request)
+    {
+        $validated = $request->validate([
+            'normalized_text' => 'required|string',
+        ]);
+
+        DB::transaction(function () use ($validated) {
+            $mapping = TimestampSongMapping::where('normalized_text', $validated['normalized_text'])->first();
+
+            if ($mapping && $mapping->is_not_song) {
+                // マッピングを削除して未紐づけ状態に戻す
+                $mapping->delete();
+            }
+        });
+
+        return response()->json(['message' => '「楽曲ではない」マークを解除しました。']);
+    }
+
+    /**
      * マッピングを解除
      */
     public function unlinkTimestamp(Request $request)

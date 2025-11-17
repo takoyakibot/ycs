@@ -173,6 +173,9 @@
                             <button id="markAsNotSongBtn" class="w-full px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>
                                 楽曲ではないとマークする
                             </button>
+                            <button id="unmarkAsNotSongBtn" class="w-full px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>
+                                楽曲ではないを解除
+                            </button>
                             <button id="unlinkBtn" class="w-full px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>
                                 紐づけを解除
                             </button>
