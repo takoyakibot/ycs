@@ -63,6 +63,40 @@ function registerArchiveListComponent() {
                     return escapeHTML(str);
                 },
 
+                // 配信サービスURL生成
+                getSpotifyUrl(song) {
+                    if (!song) return '';
+                    if (song.spotify_track_id) {
+                        return `https://open.spotify.com/track/${song.spotify_track_id}`;
+                    }
+                    const query = encodeURIComponent(`${song.title} ${song.artist}`);
+                    return `https://open.spotify.com/search/${query}`;
+                },
+
+                getAppleMusicUrl(song) {
+                    if (!song) return '';
+                    const query = encodeURIComponent(`${song.title} ${song.artist}`);
+                    return `https://music.apple.com/jp/search?term=${query}`;
+                },
+
+                getYouTubeMusicUrl(song) {
+                    if (!song) return '';
+                    const query = encodeURIComponent(`${song.title} ${song.artist}`);
+                    return `https://music.youtube.com/search?q=${query}`;
+                },
+
+                getAmazonMusicUrl(song) {
+                    if (!song) return '';
+                    const query = encodeURIComponent(`${song.title} ${song.artist}`);
+                    return `https://music.amazon.co.jp/search/${query}`;
+                },
+
+                getLineMusicUrl(song) {
+                    if (!song) return '';
+                    const query = encodeURIComponent(`${song.title} ${song.artist}`);
+                    return `https://music.line.me/search/all?query=${query}`;
+                },
+
                 archiveSearch() {
                     const params = new URLSearchParams();
                     params.append('baramutsu', this.archiveQuery);
