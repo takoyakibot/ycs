@@ -8,13 +8,14 @@ class TextNormalizer
      * タイムスタンプテキストを正規化
      *
      * 以下の処理を行います：
-     * - 全角文字を半角に変換
+     * - 全角英数字を半角に変換（チルダは除く）
      * - 区切り文字（スラッシュ、ハイフン、コロン等）を統一
+     * - チルダ系文字（～、〜）を半角チルダ（~）に統一
      * - 空白文字を統一（全て半角スペースに）
      * - 先頭・末尾の空白をトリム
      * - 小文字に統一
      */
-    public static function normalize($text)
+    public static function normalize(?string $text): string
     {
         if (empty($text)) {
             return '';
@@ -28,6 +29,9 @@ class TextNormalizer
         foreach ($separators as $sep) {
             $text = str_replace($sep, '/', $text);
         }
+
+        // チルダ系文字を半角チルダに統一
+        $text = str_replace(['～', '〜'], '~', $text);
 
         // 連続する区切り文字を1つに
         $text = preg_replace('/\/+/', '/', $text);
@@ -47,18 +51,15 @@ class TextNormalizer
     /**
      * 2つのテキストが正規化後に一致するか判定
      */
-    public static function equals($text1, $text2)
+    public static function equals(?string $text1, ?string $text2): bool
     {
         return static::normalize($text1) === static::normalize($text2);
     }
 
     /**
      * 先頭の全角スペース（および半角スペース）を除外
-     *
-     * @param  string  $text
-     * @return string
      */
-    public static function trimFullwidthSpace($text)
+    public static function trimFullwidthSpace(?string $text): string
     {
         if (empty($text)) {
             return '';
@@ -71,9 +72,9 @@ class TextNormalizer
     /**
      * テキストから楽曲名とアーティスト名を抽出を試みる
      *
-     * @return array ['title' => string, 'artist' => string|null]
+     * @return array{title: string, artist: ?string}
      */
-    public static function extractSongInfo($text)
+    public static function extractSongInfo(?string $text): array
     {
         $normalized = static::normalize($text);
 
