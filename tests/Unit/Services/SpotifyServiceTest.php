@@ -170,18 +170,12 @@ class SpotifyServiceTest extends TestCase
      */
     public function test_get_track_success(): void
     {
-        // 認証をモック
+        // 認証とトラック取得APIをモック
         Http::fake([
             'https://accounts.spotify.com/api/token' => Http::response([
                 'access_token' => 'test_token',
             ], 200),
-        ]);
-
-        $this->service->authenticate('client_id', 'client_secret');
-
-        // トラック取得APIをモック
-        Http::fake([
-            'https://api.spotify.com/v1/tracks/track123' => Http::response([
+            'https://api.spotify.com/v1/tracks/track123*' => Http::response([
                 'id' => 'track123',
                 'name' => 'Test Track',
                 'artists' => [
@@ -197,6 +191,8 @@ class SpotifyServiceTest extends TestCase
                 ],
             ], 200),
         ]);
+
+        $this->service->authenticate('client_id', 'client_secret');
 
         $track = $this->service->getTrack('track123');
 
@@ -222,24 +218,20 @@ class SpotifyServiceTest extends TestCase
      */
     public function test_get_track_not_found(): void
     {
-        // 認証をモック
+        // 認証とトラック取得APIをモック
         Http::fake([
             'https://accounts.spotify.com/api/token' => Http::response([
                 'access_token' => 'test_token',
             ], 200),
-        ]);
-
-        $this->service->authenticate('client_id', 'client_secret');
-
-        // トラック取得APIを404でモック
-        Http::fake([
-            'https://api.spotify.com/v1/tracks/nonexistent' => Http::response([
+            'https://api.spotify.com/v1/tracks/nonexistent*' => Http::response([
                 'error' => [
                     'status' => 404,
                     'message' => 'Not found',
                 ],
             ], 404),
         ]);
+
+        $this->service->authenticate('client_id', 'client_secret');
 
         $this->expectException(\Exception::class);
         $this->expectExceptionMessage('Spotify get track request failed with status 404');
@@ -271,12 +263,13 @@ class SpotifyServiceTest extends TestCase
         $this->service->authenticate('client_id', 'client_secret');
         $tracks = $this->service->searchTracks('query', 20);
 
-        // limitパラメータが正しく送信されたことを確認
+        // limitとmarketパラメータが正しく送信されたことを確認
         Http::assertSent(function ($request) {
             return str_starts_with($request->url(), 'https://api.spotify.com/v1/search')
                 && $request['limit'] === 20
                 && $request['q'] === 'query'
-                && $request['type'] === 'track';
+                && $request['type'] === 'track'
+                && $request['market'] === 'JP';
         });
 
         $this->assertCount(20, $tracks);
@@ -330,6 +323,31 @@ class SpotifyServiceTest extends TestCase
         Http::assertSent(function ($request) {
             return str_starts_with($request->url(), 'https://api.spotify.com/v1/tracks/')
                 && $request->hasHeader('Authorization', 'Bearer my_access_token');
+        });
+    }
+
+    /**
+     * トラック取得時にmarketパラメータが送信されるかのテスト
+     */
+    public function test_get_track_sends_market_parameter(): void
+    {
+        Http::fake([
+            'https://accounts.spotify.com/api/token' => Http::response([
+                'access_token' => 'test_token',
+            ], 200),
+            'https://api.spotify.com/v1/tracks/*' => Http::response([
+                'id' => 'track123',
+                'name' => 'Track',
+                'artists' => [['name' => 'Artist']],
+            ], 200),
+        ]);
+
+        $this->service->authenticate('client_id', 'client_secret');
+        $this->service->getTrack('track123');
+
+        Http::assertSent(function ($request) {
+            return str_starts_with($request->url(), 'https://api.spotify.com/v1/tracks/')
+                && $request['market'] === 'JP';
         });
     }
 }

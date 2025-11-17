@@ -30,6 +30,9 @@ class SpotifyService
 
     /**
      * 楽曲を検索
+     *
+     * market=JP を指定することで、日本市場向けのローカライズされた
+     * アーティスト名が返される可能性があります。
      */
     public function searchTracks($query, $limit = 10)
     {
@@ -41,6 +44,7 @@ class SpotifyService
             'q' => $query,
             'type' => 'track',
             'limit' => $limit,
+            'market' => 'JP',
         ]);
 
         if ($response->successful()) {
@@ -52,6 +56,9 @@ class SpotifyService
 
     /**
      * トラック情報を取得
+     *
+     * market=JP を指定することで、日本市場向けのローカライズされた
+     * アーティスト名が返される可能性があります。
      */
     public function getTrack($trackId)
     {
@@ -59,7 +66,9 @@ class SpotifyService
             throw new \Exception('Spotify API is not authenticated.');
         }
 
-        $response = Http::withToken($this->accessToken)->get("https://api.spotify.com/v1/tracks/{$trackId}");
+        $response = Http::withToken($this->accessToken)->get("https://api.spotify.com/v1/tracks/{$trackId}", [
+            'market' => 'JP',
+        ]);
 
         if ($response->successful()) {
             return $response->json();
