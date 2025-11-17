@@ -53,7 +53,8 @@ class TimestampSongMappingFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'song_id' => null,
             'is_not_song' => true,
-            'confidence' => null,
+            'is_manual' => true,
+            'confidence' => 1.0,
         ]);
     }
 
