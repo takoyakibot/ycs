@@ -302,7 +302,16 @@ class TimestampNormalization {
         const container = document.getElementById('timestampPagination');
         container.innerHTML = '';
 
-        if (data.last_page <= 1) return;
+        if (data.last_page <= 1) {
+            // ページが1ページのみの場合も件数を表示
+            if (data.total !== undefined) {
+                const totalInfo = document.createElement('span');
+                totalInfo.textContent = `全${data.total}件`;
+                totalInfo.className = 'px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-400';
+                container.appendChild(totalInfo);
+            }
+            return;
+        }
 
         const currentPage = parseInt(data.current_page, 10);
         const lastPage = parseInt(data.last_page, 10);
@@ -355,6 +364,14 @@ class TimestampNormalization {
         pageInfo.textContent = `${currentPage} / ${lastPage}`;
         pageInfo.className = 'px-3 py-1 text-sm font-medium';
         container.appendChild(pageInfo);
+
+        // 件数表示を追加
+        if (data.total !== undefined) {
+            const totalInfo = document.createElement('span');
+            totalInfo.textContent = `(全${data.total}件)`;
+            totalInfo.className = 'px-3 py-1 text-sm text-gray-600 dark:text-gray-400';
+            container.appendChild(totalInfo);
+        }
 
         // 次へ系のボタン
         const nextButtons = [
@@ -793,14 +810,20 @@ class TimestampNormalization {
                 params: { search }
             });
 
-            this.displaySongs(response.data);
+            // APIレスポンスの形式に応じて分岐
+            if (response.data.data) {
+                this.displaySongs(response.data.data, response.data.total);
+            } else {
+                // 後方互換性のため、直接配列が返された場合も対応
+                this.displaySongs(response.data, response.data.length);
+            }
         } catch (error) {
             console.error('楽曲マスタの取得に失敗しました:', error);
             toast.error('楽曲マスタの取得に失敗しました。');
         }
     }
 
-    displaySongs(songs) {
+    displaySongs(songs, total = null) {
         const container = document.getElementById('songsResults');
         if (!container) {
             console.error('songsResults element not found');
@@ -808,6 +831,9 @@ class TimestampNormalization {
         }
 
         container.innerHTML = '';
+
+        // 件数表示を更新
+        this.updateSongsCount(total !== null ? total : songs.length);
 
         if (!Array.isArray(songs)) {
             console.error('songs is not an array:', songs);
@@ -865,12 +891,19 @@ class TimestampNormalization {
 
             div.addEventListener('click', () => {
                 this.selectedSong = song;
-                this.displaySongs(songs);
+                this.displaySongs(songs, total);
                 this.updateSelectionDisplay();
             });
 
             container.appendChild(div);
         });
+    }
+
+    updateSongsCount(count) {
+        const countDiv = document.getElementById('songsCount');
+        if (!countDiv) return;
+
+        countDiv.textContent = `${count}件`;
     }
 
     async deleteSong(songId) {
