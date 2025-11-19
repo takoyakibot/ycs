@@ -157,8 +157,11 @@
 
                         <!-- 楽曲マスタ一覧 -->
                         <div id="songsList" class="tab-content hidden">
-                            <div class="mb-3">
-                                <input type="text" id="songsSearch" placeholder="楽曲名やアーティスト名で検索..." class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <div class="flex justify-between items-center mb-3">
+                                <input type="text" id="songsSearch" placeholder="楽曲名やアーティスト名で検索..." class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <div id="songsCount" class="text-sm text-gray-600 dark:text-gray-400 ml-4">
+                                    <!-- JavaScriptで動的に更新 -->
+                                </div>
                             </div>
                             <div id="songsResults" class="space-y-2 max-h-64 overflow-y-auto">
                                 <!-- 楽曲マスタリストがここに表示される -->

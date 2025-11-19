@@ -163,11 +163,15 @@ class SongController extends Controller
             });
         }
 
+        $total = $query->count();
         $songs = $query->orderBy('artist')
             ->orderBy('title')
             ->get();
 
-        return response()->json($songs);
+        return response()->json([
+            'data' => $songs,
+            'total' => $total,
+        ]);
     }
 
     /**

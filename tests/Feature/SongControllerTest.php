@@ -214,7 +214,9 @@ class SongControllerTest extends TestCase
         $response = $this->actingAs($this->user)->getJson(route('songs.fetchSongs'));
 
         $response->assertStatus(200);
-        $this->assertCount(3, $response->json());
+        $response->assertJsonStructure(['data', 'total']);
+        $this->assertCount(3, $response->json('data'));
+        $this->assertEquals(3, $response->json('total'));
     }
 
     /**
@@ -231,7 +233,9 @@ class SongControllerTest extends TestCase
         ]));
 
         $response->assertStatus(200);
-        $this->assertCount(2, $response->json());
+        $response->assertJsonStructure(['data', 'total']);
+        $this->assertCount(2, $response->json('data'));
+        $this->assertEquals(2, $response->json('total'));
     }
 
     /**
@@ -248,7 +252,9 @@ class SongControllerTest extends TestCase
         ]));
 
         $response->assertStatus(200);
-        $this->assertCount(2, $response->json());
+        $response->assertJsonStructure(['data', 'total']);
+        $this->assertCount(2, $response->json('data'));
+        $this->assertEquals(2, $response->json('total'));
     }
 
     /**
