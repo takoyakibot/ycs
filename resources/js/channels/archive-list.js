@@ -39,6 +39,11 @@ function registerArchiveListComponent() {
                 reportType: '',
                 reportComment: '',
 
+                // 配信リンクパネルの状態管理
+                selectedSong: null,
+                showDistributionPanel: false,
+                panelDismissed: false,
+
                 // computed property
                 get maxPage() {
                     if (!this.archives.total || !this.archives.per_page) return 1;
@@ -343,6 +348,69 @@ function registerArchiveListComponent() {
 
                     toast.success('報告を受け付けました。（現在は暫定実装のため、コンソールに出力されています）');
                     this.showReportModal = false;
+                },
+
+                // 配信リンクパネル関連メソッド
+                init() {
+                    // localStorageから設定を読み込み
+                    const dismissed = localStorage.getItem('distributionPanelDismissed');
+                    this.panelDismissed = dismissed === 'true';
+                },
+
+                selectSong(song) {
+                    if (!song) return;
+                    this.selectedSong = song;
+                    if (!this.panelDismissed) {
+                        this.showDistributionPanel = true;
+                    }
+                },
+
+                closePanel() {
+                    this.showDistributionPanel = false;
+                    this.panelDismissed = true;
+                    localStorage.setItem('distributionPanelDismissed', 'true');
+                },
+
+                openPanel() {
+                    this.panelDismissed = false;
+                    localStorage.setItem('distributionPanelDismissed', 'false');
+                    if (this.selectedSong) {
+                        this.showDistributionPanel = true;
+                    }
+                },
+
+                // 配信サービスURL生成メソッド
+                getSpotifyUrl(song) {
+                    if (!song) return '';
+                    if (song.spotify_track_id) {
+                        return `https://open.spotify.com/track/${encodeURIComponent(song.spotify_track_id)}`;
+                    }
+                    const query = encodeURIComponent(`${song.title} ${song.artist}`);
+                    return `https://open.spotify.com/search/${query}`;
+                },
+
+                getAppleMusicUrl(song) {
+                    if (!song) return '';
+                    const query = encodeURIComponent(`${song.title} ${song.artist}`);
+                    return `https://music.apple.com/jp/search?term=${query}`;
+                },
+
+                getYouTubeMusicUrl(song) {
+                    if (!song) return '';
+                    const query = encodeURIComponent(`${song.title} ${song.artist}`);
+                    return `https://music.youtube.com/search?q=${query}`;
+                },
+
+                getAmazonMusicUrl(song) {
+                    if (!song) return '';
+                    const query = encodeURIComponent(`${song.title} ${song.artist}`);
+                    return `https://music.amazon.co.jp/search/${query}`;
+                },
+
+                getLineMusicUrl(song) {
+                    if (!song) return '';
+                    const query = encodeURIComponent(`${song.title} ${song.artist}`);
+                    return `https://music.line.me/search/all?query=${query}`;
                 }
             };
         });
