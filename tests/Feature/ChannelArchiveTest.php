@@ -76,6 +76,58 @@ class ChannelArchiveTest extends TestCase
     }
 
     /**
+     * 「楽曲ではない」とマークされたタイムスタンプはアーカイブから除外される
+     */
+    public function test_fetch_archives_excludes_not_song_items(): void
+    {
+        $channel = Channel::factory()->create();
+        $archive = Archive::factory()->create([
+            'channel_id' => $channel->channel_id,
+            'is_display' => 1,
+        ]);
+
+        $normalTs = TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'text' => 'Normal song',
+            'is_display' => 1,
+        ]);
+        $notSongTs = TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'text' => 'Not a song',
+            'is_display' => 1,
+        ]);
+
+        // 「楽曲ではない」マッピングを作成
+        TimestampSongMapping::factory()->create([
+            'normalized_text' => \App\Helpers\TextNormalizer::normalize($notSongTs->text),
+            'song_id' => null,
+            'is_not_song' => true,
+            'confidence' => 1.0,
+            'is_manual' => true,
+        ]);
+
+        $response = $this->getJson("/api/channels/{$channel->handle}");
+
+        $response->assertStatus(200);
+
+        $data = $response->json('data');
+        $this->assertNotEmpty($data);
+
+        // ts_items_displayから全てのtextを取得
+        $allTexts = [];
+        foreach ($data as $arch) {
+            if (isset($arch['ts_items_display'])) {
+                foreach ($arch['ts_items_display'] as $ts) {
+                    $allTexts[] = $ts['text'];
+                }
+            }
+        }
+
+        $this->assertContains('Normal song', $allTexts);
+        $this->assertNotContains('Not a song', $allTexts);
+    }
+
+    /**
      * タイムスタンプ一覧を取得できる
      */
     public function test_fetch_timestamps_returns_timestamps(): void

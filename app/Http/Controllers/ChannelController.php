@@ -95,15 +95,27 @@ class ChannelController extends Controller
             $mappings = collect();
         }
 
-        // 各タイムスタンプに楽曲情報を追加
+        // 「楽曲ではない」タイムスタンプを除外してから楽曲情報を追加
         foreach ($archivesArray['data'] as &$archive) {
             if (isset($archive['ts_items_display'])) {
+                // 「楽曲ではない」とマークされたタイムスタンプを除外
+                $archive['ts_items_display'] = array_values(array_filter($archive['ts_items_display'], function ($tsItem) use ($mappings) {
+                    if (empty($tsItem['text'])) {
+                        return true;
+                    }
+                    $normalizedText = TextNormalizer::normalize($tsItem['text']);
+                    $mapping = $mappings->get($normalizedText);
+
+                    return ! ($mapping && $mapping->is_not_song);
+                }));
+
+                // 残ったタイムスタンプに楽曲情報を追加
                 foreach ($archive['ts_items_display'] as &$tsItem) {
                     if (! empty($tsItem['text'])) {
                         $normalizedText = TextNormalizer::normalize($tsItem['text']);
                         $mapping = $mappings->get($normalizedText);
 
-                        if ($mapping && $mapping->song && ! $mapping->is_not_song) {
+                        if ($mapping && $mapping->song) {
                             $tsItem['song'] = [
                                 'title' => $mapping->song->title,
                                 'artist' => $mapping->song->artist,
