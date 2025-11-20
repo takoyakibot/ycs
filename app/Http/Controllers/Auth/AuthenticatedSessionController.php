@@ -44,7 +44,15 @@ class AuthenticatedSessionController extends Controller
         if ($user && $user->google_token && isset($user->google_token['access_token'])) {
             try {
                 $client = new Google_Client;
+                $client->setClientId(config('services.google.client_id'));
+                $client->setClientSecret(config('services.google.client_secret'));
                 $client->revokeToken($user->google_token['access_token']);
+
+                // revokeに成功したらトークンをクリア
+                $user->google_token = null;
+                $user->google_refresh_token = null;
+                $user->save();
+
                 Log::info('Google OAuth token revoked successfully', [
                     'user_id' => $user->id,
                 ]);
@@ -53,6 +61,7 @@ class AuthenticatedSessionController extends Controller
                 Log::warning('Failed to revoke Google token', [
                     'user_id' => $user->id,
                     'error' => $e->getMessage(),
+                    'exception' => get_class($e),
                 ]);
             }
         }
