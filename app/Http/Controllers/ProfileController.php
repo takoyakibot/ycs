@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\ProfileUpdateRequest;
+use Google\Client as Google_Client;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Redirect;
 use Illuminate\View\View;
 
@@ -66,6 +68,23 @@ class ProfileController extends Controller
         ]);
 
         $user = $request->user();
+
+        // Google OAuthトークンをrevokeする
+        if ($user->google_token && isset($user->google_token['access_token'])) {
+            try {
+                $client = new Google_Client;
+                $client->revokeToken($user->google_token['access_token']);
+                Log::info('Google OAuth token revoked successfully during account deletion', [
+                    'user_id' => $user->id,
+                ]);
+            } catch (\Exception $e) {
+                // トークンのrevokeに失敗してもアカウント削除自体は成功させる
+                Log::warning('Failed to revoke Google token during account deletion', [
+                    'user_id' => $user->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
 
         Auth::logout();
 

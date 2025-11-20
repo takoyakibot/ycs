@@ -96,4 +96,31 @@ class ProfileTest extends TestCase
 
         $this->assertNotNull($user->fresh());
     }
+
+    public function test_user_with_google_token_can_delete_account(): void
+    {
+        // Google OAuthトークンを持つユーザーを作成
+        $user = User::factory()->create([
+            'google_token' => [
+                'access_token' => 'test_access_token',
+                'refresh_token' => 'test_refresh_token',
+            ],
+        ]);
+
+        // アカウント削除を実行
+        // 注: 実際のGoogle APIへの接続は行われない（無効なトークンのため）が、
+        // エラーハンドリングにより削除処理は正常に完了する
+        $response = $this
+            ->actingAs($user)
+            ->delete('/profile', [
+                'password' => 'password',
+            ]);
+
+        $response
+            ->assertSessionHasNoErrors()
+            ->assertRedirect('/');
+
+        $this->assertGuest();
+        $this->assertTrue($user->fresh()->trashed());
+    }
 }
