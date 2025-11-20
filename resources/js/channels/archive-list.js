@@ -295,6 +295,10 @@ function registerArchiveListComponent() {
                         const params = new URLSearchParams(window.location.search);
                         this.restoreStateFromURL(params);
                     });
+
+                    // 配信リンクパネルの設定を読み込み
+                    const dismissed = localStorage.getItem('distributionPanelDismissed');
+                    this.panelDismissed = dismissed === 'true';
                 },
 
                 // 報告モーダルを開く
@@ -351,12 +355,6 @@ function registerArchiveListComponent() {
                 },
 
                 // 配信リンクパネル関連メソッド
-                init() {
-                    // localStorageから設定を読み込み
-                    const dismissed = localStorage.getItem('distributionPanelDismissed');
-                    this.panelDismissed = dismissed === 'true';
-                },
-
                 selectSong(song) {
                     if (!song) return;
                     this.selectedSong = song;
