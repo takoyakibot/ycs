@@ -73,7 +73,7 @@ function registerArchiveListComponent() {
                 getYoutubeUrl(videoId, tsNum) {
                     const safeVideoId = encodeURIComponent(videoId || '');
                     const safeTsNum = parseInt(tsNum) || 0;
-                    return `https://youtube.com/watch?v=${safeVideoId}&t=${safeTsNum}s`;
+                    return `https://youtu.be/${safeVideoId}?t=${safeTsNum}s`;
                 },
 
                 getArchiveUrl(videoId, tsNum) {
