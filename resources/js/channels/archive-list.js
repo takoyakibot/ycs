@@ -417,14 +417,24 @@ function registerArchiveListComponent() {
 
                 getAmazonMusicUrl(song) {
                     if (!song) return '';
-                    const query = encodeURIComponent(`${song.title} ${song.artist}`);
-                    return `https://music.amazon.co.jp/search/${query}`;
+                    // URLに使えない特殊文字を除去し、スペースを+に変換
+                    const searchText = `${song.title} ${song.artist}`
+                        .replace(/[/\\?#%&=:@!$'()*+,;[\]{}|^`<>"]/g, ' ')  // 特殊文字をスペースに
+                        .trim()
+                        .replace(/\s+/g, '+');  // 連続スペースを+に
+                    return `https://music.amazon.co.jp/search/${searchText}`;
                 },
 
                 getLineMusicUrl(song) {
                     if (!song) return '';
-                    const query = encodeURIComponent(`${song.title} ${song.artist}`);
-                    return `https://music.line.me/search/all?query=${query}`;
+                    // URLに使えない特殊文字を除去してからエンコード
+                    const searchText = `${song.title} ${song.artist}`
+                        .replace(/[/\\?#%&=:@!$'()*+,;[\]{}|^`<>"]/g, ' ')
+                        .trim()
+                        .replace(/\s+/g, ' ');  // 連続スペースを1つに
+                    const query = encodeURIComponent(searchText);
+                    // LINE MUSICのwebappは /webapp/ パスを使用
+                    return `https://music.line.me/webapp/search/tracks?query=${query}`;
                 }
             };
         });
