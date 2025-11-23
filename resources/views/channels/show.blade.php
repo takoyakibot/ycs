@@ -333,7 +333,7 @@
                             <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
                                 <!-- 楽曲情報 -->
                                 <div class="flex-shrink-0 w-full sm:w-[300px]">
-                                    <div class="truncate" :title="ts.mapping?.song ? `配信サービスで聴く: ${ts.mapping.song.title} / ${ts.mapping.song.artist}` : `配信サービスで検索: ${ts.text}`">
+                                    <div class="truncate" :title="ts.mapping?.song ? `配信サービスで聴く: ${ts.mapping.song.title} / ${ts.mapping.song.artist}` : (ts.text ? `配信サービスで検索: ${ts.text}` : '')">
                                         <template x-if="ts.mapping?.song">
                                             <span @click="selectSong(ts.mapping.song)"
                                                   class="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
