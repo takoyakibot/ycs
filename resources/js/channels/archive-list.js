@@ -363,6 +363,22 @@ function registerArchiveListComponent() {
                     }
                 },
 
+                // テキストから検索用の疑似songオブジェクトを作成して選択
+                selectText(text) {
+                    if (!text || text.trim() === '') return;
+                    // テキストをそのまま検索クエリとして使用
+                    // title にテキスト全体を設定し、artist は空にする
+                    const pseudoSong = {
+                        title: text.trim(),
+                        artist: '',
+                        spotify_track_id: null
+                    };
+                    this.selectedSong = pseudoSong;
+                    if (!this.panelDismissed) {
+                        this.showDistributionPanel = true;
+                    }
+                },
+
                 closePanel() {
                     this.showDistributionPanel = false;
                     this.panelDismissed = true;

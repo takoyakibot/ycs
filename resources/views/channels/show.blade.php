@@ -173,8 +173,14 @@
                                                           :title="`配信サービスで聴く: ${tsItem.song.title} / ${tsItem.song.artist}`"
                                                           x-text="tsItem.text || ''"></span>
                                                 </template>
-                                                <template x-if="!tsItem.song">
-                                                    <span x-text="tsItem.text || ''"></span>
+                                                <template x-if="!tsItem.song && tsItem.text">
+                                                    <span @click="selectText(tsItem.text)"
+                                                          class="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                                                          :title="`配信サービスで検索: ${tsItem.text}`"
+                                                          x-text="tsItem.text || ''"></span>
+                                                </template>
+                                                <template x-if="!tsItem.song && !tsItem.text">
+                                                    <span x-text="''"></span>
                                                 </template>
                                             </div>
                                         </div>
@@ -327,7 +333,7 @@
                             <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
                                 <!-- 楽曲情報 -->
                                 <div class="flex-shrink-0 w-full sm:w-[300px]">
-                                    <div class="truncate" :title="ts.mapping?.song ? `配信サービスで聴く: ${ts.mapping.song.title} / ${ts.mapping.song.artist}` : ts.text">
+                                    <div class="truncate" :title="ts.mapping?.song ? `配信サービスで聴く: ${ts.mapping.song.title} / ${ts.mapping.song.artist}` : `配信サービスで検索: ${ts.text}`">
                                         <template x-if="ts.mapping?.song">
                                             <span @click="selectSong(ts.mapping.song)"
                                                   class="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
@@ -336,8 +342,13 @@
                                                 <span class="text-gray-500 dark:text-gray-400 text-xs sm:text-sm" x-text="ts.mapping.song.artist"></span>
                                             </span>
                                         </template>
-                                        <template x-if="!ts.mapping?.song">
-                                            <span class="text-xs sm:text-sm text-gray-700 dark:text-gray-300" x-text="ts.text"></span>
+                                        <template x-if="!ts.mapping?.song && ts.text">
+                                            <span @click="selectText(ts.text)"
+                                                  class="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors text-xs sm:text-sm text-gray-700 dark:text-gray-300"
+                                                  x-text="ts.text"></span>
+                                        </template>
+                                        <template x-if="!ts.mapping?.song && !ts.text">
+                                            <span class="text-xs sm:text-sm text-gray-700 dark:text-gray-300">-</span>
                                         </template>
                                     </div>
                                 </div>
