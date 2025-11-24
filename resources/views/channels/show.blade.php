@@ -319,7 +319,8 @@
                     </template>
 
                     <template x-for="ts in (timestamps.data || [])" :key="ts.id">
-                        <div class="p-2 border rounded hover:bg-gray-50 dark:hover:bg-gray-700 active:bg-gray-100 dark:active:bg-gray-600 dark:border-gray-600 transition-colors">
+                        <div class="p-2 border rounded hover:bg-gray-50 dark:hover:bg-gray-700 active:bg-gray-100 dark:active:bg-gray-600 transition-colors"
+                             :class="(selectedSong && ((ts.mapping?.song && ts.mapping.song.title === selectedSong.title && ts.mapping.song.artist === selectedSong.artist) || (!ts.mapping?.song && ts.text === selectedSong.title))) ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-400' : 'dark:border-gray-600'">
                             <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
                                 <!-- 楽曲情報 -->
                                 <div class="flex-shrink-0 w-full sm:w-[300px] cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
@@ -344,10 +345,10 @@
                                 </div>
 
                                 <!-- アーカイブタイトル & 公開日: モバイルでは非表示 -->
-                                <div class="hidden sm:block text-sm truncate flex-1 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                                <div class="hidden sm:block text-sm truncate flex-1 cursor-pointer transition-colors"
                                      @click="ts.mapping?.song ? selectSong(ts.mapping.song) : (ts.text ? selectText(ts.text) : null)"
                                      :title="ts.mapping?.song ? `配信サービスで聴く: ${ts.mapping.song.title} / ${ts.mapping.song.artist}` : (ts.text ? `配信サービスで検索: ${ts.text}` : ts.archive.title)">
-                                    <div class="text-gray-600 dark:text-gray-400 truncate hover:text-blue-600 dark:hover:text-blue-400"
+                                    <div class="text-gray-600 dark:text-gray-400 truncate"
                                          x-text="ts.archive.title">
                                     </div>
                                     <div class="text-xs text-gray-500 dark:text-gray-500 mt-0.5"
