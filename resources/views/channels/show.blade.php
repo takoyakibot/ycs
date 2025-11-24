@@ -9,7 +9,7 @@
     </x-slot>
 
     <div class="px-2 sm:px-6 py-2 sm:py-6 transition-all duration-300"
-         :class="showDistributionPanel ? 'pb-32' : ''"
+         :style="showDistributionPanel ? 'padding-bottom: 10rem;' : ''"
          x-data="archiveListComponent">
         <div class="p-2">
             <!-- デスクトップ表示: 全体を中央寄せ -->
