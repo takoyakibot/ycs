@@ -41,7 +41,8 @@ class GoogleAuthControllerTest extends TestCase
         // ユーザーが作成されたことを確認
         $user = User::where('google_id', 'google_123')->first();
         $this->assertNotNull($user);
-        $this->assertEquals('Test User', $user->name);
+        // プライバシー保護のため、Googleの氏名ではなくメールアドレスの@前を使用
+        $this->assertEquals('test', $user->name);
         $this->assertEquals('test@example.com', $user->email);
 
         // email_verified_atが設定されていることを確認
@@ -78,9 +79,10 @@ class GoogleAuthControllerTest extends TestCase
         $response = $this->get('/auth/google/callback');
 
         // ユーザー情報が更新されたことを確認
+        // プライバシー保護のため、Googleの氏名ではなくメールアドレスの@前を使用
         $this->assertDatabaseHas('users', [
             'google_id' => 'google_123',
-            'name' => 'Updated Name',
+            'name' => 'updated',
             'email' => 'updated@example.com',
         ]);
 
