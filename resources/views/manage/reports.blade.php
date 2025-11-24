@@ -1,4 +1,8 @@
 <x-app-layout>
+    <x-slot name="alpine_script">
+        @vite('resources/js/manage/reports.js')
+    </x-slot>
+
     <x-slot name="header">
         <h2 class="font-semibold sm:text-xl text-gray-800 dark:text-gray-200 leading-tight">
             {{ __('タイムスタンプ報告管理') }}
@@ -139,5 +143,3 @@
         </div>
     </div>
 </x-app-layout>
-
-@vite('resources/js/manage/reports.js')
