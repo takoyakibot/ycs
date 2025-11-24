@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ChannelController;
+use App\Http\Controllers\ContactController;
 use App\Http\Controllers\LogController;
 use App\Http\Controllers\ManageController;
 use App\Http\Controllers\MarkdownController;
@@ -85,6 +86,12 @@ Route::get('api/channels/{id}/timestamps/download', [ChannelController::class, '
     ->middleware('throttle:10,1'); // 1分間に10回まで
 
 Route::get('/terms', [MarkdownController::class, 'show'])->name('markdown.show');
+
+// お問い合わせフォーム（ゲスト可、レートリミット適用）
+Route::get('/contact', [ContactController::class, 'show'])->name('contact.show');
+Route::post('/contact', [ContactController::class, 'store'])
+    ->name('contact.store')
+    ->middleware('throttle:5,60'); // 60分間に5回まで
 
 // タイムスタンプ報告API（ゲスト可）
 Route::post('api/timestamp-reports', [TimestampReportController::class, 'store'])->name('timestamp-reports.store');
