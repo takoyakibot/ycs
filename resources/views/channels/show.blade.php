@@ -9,7 +9,7 @@
     </x-slot>
 
     <div class="px-2 sm:px-6 py-2 sm:py-6 transition-all duration-300"
-         :style="showDistributionPanel ? 'padding-bottom: 10rem;' : ''"
+         :style="showDistributionPanel && activeTab === 'timestamps' ? 'padding-bottom: 10rem;' : ''"
          x-data="archiveListComponent">
         <div class="p-2">
             <!-- デスクトップ表示: 全体を中央寄せ -->
@@ -487,8 +487,8 @@
             </div>
         </div>
 
-        <!-- 配信リンクパネル -->
-        <div x-show="showDistributionPanel && selectedSong"
+        <!-- 配信リンクパネル（タイムスタンプタブのみ表示） -->
+        <div x-show="showDistributionPanel && selectedSong && activeTab === 'timestamps'"
              x-transition:enter="transition ease-out duration-300"
              x-transition:enter-start="transform translate-y-full"
              x-transition:enter-end="transform translate-y-0"
@@ -590,8 +590,8 @@
             </div>
         </div>
 
-        <!-- 戻すボタン（パネル非表示時） -->
-        <button x-show="panelDismissed && !showDistributionPanel"
+        <!-- 戻すボタン（パネル非表示時、タイムスタンプタブのみ） -->
+        <button x-show="panelDismissed && !showDistributionPanel && activeTab === 'timestamps'"
                 @click="openPanel()"
                 x-transition:enter="transition ease-out duration-200"
                 x-transition:enter-start="opacity-0 scale-95"
