@@ -309,8 +309,8 @@ function registerArchiveListComponent() {
                     this.showReportModal = true;
                 },
 
-                // 報告を送信（暫定実装：コンソールに出力）
-                submitReport() {
+                // 報告を送信
+                async submitReport() {
                     // reportTargetの存在確認
                     if (!this.reportTarget) {
                         console.error('No report target set');
@@ -325,33 +325,36 @@ function registerArchiveListComponent() {
                     }
 
                     const reportData = {
-                        timestamp_id: this.reportTarget.id,
+                        ts_item_id: this.reportTarget.id,
                         video_id: this.reportTarget.video_id,
-                        timestamp_text: this.reportTarget.text,
-                        timestamp_time: this.reportTarget.ts_text,
                         report_type: this.reportType,
-                        comment: this.reportComment,
-                        reported_at: new Date().toISOString(),
+                        comment: this.reportComment || null,
                     };
 
-                    // 暫定実装：コンソールに出力
-                    console.log('=== タイムスタンプ報告 ===', reportData);
+                    try {
+                        const response = await fetch('/api/timestamp-reports', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                            },
+                            body: JSON.stringify(reportData),
+                        });
 
-                    // TODO: 将来的にはAPIエンドポイントに送信
-                    // Expected endpoint: POST /api/timestamp-reports
-                    // Expected response: { success: boolean, message: string }
-                    // Required headers: CSRF token
-                    // await fetch('/api/timestamp-reports', {
-                    //     method: 'POST',
-                    //     headers: {
-                    //         'Content-Type': 'application/json',
-                    //         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                    //     },
-                    //     body: JSON.stringify(reportData),
-                    // });
+                        const data = await response.json();
 
-                    toast.success('報告を受け付けました。（現在は暫定実装のため、コンソールに出力されています）');
-                    this.showReportModal = false;
+                        if (response.ok) {
+                            toast.success(data.message || '報告を受け付けました。ご協力ありがとうございます。');
+                            this.showReportModal = false;
+                        } else if (response.status === 429) {
+                            toast.error(data.message || '報告の送信制限中です。しばらくしてから再度お試しください。');
+                        } else {
+                            toast.error(data.message || '報告の送信に失敗しました。');
+                        }
+                    } catch (error) {
+                        console.error('報告の送信に失敗しました:', error);
+                        toast.error('報告の送信に失敗しました。時間をおいて再度お試しください。');
+                    }
                 },
 
                 // 配信リンクパネル関連メソッド

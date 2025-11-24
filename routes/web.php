@@ -6,6 +6,7 @@ use App\Http\Controllers\ManageController;
 use App\Http\Controllers\MarkdownController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SongController;
+use App\Http\Controllers\TimestampReportController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -56,6 +57,11 @@ Route::middleware(['auth'])->group(function () {
     Route::get('api/songs/search-spotify', [SongController::class, 'searchSpotify'])->name('songs.searchSpotify');
     // Parameterized route - must be last to avoid capturing specific route names
     Route::delete('api/songs/{id}', [SongController::class, 'deleteSong'])->name('songs.deleteSong');
+
+    // タイムスタンプ報告管理API
+    Route::get('api/manage/timestamp-reports', [TimestampReportController::class, 'index'])->name('timestamp-reports.index');
+    Route::get('api/manage/timestamp-reports/{report}', [TimestampReportController::class, 'show'])->name('timestamp-reports.show');
+    Route::patch('api/manage/timestamp-reports/{report}/resolve', [TimestampReportController::class, 'resolve'])->name('timestamp-reports.resolve');
 });
 
 Route::middleware('auth')->group(function () {
@@ -76,5 +82,8 @@ Route::get('api/channels/{id}/timestamps/download', [ChannelController::class, '
     ->middleware('throttle:10,1'); // 1分間に10回まで
 
 Route::get('/terms', [MarkdownController::class, 'show'])->name('markdown.show');
+
+// タイムスタンプ報告API（ゲスト可）
+Route::post('api/timestamp-reports', [TimestampReportController::class, 'store'])->name('timestamp-reports.store');
 
 require __DIR__.'/auth.php';
