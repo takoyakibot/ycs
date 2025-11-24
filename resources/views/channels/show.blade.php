@@ -560,9 +560,11 @@
                         </svg>
                         <span>LINE MUSIC</span>
                     </a>
-                    <!-- 報告ボタン -->
-                    <button x-show="selectedTimestamp"
-                            @click="openReportModal(selectedTimestamp)"
+                </div>
+                <!-- 報告セクション -->
+                <div x-show="selectedTimestamp" class="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+                    <div class="text-xs text-gray-600 dark:text-gray-400 mb-2">このタイムスタンプに問題がある場合:</div>
+                    <button @click="openReportModal(selectedTimestamp)"
                             class="inline-flex items-center gap-1.5 px-3 py-2 bg-gray-500 hover:bg-gray-600 text-white text-sm rounded-md transition-colors"
                             title="このタイムスタンプを報告"
                             aria-label="このタイムスタンプを報告">
