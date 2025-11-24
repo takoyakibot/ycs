@@ -36,6 +36,9 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/manage/logs/{filename}/download', [LogController::class, 'download'])->name('logs.download');
     Route::delete('/manage/logs/{filename}', [LogController::class, 'delete'])->name('logs.delete');
 
+    // タイムスタンプ報告管理
+    Route::get('/manage/reports', [TimestampReportController::class, 'manage'])->name('reports.index');
+
     Route::get('api/manage/channels', [ManageController::class, 'fetchChannel'])->name('manage.fetchChannel');
     Route::post('api/manage/channels', [ManageController::class, 'addChannel'])->name('manage.addChannel');
     Route::get('api/manage/channels/{id}', [ManageController::class, 'fetchArchives'])->name('manage.fetchArchives');

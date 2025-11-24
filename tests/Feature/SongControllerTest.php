@@ -568,6 +568,30 @@ class SongControllerTest extends TestCase
     }
 
     /**
+     * 「楽曲ではない」マークのテスト（textパラメータで正規化）
+     */
+    public function test_mark_as_not_song_with_text_parameter(): void
+    {
+        $rawText = 'テスト　Ｓｏｎｇ　～試験～';  // 正規化されていないテキスト
+        $expectedNormalizedText = 'テスト song ~試験~';  // 正規化後
+
+        $response = $this->actingAs($this->user)->postJson(route('songs.markAsNotSong'), [
+            'text' => $rawText,
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'message' => '楽曲ではないとマークしました。',
+        ]);
+
+        $this->assertDatabaseHas('timestamp_song_mappings', [
+            'normalized_text' => $expectedNormalizedText,
+            'is_not_song' => 1,
+            'song_id' => null,
+        ]);
+    }
+
+    /**
      * 「楽曲ではない」マーク解除のテスト
      */
     public function test_unmark_as_not_song(): void
