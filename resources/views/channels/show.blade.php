@@ -164,24 +164,14 @@
                                         <div class="flex flex-col sm:flex-row sm:items-center gap-1">
                                             <div class="flex items-baseline gap-2">
                                                 <a :href="getArchiveUrl(tsItem.video_id, tsItem.ts_num)"
-                                                    target="_blank" rel="noopener noreferrer" class="text-blue-500 tabular-nums hover:underline"
+                                                    target="_blank" rel="noopener noreferrer" class="text-blue-500 tabular-nums hover:underline flex-shrink-0"
                                                     x-text="tsItem.ts_text || '0:00:00'">
                                                 </a>
-                                                <template x-if="tsItem.song">
-                                                    <span @click="selectSong(tsItem.song)"
-                                                          class="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                                                          :title="`配信サービスで聴く: ${tsItem.song.title} / ${tsItem.song.artist}`"
-                                                          x-text="tsItem.text || ''"></span>
-                                                </template>
-                                                <template x-if="!tsItem.song && tsItem.text">
-                                                    <span @click="selectText(tsItem.text)"
-                                                          class="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                                                          :title="`配信サービスで検索: ${tsItem.text}`"
-                                                          x-text="tsItem.text || ''"></span>
-                                                </template>
-                                                <template x-if="!tsItem.song && !tsItem.text">
-                                                    <span x-text="''"></span>
-                                                </template>
+                                                <div class="flex-1 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                                                     @click="tsItem.song ? selectSong(tsItem.song) : (tsItem.text ? selectText(tsItem.text) : null)"
+                                                     :title="tsItem.song ? `配信サービスで聴く: ${tsItem.song.title} / ${tsItem.song.artist}` : (tsItem.text ? `配信サービスで検索: ${tsItem.text}` : '')">
+                                                    <span x-text="tsItem.text || ''"></span>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -332,19 +322,19 @@
                         <div class="p-2 border rounded hover:bg-gray-50 dark:hover:bg-gray-700 active:bg-gray-100 dark:active:bg-gray-600 dark:border-gray-600 transition-colors">
                             <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
                                 <!-- 楽曲情報 -->
-                                <div class="flex-shrink-0 w-full sm:w-[300px]">
-                                    <div class="truncate" :title="ts.mapping?.song ? `配信サービスで聴く: ${ts.mapping.song.title} / ${ts.mapping.song.artist}` : (ts.text ? `配信サービスで検索: ${ts.text}` : '')">
+                                <div class="flex-shrink-0 w-full sm:w-[300px] cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                                     @click="ts.mapping?.song ? selectSong(ts.mapping.song) : (ts.text ? selectText(ts.text) : null)"
+                                     :title="ts.mapping?.song ? `配信サービスで聴く: ${ts.mapping.song.title} / ${ts.mapping.song.artist}` : (ts.text ? `配信サービスで検索: ${ts.text}` : '')">
+                                    <div class="truncate">
                                         <template x-if="ts.mapping?.song">
-                                            <span @click="selectSong(ts.mapping.song)"
-                                                  class="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+                                            <span>
                                                 <span class="font-medium text-xs sm:text-sm" x-text="ts.mapping.song.title"></span>
                                                 <span class="text-gray-500 dark:text-gray-400 text-xs sm:text-sm"> / </span>
                                                 <span class="text-gray-500 dark:text-gray-400 text-xs sm:text-sm" x-text="ts.mapping.song.artist"></span>
                                             </span>
                                         </template>
                                         <template x-if="!ts.mapping?.song && ts.text">
-                                            <span @click="selectText(ts.text)"
-                                                  class="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors text-xs sm:text-sm text-gray-700 dark:text-gray-300"
+                                            <span class="text-xs sm:text-sm text-gray-700 dark:text-gray-300"
                                                   x-text="ts.text"></span>
                                         </template>
                                         <template x-if="!ts.mapping?.song && !ts.text">
