@@ -98,7 +98,7 @@ function registerReportManagementComponent() {
 
                     try {
                         // 楽曲ではない判定API
-                        const response = await fetch('/api/songs/mark-not-song', {
+                        const notSongResponse = await fetch('/api/songs/mark-not-song', {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
@@ -109,17 +109,35 @@ function registerReportManagementComponent() {
                             }),
                         });
 
-                        if (!response.ok) {
+                        if (!notSongResponse.ok) {
                             throw new Error('「楽曲ではない」判定に失敗しました');
                         }
 
-                        toast.success('「楽曲ではない」に設定しました');
+                        // 報告も対応済みにする（直接APIを呼ぶ）
+                        const resolveResponse = await fetch(`/api/manage/timestamp-reports/${report.id}/resolve`, {
+                            method: 'PATCH',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                            },
+                        });
 
-                        // 報告も対応済みにする
-                        await this.resolveReport(report.id);
+                        if (!resolveResponse.ok) {
+                            throw new Error('報告の対応済みマークに失敗しました');
+                        }
+
+                        toast.success('「楽曲ではない」に設定し、報告を対応済みにしました');
+
+                        // リストを更新
+                        const index = this.reports.findIndex(r => r.id === report.id);
+                        if (index !== -1) {
+                            this.reports[index].status = 'resolved';
+                            this.reports[index].resolved_at = new Date().toISOString();
+                        }
                     } catch (error) {
                         console.error('「楽曲ではない」判定に失敗:', error);
-                        toast.error('「楽曲ではない」判定に失敗しました');
+                        toast.error(error.message || '「楽曲ではない」判定に失敗しました');
+                    } finally {
                         this.processingId = null;
                     }
                 },
