@@ -321,27 +321,33 @@
                     </template>
 
                     <template x-for="ts in (timestamps.data || [])" :key="ts.id">
-                        <div class="p-2 border rounded hover:bg-gray-50 dark:hover:bg-gray-700 active:bg-gray-100 dark:active:bg-gray-600 transition-colors"
-                             :class="(selectedSong && ((ts.mapping?.song && ts.mapping.song.title === selectedSong.title && ts.mapping.song.artist === selectedSong.artist) || (!ts.mapping?.song && ts.text === selectedSong.title))) ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-400' : 'dark:border-gray-600'">
+                        <div class="p-2 border rounded transition-colors"
+                             :class="{
+                                 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-400': selectedSong && ((ts.mapping?.song && ts.mapping.song.title === selectedSong.title && ts.mapping.song.artist === selectedSong.artist) || (!ts.mapping?.song && ts.text === selectedSong.title)),
+                                 'bg-gray-200 dark:bg-gray-700 border-gray-300 dark:border-gray-500': ts.has_pending_report && !(selectedSong && ((ts.mapping?.song && ts.mapping.song.title === selectedSong.title && ts.mapping.song.artist === selectedSong.artist) || (!ts.mapping?.song && ts.text === selectedSong.title))),
+                                 'dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 active:bg-gray-100 dark:active:bg-gray-600': !ts.has_pending_report && !(selectedSong && ((ts.mapping?.song && ts.mapping.song.title === selectedSong.title && ts.mapping.song.artist === selectedSong.artist) || (!ts.mapping?.song && ts.text === selectedSong.title)))
+                             }">
                             <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
                                 <!-- 楽曲情報 -->
-                                <div class="flex-shrink-0 w-full sm:w-[300px] cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                                <div class="flex-shrink-0 w-full sm:w-[300px] cursor-pointer transition-colors"
+                                     :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : 'hover:text-blue-600 dark:hover:text-blue-400'"
                                      @click="ts.mapping?.song ? selectSong(ts.mapping.song, ts) : (ts.text ? selectText(ts.text, ts) : null)"
                                      :title="ts.mapping?.song ? `配信サービスで聴く: ${ts.mapping.song.title} / ${ts.mapping.song.artist}` : (ts.text ? `配信サービスで検索: ${ts.text}` : '')">
                                     <div class="truncate">
                                         <template x-if="ts.mapping?.song">
                                             <span>
-                                                <span class="font-medium text-xs sm:text-sm" x-text="ts.mapping.song.title"></span>
-                                                <span class="text-gray-500 dark:text-gray-400 text-xs sm:text-sm"> / </span>
-                                                <span class="text-gray-500 dark:text-gray-400 text-xs sm:text-sm" x-text="ts.mapping.song.artist"></span>
+                                                <span class="font-medium text-xs sm:text-sm" :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : ''" x-text="ts.mapping.song.title"></span>
+                                                <span class="text-xs sm:text-sm" :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : 'text-gray-500 dark:text-gray-400'"> / </span>
+                                                <span class="text-xs sm:text-sm" :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : 'text-gray-500 dark:text-gray-400'" x-text="ts.mapping.song.artist"></span>
                                             </span>
                                         </template>
                                         <template x-if="!ts.mapping?.song && ts.text">
-                                            <span class="text-xs sm:text-sm text-gray-700 dark:text-gray-300"
+                                            <span class="text-xs sm:text-sm"
+                                                  :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-300'"
                                                   x-text="ts.text"></span>
                                         </template>
                                         <template x-if="!ts.mapping?.song && !ts.text">
-                                            <span class="text-xs sm:text-sm text-gray-700 dark:text-gray-300">-</span>
+                                            <span class="text-xs sm:text-sm" :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-300'">-</span>
                                         </template>
                                     </div>
                                 </div>
@@ -350,17 +356,20 @@
                                 <div class="hidden sm:block text-sm truncate flex-1 cursor-pointer transition-colors"
                                      @click="ts.mapping?.song ? selectSong(ts.mapping.song, ts) : (ts.text ? selectText(ts.text, ts) : null)"
                                      :title="ts.mapping?.song ? `配信サービスで聴く: ${ts.mapping.song.title} / ${ts.mapping.song.artist}` : (ts.text ? `配信サービスで検索: ${ts.text}` : ts.archive.title)">
-                                    <div class="text-gray-600 dark:text-gray-400 truncate"
+                                    <div class="truncate"
+                                         :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : 'text-gray-600 dark:text-gray-400'"
                                          x-text="ts.archive.title">
                                     </div>
-                                    <div class="text-xs text-gray-500 dark:text-gray-500 mt-0.5"
+                                    <div class="mt-0.5"
+                                         :class="ts.has_pending_report ? 'text-xs text-gray-400 dark:text-gray-500' : 'text-xs text-gray-500 dark:text-gray-500'"
                                          x-text="'公開日: ' + (ts.archive.published_at ? formatPublishedDate(ts.archive.published_at) : '不明') + '　タイムスタンプ: ' + ts.ts_text">
                                     </div>
                                 </div>
 
-                                <!-- 動画リンク: YouTubeらしい赤いボタン -->
+                                <!-- 動画リンク: YouTubeらしい赤いボタン（報告済みの場合は暗め） -->
                                 <a :href="getYoutubeUrl(ts.video_id, ts.ts_num)"
-                                   class="inline-flex items-center gap-1 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-xs sm:text-sm whitespace-nowrap transition-colors"
+                                   class="inline-flex items-center gap-1 px-3 py-1.5 text-white rounded text-xs sm:text-sm whitespace-nowrap transition-colors"
+                                   :class="ts.has_pending_report ? 'bg-red-800 hover:bg-red-900' : 'bg-red-600 hover:bg-red-700'"
                                    target="_blank"
                                    title="YouTubeで再生">
                                     <svg class="w-3 h-3 sm:w-4 sm:h-4" viewBox="0 0 24 24" fill="currentColor">
@@ -575,15 +584,27 @@
                     <template x-if="selectedTimestamp">
                         <div class="flex-shrink-0">
                             <div class="text-xs text-gray-600 dark:text-gray-400 mb-1">このタイムスタンプに問題がある場合:</div>
-                            <button @click="openReportModal(selectedTimestamp)"
-                                    class="inline-flex items-center gap-1.5 px-3 py-2 bg-gray-500 hover:bg-gray-600 text-white text-sm rounded-md transition-colors"
-                                    title="このタイムスタンプを報告"
-                                    aria-label="このタイムスタンプを報告">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                                </svg>
-                                <span>報告</span>
-                            </button>
+                            <!-- 報告済みの場合はメッセージを表示 -->
+                            <template x-if="selectedTimestamp.has_pending_report">
+                                <div class="inline-flex items-center gap-1.5 px-3 py-2 bg-gray-300 dark:bg-gray-600 text-gray-600 dark:text-gray-300 text-sm rounded-md">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                    </svg>
+                                    <span>報告済みです。対応をお待ちください</span>
+                                </div>
+                            </template>
+                            <!-- 未報告の場合は報告ボタンを表示 -->
+                            <template x-if="!selectedTimestamp.has_pending_report">
+                                <button @click="openReportModal(selectedTimestamp)"
+                                        class="inline-flex items-center gap-1.5 px-3 py-2 bg-gray-500 hover:bg-gray-600 text-white text-sm rounded-md transition-colors"
+                                        title="このタイムスタンプを報告"
+                                        aria-label="このタイムスタンプを報告">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                                    </svg>
+                                    <span>報告</span>
+                                </button>
+                            </template>
                         </div>
                     </template>
                 </div>

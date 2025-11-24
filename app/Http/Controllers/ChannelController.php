@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Helpers\TextNormalizer;
 use App\Models\Channel;
+use App\Models\TimestampReport;
 use App\Models\TimestampSongMapping;
 use App\Models\TsItem;
 use App\Services\GetArchiveService;
@@ -188,8 +189,26 @@ class ChannelController extends Controller
             $mappings = collect();
         }
 
+        // 未解決の報告があるタイムスタンプIDを取得
+        $tsItemIds = $allTimestamps->pluck('id')->toArray();
+        $reportedTsItemIds = [];
+        if (! empty($tsItemIds)) {
+            try {
+                $reportedTsItemIds = TimestampReport::whereIn('ts_item_id', $tsItemIds)
+                    ->where('status', 'pending')
+                    ->pluck('ts_item_id')
+                    ->unique()
+                    ->toArray();
+            } catch (\Exception $e) {
+                \Log::error('Failed to fetch timestamp reports', [
+                    'error' => $e->getMessage(),
+                    'channel_id' => $id,
+                ]);
+            }
+        }
+
         // 各タイムスタンプにマッピング情報を追加
-        $timestampsWithMapping = $allTimestamps->map(function ($item) use ($mappings) {
+        $timestampsWithMapping = $allTimestamps->map(function ($item) use ($mappings, $reportedTsItemIds) {
             $normalizedText = TextNormalizer::normalize($item->text);
             $mapping = $mappings->get($normalizedText);
 
@@ -211,6 +230,7 @@ class ChannelController extends Controller
                     ] : null,
                     'is_not_song' => $mapping->is_not_song,
                 ] : null,
+                'has_pending_report' => in_array($item->id, $reportedTsItemIds),
             ];
         });
 

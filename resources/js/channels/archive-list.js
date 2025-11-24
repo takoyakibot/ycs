@@ -347,6 +347,21 @@ function registerArchiveListComponent() {
                         if (response.ok) {
                             toast.success(data.message || '報告を受け付けました。ご協力ありがとうございます。');
                             this.showReportModal = false;
+
+                            // フロントエンドで報告済みフラグを即座に反映
+                            if (this.reportTarget) {
+                                // selectedTimestamp を更新（配信リンクパネル用）
+                                if (this.selectedTimestamp && this.selectedTimestamp.id === this.reportTarget.id) {
+                                    this.selectedTimestamp.has_pending_report = true;
+                                }
+                                // timestamps.data 内の該当アイテムを更新（一覧表示用）
+                                if (this.timestamps.data) {
+                                    const index = this.timestamps.data.findIndex(ts => ts.id === this.reportTarget.id);
+                                    if (index !== -1) {
+                                        this.timestamps.data[index].has_pending_report = true;
+                                    }
+                                }
+                            }
                         } else if (response.status === 429) {
                             toast.error(data.message || '報告の送信制限中です。しばらくしてから再度お試しください。');
                         } else {
