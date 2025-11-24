@@ -42,10 +42,14 @@ class GoogleAuthController extends Controller
                 'created' => time(),
             ];
 
+            // メールアドレスの@より前の部分を表示名として使用
+            // （プライバシー保護のため、Googleアカウントの氏名は収集しない）
+            $displayName = explode('@', $googleUser->getEmail())[0];
+
             $user = User::updateOrCreate(
                 ['google_id' => $googleUser->getId()],
                 [
-                    'name' => $googleUser->getName(),
+                    'name' => $displayName,
                     'email' => $googleUser->getEmail(),
                     'avatar' => $googleUser->getAvatar(),
                     'google_token' => $tokenArray,
