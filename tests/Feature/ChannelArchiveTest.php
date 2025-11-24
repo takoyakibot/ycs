@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Archive;
 use App\Models\Channel;
 use App\Models\Song;
+use App\Models\TimestampReport;
 use App\Models\TimestampSongMapping;
 use App\Models\TsItem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -486,5 +487,88 @@ class ChannelArchiveTest extends TestCase
                     'spotify_track_id' => null,
                 ],
             ]);
+    }
+
+    /**
+     * 報告済みのタイムスタンプにhas_pending_reportフラグが付与される
+     */
+    public function test_fetch_timestamps_includes_pending_report_flag(): void
+    {
+        $channel = Channel::factory()->create();
+        $archive = Archive::factory()->create([
+            'channel_id' => $channel->channel_id,
+            'is_display' => 1,
+        ]);
+
+        $reportedTs = TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'text' => 'Reported song',
+            'is_display' => 1,
+        ]);
+        $normalTs = TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'text' => 'Normal song',
+            'is_display' => 1,
+        ]);
+
+        // 報告を作成（pending状態）
+        TimestampReport::create([
+            'ts_item_id' => $reportedTs->id,
+            'video_id' => $archive->video_id,
+            'report_type' => 'wrong_song',
+            'status' => 'pending',
+            'reporter_ip' => '127.0.0.1',
+        ]);
+
+        $response = $this->getJson("/api/channels/{$channel->handle}/timestamps");
+
+        $response->assertStatus(200);
+
+        $data = $response->json('data');
+
+        // 報告済みタイムスタンプにはhas_pending_report=trueが設定される
+        $reportedItem = collect($data)->firstWhere('text', 'Reported song');
+        $normalItem = collect($data)->firstWhere('text', 'Normal song');
+
+        $this->assertTrue($reportedItem['has_pending_report']);
+        $this->assertFalse($normalItem['has_pending_report']);
+    }
+
+    /**
+     * 解決済みの報告はhas_pending_reportフラグに影響しない
+     */
+    public function test_fetch_timestamps_resolved_report_does_not_set_flag(): void
+    {
+        $channel = Channel::factory()->create();
+        $archive = Archive::factory()->create([
+            'channel_id' => $channel->channel_id,
+            'is_display' => 1,
+        ]);
+
+        $ts = TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'text' => 'Song with resolved report',
+            'is_display' => 1,
+        ]);
+
+        // 解決済みの報告を作成
+        TimestampReport::create([
+            'ts_item_id' => $ts->id,
+            'video_id' => $archive->video_id,
+            'report_type' => 'wrong_song',
+            'status' => 'resolved',
+            'resolved_at' => now(),
+            'reporter_ip' => '127.0.0.1',
+        ]);
+
+        $response = $this->getJson("/api/channels/{$channel->handle}/timestamps");
+
+        $response->assertStatus(200);
+
+        $data = $response->json('data');
+        $item = collect($data)->firstWhere('text', 'Song with resolved report');
+
+        // 解決済みの報告はhas_pending_reportに影響しない
+        $this->assertFalse($item['has_pending_report']);
     }
 }
