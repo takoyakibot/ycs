@@ -8,7 +8,9 @@
         @vite('resources/js/channels/archive-list.js')
     </x-slot>
 
-    <div class="px-2 sm:px-6 py-2 sm:py-6" x-data="archiveListComponent">
+    <div class="px-2 sm:px-6 py-2 sm:py-6 transition-all duration-300"
+         :style="showDistributionPanel && activeTab === 'timestamps' ? 'padding-bottom: 10rem;' : ''"
+         x-data="archiveListComponent">
         <div class="p-2">
             <!-- デスクトップ表示: 全体を中央寄せ -->
             <div class="flex justify-center">
@@ -168,7 +170,7 @@
                                                     x-text="tsItem.ts_text || '0:00:00'">
                                                 </a>
                                                 <div class="flex-1 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                                                     @click="tsItem.song ? selectSong(tsItem.song) : (tsItem.text ? selectText(tsItem.text) : null)"
+                                                     @click="tsItem.song ? selectSong(tsItem.song, tsItem) : (tsItem.text ? selectText(tsItem.text, tsItem) : null)"
                                                      :title="tsItem.song ? `配信サービスで聴く: ${tsItem.song.title} / ${tsItem.song.artist}` : (tsItem.text ? `配信サービスで検索: ${tsItem.text}` : '')">
                                                     <span x-text="tsItem.text || ''"></span>
                                                 </div>
@@ -324,7 +326,7 @@
                             <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
                                 <!-- 楽曲情報 -->
                                 <div class="flex-shrink-0 w-full sm:w-[300px] cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                                     @click="ts.mapping?.song ? selectSong(ts.mapping.song) : (ts.text ? selectText(ts.text) : null)"
+                                     @click="ts.mapping?.song ? selectSong(ts.mapping.song, ts) : (ts.text ? selectText(ts.text, ts) : null)"
                                      :title="ts.mapping?.song ? `配信サービスで聴く: ${ts.mapping.song.title} / ${ts.mapping.song.artist}` : (ts.text ? `配信サービスで検索: ${ts.text}` : '')">
                                     <div class="truncate">
                                         <template x-if="ts.mapping?.song">
@@ -346,33 +348,26 @@
 
                                 <!-- アーカイブタイトル & 公開日: モバイルでは非表示 -->
                                 <div class="hidden sm:block text-sm truncate flex-1 cursor-pointer transition-colors"
-                                     @click="ts.mapping?.song ? selectSong(ts.mapping.song) : (ts.text ? selectText(ts.text) : null)"
+                                     @click="ts.mapping?.song ? selectSong(ts.mapping.song, ts) : (ts.text ? selectText(ts.text, ts) : null)"
                                      :title="ts.mapping?.song ? `配信サービスで聴く: ${ts.mapping.song.title} / ${ts.mapping.song.artist}` : (ts.text ? `配信サービスで検索: ${ts.text}` : ts.archive.title)">
                                     <div class="text-gray-600 dark:text-gray-400 truncate"
                                          x-text="ts.archive.title">
                                     </div>
                                     <div class="text-xs text-gray-500 dark:text-gray-500 mt-0.5"
-                                         x-text="'公開日: ' + (ts.archive.published_at ? formatPublishedDate(ts.archive.published_at) : '不明')">
+                                         x-text="'公開日: ' + (ts.archive.published_at ? formatPublishedDate(ts.archive.published_at) : '不明') + '　タイムスタンプ: ' + ts.ts_text">
                                     </div>
                                 </div>
 
                                 <!-- 動画リンク: YouTubeらしい赤いボタン -->
                                 <a :href="getYoutubeUrl(ts.video_id, ts.ts_num)"
-                                   class="inline-flex items-center gap-1 px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs sm:text-sm whitespace-nowrap tabular-nums transition-colors"
+                                   class="inline-flex items-center gap-1 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-xs sm:text-sm whitespace-nowrap transition-colors"
                                    target="_blank"
                                    title="YouTubeで再生">
                                     <svg class="w-3 h-3 sm:w-4 sm:h-4" viewBox="0 0 24 24" fill="currentColor">
                                         <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
                                     </svg>
-                                    <span x-text="ts.ts_text"></span>
+                                    <span>YTで開く</span>
                                 </a>
-
-                                <!-- 報告ボタン -->
-                                <button @click="openReportModal(ts)"
-                                        class="text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400 text-xs px-2 py-1 border border-gray-300 dark:border-gray-600 rounded hover:border-red-500 dark:hover:border-red-400 transition-colors whitespace-nowrap"
-                                        title="問題を報告">
-                                    報告
-                                </button>
                             </div>
                         </div>
                     </template>
@@ -492,8 +487,8 @@
             </div>
         </div>
 
-        <!-- 配信リンクパネル -->
-        <div x-show="showDistributionPanel && selectedSong"
+        <!-- 配信リンクパネル（タイムスタンプタブのみ表示） -->
+        <div x-show="showDistributionPanel && selectedSong && activeTab === 'timestamps'"
              x-transition:enter="transition ease-out duration-300"
              x-transition:enter-start="transform translate-y-full"
              x-transition:enter-end="transform translate-y-0"
@@ -502,12 +497,10 @@
              x-transition:leave-end="transform translate-y-full"
              class="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t-2 border-gray-300 dark:border-gray-600 shadow-lg z-50 px-4 py-3">
             <div class="max-w-7xl mx-auto">
+                <!-- 楽曲タイトルと閉じるボタン -->
                 <div class="flex items-center justify-between mb-2">
-                    <div class="flex-1 mr-4">
-                        <div class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate"
-                             x-text="selectedSong ? `${selectedSong.title} / ${selectedSong.artist}` : ''"></div>
-                        <div class="text-xs text-gray-600 dark:text-gray-400">配信サービスで聴く:</div>
-                    </div>
+                    <div class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate"
+                         x-text="selectedSong ? `${selectedSong.title} / ${selectedSong.artist}` : ''"></div>
                     <button @click="closePanel()"
                             class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 p-1"
                             aria-label="閉じる">
@@ -516,7 +509,12 @@
                         </svg>
                     </button>
                 </div>
-                <div class="flex flex-wrap gap-2">
+                <!-- 2列レイアウト -->
+                <div class="flex gap-4">
+                    <!-- 左列: 配信サービス -->
+                    <div class="flex-1">
+                        <div class="text-xs text-gray-600 dark:text-gray-400 mb-1">配信サービスで聴く:</div>
+                        <div class="flex flex-wrap gap-2">
                     <!-- Spotify -->
                     <a :href="getSpotifyUrl(selectedSong)"
                        target="_blank"
@@ -567,12 +565,33 @@
                         </svg>
                         <span>LINE MUSIC</span>
                     </a>
+                        </div>
+                    </div>
+                    <!-- 区切り線 -->
+                    <template x-if="selectedTimestamp">
+                        <div class="w-px bg-gray-300 dark:bg-gray-600 self-stretch"></div>
+                    </template>
+                    <!-- 右列: 報告 -->
+                    <template x-if="selectedTimestamp">
+                        <div class="flex-shrink-0">
+                            <div class="text-xs text-gray-600 dark:text-gray-400 mb-1">このタイムスタンプに問題がある場合:</div>
+                            <button @click="openReportModal(selectedTimestamp)"
+                                    class="inline-flex items-center gap-1.5 px-3 py-2 bg-gray-500 hover:bg-gray-600 text-white text-sm rounded-md transition-colors"
+                                    title="このタイムスタンプを報告"
+                                    aria-label="このタイムスタンプを報告">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                                </svg>
+                                <span>報告</span>
+                            </button>
+                        </div>
+                    </template>
                 </div>
             </div>
         </div>
 
-        <!-- 戻すボタン（パネル非表示時） -->
-        <button x-show="panelDismissed && !showDistributionPanel"
+        <!-- 戻すボタン（パネル非表示時、タイムスタンプタブのみ） -->
+        <button x-show="panelDismissed && !showDistributionPanel && activeTab === 'timestamps'"
                 @click="openPanel()"
                 x-transition:enter="transition ease-out duration-200"
                 x-transition:enter-start="opacity-0 scale-95"

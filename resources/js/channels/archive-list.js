@@ -41,6 +41,7 @@ function registerArchiveListComponent() {
 
                 // 配信リンクパネルの状態管理
                 selectedSong: null,
+                selectedTimestamp: null,
                 showDistributionPanel: false,
                 panelDismissed: false,
 
@@ -358,16 +359,17 @@ function registerArchiveListComponent() {
                 },
 
                 // 配信リンクパネル関連メソッド
-                selectSong(song) {
+                selectSong(song, timestamp = null) {
                     if (!song) return;
                     this.selectedSong = song;
+                    this.selectedTimestamp = timestamp;
                     if (!this.panelDismissed) {
                         this.showDistributionPanel = true;
                     }
                 },
 
                 // テキストから検索用の疑似songオブジェクトを作成して選択
-                selectText(text) {
+                selectText(text, timestamp = null) {
                     if (!text || text.trim() === '') return;
                     // テキストをそのまま検索クエリとして使用
                     // title にテキスト全体を設定し、artist は空にする
@@ -377,6 +379,7 @@ function registerArchiveListComponent() {
                         spotify_track_id: null
                     };
                     this.selectedSong = pseudoSong;
+                    this.selectedTimestamp = timestamp;
                     if (!this.panelDismissed) {
                         this.showDistributionPanel = true;
                     }
