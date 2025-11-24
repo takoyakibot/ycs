@@ -59,6 +59,9 @@
                             <x-dropdown-link :href="route('logs.index')" :active="request()->routeIs('logs.*')">
                                 {{ __('ログ管理') }}
                             </x-dropdown-link>
+                            <x-dropdown-link :href="route('reports.index')" :active="request()->routeIs('reports.*')">
+                                {{ __('報告管理') }}
+                            </x-dropdown-link>
 
                             <!-- Authentication -->
                             <form method="POST" action="{{ route('logout') }}">
@@ -128,6 +131,9 @@
                     </x-responsive-nav-link>
                     <x-responsive-nav-link :href="route('logs.index')" :active="request()->routeIs('logs.*')">
                         {{ __('ログ管理') }}
+                    </x-responsive-nav-link>
+                    <x-responsive-nav-link :href="route('reports.index')" :active="request()->routeIs('reports.*')">
+                        {{ __('報告管理') }}
                     </x-responsive-nav-link>
 
                     <!-- Authentication -->

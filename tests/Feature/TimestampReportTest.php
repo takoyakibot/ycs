@@ -460,4 +460,26 @@ class TimestampReportTest extends TestCase
         $this->assertCount(1, $resolvedReports);
         $this->assertEquals('resolved', $resolvedReports->first()->status);
     }
+
+    /**
+     * 認証済みユーザーが報告管理画面にアクセスできることをテスト
+     */
+    public function test_authenticated_user_can_access_manage_page(): void
+    {
+        $response = $this->actingAs($this->user)
+            ->get('/manage/reports');
+
+        $response->assertStatus(200);
+        $response->assertViewIs('manage.reports');
+    }
+
+    /**
+     * 未認証ユーザーは報告管理画面にアクセスできないことをテスト
+     */
+    public function test_guest_cannot_access_manage_page(): void
+    {
+        $response = $this->get('/manage/reports');
+
+        $response->assertRedirect('/login');
+    }
 }

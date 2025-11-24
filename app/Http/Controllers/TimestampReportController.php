@@ -3,12 +3,21 @@
 namespace App\Http\Controllers;
 
 use App\Models\TimestampReport;
+use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 
 class TimestampReportController extends Controller
 {
+    /**
+     * 報告管理画面を表示
+     */
+    public function manage(): View
+    {
+        return view('manage.reports');
+    }
+
     /**
      * 報告を作成（ゲスト可、レートリミット付き）
      */
