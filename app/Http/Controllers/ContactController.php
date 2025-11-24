@@ -25,6 +25,11 @@ class ContactController extends Controller
     {
         $validated = $request->validated();
 
+        // IPアドレスとユーザーエージェントを追加
+        $validated['ip_address'] = $request->ip();
+        $validated['user_agent'] = $request->userAgent();
+        $validated['submitted_at'] = now()->format('Y-m-d H:i:s');
+
         // 管理者にメール送信
         $adminEmail = config('mail.admin_address');
         if ($adminEmail) {

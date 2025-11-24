@@ -51,6 +51,9 @@ class ContactFormMail extends Mailable
                 'email' => $this->contactData['email'],
                 'category' => $this->contactData['category'],
                 'message' => $this->contactData['message'],
+                'ipAddress' => $this->contactData['ip_address'] ?? null,
+                'userAgent' => $this->contactData['user_agent'] ?? null,
+                'submittedAt' => $this->contactData['submitted_at'] ?? null,
             ],
         );
     }

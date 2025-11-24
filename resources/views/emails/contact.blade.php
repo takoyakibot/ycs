@@ -23,6 +23,14 @@
 
 ---
 
+## 送信者情報
+
+| 項目 | 値 |
+|------|-----|
+| IPアドレス | {{ $ipAddress ?? '不明' }} |
+| 送信日時 | {{ $submittedAt ?? '不明' }} |
+| ユーザーエージェント | {{ $userAgent ?? '不明' }} |
+
 <x-mail::button :url="config('app.url')">
 サイトを開く
 </x-mail::button>
