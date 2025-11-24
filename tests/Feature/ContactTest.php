@@ -155,9 +155,10 @@ class ContactTest extends TestCase
         $response->assertSessionHasErrors('message');
     }
 
-    public function test_contact_form_requires_recaptcha_token(): void
+    public function test_contact_form_requires_recaptcha_token_when_configured(): void
     {
-        config(['services.recaptcha.secret_key' => null]);
+        // reCAPTCHAが設定されている場合はトークンが必須
+        $this->app['config']->set('services.recaptcha.secret_key', 'test_secret');
 
         $response = $this->post('/contact', [
             'email' => 'test@example.com',
@@ -166,6 +167,24 @@ class ContactTest extends TestCase
         ]);
 
         $response->assertSessionHasErrors('recaptcha_token');
+    }
+
+    public function test_contact_form_works_without_recaptcha_when_not_configured(): void
+    {
+        // reCAPTCHAが設定されていない場合はトークン不要
+        $this->app['config']->set('services.recaptcha.secret_key', null);
+        $this->app['config']->set('mail.admin_address', 'admin@example.com');
+
+        $response = $this->post('/contact', [
+            'email' => 'test@example.com',
+            'category' => 'general',
+            'message' => 'これはテストメッセージです。reCAPTCHAなし。',
+        ]);
+
+        $response->assertSessionHasNoErrors();
+        $response->assertRedirect('/contact');
+
+        Mail::assertSent(ContactFormMail::class);
     }
 
     public function test_contact_form_recaptcha_verification(): void

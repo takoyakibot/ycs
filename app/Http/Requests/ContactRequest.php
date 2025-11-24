@@ -22,12 +22,17 @@ class ContactRequest extends FormRequest
      */
     public function rules(): array
     {
+        // reCAPTCHAが設定されている場合のみトークンを必須にする
+        $recaptchaRules = config('services.recaptcha.secret_key')
+            ? ['required', 'string']
+            : ['nullable', 'string'];
+
         return [
             'name' => ['nullable', 'string', 'max:100'],
             'email' => ['required', 'email', 'max:255'],
             'category' => ['required', 'string', 'in:general,bug,feature,other'],
             'message' => ['required', 'string', 'min:10', 'max:5000'],
-            'recaptcha_token' => ['required', 'string'],
+            'recaptcha_token' => $recaptchaRules,
         ];
     }
 

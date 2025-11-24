@@ -97,14 +97,20 @@
                             </p>
                         </div>
 
+                        @if(config('services.recaptcha.site_key'))
                         <!-- reCAPTCHA token -->
                         <input type="hidden" name="recaptcha_token" id="recaptcha_token">
                         <x-input-error :messages="$errors->get('recaptcha_token')" class="mt-2 mb-4" />
+                        @endif
 
                         <div class="flex items-center justify-between">
+                            @if(config('services.recaptcha.site_key'))
                             <p class="text-xs text-gray-500 dark:text-gray-400">
                                 このフォームは reCAPTCHA で保護されています。
                             </p>
+                            @else
+                            <div></div>
+                            @endif
                             <x-primary-button type="submit" id="submitBtn">
                                 送信
                             </x-primary-button>
