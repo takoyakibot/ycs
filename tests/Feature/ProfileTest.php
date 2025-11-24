@@ -25,11 +25,11 @@ class ProfileTest extends TestCase
     {
         $user = User::factory()->create();
 
-        // AIza + 35文字 = 39文字
+        // AIza + 35文字 = 39文字（テスト用ダミーキー）
         $response = $this
             ->actingAs($user)
             ->patch('/profile', [
-                'api_key' => 'AIzaSyA12345678901234567890123456789012',
+                'api_key' => 'AIza_FAKE_KEY_FOR_TESTING_0000000000000',
             ]);
 
         $response
@@ -44,7 +44,7 @@ class ProfileTest extends TestCase
     public function test_api_key_can_be_cleared_by_empty_string(): void
     {
         $user = User::factory()->create([
-            'api_key' => 'AIzaSyA12345678901234567890123456789012',
+            'api_key' => 'AIza_FAKE_KEY_FOR_TESTING_0000000000000',
         ]);
 
         $response = $this
