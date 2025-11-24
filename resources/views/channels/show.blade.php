@@ -495,12 +495,10 @@
              x-transition:leave-end="transform translate-y-full"
              class="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t-2 border-gray-300 dark:border-gray-600 shadow-lg z-50 px-4 py-3">
             <div class="max-w-7xl mx-auto">
+                <!-- 楽曲タイトルと閉じるボタン -->
                 <div class="flex items-center justify-between mb-2">
-                    <div class="flex-1 mr-4">
-                        <div class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate"
-                             x-text="selectedSong ? `${selectedSong.title} / ${selectedSong.artist}` : ''"></div>
-                        <div class="text-xs text-gray-600 dark:text-gray-400">配信サービスで聴く:</div>
-                    </div>
+                    <div class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate"
+                         x-text="selectedSong ? `${selectedSong.title} / ${selectedSong.artist}` : ''"></div>
                     <button @click="closePanel()"
                             class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 p-1"
                             aria-label="閉じる">
@@ -509,7 +507,12 @@
                         </svg>
                     </button>
                 </div>
-                <div class="flex flex-wrap gap-2">
+                <!-- 2列レイアウト -->
+                <div class="flex gap-4">
+                    <!-- 左列: 配信サービス -->
+                    <div class="flex-1">
+                        <div class="text-xs text-gray-600 dark:text-gray-400 mb-1">配信サービスで聴く:</div>
+                        <div class="flex flex-wrap gap-2">
                     <!-- Spotify -->
                     <a :href="getSpotifyUrl(selectedSong)"
                        target="_blank"
@@ -560,11 +563,16 @@
                         </svg>
                         <span>LINE MUSIC</span>
                     </a>
-                    <!-- 区切り線と報告ボタン -->
+                        </div>
+                    </div>
+                    <!-- 区切り線 -->
                     <template x-if="selectedTimestamp">
-                        <div class="flex items-center gap-2">
-                            <div class="w-px h-6 bg-gray-300 dark:bg-gray-600"></div>
-                            <span class="text-xs text-gray-600 dark:text-gray-400">このタイムスタンプに問題がある場合:</span>
+                        <div class="w-px bg-gray-300 dark:bg-gray-600 self-stretch"></div>
+                    </template>
+                    <!-- 右列: 報告 -->
+                    <template x-if="selectedTimestamp">
+                        <div class="flex-shrink-0">
+                            <div class="text-xs text-gray-600 dark:text-gray-400 mb-1">このタイムスタンプに問題がある場合:</div>
                             <button @click="openReportModal(selectedTimestamp)"
                                     class="inline-flex items-center gap-1.5 px-3 py-2 bg-gray-500 hover:bg-gray-600 text-white text-sm rounded-md transition-colors"
                                     title="このタイムスタンプを報告"
