@@ -447,11 +447,15 @@ class SongController extends Controller
     public function markAsNotSong(Request $request)
     {
         $validated = $request->validate([
-            'normalized_text' => 'required|string',
+            'normalized_text' => 'nullable|string|required_without:text',
+            'text' => 'nullable|string|required_without:normalized_text',
         ]);
 
-        DB::transaction(function () use ($validated) {
-            $mapping = TimestampSongMapping::where('normalized_text', $validated['normalized_text'])->first();
+        // textが渡された場合は正規化する
+        $normalizedText = $validated['normalized_text'] ?? TextNormalizer::normalize($validated['text']);
+
+        DB::transaction(function () use ($normalizedText) {
+            $mapping = TimestampSongMapping::where('normalized_text', $normalizedText)->first();
 
             if ($mapping) {
                 // 既存レコードを更新（IDは変更しない）
@@ -465,7 +469,7 @@ class SongController extends Controller
                 // 新規レコードを作成
                 TimestampSongMapping::create([
                     'id' => Str::ulid(),
-                    'normalized_text' => $validated['normalized_text'],
+                    'normalized_text' => $normalizedText,
                     'song_id' => null,
                     'is_not_song' => true,
                     'is_manual' => true,
