@@ -564,6 +564,7 @@
                     <template x-if="selectedTimestamp">
                         <div class="flex items-center gap-2">
                             <div class="w-px h-6 bg-gray-300 dark:bg-gray-600"></div>
+                            <span class="text-xs text-gray-600 dark:text-gray-400">このタイムスタンプに問題がある場合:</span>
                             <button @click="openReportModal(selectedTimestamp)"
                                     class="inline-flex items-center gap-1.5 px-3 py-2 bg-gray-500 hover:bg-gray-600 text-white text-sm rounded-md transition-colors"
                                     title="このタイムスタンプを報告"
