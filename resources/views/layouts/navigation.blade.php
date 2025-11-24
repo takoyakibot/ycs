@@ -30,6 +30,9 @@
                         {{ __('利用規約・') }}<br/>
                         {{ __('プライバシーポリシー') }}
                     </x-nav-link>
+                    <x-nav-link :href="route('contact.show')" :active="request()->routeIs('contact.*')">
+                        {{ __('お問い合わせ') }}
+                    </x-nav-link>
                 </div>
             </div>
 
@@ -113,6 +116,9 @@
                 <x-responsive-nav-link :href="route('markdown.show')" :active="request()->routeIs('markdown.show')">
                     {{ __('利用規約・プライバシーポリシー') }}
                 </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('contact.show')" :active="request()->routeIs('contact.*')">
+                    {{ __('お問い合わせ') }}
+                </x-responsive-nav-link>
             </div>
 
             <!-- Responsive Settings Options -->
@@ -164,6 +170,9 @@
                     </x-responsive-nav-link>
                     <x-responsive-nav-link :href="route('markdown.show')" :active="request()->routeIs('markdown.show')">
                         {{ __('利用規約・プライバシーポリシー') }}
+                    </x-responsive-nav-link>
+                    <x-responsive-nav-link :href="route('contact.show')" :active="request()->routeIs('contact.*')">
+                        {{ __('お問い合わせ') }}
                     </x-responsive-nav-link>
                 </div>
             @endif
