@@ -344,22 +344,26 @@
                                 </div>
 
                                 <!-- アーカイブタイトル & 公開日: モバイルでは非表示 -->
-                                <div class="hidden sm:block text-sm truncate flex-1">
-                                    <div class="text-gray-600 dark:text-gray-400 truncate"
-                                         :title="ts.archive.title"
+                                <div class="hidden sm:block text-sm truncate flex-1 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                                     @click="ts.mapping?.song ? selectSong(ts.mapping.song) : (ts.text ? selectText(ts.text) : null)"
+                                     :title="ts.mapping?.song ? `配信サービスで聴く: ${ts.mapping.song.title} / ${ts.mapping.song.artist}` : (ts.text ? `配信サービスで検索: ${ts.text}` : ts.archive.title)">
+                                    <div class="text-gray-600 dark:text-gray-400 truncate hover:text-blue-600 dark:hover:text-blue-400"
                                          x-text="ts.archive.title">
                                     </div>
                                     <div class="text-xs text-gray-500 dark:text-gray-500 mt-0.5"
-                                         :title="'元の値: ' + (ts.archive.published_at || '')"
                                          x-text="'公開日: ' + (ts.archive.published_at ? formatPublishedDate(ts.archive.published_at) : '不明')">
                                     </div>
                                 </div>
 
-                                <!-- 動画リンク: モバイルではコンパクト -->
+                                <!-- 動画リンク: YouTubeらしい赤いボタン -->
                                 <a :href="getYoutubeUrl(ts.video_id, ts.ts_num)"
-                                   class="text-blue-500 hover:underline whitespace-nowrap tabular-nums text-xs sm:text-sm"
+                                   class="inline-flex items-center gap-1 px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs sm:text-sm whitespace-nowrap tabular-nums transition-colors"
                                    target="_blank"
-                                   x-text="ts.ts_text + ' ↗'">
+                                   title="YouTubeで再生">
+                                    <svg class="w-3 h-3 sm:w-4 sm:h-4" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                                    </svg>
+                                    <span x-text="ts.ts_text"></span>
                                 </a>
 
                                 <!-- 報告ボタン -->
