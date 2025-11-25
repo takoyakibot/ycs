@@ -21,5 +21,11 @@
             </svg>
             Googleでログイン
         </a>
+
+        <!-- 同意確認 -->
+        <p class="mt-6 text-xs text-gray-500 dark:text-gray-400">
+            ログインすることで、<a href="{{ route('markdown.show') }}" class="text-indigo-600 dark:text-indigo-400 hover:underline">利用規約・プライバシーポリシー</a>、<br>
+            <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener noreferrer" class="text-indigo-600 dark:text-indigo-400 hover:underline">YouTube利用規約</a>および<a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" class="text-indigo-600 dark:text-indigo-400 hover:underline">Googleプライバシーポリシー</a>に同意したものとみなされます。
+        </p>
     </div>
 </x-guest-layout>
