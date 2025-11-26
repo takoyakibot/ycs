@@ -142,10 +142,10 @@ class ChannelController extends Controller
         $channel = Channel::where('handle', $id)->firstOrFail();
 
         // バリデーション
-        $allowedIndexes = array_merge(
-            range('A', 'Z'),
-            ['0-9', 'あ', 'か', 'さ', 'た', 'な', 'は', 'ま', 'や', 'ら', 'わ', 'その他']
-        );
+        $allowedIndexes = [
+            'A-E', 'F-J', 'K-O', 'P-T', 'U-Z',
+            '0-9', 'あ', 'か', 'さ', 'た', 'な', 'は', 'ま', 'や', 'ら', 'わ', 'その他',
+        ];
         $validated = $request->validate([
             'per_page' => 'integer|min:1|max:100',
             'page' => 'integer|min:1',
@@ -312,9 +312,22 @@ class ChannelController extends Controller
      */
     private function categorizeFirstChar($char)
     {
-        // アルファベット（A-Z）
-        if (preg_match('/^[A-Z]$/i', $char)) {
-            return strtoupper($char);
+        // アルファベット（A-E, F-J, K-O, P-T, U-Z）
+        $upperChar = strtoupper($char);
+        if (preg_match('/^[A-E]$/', $upperChar)) {
+            return 'A-E';
+        }
+        if (preg_match('/^[F-J]$/', $upperChar)) {
+            return 'F-J';
+        }
+        if (preg_match('/^[K-O]$/', $upperChar)) {
+            return 'K-O';
+        }
+        if (preg_match('/^[P-T]$/', $upperChar)) {
+            return 'P-T';
+        }
+        if (preg_match('/^[U-Z]$/', $upperChar)) {
+            return 'U-Z';
         }
 
         // ひらがな・カタカナ（五十音行に分類）

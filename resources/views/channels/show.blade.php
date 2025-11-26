@@ -263,18 +263,18 @@
                             0-9
                         </button>
                         <span class="text-gray-300 dark:text-gray-600 mx-1">|</span>
-                        <!-- アルファベット（A-Z全文字） -->
-                        <template x-for="letter in ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z']" :key="letter">
+                        <!-- アルファベット（A-E, F-J, K-O, P-T, U-Z） -->
+                        <template x-for="group in ['A-E','F-J','K-O','P-T','U-Z']" :key="group">
                             <button
-                                @click="filterByIndex(letter)"
-                                :disabled="!timestamps.available_indexes?.includes(letter)"
-                                :class="selectedIndex === letter
+                                @click="filterByIndex(group)"
+                                :disabled="!timestamps.available_indexes?.includes(group)"
+                                :class="selectedIndex === group
                                     ? 'bg-blue-700 text-white cursor-pointer ring-2 ring-blue-300'
-                                    : (timestamps.available_indexes?.includes(letter)
+                                    : (timestamps.available_indexes?.includes(group)
                                         ? 'bg-blue-500 hover:bg-blue-600 text-white cursor-pointer'
                                         : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed')"
-                                class="w-7 h-7 text-xs rounded transition-colors">
-                                <span x-text="letter"></span>
+                                class="px-2 h-7 text-xs rounded transition-colors">
+                                <span x-text="group"></span>
                             </button>
                         </template>
                         <span class="text-gray-300 dark:text-gray-600 mx-1">|</span>
