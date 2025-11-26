@@ -142,15 +142,21 @@ class ChannelController extends Controller
         $channel = Channel::where('handle', $id)->firstOrFail();
 
         // バリデーション
+        $allowedIndexes = [
+            'ABCDE', 'FGHIJ', 'KLMNO', 'PQRST', 'UVWXYZ',
+            '0-9', 'あ', 'か', 'さ', 'た', 'な', 'は', 'ま', 'や', 'ら', 'わ', 'その他',
+        ];
         $validated = $request->validate([
             'per_page' => 'integer|min:1|max:100',
             'page' => 'integer|min:1',
             'search' => 'string|max:255',
+            'index' => ['nullable', 'string', \Illuminate\Validation\Rule::in($allowedIndexes)],
         ]);
 
         $perPage = $validated['per_page'] ?? 50;
         $currentPage = $validated['page'] ?? 1;
         $search = $validated['search'] ?? '';
+        $index = $validated['index'] ?? '';
 
         // タイムスタンプ取得（チャンネルフィルタ付き）
         $query = $this->buildTimestampQuery($channel, withArchive: true);
@@ -265,33 +271,29 @@ class ChannelController extends Controller
 
         $timestampsWithMapping = $timestampsWithMapping->values();
 
-        // 頭文字インデックスマップを生成
-        $indexMap = [];
+        // 利用可能な頭文字カテゴリを収集（フィルタリング前に行う）
         $availableIndexes = [];
-        foreach ($timestampsWithMapping as $index => $ts) {
+        foreach ($timestampsWithMapping as $ts) {
             $title = $ts['mapping']['song']['title'] ?? $ts['text'] ?? '';
-            if (empty($title)) {
-                continue;
-            }
+            $category = $this->getFirstCharCategory($title);
 
-            // 頭文字を取得
-            $firstChar = mb_substr($title, 0, 1, 'UTF-8');
-            $firstChar = mb_strtoupper($firstChar, 'UTF-8');
-
-            // カテゴリ分け
-            $category = $this->categorizeFirstChar($firstChar);
-
-            // まだ記録されていないカテゴリの場合、ページ番号を記録
-            if (! isset($indexMap[$category])) {
-                $pageNum = (int) floor($index / $perPage) + 1;
-                $indexMap[$category] = $pageNum;
+            if ($category && ! in_array($category, $availableIndexes)) {
                 $availableIndexes[] = $category;
             }
         }
 
+        // 頭文字フィルタリング
+        if ($index) {
+            $timestampsWithMapping = $timestampsWithMapping->filter(function ($ts) use ($index) {
+                $title = $ts['mapping']['song']['title'] ?? $ts['text'] ?? '';
+
+                return $this->getFirstCharCategory($title) === $index;
+            })->values();
+        }
+
         // 手動でページネーション
         $total = $timestampsWithMapping->count();
-        $lastPage = (int) ceil($total / $perPage);
+        $lastPage = max(1, (int) ceil($total / $perPage));
         $offset = ($currentPage - 1) * $perPage;
         $items = $timestampsWithMapping->slice($offset, $perPage)->values();
 
@@ -301,7 +303,6 @@ class ChannelController extends Controller
             'last_page' => $lastPage,
             'per_page' => $perPage,
             'total' => $total,
-            'index_map' => $indexMap,
             'available_indexes' => $availableIndexes,
         ]);
     }
@@ -311,9 +312,22 @@ class ChannelController extends Controller
      */
     private function categorizeFirstChar($char)
     {
-        // アルファベット（A-Z）
-        if (preg_match('/^[A-Z]$/i', $char)) {
-            return strtoupper($char);
+        // アルファベット（ABCDE, FGHIJ, KLMNO, PQRST, UVWXYZ）
+        $upperChar = strtoupper($char);
+        if (preg_match('/^[A-E]$/', $upperChar)) {
+            return 'ABCDE';
+        }
+        if (preg_match('/^[F-J]$/', $upperChar)) {
+            return 'FGHIJ';
+        }
+        if (preg_match('/^[K-O]$/', $upperChar)) {
+            return 'KLMNO';
+        }
+        if (preg_match('/^[P-T]$/', $upperChar)) {
+            return 'PQRST';
+        }
+        if (preg_match('/^[U-Z]$/', $upperChar)) {
+            return 'UVWXYZ';
         }
 
         // ひらがな・カタカナ（五十音行に分類）
@@ -349,6 +363,21 @@ class ChannelController extends Controller
 
         // その他（記号など）
         return 'その他';
+    }
+
+    /**
+     * タイトルから頭文字カテゴリを取得
+     */
+    private function getFirstCharCategory(?string $title): ?string
+    {
+        if (empty($title)) {
+            return null;
+        }
+
+        $firstChar = mb_substr($title, 0, 1, 'UTF-8');
+        $firstChar = mb_strtoupper($firstChar, 'UTF-8');
+
+        return $this->categorizeFirstChar($firstChar);
     }
 
     /**

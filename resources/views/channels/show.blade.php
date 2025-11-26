@@ -209,26 +209,26 @@
             <div x-show="activeTab === 'timestamps'">
                 <!-- ページネーション（上） -->
                 <div class="flex justify-center gap-2 mb-4">
-                    <button @click="fetchTimestamps(1, searchQuery)"
+                    <button @click="fetchTimestamps(1, searchQuery, selectedIndex)"
                             :disabled="timestamps.current_page <= 1"
                             :class="timestamps.current_page <= 1 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-300 dark:hover:bg-gray-600'"
                             class="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded text-sm">
                         最初
                     </button>
-                    <button @click="fetchTimestamps(timestamps.current_page - 1, searchQuery)"
+                    <button @click="fetchTimestamps(timestamps.current_page - 1, searchQuery, selectedIndex)"
                             :disabled="timestamps.current_page <= 1"
                             :class="timestamps.current_page <= 1 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-300 dark:hover:bg-gray-600'"
                             class="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded text-sm">
                         前へ
                     </button>
                     <span class="px-3 py-1 text-sm font-medium" x-text="`${timestamps.current_page || 1} / ${timestamps.last_page || 1}`"></span>
-                    <button @click="fetchTimestamps(timestamps.current_page + 1, searchQuery)"
+                    <button @click="fetchTimestamps(timestamps.current_page + 1, searchQuery, selectedIndex)"
                             :disabled="timestamps.current_page >= timestamps.last_page"
                             :class="timestamps.current_page >= timestamps.last_page ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-300 dark:hover:bg-gray-600'"
                             class="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded text-sm">
                         次へ
                     </button>
-                    <button @click="fetchTimestamps(timestamps.last_page, searchQuery)"
+                    <button @click="fetchTimestamps(timestamps.last_page, searchQuery, selectedIndex)"
                             :disabled="timestamps.current_page >= timestamps.last_page"
                             :class="timestamps.current_page >= timestamps.last_page ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-300 dark:hover:bg-gray-600'"
                             class="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded text-sm">
@@ -236,42 +236,58 @@
                     </button>
                 </div>
 
-                <!-- 頭文字ジャンプナビゲーション -->
+                <!-- 頭文字フィルタナビゲーション -->
                 <div x-show="timestamps.available_indexes && timestamps.available_indexes.length > 0" class="mb-4 hidden sm:block">
                     <div class="flex flex-wrap items-center gap-1">
-                        <span class="text-xs text-gray-500 dark:text-gray-400 mr-1">頭文字:</span>
+                        <span class="text-xs text-gray-500 dark:text-gray-400 mr-1">絞り込み:</span>
+                        <!-- すべて -->
+                        <button
+                            @click="clearIndexFilter()"
+                            :class="!selectedIndex
+                                ? 'bg-gray-600 text-white cursor-pointer'
+                                : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-600 cursor-pointer'"
+                            class="px-2 h-7 text-xs rounded transition-colors">
+                            すべて
+                        </button>
+                        <span class="text-gray-300 dark:text-gray-600 mx-1">|</span>
                         <!-- 数字 -->
                         <button
-                            @click="jumpToIndex('0-9')"
+                            @click="filterByIndex('0-9')"
                             :disabled="!timestamps.available_indexes?.includes('0-9')"
-                            :class="timestamps.available_indexes?.includes('0-9')
-                                ? 'bg-purple-500 hover:bg-purple-600 text-white cursor-pointer'
-                                : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'"
+                            :class="selectedIndex === '0-9'
+                                ? 'bg-purple-700 text-white cursor-pointer ring-2 ring-purple-300'
+                                : (timestamps.available_indexes?.includes('0-9')
+                                    ? 'bg-purple-500 hover:bg-purple-600 text-white cursor-pointer'
+                                    : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed')"
                             class="px-2 h-7 text-xs rounded transition-colors">
                             0-9
                         </button>
                         <span class="text-gray-300 dark:text-gray-600 mx-1">|</span>
-                        <!-- アルファベット（A, F, K, P, U） -->
-                        <template x-for="letter in ['A','F','K','P','U']" :key="letter">
+                        <!-- アルファベット（ABCDE, FGHIJ, KLMNO, PQRST, UVWXYZ） -->
+                        <template x-for="group in ['ABCDE','FGHIJ','KLMNO','PQRST','UVWXYZ']" :key="group">
                             <button
-                                @click="jumpToIndex(letter)"
-                                :disabled="!timestamps.available_indexes?.includes(letter)"
-                                :class="timestamps.available_indexes?.includes(letter)
-                                    ? 'bg-blue-500 hover:bg-blue-600 text-white cursor-pointer'
-                                    : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'"
-                                class="w-7 h-7 text-xs rounded transition-colors">
-                                <span x-text="letter"></span>
+                                @click="filterByIndex(group)"
+                                :disabled="!timestamps.available_indexes?.includes(group)"
+                                :class="selectedIndex === group
+                                    ? 'bg-blue-700 text-white cursor-pointer ring-2 ring-blue-300'
+                                    : (timestamps.available_indexes?.includes(group)
+                                        ? 'bg-blue-500 hover:bg-blue-600 text-white cursor-pointer'
+                                        : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed')"
+                                class="px-2 h-7 text-xs rounded transition-colors">
+                                <span x-text="group"></span>
                             </button>
                         </template>
                         <span class="text-gray-300 dark:text-gray-600 mx-1">|</span>
                         <!-- 五十音 -->
                         <template x-for="kana in ['あ','か','さ','た','な','は','ま','や','ら','わ']" :key="kana">
                             <button
-                                @click="jumpToIndex(kana)"
+                                @click="filterByIndex(kana)"
                                 :disabled="!timestamps.available_indexes?.includes(kana)"
-                                :class="timestamps.available_indexes?.includes(kana)
-                                    ? 'bg-green-500 hover:bg-green-600 text-white cursor-pointer'
-                                    : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'"
+                                :class="selectedIndex === kana
+                                    ? 'bg-green-700 text-white cursor-pointer ring-2 ring-green-300'
+                                    : (timestamps.available_indexes?.includes(kana)
+                                        ? 'bg-green-500 hover:bg-green-600 text-white cursor-pointer'
+                                        : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed')"
                                 class="w-7 h-7 text-xs rounded transition-colors">
                                 <span x-text="kana"></span>
                             </button>
@@ -279,11 +295,13 @@
                         <span class="text-gray-300 dark:text-gray-600 mx-1">|</span>
                         <!-- 漢字・その他 -->
                         <button
-                            @click="jumpToIndex('その他')"
+                            @click="filterByIndex('その他')"
                             :disabled="!timestamps.available_indexes?.includes('その他')"
-                            :class="timestamps.available_indexes?.includes('その他')
-                                ? 'bg-orange-500 hover:bg-orange-600 text-white cursor-pointer'
-                                : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'"
+                            :class="selectedIndex === 'その他'
+                                ? 'bg-orange-700 text-white cursor-pointer ring-2 ring-orange-300'
+                                : (timestamps.available_indexes?.includes('その他')
+                                    ? 'bg-orange-500 hover:bg-orange-600 text-white cursor-pointer'
+                                    : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed')"
                             class="px-2 h-7 text-xs rounded transition-colors">
                             漢字
                         </button>
@@ -379,26 +397,26 @@
 
                 <!-- ページネーション（下） -->
                 <div class="flex justify-center gap-2 mt-4">
-                    <button @click="fetchTimestamps(1, searchQuery); document.querySelector('#archives').scrollIntoView({ behavior: 'auto' })"
+                    <button @click="fetchTimestamps(1, searchQuery, selectedIndex); document.querySelector('#archives').scrollIntoView({ behavior: 'auto' })"
                             :disabled="timestamps.current_page <= 1"
                             :class="timestamps.current_page <= 1 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-300 dark:hover:bg-gray-600'"
                             class="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded text-sm">
                         最初
                     </button>
-                    <button @click="fetchTimestamps(timestamps.current_page - 1, searchQuery); document.querySelector('#archives').scrollIntoView({ behavior: 'auto' })"
+                    <button @click="fetchTimestamps(timestamps.current_page - 1, searchQuery, selectedIndex); document.querySelector('#archives').scrollIntoView({ behavior: 'auto' })"
                             :disabled="timestamps.current_page <= 1"
                             :class="timestamps.current_page <= 1 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-300 dark:hover:bg-gray-600'"
                             class="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded text-sm">
                         前へ
                     </button>
                     <span class="px-3 py-1 text-sm font-medium" x-text="`${timestamps.current_page || 1} / ${timestamps.last_page || 1}`"></span>
-                    <button @click="fetchTimestamps(timestamps.current_page + 1, searchQuery); document.querySelector('#archives').scrollIntoView({ behavior: 'auto' })"
+                    <button @click="fetchTimestamps(timestamps.current_page + 1, searchQuery, selectedIndex); document.querySelector('#archives').scrollIntoView({ behavior: 'auto' })"
                             :disabled="timestamps.current_page >= timestamps.last_page"
                             :class="timestamps.current_page >= timestamps.last_page ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-300 dark:hover:bg-gray-600'"
                             class="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded text-sm">
                         次へ
                     </button>
-                    <button @click="fetchTimestamps(timestamps.last_page, searchQuery); document.querySelector('#archives').scrollIntoView({ behavior: 'auto' })"
+                    <button @click="fetchTimestamps(timestamps.last_page, searchQuery, selectedIndex); document.querySelector('#archives').scrollIntoView({ behavior: 'auto' })"
                             :disabled="timestamps.current_page >= timestamps.last_page"
                             :class="timestamps.current_page >= timestamps.last_page ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-300 dark:hover:bg-gray-600'"
                             class="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded text-sm">
