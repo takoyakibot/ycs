@@ -45,6 +45,16 @@ function registerArchiveListComponent() {
                 showDistributionPanel: false,
                 panelDismissed: false,
 
+                // 動画プレイヤーの状態管理
+                autoPlay: false,
+                isMobile: false,
+                showVideoPlayer: false,
+                currentVideoId: null,
+                currentVideoTime: 0,
+                isPlaying: false,
+                playerReady: false,
+                youtubePlayer: null,
+
                 // computed property
                 get maxPage() {
                     if (!this.archives.total || !this.archives.per_page) return 1;
@@ -290,6 +300,23 @@ function registerArchiveListComponent() {
                     // 配信リンクパネルの設定を読み込み
                     const dismissed = localStorage.getItem('distributionPanelDismissed');
                     this.panelDismissed = dismissed === 'true';
+
+                    // モバイル判定
+                    this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+                    // 自動再生設定を読み込み（モバイルでは常にOFF）
+                    if (!this.isMobile) {
+                        const autoPlaySaved = localStorage.getItem('videoAutoPlay');
+                        this.autoPlay = autoPlaySaved === 'true';
+                    }
+
+                    // YouTube IFrame APIの読み込み
+                    this.loadYouTubeAPI();
+
+                    // ページ離脱時のクリーンアップ
+                    window.addEventListener('beforeunload', () => {
+                        this.destroyPlayer();
+                    });
                 },
 
                 // 報告モーダルを開く
@@ -371,6 +398,11 @@ function registerArchiveListComponent() {
                     if (!this.panelDismissed) {
                         this.showDistributionPanel = true;
                     }
+
+                    // 自動再生がONの場合、動画を読み込んで再生
+                    if (this.autoPlay && timestamp && timestamp.video_id) {
+                        this.loadAndPlayVideo(timestamp.video_id, timestamp.ts_num || 0);
+                    }
                 },
 
                 // テキストから検索用の疑似songオブジェクトを作成して選択
@@ -387,6 +419,11 @@ function registerArchiveListComponent() {
                     this.selectedTimestamp = timestamp;
                     if (!this.panelDismissed) {
                         this.showDistributionPanel = true;
+                    }
+
+                    // 自動再生がONの場合、動画を読み込んで再生
+                    if (this.autoPlay && timestamp && timestamp.video_id) {
+                        this.loadAndPlayVideo(timestamp.video_id, timestamp.ts_num || 0);
                     }
                 },
 
@@ -446,6 +483,155 @@ function registerArchiveListComponent() {
                     const query = encodeURIComponent(searchText);
                     // LINE MUSICのwebappは /webapp/ パスを使用
                     return `https://music.line.me/webapp/search/tracks?query=${query}`;
+                },
+
+                // YouTube IFrame APIの読み込み
+                loadYouTubeAPI() {
+                    if (window.YT && window.YT.Player) {
+                        this.playerReady = true;
+                        return;
+                    }
+
+                    // コールバック配列を初期化（複数コンポーネント対応）
+                    if (!window.youtubeAPIReadyCallbacks) {
+                        window.youtubeAPIReadyCallbacks = [];
+                        window.onYouTubeIframeAPIReady = () => {
+                            window.youtubeAPIReadyCallbacks.forEach(cb => cb());
+                        };
+                    }
+
+                    // コールバックを登録
+                    window.youtubeAPIReadyCallbacks.push(() => {
+                        this.playerReady = true;
+                    });
+
+                    // APIがまだ読み込まれていない場合
+                    if (!document.querySelector('script[src*="youtube.com/iframe_api"]')) {
+                        const tag = document.createElement('script');
+                        tag.src = 'https://www.youtube.com/iframe_api';
+                        tag.onerror = () => {
+                            console.error('YouTube APIの読み込みに失敗しました');
+                            toast.error('動画プレイヤーの読み込みに失敗しました');
+                        };
+                        const firstScriptTag = document.getElementsByTagName('script')[0];
+                        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+                    }
+                },
+
+                // 動画プレイヤーの初期化
+                initPlayer() {
+                    if (!this.playerReady || this.youtubePlayer) return;
+
+                    const playerElement = document.getElementById('youtube-player');
+                    if (!playerElement) return;
+
+                    this.youtubePlayer = new YT.Player('youtube-player', {
+                        height: '180',
+                        width: '320',
+                        playerVars: {
+                            'autoplay': 0,
+                            'controls': 1,
+                            'rel': 0,
+                            'modestbranding': 1,
+                            'origin': window.location.origin
+                        },
+                        events: {
+                            'onReady': () => {
+                                // プレイヤー準備完了
+                            },
+                            'onStateChange': (event) => {
+                                this.isPlaying = event.data === YT.PlayerState.PLAYING;
+                            }
+                        }
+                    });
+                },
+
+                // 動画を読み込んで再生
+                loadAndPlayVideo(videoId, time = 0) {
+                    // YouTubeのvideoIDは11文字の英数字とハイフン、アンダースコア
+                    if (!videoId || !/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
+                        console.error('Invalid video ID:', videoId);
+                        return;
+                    }
+
+                    this.currentVideoId = videoId;
+                    this.currentVideoTime = time;
+                    this.showVideoPlayer = true;
+
+                    // プレイヤーが既に初期化されている場合
+                    if (this.youtubePlayer && this.youtubePlayer.loadVideoById) {
+                        this.youtubePlayer.loadVideoById({
+                            videoId: videoId,
+                            startSeconds: time
+                        });
+                        this.isPlaying = true;
+                    } else {
+                        // プレイヤーがまだ初期化されていない場合、次のtickで初期化を試みる
+                        this.$nextTick(() => {
+                            if (!this.youtubePlayer && this.playerReady) {
+                                this.initPlayer();
+                                // 少し待ってから動画を読み込む
+                                setTimeout(() => {
+                                    if (this.youtubePlayer && this.youtubePlayer.loadVideoById) {
+                                        this.youtubePlayer.loadVideoById({
+                                            videoId: videoId,
+                                            startSeconds: time
+                                        });
+                                        this.isPlaying = true;
+                                    }
+                                }, 500);
+                            }
+                        });
+                    }
+                },
+
+                // 再生/一時停止の切り替え
+                togglePlayPause() {
+                    if (!this.youtubePlayer) {
+                        // プレイヤーがない場合は、現在選択中のタイムスタンプの動画を再生
+                        if (this.selectedTimestamp && this.selectedTimestamp.video_id) {
+                            this.loadAndPlayVideo(
+                                this.selectedTimestamp.video_id,
+                                this.selectedTimestamp.ts_num || 0
+                            );
+                        }
+                        return;
+                    }
+
+                    if (this.isPlaying) {
+                        this.youtubePlayer.pauseVideo();
+                        this.isPlaying = false;
+                    } else {
+                        this.youtubePlayer.playVideo();
+                        this.isPlaying = true;
+                    }
+                },
+
+                // 動画プレイヤーを閉じる
+                closeVideoPlayer() {
+                    if (this.youtubePlayer) {
+                        this.youtubePlayer.stopVideo();
+                    }
+                    this.showVideoPlayer = false;
+                    this.isPlaying = false;
+                    this.currentVideoId = null;
+                },
+
+                // プレイヤーの破棄（メモリリーク防止）
+                destroyPlayer() {
+                    if (this.youtubePlayer) {
+                        this.youtubePlayer.destroy();
+                        this.youtubePlayer = null;
+                    }
+                    this.showVideoPlayer = false;
+                    this.isPlaying = false;
+                    this.currentVideoId = null;
+                },
+
+                // 自動再生の切り替え
+                toggleAutoPlay() {
+                    this.autoPlay = !this.autoPlay;
+                    localStorage.setItem('videoAutoPlay', this.autoPlay.toString());
                 }
             };
         });
