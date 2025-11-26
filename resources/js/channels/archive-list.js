@@ -107,7 +107,7 @@ function registerArchiveListComponent() {
 
                 archiveSearch() {
                     const params = new URLSearchParams();
-                    params.append('baramutsu', this.archiveQuery);
+                    params.append('search', this.archiveQuery);
                     params.append('visible', '');
                     params.append('ts', this.tsFlg);
 
@@ -218,7 +218,7 @@ function registerArchiveListComponent() {
                     } else {
                         // アーカイブタブのパラメータ
                         if (this.archiveQuery) {
-                            params.set('baramutsu', this.archiveQuery);
+                            params.set('search', this.archiveQuery);
                         }
 
                         if (this.tsFlg) {
@@ -253,7 +253,7 @@ function registerArchiveListComponent() {
 
                     if (view === 'archives') {
                         this.activeTab = 'archives';
-                        const archiveQuery = params.get('baramutsu') || '';
+                        const archiveQuery = params.get('search') || '';
                         const tsFlg = params.get('ts') || '';
                         this.archiveQuery = archiveQuery;
                         this.tsFlg = tsFlg;

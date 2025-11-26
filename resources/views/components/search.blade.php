@@ -48,7 +48,7 @@
 
                 try {
                     const params = new URLSearchParams();
-                    params.append('baramutsu', this.query);
+                    params.append('search', this.query);
                     params.append('visible', this.visibleFlg);
                     params.append('ts', this.tsFlg);
 

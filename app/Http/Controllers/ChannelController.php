@@ -53,7 +53,7 @@ class ChannelController extends Controller
     {
         $archives = $this->getArchiveService->getArchives(
             $id,
-            (string) $request->query('baramutsu', ''),
+            (string) $request->query('search', ''),
             (string) $request->query('visible', ''),
             (string) $request->query('ts', '')
         )
