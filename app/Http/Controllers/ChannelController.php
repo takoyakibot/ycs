@@ -143,7 +143,7 @@ class ChannelController extends Controller
 
         // バリデーション
         $allowedIndexes = [
-            'A-E', 'F-J', 'K-O', 'P-T', 'U-Z',
+            'ABCDE', 'FGHIJ', 'KLMNO', 'PQRST', 'UVWXYZ',
             '0-9', 'あ', 'か', 'さ', 'た', 'な', 'は', 'ま', 'や', 'ら', 'わ', 'その他',
         ];
         $validated = $request->validate([
@@ -312,22 +312,22 @@ class ChannelController extends Controller
      */
     private function categorizeFirstChar($char)
     {
-        // アルファベット（A-E, F-J, K-O, P-T, U-Z）
+        // アルファベット（ABCDE, FGHIJ, KLMNO, PQRST, UVWXYZ）
         $upperChar = strtoupper($char);
         if (preg_match('/^[A-E]$/', $upperChar)) {
-            return 'A-E';
+            return 'ABCDE';
         }
         if (preg_match('/^[F-J]$/', $upperChar)) {
-            return 'F-J';
+            return 'FGHIJ';
         }
         if (preg_match('/^[K-O]$/', $upperChar)) {
-            return 'K-O';
+            return 'KLMNO';
         }
         if (preg_match('/^[P-T]$/', $upperChar)) {
-            return 'P-T';
+            return 'PQRST';
         }
         if (preg_match('/^[U-Z]$/', $upperChar)) {
-            return 'U-Z';
+            return 'UVWXYZ';
         }
 
         // ひらがな・カタカナ（五十音行に分類）

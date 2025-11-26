@@ -263,8 +263,8 @@
                             0-9
                         </button>
                         <span class="text-gray-300 dark:text-gray-600 mx-1">|</span>
-                        <!-- アルファベット（A-E, F-J, K-O, P-T, U-Z） -->
-                        <template x-for="group in ['A-E','F-J','K-O','P-T','U-Z']" :key="group">
+                        <!-- アルファベット（ABCDE, FGHIJ, KLMNO, PQRST, UVWXYZ） -->
+                        <template x-for="group in ['ABCDE','FGHIJ','KLMNO','PQRST','UVWXYZ']" :key="group">
                             <button
                                 @click="filterByIndex(group)"
                                 :disabled="!timestamps.available_indexes?.includes(group)"
