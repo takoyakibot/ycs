@@ -162,7 +162,6 @@ class ChannelArchiveTest extends TestCase
                 'last_page',
                 'per_page',
                 'total',
-                'index_map',
                 'available_indexes',
             ]);
     }
