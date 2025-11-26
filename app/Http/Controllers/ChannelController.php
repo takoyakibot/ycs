@@ -142,11 +142,15 @@ class ChannelController extends Controller
         $channel = Channel::where('handle', $id)->firstOrFail();
 
         // バリデーション
+        $allowedIndexes = array_merge(
+            range('A', 'Z'),
+            ['0-9', 'あ', 'か', 'さ', 'た', 'な', 'は', 'ま', 'や', 'ら', 'わ', 'その他']
+        );
         $validated = $request->validate([
             'per_page' => 'integer|min:1|max:100',
             'page' => 'integer|min:1',
             'search' => 'string|max:255',
-            'index' => 'string|max:10',
+            'index' => ['nullable', 'string', \Illuminate\Validation\Rule::in($allowedIndexes)],
         ]);
 
         $perPage = $validated['per_page'] ?? 50;
@@ -271,15 +275,9 @@ class ChannelController extends Controller
         $availableIndexes = [];
         foreach ($timestampsWithMapping as $ts) {
             $title = $ts['mapping']['song']['title'] ?? $ts['text'] ?? '';
-            if (empty($title)) {
-                continue;
-            }
+            $category = $this->getFirstCharCategory($title);
 
-            $firstChar = mb_substr($title, 0, 1, 'UTF-8');
-            $firstChar = mb_strtoupper($firstChar, 'UTF-8');
-            $category = $this->categorizeFirstChar($firstChar);
-
-            if (! in_array($category, $availableIndexes)) {
+            if ($category && ! in_array($category, $availableIndexes)) {
                 $availableIndexes[] = $category;
             }
         }
@@ -288,15 +286,8 @@ class ChannelController extends Controller
         if ($index) {
             $timestampsWithMapping = $timestampsWithMapping->filter(function ($ts) use ($index) {
                 $title = $ts['mapping']['song']['title'] ?? $ts['text'] ?? '';
-                if (empty($title)) {
-                    return false;
-                }
 
-                $firstChar = mb_substr($title, 0, 1, 'UTF-8');
-                $firstChar = mb_strtoupper($firstChar, 'UTF-8');
-                $category = $this->categorizeFirstChar($firstChar);
-
-                return $category === $index;
+                return $this->getFirstCharCategory($title) === $index;
             })->values();
         }
 
@@ -359,6 +350,21 @@ class ChannelController extends Controller
 
         // その他（記号など）
         return 'その他';
+    }
+
+    /**
+     * タイトルから頭文字カテゴリを取得
+     */
+    private function getFirstCharCategory(?string $title): ?string
+    {
+        if (empty($title)) {
+            return null;
+        }
+
+        $firstChar = mb_substr($title, 0, 1, 'UTF-8');
+        $firstChar = mb_strtoupper($firstChar, 'UTF-8');
+
+        return $this->categorizeFirstChar($firstChar);
     }
 
     /**

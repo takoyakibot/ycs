@@ -148,12 +148,7 @@ function registerArchiveListComponent() {
                 },
 
                 filterByIndex(index) {
-                    // 同じインデックスをクリックした場合は解除
-                    if (this.selectedIndex === index) {
-                        this.selectedIndex = '';
-                    } else {
-                        this.selectedIndex = index;
-                    }
+                    this.selectedIndex = index;
                     this.currentTimestampPage = 1;
                     this.fetchTimestamps(1, this.searchQuery, this.selectedIndex);
                 },
