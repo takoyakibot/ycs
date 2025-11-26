@@ -44,12 +44,6 @@ function registerArchiveListComponent() {
                 showDistributionPanel: false,
                 panelDismissed: false,
 
-                // YouTube埋め込みの状態管理
-                showYoutubePlayer: false,
-                autoplayEnabled: false,
-                currentVideoId: null,
-                currentTsNum: null,
-
                 // computed property
                 get maxPage() {
                     if (!this.archives.total || !this.archives.per_page) return 1;
@@ -298,10 +292,6 @@ function registerArchiveListComponent() {
                     // 配信リンクパネルの設定を読み込み
                     const dismissed = localStorage.getItem('distributionPanelDismissed');
                     this.panelDismissed = dismissed === 'true';
-
-                    // 自動再生設定を読み込み
-                    const autoplay = localStorage.getItem('youtubeAutoplayEnabled');
-                    this.autoplayEnabled = autoplay === 'true';
                 },
 
                 // 報告モーダルを開く
@@ -383,10 +373,6 @@ function registerArchiveListComponent() {
                     if (!this.panelDismissed) {
                         this.showDistributionPanel = true;
                     }
-                    // 自動再生が有効な場合はYouTubeプレーヤーを開く
-                    if (this.autoplayEnabled && timestamp) {
-                        this.playYoutube(timestamp.video_id, timestamp.ts_num);
-                    }
                 },
 
                 // テキストから検索用の疑似songオブジェクトを作成して選択
@@ -404,37 +390,6 @@ function registerArchiveListComponent() {
                     if (!this.panelDismissed) {
                         this.showDistributionPanel = true;
                     }
-                    // 自動再生が有効な場合はYouTubeプレーヤーを開く
-                    if (this.autoplayEnabled && timestamp) {
-                        this.playYoutube(timestamp.video_id, timestamp.ts_num);
-                    }
-                },
-
-                // YouTube埋め込みプレーヤーを開く
-                playYoutube(videoId, tsNum = 0) {
-                    this.currentVideoId = videoId;
-                    this.currentTsNum = tsNum;
-                    this.showYoutubePlayer = true;
-                },
-
-                // YouTube埋め込みプレーヤーを閉じる
-                closeYoutubePlayer() {
-                    this.showYoutubePlayer = false;
-                    this.currentVideoId = null;
-                    this.currentTsNum = null;
-                },
-
-                // 自動再生設定を切り替え
-                toggleAutoplay() {
-                    this.autoplayEnabled = !this.autoplayEnabled;
-                    localStorage.setItem('youtubeAutoplayEnabled', this.autoplayEnabled ? 'true' : 'false');
-                },
-
-                // YouTube埋め込みURLを生成
-                getYoutubeEmbedUrl(videoId, tsNum = 0) {
-                    const safeVideoId = encodeURIComponent(videoId || '');
-                    const safeTsNum = parseInt(tsNum) || 0;
-                    return `https://www.youtube.com/embed/${safeVideoId}?start=${safeTsNum}&autoplay=1`;
                 },
 
                 closePanel() {

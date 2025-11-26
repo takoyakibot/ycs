@@ -501,18 +501,10 @@
              x-transition:leave-end="transform translate-y-full"
              class="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t-2 border-gray-300 dark:border-gray-600 shadow-lg z-50 px-4 py-3">
             <div class="max-w-7xl mx-auto">
-                <!-- ヘッダー: 楽曲タイトル / 自動再生チェック / 閉じる -->
+                <!-- ヘッダー: 楽曲タイトル / 閉じる -->
                 <div class="flex items-center justify-between mb-2 gap-2">
                     <div class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate flex-1"
                          x-text="selectedSong ? `${selectedSong.title}${selectedSong.artist ? ' / ' + selectedSong.artist : ''}` : ''"></div>
-                    <!-- 自動再生チェックボックス -->
-                    <label class="hidden sm:flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400 cursor-pointer select-none whitespace-nowrap">
-                        <input type="checkbox"
-                               x-model="autoplayEnabled"
-                               @change="toggleAutoplay()"
-                               class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-red-600 focus:ring-red-500">
-                        <span>自動再生</span>
-                    </label>
                     <button @click="closePanel()"
                             class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 p-1 flex-shrink-0"
                             aria-label="閉じる">
@@ -522,38 +514,10 @@
                     </button>
                 </div>
 
-                <!-- YouTube埋め込みプレーヤー -->
-                <div x-show="showYoutubePlayer && currentVideoId" class="mb-3">
-                    <div class="relative w-full" style="padding-bottom: 56.25%; max-height: 240px;">
-                        <iframe
-                            x-show="showYoutubePlayer && currentVideoId"
-                            :src="showYoutubePlayer && currentVideoId ? getYoutubeEmbedUrl(currentVideoId, currentTsNum) : ''"
-                            class="absolute top-0 left-0 w-full h-full max-h-[240px] rounded-lg"
-                            frameborder="0"
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                            allowfullscreen>
-                        </iframe>
-                    </div>
-                    <button @click="closeYoutubePlayer()"
-                            class="mt-2 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
-                        プレーヤーを閉じる
-                    </button>
-                </div>
-
-                <!-- コンテンツ: 配信サービス / YouTube再生ボタン / 報告 -->
+                <!-- コンテンツ: 配信サービス / 報告 -->
                 <div class="flex flex-wrap gap-3 items-start">
                     <!-- 配信サービスボタン群 -->
                     <div class="flex flex-wrap gap-2 flex-1">
-                        <!-- YouTube再生ボタン（自動再生OFF時、タイムスタンプ選択時のみ） -->
-                        <template x-if="selectedTimestamp && !autoplayEnabled">
-                            <button @click="playYoutube(selectedTimestamp.video_id, selectedTimestamp.ts_num)"
-                                    class="inline-flex items-center gap-1.5 px-3 py-2 bg-red-600 hover:bg-red-700 text-white text-sm rounded-md transition-colors">
-                                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-                                </svg>
-                                <span>ここで再生</span>
-                            </button>
-                        </template>
                         <!-- Spotify -->
                         <a :href="getSpotifyUrl(selectedSong)"
                            target="_blank"
