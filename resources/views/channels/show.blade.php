@@ -282,7 +282,7 @@
                             @click="jumpToIndex('その他')"
                             :disabled="!timestamps.available_indexes?.includes('その他')"
                             :class="timestamps.available_indexes?.includes('その他')
-                                ? 'bg-gray-500 hover:bg-gray-600 text-white cursor-pointer'
+                                ? 'bg-orange-500 hover:bg-orange-600 text-white cursor-pointer'
                                 : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'"
                             class="px-2 h-7 text-xs rounded transition-colors">
                             漢字
