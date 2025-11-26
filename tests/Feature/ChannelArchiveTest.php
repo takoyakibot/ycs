@@ -279,40 +279,6 @@ class ChannelArchiveTest extends TestCase
     }
 
     /**
-     * タイムスタンプのソート機能が動作する（時間降順）
-     */
-    public function test_fetch_timestamps_sort_by_time_desc(): void
-    {
-        $channel = Channel::factory()->create();
-        $archive = Archive::factory()->create([
-            'channel_id' => $channel->channel_id,
-            'is_display' => 1,
-        ]);
-
-        TsItem::factory()->create([
-            'video_id' => $archive->video_id,
-            'ts_num' => 100,
-            'text' => 'Early timestamp',
-            'is_display' => 1,
-        ]);
-        TsItem::factory()->create([
-            'video_id' => $archive->video_id,
-            'ts_num' => 200,
-            'text' => 'Late timestamp',
-            'is_display' => 1,
-        ]);
-
-        $response = $this->getJson("/api/channels/{$channel->handle}/timestamps?sort=time_desc");
-
-        $response->assertStatus(200);
-
-        $data = $response->json('data');
-        $this->assertCount(2, $data);
-        $this->assertEquals(200, $data[0]['ts_num']);
-        $this->assertEquals(100, $data[1]['ts_num']);
-    }
-
-    /**
      * バリデーションエラー: per_pageが範囲外
      */
     public function test_fetch_timestamps_validation_per_page_out_of_range(): void
@@ -323,19 +289,6 @@ class ChannelArchiveTest extends TestCase
 
         $response->assertStatus(422)
             ->assertJsonValidationErrors(['per_page']);
-    }
-
-    /**
-     * バリデーションエラー: sortが不正な値
-     */
-    public function test_fetch_timestamps_validation_invalid_sort(): void
-    {
-        $channel = Channel::factory()->create();
-
-        $response = $this->getJson("/api/channels/{$channel->handle}/timestamps?sort=invalid_sort");
-
-        $response->assertStatus(422)
-            ->assertJsonValidationErrors(['sort']);
     }
 
     /**

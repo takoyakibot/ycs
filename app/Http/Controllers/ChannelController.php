@@ -146,13 +146,11 @@ class ChannelController extends Controller
             'per_page' => 'integer|min:1|max:100',
             'page' => 'integer|min:1',
             'search' => 'string|max:255',
-            'sort' => 'string|in:time_desc,time_asc,song_asc,archive_desc',
         ]);
 
         $perPage = $validated['per_page'] ?? 50;
         $currentPage = $validated['page'] ?? 1;
         $search = $validated['search'] ?? '';
-        $sort = $validated['sort'] ?? 'song_asc';
 
         // タイムスタンプ取得（チャンネルフィルタ付き）
         $query = $this->buildTimestampQuery($channel, withArchive: true);
@@ -256,55 +254,38 @@ class ChannelController extends Controller
             return ! ($ts['mapping'] && $ts['mapping']['is_not_song']);
         })->values();
 
-        // ソート処理
-        switch ($sort) {
-            case 'time_asc':
-                $timestampsWithMapping = $timestampsWithMapping->sortBy('ts_num');
-                break;
-            case 'time_desc':
-                $timestampsWithMapping = $timestampsWithMapping->sortByDesc('ts_num');
-                break;
-            case 'song_asc':
-                $timestampsWithMapping = $timestampsWithMapping->sort(function ($a, $b) {
-                    // 楽曲紐づけ済みは楽曲名、未紐づけはテキストでソート
-                    $aTitle = $a['mapping']['song']['title'] ?? $a['text'] ?? '';
-                    $bTitle = $b['mapping']['song']['title'] ?? $b['text'] ?? '';
+        // ソート処理（楽曲名順）
+        $timestampsWithMapping = $timestampsWithMapping->sort(function ($a, $b) {
+            // 楽曲紐づけ済みは楽曲名、未紐づけはテキストでソート
+            $aTitle = $a['mapping']['song']['title'] ?? $a['text'] ?? '';
+            $bTitle = $b['mapping']['song']['title'] ?? $b['text'] ?? '';
 
-                    return strcasecmp($aTitle, $bTitle);
-                });
-                break;
-            case 'archive_desc':
-                $timestampsWithMapping = $timestampsWithMapping->sortByDesc(function ($ts) {
-                    return $ts['archive']['published_at'];
-                });
-                break;
-        }
+            return strcasecmp($aTitle, $bTitle);
+        });
 
         $timestampsWithMapping = $timestampsWithMapping->values();
 
-        // 頭文字インデックスマップを生成（楽曲名ソート時のみ）
+        // 頭文字インデックスマップを生成
         $indexMap = [];
         $availableIndexes = [];
-        if ($sort === 'song_asc') {
-            foreach ($timestampsWithMapping as $index => $ts) {
-                $title = $ts['mapping']['song']['title'] ?? $ts['text'] ?? '';
-                if (empty($title)) {
-                    continue;
-                }
+        foreach ($timestampsWithMapping as $index => $ts) {
+            $title = $ts['mapping']['song']['title'] ?? $ts['text'] ?? '';
+            if (empty($title)) {
+                continue;
+            }
 
-                // 頭文字を取得
-                $firstChar = mb_substr($title, 0, 1, 'UTF-8');
-                $firstChar = mb_strtoupper($firstChar, 'UTF-8');
+            // 頭文字を取得
+            $firstChar = mb_substr($title, 0, 1, 'UTF-8');
+            $firstChar = mb_strtoupper($firstChar, 'UTF-8');
 
-                // カテゴリ分け
-                $category = $this->categorizeFirstChar($firstChar);
+            // カテゴリ分け
+            $category = $this->categorizeFirstChar($firstChar);
 
-                // まだ記録されていないカテゴリの場合、ページ番号を記録
-                if (! isset($indexMap[$category])) {
-                    $pageNum = (int) floor($index / $perPage) + 1;
-                    $indexMap[$category] = $pageNum;
-                    $availableIndexes[] = $category;
-                }
+            // まだ記録されていないカテゴリの場合、ページ番号を記録
+            if (! isset($indexMap[$category])) {
+                $pageNum = (int) floor($index / $perPage) + 1;
+                $indexMap[$category] = $pageNum;
+                $availableIndexes[] = $category;
             }
         }
 

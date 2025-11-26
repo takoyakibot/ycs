@@ -28,7 +28,6 @@ function registerArchiveListComponent() {
                 tsFlg: '',
                 searchTimeout: null,
                 currentTimestampPage: 1,
-                timestampSort: 'song_asc',
                 loading: false,
                 error: null,
                 isFiltered: false,
@@ -109,8 +108,7 @@ function registerArchiveListComponent() {
 
                         const params = new URLSearchParams({
                             page: page,
-                            per_page: 50,
-                            sort: this.timestampSort
+                            per_page: 50
                         });
 
                         if (search) {
@@ -201,10 +199,6 @@ function registerArchiveListComponent() {
                             params.set('search', this.searchQuery);
                         }
 
-                        if (this.timestampSort && this.timestampSort !== 'song_asc') {
-                            params.set('sort', this.timestampSort);
-                        }
-
                         if (this.currentTimestampPage && this.currentTimestampPage > 1) {
                             params.set('page', this.currentTimestampPage);
                         }
@@ -241,7 +235,6 @@ function registerArchiveListComponent() {
                 restoreStateFromURL(params) {
                     const view = params.get('view');
                     const search = params.get('search');
-                    const sort = params.get('sort');
                     // ページパラメータのバリデーション: 1以上の整数に制限
                     const page = Math.max(1, parseInt(params.get('page')) || 1);
 
@@ -261,7 +254,6 @@ function registerArchiveListComponent() {
                         // タイムスタンプタブの状態を復元（デフォルト）
                         this.activeTab = 'timestamps';
                         this.searchQuery = search || '';
-                        this.timestampSort = sort || 'song_asc';
                         this.currentTimestampPage = page;
                         this.fetchTimestamps(page, this.searchQuery);
                     }
