@@ -240,6 +240,17 @@
                 <div x-show="timestamps.available_indexes && timestamps.available_indexes.length > 0" class="mb-4 hidden sm:block">
                     <div class="flex flex-wrap items-center gap-1">
                         <span class="text-xs text-gray-500 dark:text-gray-400 mr-1">頭文字:</span>
+                        <!-- 数字 -->
+                        <button
+                            @click="jumpToIndex('0-9')"
+                            :disabled="!timestamps.available_indexes?.includes('0-9')"
+                            :class="timestamps.available_indexes?.includes('0-9')
+                                ? 'bg-purple-500 hover:bg-purple-600 text-white cursor-pointer'
+                                : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'"
+                            class="px-2 h-7 text-xs rounded transition-colors">
+                            0-9
+                        </button>
+                        <span class="text-gray-300 dark:text-gray-600 mx-1">|</span>
                         <!-- アルファベット（A, F, K, P, U） -->
                         <template x-for="letter in ['A','F','K','P','U']" :key="letter">
                             <button
@@ -266,16 +277,7 @@
                             </button>
                         </template>
                         <span class="text-gray-300 dark:text-gray-600 mx-1">|</span>
-                        <!-- 数字・その他 -->
-                        <button
-                            @click="jumpToIndex('0-9')"
-                            :disabled="!timestamps.available_indexes?.includes('0-9')"
-                            :class="timestamps.available_indexes?.includes('0-9')
-                                ? 'bg-purple-500 hover:bg-purple-600 text-white cursor-pointer'
-                                : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'"
-                            class="px-2 h-7 text-xs rounded transition-colors">
-                            0-9
-                        </button>
+                        <!-- 漢字・その他 -->
                         <button
                             @click="jumpToIndex('その他')"
                             :disabled="!timestamps.available_indexes?.includes('その他')"
@@ -283,7 +285,7 @@
                                 ? 'bg-gray-500 hover:bg-gray-600 text-white cursor-pointer'
                                 : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'"
                             class="px-2 h-7 text-xs rounded transition-colors">
-                            他
+                            漢字
                         </button>
                     </div>
                 </div>
