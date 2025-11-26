@@ -28,6 +28,7 @@ function registerArchiveListComponent() {
                 tsFlg: '',
                 searchTimeout: null,
                 currentTimestampPage: 1,
+                selectedIndex: '',
                 loading: false,
                 error: null,
                 isFiltered: false,
@@ -101,7 +102,7 @@ function registerArchiveListComponent() {
                     this.updateURL();
                 },
 
-                async fetchTimestamps(page = 1, search = '') {
+                async fetchTimestamps(page = 1, search = '', index = '') {
                     try {
                         this.loading = true;
                         this.error = null;
@@ -113,6 +114,10 @@ function registerArchiveListComponent() {
 
                         if (search) {
                             params.set('search', search);
+                        }
+
+                        if (index) {
+                            params.set('index', index);
                         }
 
                         const response = await fetch(`/api/channels/${this.channel.handle}/timestamps?${params}`);
@@ -139,31 +144,24 @@ function registerArchiveListComponent() {
 
                 searchTimestamps() {
                     this.currentTimestampPage = 1;
-                    this.fetchTimestamps(1, this.searchQuery);
+                    this.fetchTimestamps(1, this.searchQuery, this.selectedIndex);
                 },
 
-                jumpToIndex(letter) {
-                    if (!this.timestamps.index_map || !this.timestamps.index_map[letter]) {
-                        return;
+                filterByIndex(index) {
+                    // 同じインデックスをクリックした場合は解除
+                    if (this.selectedIndex === index) {
+                        this.selectedIndex = '';
+                    } else {
+                        this.selectedIndex = index;
                     }
+                    this.currentTimestampPage = 1;
+                    this.fetchTimestamps(1, this.searchQuery, this.selectedIndex);
+                },
 
-                    const targetPage = this.timestamps.index_map[letter];
-                    this.fetchTimestamps(targetPage, this.searchQuery);
-
-                    // スムーズスクロール + オフセット
-                    setTimeout(() => {
-                        const tabElement = document.querySelector('#archives');
-                        if (tabElement) {
-                            const offset = 100; // 100pxの余白
-                            const elementPosition = tabElement.getBoundingClientRect().top;
-                            const offsetPosition = elementPosition + window.pageYOffset - offset;
-
-                            window.scrollTo({
-                                top: offsetPosition,
-                                behavior: 'smooth'
-                            });
-                        }
-                    }, 100); // データ取得待ち
+                clearIndexFilter() {
+                    this.selectedIndex = '';
+                    this.currentTimestampPage = 1;
+                    this.fetchTimestamps(1, this.searchQuery, '');
                 },
 
                 downloadTimestamps() {
@@ -197,6 +195,10 @@ function registerArchiveListComponent() {
                     if (this.activeTab === 'timestamps') {
                         if (this.searchQuery) {
                             params.set('search', this.searchQuery);
+                        }
+
+                        if (this.selectedIndex) {
+                            params.set('index', this.selectedIndex);
                         }
 
                         if (this.currentTimestampPage && this.currentTimestampPage > 1) {
@@ -254,8 +256,9 @@ function registerArchiveListComponent() {
                         // タイムスタンプタブの状態を復元（デフォルト）
                         this.activeTab = 'timestamps';
                         this.searchQuery = search || '';
+                        this.selectedIndex = params.get('index') || '';
                         this.currentTimestampPage = page;
-                        this.fetchTimestamps(page, this.searchQuery);
+                        this.fetchTimestamps(page, this.searchQuery, this.selectedIndex);
                     }
                 },
 
