@@ -54,6 +54,10 @@ function registerArchiveListComponent() {
                 isPlaying: false,
                 playerReady: false,
                 youtubePlayer: null,
+                // ドラッグ機能用
+                isDragging: false,
+                playerPosition: { x: null, y: null },
+                dragOffset: { x: 0, y: 0 },
 
                 // computed property
                 get maxPage() {
@@ -615,6 +619,7 @@ function registerArchiveListComponent() {
                     this.showVideoPlayer = false;
                     this.isPlaying = false;
                     this.currentVideoId = null;
+                    this.resetPlayerPosition();
                 },
 
                 // プレイヤーの破棄（メモリリーク防止）
@@ -631,6 +636,84 @@ function registerArchiveListComponent() {
                 // 自動再生設定の保存
                 saveAutoPlay() {
                     localStorage.setItem('videoAutoPlay', this.autoPlay.toString());
+                },
+
+                // ドラッグ開始
+                startDrag(event) {
+                    // タッチイベントとマウスイベントの両方に対応
+                    const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+                    const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+
+                    const playerEl = this.$refs.videoPlayer;
+                    if (!playerEl) return;
+
+                    const rect = playerEl.getBoundingClientRect();
+                    this.isDragging = true;
+                    this.dragOffset = {
+                        x: clientX - rect.left,
+                        y: clientY - rect.top
+                    };
+
+                    // イベントリスナーを追加
+                    document.addEventListener('mousemove', this.onDrag.bind(this));
+                    document.addEventListener('mouseup', this.stopDrag.bind(this));
+                    document.addEventListener('touchmove', this.onDrag.bind(this), { passive: false });
+                    document.addEventListener('touchend', this.stopDrag.bind(this));
+
+                    event.preventDefault();
+                },
+
+                // ドラッグ中
+                onDrag(event) {
+                    if (!this.isDragging) return;
+
+                    const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+                    const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+
+                    const playerEl = this.$refs.videoPlayer;
+                    if (!playerEl) return;
+
+                    const playerWidth = playerEl.offsetWidth;
+                    const playerHeight = playerEl.offsetHeight;
+
+                    // 画面内に収まるように位置を計算
+                    let newX = clientX - this.dragOffset.x;
+                    let newY = clientY - this.dragOffset.y;
+
+                    // 画面外にはみ出さないように制限
+                    newX = Math.max(0, Math.min(newX, window.innerWidth - playerWidth));
+                    newY = Math.max(0, Math.min(newY, window.innerHeight - playerHeight));
+
+                    this.playerPosition = { x: newX, y: newY };
+
+                    event.preventDefault();
+                },
+
+                // ドラッグ終了
+                stopDrag() {
+                    this.isDragging = false;
+                    document.removeEventListener('mousemove', this.onDrag.bind(this));
+                    document.removeEventListener('mouseup', this.stopDrag.bind(this));
+                    document.removeEventListener('touchmove', this.onDrag.bind(this));
+                    document.removeEventListener('touchend', this.stopDrag.bind(this));
+                },
+
+                // プレイヤーの位置スタイルを取得
+                getPlayerStyle() {
+                    if (this.playerPosition.x !== null && this.playerPosition.y !== null) {
+                        return {
+                            left: `${this.playerPosition.x}px`,
+                            top: `${this.playerPosition.y}px`,
+                            right: 'auto',
+                            bottom: 'auto'
+                        };
+                    }
+                    return {};
+                },
+
+                // プレイヤー位置をリセット
+                resetPlayerPosition() {
+                    this.playerPosition = { x: null, y: null };
                 }
             };
         });
