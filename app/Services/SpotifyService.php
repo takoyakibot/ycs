@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class SpotifyService
 {
@@ -26,6 +27,49 @@ class SpotifyService
         }
 
         throw new \Exception('Spotify authentication failed with status '.$response->status());
+    }
+
+    /**
+     * 認証してから楽曲を検索（一連の処理を統合）
+     *
+     * @param  string  $query  検索クエリ
+     * @param  int  $limit  取得件数（デフォルト: 10）
+     * @return array 検索結果のトラック配列
+     *
+     * @throws \Exception 認証失敗または検索失敗時
+     */
+    public function searchWithAuth(string $query, int $limit = 10): array
+    {
+        $clientId = config('services.spotify.client_id');
+        $clientSecret = config('services.spotify.client_secret');
+
+        if (! $clientId || ! $clientSecret) {
+            Log::error('Spotify API credentials are not configured');
+            throw new \Exception('Spotify API credentials are not configured.');
+        }
+
+        // 認証処理
+        try {
+            $this->authenticate($clientId, $clientSecret);
+        } catch (\Exception $e) {
+            Log::error('Spotify authentication failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            throw new \Exception('Spotify API authentication failed. Please check your credentials.');
+        }
+
+        // 検索処理
+        try {
+            return $this->searchTracks($query, $limit);
+        } catch (\Exception $e) {
+            Log::error('Spotify search failed', [
+                'query' => $query,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            throw new \Exception('Spotify API search failed. Please try again later.');
+        }
     }
 
     /**
