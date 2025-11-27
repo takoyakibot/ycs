@@ -126,7 +126,7 @@ class ManageController extends Controller
 
         $archives = $this->getArchiveService->getArchivesForManage(
             $id,
-            (string) $request->query('baramutsu', ''),
+            (string) $request->query('search', ''),
             (string) $request->query('visible', ''),
             (string) $request->query('ts', '')
         )
