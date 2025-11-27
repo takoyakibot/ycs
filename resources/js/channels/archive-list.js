@@ -58,6 +58,8 @@ function registerArchiveListComponent() {
                 isDragging: false,
                 playerPosition: { x: null, y: null },
                 dragOffset: { x: 0, y: 0 },
+                boundOnDrag: null,
+                boundStopDrag: null,
 
                 // computed property
                 get maxPage() {
@@ -664,11 +666,15 @@ function registerArchiveListComponent() {
                         y: clientY - rect.top
                     };
 
+                    // バインドした関数を保存（removeEventListenerで同じ参照を使うため）
+                    this.boundOnDrag = this.onDrag.bind(this);
+                    this.boundStopDrag = this.stopDrag.bind(this);
+
                     // イベントリスナーを追加
-                    document.addEventListener('mousemove', this.onDrag.bind(this));
-                    document.addEventListener('mouseup', this.stopDrag.bind(this));
-                    document.addEventListener('touchmove', this.onDrag.bind(this), { passive: false });
-                    document.addEventListener('touchend', this.stopDrag.bind(this));
+                    document.addEventListener('mousemove', this.boundOnDrag);
+                    document.addEventListener('mouseup', this.boundStopDrag);
+                    document.addEventListener('touchmove', this.boundOnDrag, { passive: false });
+                    document.addEventListener('touchend', this.boundStopDrag);
 
                     event.preventDefault();
                 },
@@ -702,10 +708,20 @@ function registerArchiveListComponent() {
                 // ドラッグ終了
                 stopDrag() {
                     this.isDragging = false;
-                    document.removeEventListener('mousemove', this.onDrag.bind(this));
-                    document.removeEventListener('mouseup', this.stopDrag.bind(this));
-                    document.removeEventListener('touchmove', this.onDrag.bind(this));
-                    document.removeEventListener('touchend', this.stopDrag.bind(this));
+
+                    // 保存した関数参照を使ってイベントリスナーを削除
+                    if (this.boundOnDrag) {
+                        document.removeEventListener('mousemove', this.boundOnDrag);
+                        document.removeEventListener('touchmove', this.boundOnDrag);
+                    }
+                    if (this.boundStopDrag) {
+                        document.removeEventListener('mouseup', this.boundStopDrag);
+                        document.removeEventListener('touchend', this.boundStopDrag);
+                    }
+
+                    // 参照をクリア
+                    this.boundOnDrag = null;
+                    this.boundStopDrag = null;
                 },
 
                 // プレイヤーの位置スタイルを取得
