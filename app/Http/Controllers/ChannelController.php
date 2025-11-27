@@ -4,19 +4,23 @@ namespace App\Http\Controllers;
 
 use App\Helpers\TextNormalizer;
 use App\Models\Channel;
-use App\Models\TimestampReport;
 use App\Models\TimestampSongMapping;
 use App\Models\TsItem;
 use App\Services\GetArchiveService;
+use App\Services\TimestampService;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class ChannelController extends Controller
 {
     protected $getArchiveService;
 
-    public function __construct(GetArchiveService $getArchiveService)
+    protected $timestampService;
+
+    public function __construct(GetArchiveService $getArchiveService, TimestampService $timestampService)
     {
         $this->getArchiveService = $getArchiveService;
+        $this->timestampService = $timestampService;
     }
 
     /**
@@ -138,246 +142,29 @@ class ChannelController extends Controller
      */
     public function fetchTimestamps(string $id, Request $request)
     {
-        // チャンネル取得
         $channel = Channel::where('handle', $id)->firstOrFail();
 
-        // バリデーション
         $allowedIndexes = [
             'ABCDE', 'FGHIJ', 'KLMNO', 'PQRST', 'UVWXYZ',
             '0-9', 'あ', 'か', 'さ', 'た', 'な', 'は', 'ま', 'や', 'ら', 'わ', 'その他',
         ];
+
         $validated = $request->validate([
             'per_page' => 'integer|min:1|max:100',
             'page' => 'integer|min:1',
             'search' => 'string|max:255',
-            'index' => ['nullable', 'string', \Illuminate\Validation\Rule::in($allowedIndexes)],
+            'index' => ['nullable', 'string', Rule::in($allowedIndexes)],
         ]);
 
-        $perPage = $validated['per_page'] ?? 50;
-        $currentPage = $validated['page'] ?? 1;
-        $search = $validated['search'] ?? '';
-        $index = $validated['index'] ?? '';
+        $result = $this->timestampService->getTimestampsWithMapping(
+            $channel,
+            $validated['per_page'] ?? 50,
+            $validated['page'] ?? 1,
+            $validated['search'] ?? '',
+            $validated['index'] ?? ''
+        );
 
-        // タイムスタンプ取得（チャンネルフィルタ付き）
-        $query = $this->buildTimestampQuery($channel, withArchive: true);
-
-        // 検索条件の追加（タイムスタンプテキスト）
-        if ($search) {
-            // LIKEの特殊文字をエスケープ
-            $escapedSearch = addcslashes($search, '%_\\');
-            $query->where('text', 'like', "%{$escapedSearch}%");
-        }
-
-        // 全件取得（ページネーション前）
-        $allTimestamps = $query->get();
-
-        // N+1クエリ問題を回避: 全タイムスタンプの正規化テキストを事前に取得
-        $normalizedTexts = $allTimestamps->map(function ($item) {
-            return TextNormalizer::normalize($item->text);
-        })->unique()->values()->toArray();
-
-        // 一度にすべてのマッピングを取得
-        try {
-            $mappings = TimestampSongMapping::whereIn('normalized_text', $normalizedTexts)
-                ->with('song')
-                ->get()
-                ->keyBy('normalized_text');
-        } catch (\Exception $e) {
-            // ログにエラーを記録
-            \Log::error('Failed to fetch song mappings in fetchTimestamps', [
-                'error' => $e->getMessage(),
-                'channel_id' => $id,
-            ]);
-
-            // エラー発生時は空のコレクションを返して処理を継続
-            $mappings = collect();
-        }
-
-        // 未解決の報告があるタイムスタンプIDを取得
-        $tsItemIds = $allTimestamps->pluck('id')->toArray();
-        $reportedTsItemIds = [];
-        if (! empty($tsItemIds)) {
-            try {
-                $reportedTsItemIds = TimestampReport::whereIn('ts_item_id', $tsItemIds)
-                    ->where('status', 'pending')
-                    ->pluck('ts_item_id')
-                    ->unique()
-                    ->toArray();
-            } catch (\Exception $e) {
-                \Log::error('Failed to fetch timestamp reports', [
-                    'error' => $e->getMessage(),
-                    'channel_id' => $id,
-                ]);
-            }
-        }
-
-        // 各タイムスタンプにマッピング情報を追加
-        $timestampsWithMapping = $allTimestamps->map(function ($item) use ($mappings, $reportedTsItemIds) {
-            $normalizedText = TextNormalizer::normalize($item->text);
-            $mapping = $mappings->get($normalizedText);
-
-            return [
-                'id' => $item->id,
-                'ts_text' => $item->ts_text,
-                'ts_num' => $item->ts_num,
-                'text' => $item->text,
-                'video_id' => $item->video_id,
-                'archive' => [
-                    'title' => $item->archive->title,
-                    'published_at' => $item->archive->published_at,
-                ],
-                'mapping' => $mapping ? [
-                    'song' => $mapping->song ? [
-                        'title' => $mapping->song->title,
-                        'artist' => $mapping->song->artist,
-                        'spotify_track_id' => $this->validateSpotifyTrackId($mapping->song->spotify_track_id),
-                    ] : null,
-                    'is_not_song' => $mapping->is_not_song,
-                ] : null,
-                'has_pending_report' => in_array($item->id, $reportedTsItemIds),
-            ];
-        });
-
-        // 楽曲名・アーティスト名での検索フィルタリング
-        // ※タイムスタンプテキストはDBレベルでフィルタ済み
-        if ($search) {
-            $timestampsWithMapping = $timestampsWithMapping->filter(function ($ts) use ($search) {
-                // 楽曲紐づけ済みの場合は楽曲名・アーティスト名でも検索
-                if ($ts['mapping'] && $ts['mapping']['song']) {
-                    $songText = $ts['mapping']['song']['title'].' '.$ts['mapping']['song']['artist'];
-                    if (stripos($songText, $search) !== false) {
-                        return true;
-                    }
-                }
-
-                // 楽曲検索で一致しない場合も、テキスト検索でDBに含まれているものは表示
-                return true;
-            });
-        }
-
-        // 「楽曲ではない」タイムスタンプを除外
-        $timestampsWithMapping = $timestampsWithMapping->filter(function ($ts) {
-            return ! ($ts['mapping'] && $ts['mapping']['is_not_song']);
-        })->values();
-
-        // ソート処理（楽曲名順）
-        $timestampsWithMapping = $timestampsWithMapping->sort(function ($a, $b) {
-            // 楽曲紐づけ済みは楽曲名、未紐づけはテキストでソート
-            $aTitle = $a['mapping']['song']['title'] ?? $a['text'] ?? '';
-            $bTitle = $b['mapping']['song']['title'] ?? $b['text'] ?? '';
-
-            return strcasecmp($aTitle, $bTitle);
-        });
-
-        $timestampsWithMapping = $timestampsWithMapping->values();
-
-        // 利用可能な頭文字カテゴリを収集（フィルタリング前に行う）
-        $availableIndexes = [];
-        foreach ($timestampsWithMapping as $ts) {
-            $title = $ts['mapping']['song']['title'] ?? $ts['text'] ?? '';
-            $category = $this->getFirstCharCategory($title);
-
-            if ($category && ! in_array($category, $availableIndexes)) {
-                $availableIndexes[] = $category;
-            }
-        }
-
-        // 頭文字フィルタリング
-        if ($index) {
-            $timestampsWithMapping = $timestampsWithMapping->filter(function ($ts) use ($index) {
-                $title = $ts['mapping']['song']['title'] ?? $ts['text'] ?? '';
-
-                return $this->getFirstCharCategory($title) === $index;
-            })->values();
-        }
-
-        // 手動でページネーション
-        $total = $timestampsWithMapping->count();
-        $lastPage = max(1, (int) ceil($total / $perPage));
-        $offset = ($currentPage - 1) * $perPage;
-        $items = $timestampsWithMapping->slice($offset, $perPage)->values();
-
-        return response()->json([
-            'data' => $items,
-            'current_page' => $currentPage,
-            'last_page' => $lastPage,
-            'per_page' => $perPage,
-            'total' => $total,
-            'available_indexes' => $availableIndexes,
-        ]);
-    }
-
-    /**
-     * 頭文字をカテゴリに分類
-     */
-    private function categorizeFirstChar($char)
-    {
-        // アルファベット（ABCDE, FGHIJ, KLMNO, PQRST, UVWXYZ）
-        $upperChar = strtoupper($char);
-        if (preg_match('/^[A-E]$/', $upperChar)) {
-            return 'ABCDE';
-        }
-        if (preg_match('/^[F-J]$/', $upperChar)) {
-            return 'FGHIJ';
-        }
-        if (preg_match('/^[K-O]$/', $upperChar)) {
-            return 'KLMNO';
-        }
-        if (preg_match('/^[P-T]$/', $upperChar)) {
-            return 'PQRST';
-        }
-        if (preg_match('/^[U-Z]$/', $upperChar)) {
-            return 'UVWXYZ';
-        }
-
-        // ひらがな・カタカナ（五十音行に分類）
-        $kanaMap = [
-            'あ' => ['あ', 'い', 'う', 'え', 'お', 'ア', 'イ', 'ウ', 'エ', 'オ'],
-            'か' => ['か', 'き', 'く', 'け', 'こ', 'が', 'ぎ', 'ぐ', 'げ', 'ご',
-                'カ', 'キ', 'ク', 'ケ', 'コ', 'ガ', 'ギ', 'グ', 'ゲ', 'ゴ'],
-            'さ' => ['さ', 'し', 'す', 'せ', 'そ', 'ざ', 'じ', 'ず', 'ぜ', 'ぞ',
-                'サ', 'シ', 'ス', 'セ', 'ソ', 'ザ', 'ジ', 'ズ', 'ゼ', 'ゾ'],
-            'た' => ['た', 'ち', 'つ', 'て', 'と', 'だ', 'ぢ', 'づ', 'で', 'ど',
-                'タ', 'チ', 'ツ', 'テ', 'ト', 'ダ', 'ヂ', 'ヅ', 'デ', 'ド'],
-            'な' => ['な', 'に', 'ぬ', 'ね', 'の', 'ナ', 'ニ', 'ヌ', 'ネ', 'ノ'],
-            'は' => ['は', 'ひ', 'ふ', 'へ', 'ほ', 'ば', 'び', 'ぶ', 'べ', 'ぼ',
-                'ぱ', 'ぴ', 'ぷ', 'ぺ', 'ぽ',
-                'ハ', 'ヒ', 'フ', 'ヘ', 'ホ', 'バ', 'ビ', 'ブ', 'ベ', 'ボ',
-                'パ', 'ピ', 'プ', 'ペ', 'ポ'],
-            'ま' => ['ま', 'み', 'む', 'め', 'も', 'マ', 'ミ', 'ム', 'メ', 'モ'],
-            'や' => ['や', 'ゆ', 'よ', 'ヤ', 'ユ', 'ヨ'],
-            'ら' => ['ら', 'り', 'る', 'れ', 'ろ', 'ラ', 'リ', 'ル', 'レ', 'ロ'],
-            'わ' => ['わ', 'を', 'ん', 'ワ', 'ヲ', 'ン'],
-        ];
-
-        foreach ($kanaMap as $category => $chars) {
-            if (in_array($char, $chars)) {
-                return $category;
-            }
-        }
-
-        // 数字（0-9）
-        if (preg_match('/^[0-9]$/', $char)) {
-            return '0-9';
-        }
-
-        // その他（記号など）
-        return 'その他';
-    }
-
-    /**
-     * タイトルから頭文字カテゴリを取得
-     */
-    private function getFirstCharCategory(?string $title): ?string
-    {
-        if (empty($title)) {
-            return null;
-        }
-
-        $firstChar = mb_substr($title, 0, 1, 'UTF-8');
-        $firstChar = mb_strtoupper($firstChar, 'UTF-8');
-
-        return $this->categorizeFirstChar($firstChar);
+        return response()->json($result);
     }
 
     /**
