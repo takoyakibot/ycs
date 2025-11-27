@@ -310,16 +310,8 @@ function registerArchiveListComponent() {
                     // モバイル判定
                     this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
-                    // 自動再生設定を読み込み（デフォルトOFF、モバイルでは常にOFF）
-                    if (!this.isMobile) {
-                        const autoPlaySaved = localStorage.getItem('videoAutoPlay');
-                        if (autoPlaySaved !== null) {
-                            this.autoPlay = autoPlaySaved === 'true';
-                        } else {
-                            // 初回アクセス時はデフォルトOFF
-                            this.autoPlay = false;
-                        }
-                    }
+                    // 自動再生は常にOFF（ページ読み込み時にリセット）
+                    this.autoPlay = false;
 
                     // YouTube IFrame APIの読み込み
                     this.loadYouTubeAPI();
@@ -648,11 +640,6 @@ function registerArchiveListComponent() {
                     this.showVideoPlayer = false;
                     this.isPlaying = false;
                     this.currentVideoId = null;
-                },
-
-                // 自動再生設定の保存
-                saveAutoPlay() {
-                    localStorage.setItem('videoAutoPlay', this.autoPlay.toString());
                 },
 
                 // ドラッグ開始
