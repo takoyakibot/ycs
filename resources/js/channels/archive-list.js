@@ -1,5 +1,13 @@
 import { escapeHTML, formatDate } from '../utils.js';
 import toast from '../utils/toast.js';
+import { getYoutubeUrl, isValidVideoId } from '../utils/youtube.js';
+import {
+    getSpotifyUrl,
+    getAppleMusicUrl,
+    getYouTubeMusicUrl,
+    getAmazonMusicUrl,
+    getLineMusicUrl
+} from '../utils/music-services.js';
 
 // 報告タイプ定数
 const REPORT_TYPES = {
@@ -88,13 +96,11 @@ function registerArchiveListComponent() {
                 },
 
                 getYoutubeUrl(videoId, tsNum) {
-                    const safeVideoId = encodeURIComponent(videoId || '');
-                    const safeTsNum = parseInt(tsNum) || 0;
-                    return `https://youtu.be/${safeVideoId}?t=${safeTsNum}s`;
+                    return getYoutubeUrl(videoId, tsNum);
                 },
 
                 getArchiveUrl(videoId, tsNum) {
-                    return this.getYoutubeUrl(videoId, tsNum);
+                    return getYoutubeUrl(videoId, tsNum);
                 },
 
                 escapeHTML(str) {
@@ -447,48 +453,25 @@ function registerArchiveListComponent() {
                     }
                 },
 
-                // 配信サービスURL生成メソッド
+                // 配信サービスURL生成メソッド（ユーティリティ関数のラッパー）
                 getSpotifyUrl(song) {
-                    if (!song) return '';
-                    if (song.spotify_track_id) {
-                        return `https://open.spotify.com/track/${encodeURIComponent(song.spotify_track_id)}`;
-                    }
-                    const query = encodeURIComponent(`${song.title} ${song.artist}`);
-                    return `https://open.spotify.com/search/${query}`;
+                    return getSpotifyUrl(song);
                 },
 
                 getAppleMusicUrl(song) {
-                    if (!song) return '';
-                    const query = encodeURIComponent(`${song.title} ${song.artist}`);
-                    return `https://music.apple.com/jp/search?term=${query}`;
+                    return getAppleMusicUrl(song);
                 },
 
                 getYouTubeMusicUrl(song) {
-                    if (!song) return '';
-                    const query = encodeURIComponent(`${song.title} ${song.artist}`);
-                    return `https://music.youtube.com/search?q=${query}`;
+                    return getYouTubeMusicUrl(song);
                 },
 
                 getAmazonMusicUrl(song) {
-                    if (!song) return '';
-                    // URLに使えない特殊文字を除去し、スペースを+に変換
-                    const searchText = `${song.title} ${song.artist}`
-                        .replace(/[/\\?#%&=:@!$'()*+,;[\]{}|^`<>"]/g, ' ')  // 特殊文字をスペースに
-                        .trim()
-                        .replace(/\s+/g, '+');  // 連続スペースを+に
-                    return `https://music.amazon.co.jp/search/${searchText}`;
+                    return getAmazonMusicUrl(song);
                 },
 
                 getLineMusicUrl(song) {
-                    if (!song) return '';
-                    // URLに使えない特殊文字を除去してからエンコード
-                    const searchText = `${song.title} ${song.artist}`
-                        .replace(/[/\\?#%&=:@!$'()*+,;[\]{}|^`<>"]/g, ' ')
-                        .trim()
-                        .replace(/\s+/g, ' ');  // 連続スペースを1つに
-                    const query = encodeURIComponent(searchText);
-                    // LINE MUSICのwebappは /webapp/ パスを使用
-                    return `https://music.line.me/webapp/search/tracks?query=${query}`;
+                    return getLineMusicUrl(song);
                 },
 
                 // YouTube IFrame APIの読み込み
@@ -554,8 +537,7 @@ function registerArchiveListComponent() {
 
                 // 動画を読み込んで再生
                 loadAndPlayVideo(videoId, time = 0) {
-                    // YouTubeのvideoIDは11文字の英数字とハイフン、アンダースコア
-                    if (!videoId || !/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
+                    if (!isValidVideoId(videoId)) {
                         console.error('Invalid video ID:', videoId);
                         return;
                     }
