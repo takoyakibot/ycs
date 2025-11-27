@@ -519,8 +519,36 @@
              x-transition:leave-end="transform translate-y-full"
              class="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t-2 border-gray-300 dark:border-gray-600 shadow-lg z-50 px-4 py-3">
             <div class="max-w-7xl mx-auto">
-                <!-- ヘッダー: 楽曲タイトル / 閉じる -->
+                <!-- ヘッダー: 動画コントロール / 楽曲タイトル / 閉じる -->
                 <div class="flex items-center justify-between mb-2 gap-2">
+                    <!-- 動画コントロール -->
+                    <div class="flex items-center gap-2 flex-shrink-0">
+                        <!-- 自動再生チェック（モバイルでは非表示） -->
+                        <label x-show="!isMobile" class="hidden sm:inline-flex items-center gap-1 cursor-pointer select-none">
+                            <input type="checkbox"
+                                   x-model="autoPlay"
+                                   @change="saveAutoPlay()"
+                                   class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600">
+                            <span class="text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap">自動再生</span>
+                        </label>
+                        <!-- 再生/停止ボタン -->
+                        <button @click="togglePlayPause()"
+                                :disabled="!selectedTimestamp?.video_id"
+                                :class="!selectedTimestamp?.video_id ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-200 dark:hover:bg-gray-600'"
+                                class="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded text-xs transition-colors"
+                                :title="isPlaying ? '停止' : '再生'">
+                            <!-- 再生アイコン -->
+                            <svg x-show="!isPlaying" class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M8 5v14l11-7z"/>
+                            </svg>
+                            <!-- 停止アイコン -->
+                            <svg x-show="isPlaying" class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                            </svg>
+                            <span class="hidden sm:inline" x-text="isPlaying ? '停止' : '再生'"></span>
+                        </button>
+                    </div>
+                    <!-- 楽曲タイトル -->
                     <div class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate flex-1"
                          x-text="selectedSong ? `${selectedSong.title}${selectedSong.artist ? ' / ' + selectedSong.artist : ''}` : ''"></div>
                     <button @click="closePanel()"
@@ -611,6 +639,40 @@
                         </div>
                     </template>
                 </div>
+            </div>
+        </div>
+
+        <!-- PIP風動画プレイヤー -->
+        <div x-show="showVideoPlayer"
+             x-ref="videoPlayer"
+             x-transition:enter="transition ease-out duration-300"
+             x-transition:enter-start="opacity-0 scale-95"
+             x-transition:enter-end="opacity-100 scale-100"
+             x-transition:leave="transition ease-in duration-200"
+             x-transition:leave-start="opacity-100 scale-100"
+             x-transition:leave-end="opacity-0 scale-95"
+             class="fixed z-50 shadow-2xl rounded-lg overflow-hidden w-[320px] max-w-[calc(100vw-2rem)]"
+             :class="playerPosition.x === null ? (showDistributionPanel ? 'bottom-28 right-4' : 'bottom-4 right-4') : ''"
+             :style="getPlayerStyle()">
+            <!-- プレイヤーヘッダー（ドラッグ可能） -->
+            <div class="bg-gray-800 text-white px-2 py-1 flex items-center justify-between cursor-move select-none"
+                 @mousedown="startDrag($event)"
+                 @touchstart="startDrag($event)">
+                <span class="text-xs truncate flex-1"
+                      x-text="selectedSong ? `${selectedSong.title}${selectedSong.artist ? ' / ' + selectedSong.artist : ''}` : '動画プレビュー'"></span>
+                <button @click="closeVideoPlayer()"
+                        @mousedown.stop
+                        @touchstart.stop
+                        class="text-gray-400 hover:text-white p-1"
+                        aria-label="プレイヤーを閉じる">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <!-- YouTube Player -->
+            <div class="bg-black" style="aspect-ratio: 16/9;">
+                <div id="youtube-player"></div>
             </div>
         </div>
 

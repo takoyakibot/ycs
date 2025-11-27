@@ -45,6 +45,22 @@ function registerArchiveListComponent() {
                 showDistributionPanel: false,
                 panelDismissed: false,
 
+                // 動画プレイヤーの状態管理
+                autoPlay: false,
+                isMobile: false,
+                showVideoPlayer: false,
+                currentVideoId: null,
+                currentVideoTime: 0,
+                isPlaying: false,
+                playerReady: false,
+                youtubePlayer: null,
+                // ドラッグ機能用
+                isDragging: false,
+                playerPosition: { x: null, y: null },
+                dragOffset: { x: 0, y: 0 },
+                boundOnDrag: null,
+                boundStopDrag: null,
+
                 // computed property
                 get maxPage() {
                     if (!this.archives.total || !this.archives.per_page) return 1;
@@ -290,6 +306,23 @@ function registerArchiveListComponent() {
                     // 配信リンクパネルの設定を読み込み
                     const dismissed = localStorage.getItem('distributionPanelDismissed');
                     this.panelDismissed = dismissed === 'true';
+
+                    // モバイル判定
+                    this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+                    // 自動再生設定を読み込み（sessionStorageから、デフォルトOFF）
+                    if (!this.isMobile) {
+                        const autoPlaySaved = sessionStorage.getItem('videoAutoPlay');
+                        this.autoPlay = autoPlaySaved === 'true';
+                    }
+
+                    // YouTube IFrame APIの読み込み
+                    this.loadYouTubeAPI();
+
+                    // ページ離脱時のクリーンアップ
+                    window.addEventListener('beforeunload', () => {
+                        this.destroyPlayer();
+                    });
                 },
 
                 // 報告モーダルを開く
@@ -371,6 +404,11 @@ function registerArchiveListComponent() {
                     if (!this.panelDismissed) {
                         this.showDistributionPanel = true;
                     }
+
+                    // 自動再生がONの場合、動画を読み込んで再生
+                    if (this.autoPlay && timestamp && timestamp.video_id) {
+                        this.loadAndPlayVideo(timestamp.video_id, timestamp.ts_num || 0);
+                    }
                 },
 
                 // テキストから検索用の疑似songオブジェクトを作成して選択
@@ -387,6 +425,11 @@ function registerArchiveListComponent() {
                     this.selectedTimestamp = timestamp;
                     if (!this.panelDismissed) {
                         this.showDistributionPanel = true;
+                    }
+
+                    // 自動再生がONの場合、動画を読み込んで再生
+                    if (this.autoPlay && timestamp && timestamp.video_id) {
+                        this.loadAndPlayVideo(timestamp.video_id, timestamp.ts_num || 0);
                     }
                 },
 
@@ -446,6 +489,257 @@ function registerArchiveListComponent() {
                     const query = encodeURIComponent(searchText);
                     // LINE MUSICのwebappは /webapp/ パスを使用
                     return `https://music.line.me/webapp/search/tracks?query=${query}`;
+                },
+
+                // YouTube IFrame APIの読み込み
+                loadYouTubeAPI() {
+                    if (window.YT && window.YT.Player) {
+                        this.playerReady = true;
+                        return;
+                    }
+
+                    // コールバック配列を初期化（複数コンポーネント対応）
+                    if (!window.youtubeAPIReadyCallbacks) {
+                        window.youtubeAPIReadyCallbacks = [];
+                        window.onYouTubeIframeAPIReady = () => {
+                            window.youtubeAPIReadyCallbacks.forEach(cb => cb());
+                        };
+                    }
+
+                    // コールバックを登録
+                    window.youtubeAPIReadyCallbacks.push(() => {
+                        this.playerReady = true;
+                    });
+
+                    // APIがまだ読み込まれていない場合
+                    if (!document.querySelector('script[src*="youtube.com/iframe_api"]')) {
+                        const tag = document.createElement('script');
+                        tag.src = 'https://www.youtube.com/iframe_api';
+                        tag.onerror = () => {
+                            console.error('YouTube APIの読み込みに失敗しました');
+                            toast.error('動画プレイヤーの読み込みに失敗しました');
+                        };
+                        const firstScriptTag = document.getElementsByTagName('script')[0];
+                        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+                    }
+                },
+
+                // 動画プレイヤーの初期化
+                initPlayer() {
+                    if (!this.playerReady || this.youtubePlayer) return;
+
+                    const playerElement = document.getElementById('youtube-player');
+                    if (!playerElement) return;
+
+                    this.youtubePlayer = new YT.Player('youtube-player', {
+                        height: '180',
+                        width: '320',
+                        playerVars: {
+                            'autoplay': 0,
+                            'controls': 1,
+                            'rel': 0,
+                            'modestbranding': 1,
+                            'origin': window.location.origin
+                        },
+                        events: {
+                            'onReady': () => {
+                                // プレイヤー準備完了
+                            },
+                            'onStateChange': (event) => {
+                                this.isPlaying = event.data === YT.PlayerState.PLAYING;
+                            }
+                        }
+                    });
+                },
+
+                // 動画を読み込んで再生
+                loadAndPlayVideo(videoId, time = 0) {
+                    // YouTubeのvideoIDは11文字の英数字とハイフン、アンダースコア
+                    if (!videoId || !/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
+                        console.error('Invalid video ID:', videoId);
+                        return;
+                    }
+
+                    this.currentVideoId = videoId;
+                    this.currentVideoTime = time;
+                    this.showVideoPlayer = true;
+
+                    // プレイヤーが既に初期化されている場合
+                    if (this.youtubePlayer && this.youtubePlayer.loadVideoById) {
+                        this.youtubePlayer.loadVideoById({
+                            videoId: videoId,
+                            startSeconds: time
+                        });
+                        this.isPlaying = true;
+                    } else {
+                        // プレイヤーがまだ初期化されていない場合、次のtickで初期化を試みる
+                        this.$nextTick(() => {
+                            if (!this.youtubePlayer && this.playerReady) {
+                                this.initPlayer();
+                                // 少し待ってから動画を読み込む
+                                setTimeout(() => {
+                                    if (this.youtubePlayer && this.youtubePlayer.loadVideoById) {
+                                        this.youtubePlayer.loadVideoById({
+                                            videoId: videoId,
+                                            startSeconds: time
+                                        });
+                                        this.isPlaying = true;
+                                    }
+                                }, 500);
+                            }
+                        });
+                    }
+                },
+
+                // 再生/一時停止の切り替え
+                togglePlayPause() {
+                    // 再生中の場合は一時停止
+                    if (this.isPlaying) {
+                        if (this.youtubePlayer) {
+                            this.youtubePlayer.pauseVideo();
+                        }
+                        this.isPlaying = false;
+                        return;
+                    }
+
+                    // 停止中の場合
+                    if (this.selectedTimestamp && this.selectedTimestamp.video_id) {
+                        const selectedVideoId = this.selectedTimestamp.video_id;
+                        const selectedTime = this.selectedTimestamp.ts_num || 0;
+
+                        // 選択中のタイムスタンプが現在の動画と異なる場合は新しい動画を読み込み
+                        if (this.currentVideoId !== selectedVideoId || this.currentVideoTime !== selectedTime) {
+                            this.loadAndPlayVideo(selectedVideoId, selectedTime);
+                        } else {
+                            // 同じ動画の場合は再生を再開
+                            if (this.youtubePlayer) {
+                                this.youtubePlayer.playVideo();
+                                this.isPlaying = true;
+                            } else {
+                                // プレイヤーがない場合は読み込み・再生
+                                this.loadAndPlayVideo(selectedVideoId, selectedTime);
+                            }
+                        }
+                    }
+                },
+
+                // 動画プレイヤーを閉じる
+                closeVideoPlayer() {
+                    if (this.youtubePlayer) {
+                        this.youtubePlayer.stopVideo();
+                    }
+                    this.showVideoPlayer = false;
+                    this.isPlaying = false;
+                    this.currentVideoId = null;
+                    this.resetPlayerPosition();
+                },
+
+                // プレイヤーの破棄（メモリリーク防止）
+                destroyPlayer() {
+                    if (this.youtubePlayer) {
+                        this.youtubePlayer.destroy();
+                        this.youtubePlayer = null;
+                    }
+                    this.showVideoPlayer = false;
+                    this.isPlaying = false;
+                    this.currentVideoId = null;
+                },
+
+                // 自動再生設定の保存（sessionStorage）
+                saveAutoPlay() {
+                    sessionStorage.setItem('videoAutoPlay', this.autoPlay.toString());
+                },
+
+                // ドラッグ開始
+                startDrag(event) {
+                    // タッチイベントとマウスイベントの両方に対応
+                    const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+                    const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+
+                    const playerEl = this.$refs.videoPlayer;
+                    if (!playerEl) return;
+
+                    const rect = playerEl.getBoundingClientRect();
+                    this.isDragging = true;
+                    this.dragOffset = {
+                        x: clientX - rect.left,
+                        y: clientY - rect.top
+                    };
+
+                    // バインドした関数を保存（removeEventListenerで同じ参照を使うため）
+                    this.boundOnDrag = this.onDrag.bind(this);
+                    this.boundStopDrag = this.stopDrag.bind(this);
+
+                    // イベントリスナーを追加
+                    document.addEventListener('mousemove', this.boundOnDrag);
+                    document.addEventListener('mouseup', this.boundStopDrag);
+                    document.addEventListener('touchmove', this.boundOnDrag, { passive: false });
+                    document.addEventListener('touchend', this.boundStopDrag);
+
+                    event.preventDefault();
+                },
+
+                // ドラッグ中
+                onDrag(event) {
+                    if (!this.isDragging) return;
+
+                    const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+                    const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+
+                    const playerEl = this.$refs.videoPlayer;
+                    if (!playerEl) return;
+
+                    const playerWidth = playerEl.offsetWidth;
+                    const playerHeight = playerEl.offsetHeight;
+
+                    // 画面内に収まるように位置を計算
+                    let newX = clientX - this.dragOffset.x;
+                    let newY = clientY - this.dragOffset.y;
+
+                    // 画面外にはみ出さないように制限
+                    newX = Math.max(0, Math.min(newX, window.innerWidth - playerWidth));
+                    newY = Math.max(0, Math.min(newY, window.innerHeight - playerHeight));
+
+                    this.playerPosition = { x: newX, y: newY };
+
+                    event.preventDefault();
+                },
+
+                // ドラッグ終了
+                stopDrag() {
+                    this.isDragging = false;
+
+                    // 保存した関数参照を使ってイベントリスナーを削除
+                    if (this.boundOnDrag) {
+                        document.removeEventListener('mousemove', this.boundOnDrag);
+                        document.removeEventListener('touchmove', this.boundOnDrag);
+                    }
+                    if (this.boundStopDrag) {
+                        document.removeEventListener('mouseup', this.boundStopDrag);
+                        document.removeEventListener('touchend', this.boundStopDrag);
+                    }
+
+                    // 参照をクリア
+                    this.boundOnDrag = null;
+                    this.boundStopDrag = null;
+                },
+
+                // プレイヤーの位置スタイルを取得
+                getPlayerStyle() {
+                    if (this.playerPosition.x !== null && this.playerPosition.y !== null) {
+                        return {
+                            left: `${this.playerPosition.x}px`,
+                            top: `${this.playerPosition.y}px`,
+                            right: 'auto',
+                            bottom: 'auto'
+                        };
+                    }
+                    return {};
+                },
+
+                // プレイヤー位置をリセット
+                resetPlayerPosition() {
+                    this.playerPosition = { x: null, y: null };
                 }
             };
         });
