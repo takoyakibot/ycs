@@ -2,11 +2,11 @@
 
 namespace App\Services;
 
+use App\Helpers\TextNormalizer;
 use App\Models\Channel;
 use App\Models\TimestampReport;
 use App\Models\TimestampSongMapping;
 use App\Models\TsItem;
-use App\Utils\TextNormalizer;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 
