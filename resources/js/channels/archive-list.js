@@ -591,23 +591,33 @@ function registerArchiveListComponent() {
 
                 // 再生/一時停止の切り替え
                 togglePlayPause() {
-                    if (!this.youtubePlayer) {
-                        // プレイヤーがない場合は、現在選択中のタイムスタンプの動画を再生
-                        if (this.selectedTimestamp && this.selectedTimestamp.video_id) {
-                            this.loadAndPlayVideo(
-                                this.selectedTimestamp.video_id,
-                                this.selectedTimestamp.ts_num || 0
-                            );
+                    // 再生中の場合は一時停止
+                    if (this.isPlaying) {
+                        if (this.youtubePlayer) {
+                            this.youtubePlayer.pauseVideo();
                         }
+                        this.isPlaying = false;
                         return;
                     }
 
-                    if (this.isPlaying) {
-                        this.youtubePlayer.pauseVideo();
-                        this.isPlaying = false;
-                    } else {
-                        this.youtubePlayer.playVideo();
-                        this.isPlaying = true;
+                    // 停止中の場合
+                    if (this.selectedTimestamp && this.selectedTimestamp.video_id) {
+                        const selectedVideoId = this.selectedTimestamp.video_id;
+                        const selectedTime = this.selectedTimestamp.ts_num || 0;
+
+                        // 選択中のタイムスタンプが現在の動画と異なる場合は新しい動画を読み込み
+                        if (this.currentVideoId !== selectedVideoId || this.currentVideoTime !== selectedTime) {
+                            this.loadAndPlayVideo(selectedVideoId, selectedTime);
+                        } else {
+                            // 同じ動画の場合は再生を再開
+                            if (this.youtubePlayer) {
+                                this.youtubePlayer.playVideo();
+                                this.isPlaying = true;
+                            } else {
+                                // プレイヤーがない場合は読み込み・再生
+                                this.loadAndPlayVideo(selectedVideoId, selectedTime);
+                            }
+                        }
                     }
                 },
 
