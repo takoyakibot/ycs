@@ -628,9 +628,8 @@ function registerArchiveListComponent() {
                     this.currentVideoId = null;
                 },
 
-                // 自動再生の切り替え
-                toggleAutoPlay() {
-                    this.autoPlay = !this.autoPlay;
+                // 自動再生設定の保存
+                saveAutoPlay() {
                     localStorage.setItem('videoAutoPlay', this.autoPlay.toString());
                 }
             };
