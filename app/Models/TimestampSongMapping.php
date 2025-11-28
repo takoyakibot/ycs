@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\SimilarityService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -68,9 +69,10 @@ class TimestampSongMapping extends Model
         // 類似度計算
         $best = null;
         $bestScore = 0;
+        $similarityService = app(SimilarityService::class);
 
         foreach ($candidates as $candidate) {
-            $similarity = static::calculateSimilarity($normalized, $candidate->normalized_text);
+            $similarity = $similarityService->calculateSimilarity($normalized, $candidate->normalized_text);
             if ($similarity > $bestScore && $similarity >= $threshold) {
                 $bestScore = $similarity;
                 $best = $candidate;
@@ -78,24 +80,5 @@ class TimestampSongMapping extends Model
         }
 
         return $best;
-    }
-
-    /**
-     * 2つのテキストの類似度を計算（0.0〜1.0）
-     */
-    private static function calculateSimilarity($str1, $str2)
-    {
-        // Levenshtein距離ベースの類似度
-        $len1 = mb_strlen($str1);
-        $len2 = mb_strlen($str2);
-
-        if ($len1 === 0 || $len2 === 0) {
-            return 0.0;
-        }
-
-        $distance = levenshtein($str1, $str2);
-        $maxLen = max($len1, $len2);
-
-        return 1.0 - ($distance / $maxLen);
     }
 }

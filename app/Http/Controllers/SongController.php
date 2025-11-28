@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Helpers\QueryHelper;
 use App\Helpers\TextNormalizer;
+use App\Helpers\ValidationHelper;
 use App\Http\Requests\FetchTimestampsRequest;
 use App\Http\Requests\StoreSongRequest;
 use App\Models\Song;
@@ -49,14 +51,7 @@ class SongController extends Controller
 
         $perPage = $validated['per_page'] ?? 50;
         $search = $validated['search'] ?? '';
-        // Axios sends boolean false as "false" in query params, which Laravel's
-        // boolean validation rule doesn't accept. Use filter_var to handle both
-        // true booleans and string representations.
-        $unlinkedOnly = filter_var(
-            $validated['unlinked_only'] ?? false,
-            FILTER_VALIDATE_BOOLEAN,
-            FILTER_NULL_ON_FAILURE
-        ) ?? false;
+        $unlinkedOnly = ValidationHelper::parseBoolean($validated['unlinked_only'] ?? false);
         $currentPage = $validated['page'] ?? 1;
 
         $query = TsItem::with(['archive'])
@@ -73,8 +68,7 @@ class SongController extends Controller
 
         // 検索条件
         if ($search) {
-            // LIKEの特殊文字をエスケープ
-            $escapedSearch = addcslashes($search, '%_\\');
+            $escapedSearch = QueryHelper::escapeLikeString($search);
             $query->where('text', 'like', "%{$escapedSearch}%");
         }
 
@@ -168,8 +162,7 @@ class SongController extends Controller
         $query = Song::query();
 
         if ($search) {
-            // LIKEの特殊文字をエスケープ
-            $escapedSearch = addcslashes($search, '%_\\');
+            $escapedSearch = QueryHelper::escapeLikeString($search);
             $query->where(function ($q) use ($escapedSearch) {
                 $q->where('title', 'like', "%{$escapedSearch}%")
                     ->orWhere('artist', 'like', "%{$escapedSearch}%");

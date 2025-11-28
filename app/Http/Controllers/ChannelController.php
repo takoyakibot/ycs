@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Helpers\TextNormalizer;
+use App\Helpers\ValidationHelper;
 use App\Models\Channel;
 use App\Models\TimestampSongMapping;
 use App\Models\TsItem;
@@ -124,7 +125,7 @@ class ChannelController extends Controller
                             $tsItem['song'] = [
                                 'title' => $mapping->song->title,
                                 'artist' => $mapping->song->artist,
-                                'spotify_track_id' => $this->validateSpotifyTrackId($mapping->song->spotify_track_id),
+                                'spotify_track_id' => ValidationHelper::validateSpotifyTrackId($mapping->song->spotify_track_id),
                             ];
                         } else {
                             $tsItem['song'] = null;
@@ -188,23 +189,6 @@ class ChannelController extends Controller
             ->whereNotNull('text')
             ->where('text', '!=', '')
             ->where('is_display', 1);
-    }
-
-    /**
-     * Spotify Track IDの妥当性を検証
-     */
-    private function validateSpotifyTrackId(?string $trackId): ?string
-    {
-        if (! $trackId) {
-            return null;
-        }
-
-        // Spotify track IDsは22文字の英数字
-        if (preg_match('/^[a-zA-Z0-9]{22}$/', $trackId)) {
-            return $trackId;
-        }
-
-        return null;
     }
 
     /**
