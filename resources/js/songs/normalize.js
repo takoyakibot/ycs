@@ -4,7 +4,7 @@ import { CONSTANTS } from './utils/constants.js';
 import { timestampApiService } from './services/TimestampApiService.js';
 import { songApiService } from './services/SongApiService.js';
 import { SimilarSongsDialog } from './components/SimilarSongsDialog.js';
-import { Pagination } from './components/Pagination.js';
+import { Pagination } from '../shared/components/Pagination.js';
 
 // axiosの設定: クロスオリジンリクエストでクッキーを送信
 axios.defaults.withCredentials = true;
