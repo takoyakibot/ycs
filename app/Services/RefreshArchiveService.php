@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\Archive;
-use App\Models\ChangeList;
 use App\Models\Channel;
 use App\Models\TsItem;
 use App\Models\User;
@@ -13,11 +12,20 @@ use Illuminate\Support\Facades\DB;
 
 class RefreshArchiveService
 {
-    protected $youtubeService;
+    protected YouTubeService $youtubeService;
 
-    public function __construct(YouTubeService $youtubeService)
-    {
+    protected ChangeListService $changeListService;
+
+    protected ChannelQueryService $channelQueryService;
+
+    public function __construct(
+        YouTubeService $youtubeService,
+        ChangeListService $changeListService,
+        ChannelQueryService $channelQueryService
+    ) {
         $this->youtubeService = $youtubeService;
+        $this->changeListService = $changeListService;
+        $this->channelQueryService = $channelQueryService;
     }
 
     public function cliLogin(string $userId): void
@@ -118,19 +126,13 @@ class RefreshArchiveService
             }
 
             // 4.2.履歴情報から、タイムスタンプの表示非表示を反映させる
-            // change_list.is_displayが登録されている値と異なる場合、ts_itemsに反映
-            $this->applyChangeListToTsItems($channel->channel_id);
+            $this->changeListService->applyChangeListToTsItems($channel->channel_id);
 
             // 4.3.履歴情報から、動画の表示非表示を反映させる
-            // change_list.is_displayが登録されている値と異なる場合、archivesに反映
-            $this->applyChangeListToArchives($channel->channel_id);
+            $this->changeListService->applyChangeListToArchives($channel->channel_id);
 
             // 4.4.不要な履歴は削除する
-            // archivesとts_itemsを外部結合したときに、結合先が存在しないchange_listを削除、条件は以下
-            // a. タイムスタンプ(コメント<>null)でts_itemsに紐づかないレコード
-            // b. アーカイブ(コメント==null)でarvhivesに紐づかないレコード
-            // c. ts_itemsにもarchivesにも紐づかないレコード
-            $this->deleteObsoleteChangeLists($channel->channel_id);
+            $this->changeListService->deleteObsoleteChangeLists($channel->channel_id);
         });
 
         return count($rtn_archives);
@@ -138,13 +140,8 @@ class RefreshArchiveService
 
     /**
      * コメントを取得して、現在登録されているコメントを削除して再登録
-     *
-     * @param  mixed  $videoId
-     * @return void
-     *
-     * @throws \Exception
      */
-    public function refreshTimeStampsFromComments($videoId)
+    public function refreshTimeStampsFromComments(string $videoId): void
     {
         try {
             $ts_items = $this->youtubeService->getTimeStampsFromComments($videoId);
@@ -162,174 +159,21 @@ class RefreshArchiveService
 
     public function getOldestUpdatedChannel(): Channel
     {
-        $archive = Archive::orderBy('created_at', 'asc')->firstOrFail();
-        $channel = Channel::where('channel_id', '=', $archive->channel_id)->firstOrFail();
-
-        return $channel;
+        return $this->channelQueryService->getOldestUpdatedChannel();
     }
 
     public function getChannelCount(): int
     {
-        return Channel::count();
+        return $this->channelQueryService->getChannelCount();
     }
 
     public function getOldestUpdatedChannelForUser(int $userId): ?Channel
     {
-        $archive = Archive::whereHas('channel', function ($query) use ($userId) {
-            $query->where('user_id', $userId);
-        })
-            ->orderBy('created_at', 'asc')
-            ->first();
-
-        if (! $archive) {
-            return null;
-        }
-
-        return Channel::where('channel_id', '=', $archive->channel_id)->first();
+        return $this->channelQueryService->getOldestUpdatedChannelForUser($userId);
     }
 
     public function getChannelCountForUser(int $userId): int
     {
-        return Channel::where('user_id', $userId)->count();
-    }
-
-    /**
-     * change_listの情報をts_itemsに反映
-     *
-     * Note: This method should be called within a database transaction.
-     * Uses optimized MySQL query for production, Eloquent for testing.
-     */
-    protected function applyChangeListToTsItems(string $channelId): void
-    {
-        $driver = DB::getDriverName();
-
-        if ($driver === 'mysql') {
-            // Use optimized MySQL query for production
-            DB::statement('
-                UPDATE ts_items t1
-                INNER JOIN change_list t2
-                  ON t2.video_id = t1.video_id
-                  AND t2.comment_id = t1.comment_id
-                SET t1.is_display = t2.is_display
-                WHERE t1.is_display <> t2.is_display
-                  AND t2.channel_id = ?
-            ', [$channelId]);
-        } else {
-            // Use Eloquent for SQLite/PostgreSQL (testability)
-            ChangeList::where('channel_id', $channelId)
-                ->whereNotNull('comment_id')
-                ->chunk(100, function ($changeLists) {
-                    foreach ($changeLists as $changeList) {
-                        TsItem::where('video_id', $changeList->video_id)
-                            ->where('comment_id', $changeList->comment_id)
-                            ->where('is_display', '!=', $changeList->is_display)
-                            ->update(['is_display' => $changeList->is_display]);
-                    }
-                });
-        }
-    }
-
-    /**
-     * change_listの情報をarchivesに反映
-     *
-     * Note: This method should be called within a database transaction.
-     * Uses optimized MySQL query for production, Eloquent for testing.
-     */
-    protected function applyChangeListToArchives(string $channelId): void
-    {
-        $driver = DB::getDriverName();
-
-        if ($driver === 'mysql') {
-            // Use optimized MySQL query for production
-            DB::statement('
-                UPDATE archives t1
-                INNER JOIN change_list t2
-                  ON t2.video_id = t1.video_id
-                  AND t2.comment_id IS NULL
-                SET t1.is_display = t2.is_display
-                WHERE t1.is_display <> t2.is_display
-                  AND t1.channel_id = ?
-            ', [$channelId]);
-        } else {
-            // Use Eloquent for SQLite/PostgreSQL (testability)
-            ChangeList::where('channel_id', $channelId)
-                ->whereNull('comment_id')
-                ->chunk(100, function ($changeLists) {
-                    foreach ($changeLists as $changeList) {
-                        Archive::where('video_id', $changeList->video_id)
-                            ->where('is_display', '!=', $changeList->is_display)
-                            ->update(['is_display' => $changeList->is_display]);
-                    }
-                });
-        }
-    }
-
-    /**
-     * 不要なchange_listレコードを削除
-     * 以下の条件に該当するレコードを削除:
-     * a. タイムスタンプ(comment_id IS NOT NULL)でts_itemsに紐づかないレコード
-     * b. アーカイブ(comment_id IS NULL)でarchivesに紐づかないレコード
-     * c. ts_itemsにもarchivesにも紐づかないレコード
-     *
-     * Note: This method should be called within a database transaction.
-     * Uses optimized MySQL query for production, Eloquent for testing.
-     */
-    protected function deleteObsoleteChangeLists(string $channelId): void
-    {
-        $driver = DB::getDriverName();
-
-        if ($driver === 'mysql') {
-            // Use optimized MySQL query for production
-            DB::statement('
-                DELETE t1 FROM change_list t1
-                LEFT JOIN ts_items t2 ON t2.video_id = t1.video_id AND t2.comment_id = t1.comment_id
-                LEFT JOIN archives t3 ON t3.video_id = t1.video_id AND t1.comment_id IS NULL
-                WHERE t1.channel_id = ?
-                    AND
-                    (
-                        (
-                            t2.id IS NULL AND t1.comment_id IS NOT NULL
-                        )
-                        OR (
-                            t3.id IS NULL AND t1.comment_id IS NULL
-                        )
-                        OR (
-                            t2.id IS NULL AND t3.id IS NULL
-                        )
-                    )
-            ', [$channelId]);
-        } else {
-            // Use Eloquent for SQLite/PostgreSQL (testability)
-            $idsToDelete = [];
-
-            ChangeList::where('channel_id', $channelId)
-                ->chunk(100, function ($changeLists) use (&$idsToDelete) {
-                    foreach ($changeLists as $changeList) {
-                        if ($changeList->comment_id !== null) {
-                            // タイムスタンプの場合: ts_itemsに紐づくかチェック
-                            $tsItemExists = TsItem::where('video_id', $changeList->video_id)
-                                ->where('comment_id', $changeList->comment_id)
-                                ->exists();
-
-                            if (! $tsItemExists) {
-                                $idsToDelete[] = $changeList->id;
-                            }
-                        } else {
-                            // アーカイブの場合: archivesに紐づくかチェック
-                            $archiveExists = Archive::where('video_id', $changeList->video_id)
-                                ->exists();
-
-                            if (! $archiveExists) {
-                                $idsToDelete[] = $changeList->id;
-                            }
-                        }
-                    }
-                });
-
-            // Bulk delete for better performance
-            if (! empty($idsToDelete)) {
-                ChangeList::whereIn('id', $idsToDelete)->delete();
-            }
-        }
+        return $this->channelQueryService->getChannelCountForUser($userId);
     }
 }
