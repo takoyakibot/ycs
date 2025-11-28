@@ -6,6 +6,9 @@ use App\Helpers\QueryHelper;
 use App\Helpers\TextNormalizer;
 use App\Helpers\ValidationHelper;
 use App\Http\Requests\FetchTimestampsRequest;
+use App\Http\Requests\LinkTimestampRequest;
+use App\Http\Requests\MarkAsNotSongRequest;
+use App\Http\Requests\NormalizedTextRequest;
 use App\Http\Requests\StoreSongRequest;
 use App\Models\Song;
 use App\Models\TimestampSongMapping;
@@ -321,12 +324,9 @@ class SongController extends Controller
     /**
      * タイムスタンプと楽曲を紐づける（マッピングを作成）
      */
-    public function linkTimestamp(Request $request)
+    public function linkTimestamp(LinkTimestampRequest $request)
     {
-        $validated = $request->validate([
-            'normalized_text' => 'required|string',
-            'song_id' => 'required|string|exists:songs,id',
-        ]);
+        $validated = $request->validated();
 
         $this->songMappingService->linkTimestamp($validated['normalized_text'], $validated['song_id']);
 
@@ -336,12 +336,9 @@ class SongController extends Controller
     /**
      * タイムスタンプを「楽曲ではない」とマーク
      */
-    public function markAsNotSong(Request $request)
+    public function markAsNotSong(MarkAsNotSongRequest $request)
     {
-        $validated = $request->validate([
-            'normalized_text' => 'nullable|string|required_without:text',
-            'text' => 'nullable|string|required_without:normalized_text',
-        ]);
+        $validated = $request->validated();
 
         // textが渡された場合は正規化する
         $normalizedText = $validated['normalized_text'] ?? TextNormalizer::normalize($validated['text']);
@@ -354,11 +351,9 @@ class SongController extends Controller
     /**
      * 「楽曲ではない」フラグを解除
      */
-    public function unmarkAsNotSong(Request $request)
+    public function unmarkAsNotSong(NormalizedTextRequest $request)
     {
-        $validated = $request->validate([
-            'normalized_text' => 'required|string',
-        ]);
+        $validated = $request->validated();
 
         $this->songMappingService->unmarkAsNotSong($validated['normalized_text']);
 
@@ -368,11 +363,9 @@ class SongController extends Controller
     /**
      * マッピングを解除
      */
-    public function unlinkTimestamp(Request $request)
+    public function unlinkTimestamp(NormalizedTextRequest $request)
     {
-        $validated = $request->validate([
-            'normalized_text' => 'required|string',
-        ]);
+        $validated = $request->validated();
 
         $this->songMappingService->unlinkTimestamp($validated['normalized_text']);
 

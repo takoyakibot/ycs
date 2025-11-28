@@ -3,6 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Exceptions\NotFoundException;
+use App\Http\Requests\EditTimestampsRequest;
+use App\Http\Requests\FetchCommentsRequest;
+use App\Http\Requests\ToggleDisplayRequest;
 use App\Models\Archive;
 use App\Models\ChangeList;
 use App\Models\Channel;
@@ -156,19 +159,16 @@ class ManageController extends Controller
 
     // 動画の表示非表示切り替え
     // comment_id = null の場合に動画と判断する
-    public function toggleDisplay(Request $request)
+    public function toggleDisplay(ToggleDisplayRequest $request)
     {
-        $request->validate([
-            'id' => ['required', 'string'],
-            'is_display' => ['required', 'in:0,1'],
-        ]);
+        $validated = $request->validated();
 
-        $newDisplay = DB::transaction(function () use ($request) {
-            $new_display = ($request->is_display === '1') ? '0' : '1';
+        $newDisplay = DB::transaction(function () use ($validated) {
+            $new_display = ($validated['is_display'] === '1') ? '0' : '1';
             // archivesとchange_listを更新
-            // Archive::where('id', $request->id)->update(['is_display' => $new_display]);
+            // Archive::where('id', $validated['id'])->update(['is_display' => $new_display]);
             // return response()->json($new_display);
-            $archive = Archive::findOrFail($request->id);
+            $archive = Archive::findOrFail($validated['id']);
             $archive->is_display = $new_display;
             $archive->save();
             ChangeList::updateOrCreate(
@@ -186,12 +186,10 @@ class ManageController extends Controller
         return response()->json($newDisplay);
     }
 
-    public function fetchComments(Request $request)
+    public function fetchComments(FetchCommentsRequest $request)
     {
-        $request->validate([
-            'id' => ['required', 'string'],
-        ]);
-        $videoId = Archive::findOrFail($request->id, ['video_id'])->video_id;
+        $validated = $request->validated();
+        $videoId = Archive::findOrFail($validated['id'], ['video_id'])->video_id;
         DB::transaction(function () use ($videoId) {
             // TODO:概要欄の再取得が現状不可能 日々の更新ができるようになれば勝手に更新されるはずなので問題ない？
             $this->refreshArchiveService->refreshTimeStampsFromComments($videoId);
@@ -208,13 +206,9 @@ class ManageController extends Controller
      *
      * @return \Illuminate\Http\JsonResponse
      */
-    public function editTimestamps(Request $request)
+    public function editTimestamps(EditTimestampsRequest $request)
     {
-        $validatedData = $request->validate([
-            '*.id' => 'required|string|exists:ts_items,id',
-            '*.comment_id' => 'required|string|exists:ts_items,comment_id',
-            '*.is_display' => 'required|boolean',
-        ]);
+        $validatedData = $request->validated();
         DB::transaction(function () use ($validatedData) {
             // リクエストで渡されたコメントIDに紐づくarchiveを取得
             $commentIds = array_column($validatedData, 'comment_id');
