@@ -191,7 +191,8 @@ class ManageController extends Controller
         $validated = $request->validated();
         $videoId = Archive::findOrFail($validated['id'], ['video_id'])->video_id;
         DB::transaction(function () use ($videoId) {
-            // TODO:概要欄の再取得が現状不可能 日々の更新ができるようになれば勝手に更新されるはずなので問題ない？
+            // コメント欄のタイムスタンプのみ再取得
+            // 概要欄のタイムスタンプはrefreshArchives()でアーカイブ更新時に自動取得される
             $this->refreshArchiveService->refreshTimeStampsFromComments($videoId);
         });
         $ts_items = TsItem::where('video_id', $videoId)->orderBy('comment_id')->get();

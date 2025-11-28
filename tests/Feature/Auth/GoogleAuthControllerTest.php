@@ -45,9 +45,8 @@ class GoogleAuthControllerTest extends TestCase
         $this->assertEquals('test', $user->name);
         $this->assertEquals('test@example.com', $user->email);
 
-        // email_verified_atが設定されていることを確認
-        // TODO: email_verified_atがnullになる問題を調査
-        // $this->assertNotNull($user->email_verified_at);
+        // email_verified_atが設定されていることを確認（Google認証済みならメール認証も済みとみなす）
+        $this->assertNotNull($user->email_verified_at);
 
         // ログインしてHOMEにリダイレクトされることを確認
         $response->assertRedirect('/manage');

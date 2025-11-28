@@ -41,6 +41,7 @@ class User extends Authenticatable
         'google_token',
         'google_refresh_token',
         'avatar',
+        'email_verified_at',
     ];
 
     /**
