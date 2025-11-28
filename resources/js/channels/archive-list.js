@@ -8,15 +8,9 @@ import {
     getAmazonMusicUrl,
     getLineMusicUrl
 } from '../utils/music-services.js';
-
-// 報告タイプ定数
-const REPORT_TYPES = {
-    WRONG_SONG: 'wrong_song',
-    NOT_SONG: 'not_song',
-    NOT_TIMESTAMP: 'not_timestamp',
-    PROBLEM: 'problem',
-    OTHER: 'other'
-};
+import { REPORT_TYPES, MOBILE_REGEX, YOUTUBE_PLAYER_CONFIG } from './utils/constants.js';
+import { ChannelApiService } from './services/ChannelApiService.js';
+import { ReportService } from './services/ReportService.js';
 
 /**
  * アーカイブ一覧とタイムスタンプ管理コンポーネント
@@ -129,29 +123,10 @@ function registerArchiveListComponent() {
                         this.loading = true;
                         this.error = null;
 
-                        const params = new URLSearchParams({
-                            page: page,
-                            per_page: 50
-                        });
-
-                        if (search) {
-                            params.set('search', search);
-                        }
-
-                        if (index) {
-                            params.set('index', index);
-                        }
-
-                        const response = await fetch(`/api/channels/${this.channel.handle}/timestamps?${params}`);
-                        if (!response.ok) throw new Error('タイムスタンプの取得に失敗しました');
-
-                        const data = await response.json();
-
-                        const parsedPage = parseInt(data.current_page, 10);
-                        data.current_page = Number.isNaN(parsedPage) ? 1 : parsedPage;
-
-                        const parsedLastPage = parseInt(data.last_page, 10);
-                        data.last_page = Number.isNaN(parsedLastPage) ? 1 : parsedLastPage;
+                        const data = await ChannelApiService.fetchTimestamps(
+                            this.channel.handle,
+                            { page, per_page: 50, search, index }
+                        );
 
                         this.timestamps = data;
                         this.currentTimestampPage = page;
@@ -183,10 +158,7 @@ function registerArchiveListComponent() {
 
                 downloadTimestamps() {
                     try {
-                        // ダウンロード用URLを生成
-                        const url = `/api/channels/${this.channel.handle}/timestamps/download`;
-
-                        // リンクを作成してクリック（サーバー側のファイル名を使用）
+                        const url = ChannelApiService.getDownloadUrl(this.channel.handle);
                         const a = document.createElement('a');
                         a.href = url;
                         document.body.appendChild(a);
@@ -203,34 +175,27 @@ function registerArchiveListComponent() {
                 updateURL() {
                     const params = new URLSearchParams();
 
-                    // Only add 'view' parameter when not on default tab (timestamps)
                     if (this.activeTab !== 'timestamps') {
                         params.set('view', this.activeTab);
                     }
 
-                    // タイムスタンプタブのパラメータ
                     if (this.activeTab === 'timestamps') {
                         if (this.searchQuery) {
                             params.set('search', this.searchQuery);
                         }
-
                         if (this.selectedIndex) {
                             params.set('index', this.selectedIndex);
                         }
-
                         if (this.currentTimestampPage && this.currentTimestampPage > 1) {
                             params.set('page', this.currentTimestampPage);
                         }
                     } else {
-                        // アーカイブタブのパラメータ
                         if (this.archiveQuery) {
                             params.set('search', this.archiveQuery);
                         }
-
                         if (this.tsFlg) {
                             params.set('ts', this.tsFlg);
                         }
-
                         if (this.archives.current_page && this.archives.current_page > 1) {
                             params.set('page', this.archives.current_page);
                         }
@@ -254,7 +219,6 @@ function registerArchiveListComponent() {
                 restoreStateFromURL(params) {
                     const view = params.get('view');
                     const search = params.get('search');
-                    // ページパラメータのバリデーション: 1以上の整数に制限
                     const page = Math.max(1, parseInt(params.get('page')) || 1);
 
                     if (view === 'archives') {
@@ -270,7 +234,6 @@ function registerArchiveListComponent() {
                             this.fetchData(this.firstUrl());
                         }
                     } else {
-                        // タイムスタンプタブの状態を復元（デフォルト）
                         this.activeTab = 'timestamps';
                         this.searchQuery = search || '';
                         this.selectedIndex = params.get('index') || '';
@@ -314,7 +277,7 @@ function registerArchiveListComponent() {
                     this.panelDismissed = dismissed === 'true';
 
                     // モバイル判定
-                    this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                    this.isMobile = MOBILE_REGEX.test(navigator.userAgent);
 
                     // 自動再生設定を読み込み（sessionStorageから、デフォルトOFF）
                     if (!this.isMobile) {
@@ -341,64 +304,42 @@ function registerArchiveListComponent() {
 
                 // 報告を送信
                 async submitReport() {
-                    // reportTargetの存在確認
                     if (!this.reportTarget) {
                         console.error('No report target set');
                         toast.error('報告対象が見つかりません');
                         return;
                     }
 
-                    // 報告タイプの検証
                     if (!this.reportType) {
                         toast.error('報告の種類を選択してください');
                         return;
                     }
 
-                    const reportData = {
+                    const result = await ReportService.submitReport({
                         ts_item_id: this.reportTarget.id,
                         video_id: this.reportTarget.video_id,
                         report_type: this.reportType,
                         comment: this.reportComment || null,
-                    };
+                    });
 
-                    try {
-                        const response = await fetch('/api/timestamp-reports', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                            },
-                            body: JSON.stringify(reportData),
-                        });
+                    if (result.success) {
+                        toast.success(result.message);
+                        this.showReportModal = false;
 
-                        const data = await response.json();
-
-                        if (response.ok) {
-                            toast.success(data.message || '報告を受け付けました。ご協力ありがとうございます。');
-                            this.showReportModal = false;
-
-                            // フロントエンドで報告済みフラグを即座に反映
-                            if (this.reportTarget) {
-                                // selectedTimestamp を更新（配信リンクパネル用）
-                                if (this.selectedTimestamp && this.selectedTimestamp.id === this.reportTarget.id) {
-                                    this.selectedTimestamp.has_pending_report = true;
-                                }
-                                // timestamps.data 内の該当アイテムを更新（一覧表示用）
-                                if (this.timestamps.data) {
-                                    const index = this.timestamps.data.findIndex(ts => ts.id === this.reportTarget.id);
-                                    if (index !== -1) {
-                                        this.timestamps.data[index].has_pending_report = true;
-                                    }
+                        // フロントエンドで報告済みフラグを即座に反映
+                        if (this.reportTarget) {
+                            if (this.selectedTimestamp && this.selectedTimestamp.id === this.reportTarget.id) {
+                                this.selectedTimestamp.has_pending_report = true;
+                            }
+                            if (this.timestamps.data) {
+                                const index = this.timestamps.data.findIndex(ts => ts.id === this.reportTarget.id);
+                                if (index !== -1) {
+                                    this.timestamps.data[index].has_pending_report = true;
                                 }
                             }
-                        } else if (response.status === 429) {
-                            toast.error(data.message || '報告の送信制限中です。しばらくしてから再度お試しください。');
-                        } else {
-                            toast.error(data.message || '報告の送信に失敗しました。');
                         }
-                    } catch (error) {
-                        console.error('報告の送信に失敗しました:', error);
-                        toast.error('報告の送信に失敗しました。時間をおいて再度お試しください。');
+                    } else {
+                        toast.error(result.message);
                     }
                 },
 
@@ -411,17 +352,13 @@ function registerArchiveListComponent() {
                         this.showDistributionPanel = true;
                     }
 
-                    // 自動再生がONの場合、動画を読み込んで再生
                     if (this.autoPlay && timestamp && timestamp.video_id) {
                         this.loadAndPlayVideo(timestamp.video_id, timestamp.ts_num || 0);
                     }
                 },
 
-                // テキストから検索用の疑似songオブジェクトを作成して選択
                 selectText(text, timestamp = null) {
                     if (!text || text.trim() === '') return;
-                    // テキストをそのまま検索クエリとして使用
-                    // title にテキスト全体を設定し、artist は空にする
                     const pseudoSong = {
                         title: text.trim(),
                         artist: '',
@@ -433,7 +370,6 @@ function registerArchiveListComponent() {
                         this.showDistributionPanel = true;
                     }
 
-                    // 自動再生がONの場合、動画を読み込んで再生
                     if (this.autoPlay && timestamp && timestamp.video_id) {
                         this.loadAndPlayVideo(timestamp.video_id, timestamp.ts_num || 0);
                     }
@@ -453,7 +389,7 @@ function registerArchiveListComponent() {
                     }
                 },
 
-                // 配信サービスURL生成メソッド（ユーティリティ関数のラッパー）
+                // 配信サービスURL生成メソッド
                 getSpotifyUrl(song) {
                     return getSpotifyUrl(song);
                 },
@@ -481,7 +417,6 @@ function registerArchiveListComponent() {
                         return;
                     }
 
-                    // コールバック配列を初期化（複数コンポーネント対応）
                     if (!window.youtubeAPIReadyCallbacks) {
                         window.youtubeAPIReadyCallbacks = [];
                         window.onYouTubeIframeAPIReady = () => {
@@ -489,12 +424,10 @@ function registerArchiveListComponent() {
                         };
                     }
 
-                    // コールバックを登録
                     window.youtubeAPIReadyCallbacks.push(() => {
                         this.playerReady = true;
                     });
 
-                    // APIがまだ読み込まれていない場合
                     if (!document.querySelector('script[src*="youtube.com/iframe_api"]')) {
                         const tag = document.createElement('script');
                         tag.src = 'https://www.youtube.com/iframe_api';
@@ -515,19 +448,14 @@ function registerArchiveListComponent() {
                     if (!playerElement) return;
 
                     this.youtubePlayer = new YT.Player('youtube-player', {
-                        height: '180',
-                        width: '320',
+                        height: YOUTUBE_PLAYER_CONFIG.height,
+                        width: YOUTUBE_PLAYER_CONFIG.width,
                         playerVars: {
-                            'autoplay': 0,
-                            'controls': 1,
-                            'rel': 0,
-                            'modestbranding': 1,
-                            'origin': window.location.origin
+                            ...YOUTUBE_PLAYER_CONFIG.playerVars,
+                            origin: window.location.origin
                         },
                         events: {
-                            'onReady': () => {
-                                // プレイヤー準備完了
-                            },
+                            'onReady': () => {},
                             'onStateChange': (event) => {
                                 this.isPlaying = event.data === YT.PlayerState.PLAYING;
                             }
@@ -546,7 +474,6 @@ function registerArchiveListComponent() {
                     this.currentVideoTime = time;
                     this.showVideoPlayer = true;
 
-                    // プレイヤーが既に初期化されている場合
                     if (this.youtubePlayer && this.youtubePlayer.loadVideoById) {
                         this.youtubePlayer.loadVideoById({
                             videoId: videoId,
@@ -554,11 +481,9 @@ function registerArchiveListComponent() {
                         });
                         this.isPlaying = true;
                     } else {
-                        // プレイヤーがまだ初期化されていない場合、次のtickで初期化を試みる
                         this.$nextTick(() => {
                             if (!this.youtubePlayer && this.playerReady) {
                                 this.initPlayer();
-                                // 少し待ってから動画を読み込む
                                 setTimeout(() => {
                                     if (this.youtubePlayer && this.youtubePlayer.loadVideoById) {
                                         this.youtubePlayer.loadVideoById({
@@ -575,7 +500,6 @@ function registerArchiveListComponent() {
 
                 // 再生/一時停止の切り替え
                 togglePlayPause() {
-                    // 再生中の場合は一時停止
                     if (this.isPlaying) {
                         if (this.youtubePlayer) {
                             this.youtubePlayer.pauseVideo();
@@ -584,21 +508,17 @@ function registerArchiveListComponent() {
                         return;
                     }
 
-                    // 停止中の場合
                     if (this.selectedTimestamp && this.selectedTimestamp.video_id) {
                         const selectedVideoId = this.selectedTimestamp.video_id;
                         const selectedTime = this.selectedTimestamp.ts_num || 0;
 
-                        // 選択中のタイムスタンプが現在の動画と異なる場合は新しい動画を読み込み
                         if (this.currentVideoId !== selectedVideoId || this.currentVideoTime !== selectedTime) {
                             this.loadAndPlayVideo(selectedVideoId, selectedTime);
                         } else {
-                            // 同じ動画の場合は再生を再開
                             if (this.youtubePlayer) {
                                 this.youtubePlayer.playVideo();
                                 this.isPlaying = true;
                             } else {
-                                // プレイヤーがない場合は読み込み・再生
                                 this.loadAndPlayVideo(selectedVideoId, selectedTime);
                             }
                         }
@@ -616,7 +536,7 @@ function registerArchiveListComponent() {
                     this.resetPlayerPosition();
                 },
 
-                // プレイヤーの破棄（メモリリーク防止）
+                // プレイヤーの破棄
                 destroyPlayer() {
                     if (this.youtubePlayer) {
                         this.youtubePlayer.destroy();
@@ -627,14 +547,13 @@ function registerArchiveListComponent() {
                     this.currentVideoId = null;
                 },
 
-                // 自動再生設定の保存（sessionStorage）
+                // 自動再生設定の保存
                 saveAutoPlay() {
                     sessionStorage.setItem('videoAutoPlay', this.autoPlay.toString());
                 },
 
                 // ドラッグ開始
                 startDrag(event) {
-                    // タッチイベントとマウスイベントの両方に対応
                     const clientX = event.touches ? event.touches[0].clientX : event.clientX;
                     const clientY = event.touches ? event.touches[0].clientY : event.clientY;
 
@@ -648,11 +567,9 @@ function registerArchiveListComponent() {
                         y: clientY - rect.top
                     };
 
-                    // バインドした関数を保存（removeEventListenerで同じ参照を使うため）
                     this.boundOnDrag = this.onDrag.bind(this);
                     this.boundStopDrag = this.stopDrag.bind(this);
 
-                    // イベントリスナーを追加
                     document.addEventListener('mousemove', this.boundOnDrag);
                     document.addEventListener('mouseup', this.boundStopDrag);
                     document.addEventListener('touchmove', this.boundOnDrag, { passive: false });
@@ -674,11 +591,9 @@ function registerArchiveListComponent() {
                     const playerWidth = playerEl.offsetWidth;
                     const playerHeight = playerEl.offsetHeight;
 
-                    // 画面内に収まるように位置を計算
                     let newX = clientX - this.dragOffset.x;
                     let newY = clientY - this.dragOffset.y;
 
-                    // 画面外にはみ出さないように制限
                     newX = Math.max(0, Math.min(newX, window.innerWidth - playerWidth));
                     newY = Math.max(0, Math.min(newY, window.innerHeight - playerHeight));
 
@@ -691,7 +606,6 @@ function registerArchiveListComponent() {
                 stopDrag() {
                     this.isDragging = false;
 
-                    // 保存した関数参照を使ってイベントリスナーを削除
                     if (this.boundOnDrag) {
                         document.removeEventListener('mousemove', this.boundOnDrag);
                         document.removeEventListener('touchmove', this.boundOnDrag);
@@ -701,7 +615,6 @@ function registerArchiveListComponent() {
                         document.removeEventListener('touchend', this.boundStopDrag);
                     }
 
-                    // 参照をクリア
                     this.boundOnDrag = null;
                     this.boundStopDrag = null;
                 },
@@ -732,7 +645,6 @@ function registerArchiveListComponent() {
 if (typeof Alpine !== 'undefined') {
     registerArchiveListComponent();
 } else {
-    // Alpine.jsの初期化を待つ
     window.addEventListener('alpine:init', registerArchiveListComponent);
 }
 
