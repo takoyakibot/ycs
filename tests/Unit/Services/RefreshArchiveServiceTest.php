@@ -6,6 +6,8 @@ use App\Models\Archive;
 use App\Models\ChangeList;
 use App\Models\Channel;
 use App\Models\TsItem;
+use App\Services\ChangeListService;
+use App\Services\ChannelQueryService;
 use App\Services\RefreshArchiveService;
 use App\Services\YouTubeService;
 use Exception;
@@ -24,9 +26,18 @@ class RefreshArchiveServiceTest extends TestCase
     {
         parent::setUp();
 
-        // YouTubeServiceをモック化
+        // YouTubeServiceのみモック化（外部API呼び出しを避けるため）
         $this->youtubeService = Mockery::mock(YouTubeService::class);
-        $this->service = new RefreshArchiveService($this->youtubeService);
+
+        // 実際のサービスインスタンスを使用（DBテストのため）
+        $changeListService = app(ChangeListService::class);
+        $channelQueryService = app(ChannelQueryService::class);
+
+        $this->service = new RefreshArchiveService(
+            $this->youtubeService,
+            $changeListService,
+            $channelQueryService
+        );
     }
 
     protected function tearDown(): void
