@@ -2,7 +2,10 @@
 
 namespace App\Services;
 
+use App\Helpers\CharacterCategorizer;
+use App\Helpers\QueryHelper;
 use App\Helpers\TextNormalizer;
+use App\Helpers\ValidationHelper;
 use App\Models\Channel;
 use App\Models\TimestampReport;
 use App\Models\TimestampSongMapping;
@@ -36,7 +39,7 @@ class TimestampService
 
         // 検索条件の追加（タイムスタンプテキスト）
         if ($search) {
-            $escapedSearch = addcslashes($search, '%_\\');
+            $escapedSearch = QueryHelper::escapeLikeString($search);
             $query->where('text', 'like', "%{$escapedSearch}%");
         }
 
@@ -177,7 +180,7 @@ class TimestampService
                     'song' => $mapping->song ? [
                         'title' => $mapping->song->title,
                         'artist' => $mapping->song->artist,
-                        'spotify_track_id' => $this->validateSpotifyTrackId($mapping->song->spotify_track_id),
+                        'spotify_track_id' => ValidationHelper::validateSpotifyTrackId($mapping->song->spotify_track_id),
                     ] : null,
                     'is_not_song' => $mapping->is_not_song,
                 ] : null,
@@ -218,7 +221,7 @@ class TimestampService
 
         foreach ($timestamps as $ts) {
             $title = $ts['mapping']['song']['title'] ?? $ts['text'] ?? '';
-            $category = $this->getFirstCharCategory($title);
+            $category = CharacterCategorizer::getCategory($title);
 
             if ($category && ! in_array($category, $availableIndexes)) {
                 $availableIndexes[] = $category;
@@ -236,98 +239,7 @@ class TimestampService
         return $timestamps->filter(function ($ts) use ($index) {
             $title = $ts['mapping']['song']['title'] ?? $ts['text'] ?? '';
 
-            return $this->getFirstCharCategory($title) === $index;
+            return CharacterCategorizer::getCategory($title) === $index;
         })->values();
-    }
-
-    /**
-     * タイトルから頭文字カテゴリを取得
-     */
-    private function getFirstCharCategory(?string $title): ?string
-    {
-        if (empty($title)) {
-            return null;
-        }
-
-        $firstChar = mb_substr($title, 0, 1, 'UTF-8');
-        $firstChar = mb_strtoupper($firstChar, 'UTF-8');
-
-        return $this->categorizeFirstChar($firstChar);
-    }
-
-    /**
-     * 頭文字をカテゴリに分類
-     */
-    private function categorizeFirstChar(string $char): string
-    {
-        $upperChar = strtoupper($char);
-
-        // アルファベット（ABCDE, FGHIJ, KLMNO, PQRST, UVWXYZ）
-        if (preg_match('/^[A-E]$/', $upperChar)) {
-            return 'ABCDE';
-        }
-        if (preg_match('/^[F-J]$/', $upperChar)) {
-            return 'FGHIJ';
-        }
-        if (preg_match('/^[K-O]$/', $upperChar)) {
-            return 'KLMNO';
-        }
-        if (preg_match('/^[P-T]$/', $upperChar)) {
-            return 'PQRST';
-        }
-        if (preg_match('/^[U-Z]$/', $upperChar)) {
-            return 'UVWXYZ';
-        }
-
-        // ひらがな・カタカナ（五十音行に分類）
-        $kanaMap = [
-            'あ' => ['あ', 'い', 'う', 'え', 'お', 'ア', 'イ', 'ウ', 'エ', 'オ'],
-            'か' => ['か', 'き', 'く', 'け', 'こ', 'が', 'ぎ', 'ぐ', 'げ', 'ご',
-                'カ', 'キ', 'ク', 'ケ', 'コ', 'ガ', 'ギ', 'グ', 'ゲ', 'ゴ'],
-            'さ' => ['さ', 'し', 'す', 'せ', 'そ', 'ざ', 'じ', 'ず', 'ぜ', 'ぞ',
-                'サ', 'シ', 'ス', 'セ', 'ソ', 'ザ', 'ジ', 'ズ', 'ゼ', 'ゾ'],
-            'た' => ['た', 'ち', 'つ', 'て', 'と', 'だ', 'ぢ', 'づ', 'で', 'ど',
-                'タ', 'チ', 'ツ', 'テ', 'ト', 'ダ', 'ヂ', 'ヅ', 'デ', 'ド'],
-            'な' => ['な', 'に', 'ぬ', 'ね', 'の', 'ナ', 'ニ', 'ヌ', 'ネ', 'ノ'],
-            'は' => ['は', 'ひ', 'ふ', 'へ', 'ほ', 'ば', 'び', 'ぶ', 'べ', 'ぼ',
-                'ぱ', 'ぴ', 'ぷ', 'ぺ', 'ぽ',
-                'ハ', 'ヒ', 'フ', 'ヘ', 'ホ', 'バ', 'ビ', 'ブ', 'ベ', 'ボ',
-                'パ', 'ピ', 'プ', 'ペ', 'ポ'],
-            'ま' => ['ま', 'み', 'む', 'め', 'も', 'マ', 'ミ', 'ム', 'メ', 'モ'],
-            'や' => ['や', 'ゆ', 'よ', 'ヤ', 'ユ', 'ヨ'],
-            'ら' => ['ら', 'り', 'る', 'れ', 'ろ', 'ラ', 'リ', 'ル', 'レ', 'ロ'],
-            'わ' => ['わ', 'を', 'ん', 'ワ', 'ヲ', 'ン'],
-        ];
-
-        foreach ($kanaMap as $category => $chars) {
-            if (in_array($char, $chars)) {
-                return $category;
-            }
-        }
-
-        // 数字（0-9）
-        if (preg_match('/^[0-9]$/', $char)) {
-            return '0-9';
-        }
-
-        // その他（記号など）
-        return 'その他';
-    }
-
-    /**
-     * Spotify Track IDの妥当性を検証
-     */
-    private function validateSpotifyTrackId(?string $trackId): ?string
-    {
-        if (! $trackId) {
-            return null;
-        }
-
-        // Spotify track IDsは22文字の英数字
-        if (preg_match('/^[a-zA-Z0-9]{22}$/', $trackId)) {
-            return $trackId;
-        }
-
-        return null;
     }
 }
