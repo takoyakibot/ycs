@@ -233,14 +233,20 @@ class ManageController extends Controller
                 ->whereNotNull('comment_id')
                 ->delete();
 
-            // validatedData のループ処理
+            // is_display=1 と is_display=0 でグループ化してバッチ更新
+            $displayItemIds = collect($validatedData)->where('is_display', '1')->pluck('id')->toArray();
+            $hideItemIds = collect($validatedData)->where('is_display', '0')->pluck('id')->toArray();
+
+            if (! empty($displayItemIds)) {
+                TsItem::whereIn('id', $displayItemIds)->update(['is_display' => '1']);
+            }
+            if (! empty($hideItemIds)) {
+                TsItem::whereIn('id', $hideItemIds)->update(['is_display' => '0']);
+            }
+
+            // ChangeList作成（コメント単位で実行）
             $lastCommentId = '';
             foreach ($validatedData as $item) {
-                // is_display の更新
-                TsItem::where('id', $item['id'])->update(['is_display' => $item['is_display']]);
-
-                // comment_id が変わった場合の処理
-                // コメント単位に変更リストにレコードを作成する
                 if ($lastCommentId !== $item['comment_id']) {
                     ChangeList::create([
                         'channel_id' => $channelId,
