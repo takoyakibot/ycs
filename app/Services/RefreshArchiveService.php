@@ -64,6 +64,14 @@ class RefreshArchiveService
 
         // コメントから取得が必要なvideo_idを事前に特定し、API呼び出しを実行
         $comment_ts_items_map = [];
+
+        // 既にgetArchivesAndTsItems()でコメント取得済みのvideo_idを特定
+        $alreadyFetchedVideoIds = collect($rtn_ts_items)
+            ->where('type', '2')
+            ->pluck('video_id')
+            ->unique()
+            ->toArray();
+
         $results = DB::select("
             SELECT t1.video_id
             FROM archives t1
@@ -86,6 +94,10 @@ class RefreshArchiveService
 
         foreach ($results as $result) {
             $video_id = $result->video_id;
+            // 既にコメント取得済みの動画はスキップ
+            if (in_array($video_id, $alreadyFetchedVideoIds)) {
+                continue;
+            }
             try {
                 // API呼び出しのみ実行し、結果を保存
                 $comment_ts_items_map[$video_id] = $this->youtubeService->getTimeStampsFromComments($video_id);
