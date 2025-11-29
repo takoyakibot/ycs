@@ -2,11 +2,16 @@
 
 namespace App\Services;
 
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class SpotifyService
 {
+    private const CACHE_KEY = 'spotify_access_token';
+
+    private const CACHE_TTL_BUFFER = 300; // 期限の5分前にキャッシュ期限切れとする
+
     private $accessToken;
 
     /**
@@ -14,6 +19,15 @@ class SpotifyService
      */
     public function authenticate($clientId, $clientSecret)
     {
+        // キャッシュからトークンを取得
+        $cachedToken = Cache::get(self::CACHE_KEY);
+        if ($cachedToken) {
+            $this->accessToken = $cachedToken;
+
+            return true;
+        }
+
+        // キャッシュにない場合はAPIから取得
         $response = Http::asForm()->post('https://accounts.spotify.com/api/token', [
             'grant_type' => 'client_credentials',
             'client_id' => $clientId,
@@ -21,7 +35,15 @@ class SpotifyService
         ]);
 
         if ($response->successful()) {
-            $this->accessToken = $response->json()['access_token'];
+            $data = $response->json();
+            $this->accessToken = $data['access_token'];
+            $expiresIn = $data['expires_in'] ?? 3600;
+
+            // 期限の5分前までキャッシュに保存
+            $cacheTtl = max(0, $expiresIn - self::CACHE_TTL_BUFFER);
+            if ($cacheTtl > 0) {
+                Cache::put(self::CACHE_KEY, $this->accessToken, $cacheTtl);
+            }
 
             return true;
         }
