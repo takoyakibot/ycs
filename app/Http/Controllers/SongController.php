@@ -63,6 +63,7 @@ class SongController extends Controller
             ->select('ts_items.*', 'timestamp_song_mappings.id as mapping_id', 'timestamp_song_mappings.song_id', 'timestamp_song_mappings.is_not_song')
             ->whereNotNull('ts_items.text')
             ->where('ts_items.text', '!=', '')
+            ->whereNotNull('ts_items.normalized_text') // マイグレーション後の未更新レコードを除外
             ->where('ts_items.is_display', 1)
             ->whereHas('archive', function ($q) {
                 $q->where('is_display', 1);
