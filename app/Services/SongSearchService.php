@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Helpers\TextNormalizer;
 use App\Models\Song;
+use App\Models\TimestampSongMapping;
 
 class SongSearchService
 {
@@ -66,7 +67,10 @@ class SongSearchService
     }
 
     /**
-     * 正規化後のタイトル・アーティスト名で完全一致する楽曲を検索
+     * 正規化後のタイトル・アーティスト名で一致する楽曲を検索
+     *
+     * 1. まずtimestamp_song_mappingsを類似検索して、既存マッピング経由で楽曲を探す
+     * 2. マッピングで見つからない場合、楽曲マスタをchunkで検索（メモリ削減）
      *
      * @param  string  $normalizedTitle  正規化済みタイトル
      * @param  string  $normalizedArtist  正規化済みアーティスト名
@@ -74,17 +78,31 @@ class SongSearchService
      */
     public function findExactMatch(string $normalizedTitle, string $normalizedArtist): ?Song
     {
-        // 正規化後のテキストで比較するため、全曲を取得して比較
-        $allSongs = Song::all();
-        foreach ($allSongs as $song) {
-            $songNormalizedTitle = TextNormalizer::normalize($song->title);
-            $songNormalizedArtist = TextNormalizer::normalize($song->artist);
+        // 1. マッピング経由の検索（表記ゆれを考慮）
+        // "title / artist" 形式でテキストを生成
+        $searchText = $normalizedTitle.' / '.$normalizedArtist;
 
-            if ($songNormalizedTitle === $normalizedTitle && $songNormalizedArtist === $normalizedArtist) {
-                return $song;
-            }
+        // 類似検索でマッピングを探す
+        $mapping = TimestampSongMapping::fuzzySearch($searchText);
+        if ($mapping && $mapping->song_id && ! $mapping->is_not_song) {
+            return $mapping->song;
         }
 
-        return null;
+        // 2. フォールバック: 楽曲マスタを直接検索（chunkでメモリ削減）
+        $foundSong = null;
+        Song::chunk(100, function ($songs) use ($normalizedTitle, $normalizedArtist, &$foundSong) {
+            foreach ($songs as $song) {
+                $songNormalizedTitle = TextNormalizer::normalize($song->title);
+                $songNormalizedArtist = TextNormalizer::normalize($song->artist);
+
+                if ($songNormalizedTitle === $normalizedTitle && $songNormalizedArtist === $normalizedArtist) {
+                    $foundSong = $song;
+
+                    return false; // チャンク処理を中断
+                }
+            }
+        });
+
+        return $foundSong;
     }
 }
