@@ -110,9 +110,9 @@ class SongControllerTest extends TestCase
     }
 
     /**
-     * タイムスタンプ一覧取得のテスト（未連携フィルター）
+     * タイムスタンプ一覧取得のテスト（フィルター: unlinked）
      */
-    public function test_fetch_timestamps_with_unlinked_only_filter(): void
+    public function test_fetch_timestamps_with_unlinked_filter(): void
     {
         $channel = Channel::factory()->create();
         $archive = Archive::factory()->create(['channel_id' => $channel->channel_id]);
@@ -138,7 +138,78 @@ class SongControllerTest extends TestCase
             ->create();
 
         $response = $this->actingAs($this->user)->getJson(route('songs.fetchTimestamps', [
-            'unlinked_only' => true,
+            'filter' => 'unlinked',
+        ]));
+
+        $response->assertStatus(200);
+        $this->assertEquals(1, $response->json('total'));
+    }
+
+    /**
+     * タイムスタンプ一覧取得のテスト（フィルター: linked）
+     */
+    public function test_fetch_timestamps_with_linked_filter(): void
+    {
+        $channel = Channel::factory()->create();
+        $archive = Archive::factory()->create(['channel_id' => $channel->channel_id]);
+
+        // 未連携タイムスタンプ
+        TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'text' => 'Unlinked Song',
+            'is_display' => 1,
+        ]);
+
+        // 連携済みタイムスタンプ
+        $linked = TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'text' => 'Linked Song',
+            'is_display' => 1,
+        ]);
+
+        $song = Song::factory()->create();
+        TimestampSongMapping::factory()
+            ->withSong($song)
+            ->withText($linked->text)
+            ->create();
+
+        $response = $this->actingAs($this->user)->getJson(route('songs.fetchTimestamps', [
+            'filter' => 'linked',
+        ]));
+
+        $response->assertStatus(200);
+        $this->assertEquals(1, $response->json('total'));
+    }
+
+    /**
+     * タイムスタンプ一覧取得のテスト（フィルター: not_song）
+     */
+    public function test_fetch_timestamps_with_not_song_filter(): void
+    {
+        $channel = Channel::factory()->create();
+        $archive = Archive::factory()->create(['channel_id' => $channel->channel_id]);
+
+        // 未連携タイムスタンプ
+        TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'text' => 'Unlinked Song',
+            'is_display' => 1,
+        ]);
+
+        // 「楽曲ではない」タイムスタンプ
+        $notSong = TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'text' => 'Not A Song',
+            'is_display' => 1,
+        ]);
+
+        TimestampSongMapping::factory()
+            ->withText($notSong->text)
+            ->notSong()
+            ->create();
+
+        $response = $this->actingAs($this->user)->getJson(route('songs.fetchTimestamps', [
+            'filter' => 'not_song',
         ]));
 
         $response->assertStatus(200);
