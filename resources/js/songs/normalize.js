@@ -21,7 +21,7 @@ class TimestampNormalization {
         this.currentPage = 1;
         this.currentSearchQuery = ''; // 検索条件を保持
         this.searchTimeout = null;
-        this.unlinkedOnly = false;
+        this.currentFilter = 'all'; // all, unlinked, linked, not_song
 
         this.init();
     }
@@ -43,9 +43,11 @@ class TimestampNormalization {
             }, 500);
         });
 
-        // 未連携フィルター
-        document.getElementById('unlinkedOnlyBtn').addEventListener('click', () => {
-            this.toggleUnlinkedFilter();
+        // フィルターボタン
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                this.setFilter(e.target.dataset.filter);
+            });
         });
 
         // 全選択・全選択解除
@@ -110,26 +112,23 @@ class TimestampNormalization {
         document.getElementById('clearSelectionBtn').addEventListener('click', () => this.clearSelection());
     }
 
-    toggleUnlinkedFilter() {
-        this.unlinkedOnly = !this.unlinkedOnly;
-        const btn = document.getElementById('unlinkedOnlyBtn');
-        if (this.unlinkedOnly) {
-            btn.classList.add('bg-blue-600', 'text-white', 'hover:bg-blue-700', 'dark:hover:bg-blue-700');
-            btn.classList.remove('bg-gray-200', 'dark:bg-gray-700', 'hover:bg-gray-300', 'dark:hover:bg-gray-600');
-        } else {
-            btn.classList.remove('bg-blue-600', 'text-white', 'hover:bg-blue-700', 'dark:hover:bg-blue-700');
-            btn.classList.add('bg-gray-200', 'dark:bg-gray-700', 'hover:bg-gray-300', 'dark:hover:bg-gray-600');
-        }
+    setFilter(filter) {
+        this.currentFilter = filter;
+        this.updateFilterButtons();
         this.loadTimestamps(1, this.currentSearchQuery);
     }
 
-    resetUnlinkedFilter() {
-        if (this.unlinkedOnly) {
-            this.unlinkedOnly = false;
-            const btn = document.getElementById('unlinkedOnlyBtn');
-            btn.classList.remove('bg-blue-600', 'text-white', 'hover:bg-blue-700', 'dark:hover:bg-blue-700');
-            btn.classList.add('bg-gray-200', 'dark:bg-gray-700', 'hover:bg-gray-300', 'dark:hover:bg-gray-600');
-        }
+    updateFilterButtons() {
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            const isActive = btn.dataset.filter === this.currentFilter;
+            if (isActive) {
+                btn.classList.add('bg-blue-600', 'text-white');
+                btn.classList.remove('bg-gray-200', 'dark:bg-gray-700', 'hover:bg-gray-300', 'dark:hover:bg-gray-600');
+            } else {
+                btn.classList.remove('bg-blue-600', 'text-white');
+                btn.classList.add('bg-gray-200', 'dark:bg-gray-700', 'hover:bg-gray-300', 'dark:hover:bg-gray-600');
+            }
+        });
     }
 
     async loadTimestamps(page = 1, search = '') {
@@ -139,7 +138,7 @@ class TimestampNormalization {
                 page,
                 per_page: 50,
                 search,
-                unlinked_only: this.unlinkedOnly
+                filter: this.currentFilter
             });
 
             const parsedPage = parseInt(data.current_page, 10);
@@ -163,26 +162,10 @@ class TimestampNormalization {
             return;
         }
 
-        const sortedTimestamps = this.sortTimestamps(timestamps);
-
-        sortedTimestamps.forEach(ts => {
+        // DBでソート済みなのでそのまま表示
+        timestamps.forEach(ts => {
             container.appendChild(this.createTimestampElement(ts));
         });
-    }
-
-    sortTimestamps(timestamps) {
-        return [...timestamps]
-            .map(ts => ({
-                timestamp: ts,
-                sortKey: ts.song
-                    ? `${ts.song.title || ''} - ${ts.song.artist || ''}`.trim()
-                    : (ts.text || '')
-            }))
-            .sort((a, b) => {
-                const comparison = a.sortKey.localeCompare(b.sortKey, 'ja');
-                return comparison !== 0 ? comparison : a.timestamp.id - b.timestamp.id;
-            })
-            .map(item => item.timestamp);
     }
 
     createTimestampElement(ts) {
@@ -722,7 +705,6 @@ class TimestampNormalization {
             this.selectedTimestamps = [];
             this.selectedSpotifyTrack = null;
 
-            this.resetUnlinkedFilter();
             await this.loadTimestamps(this.currentPage, this.currentSearchQuery);
             this.updateSelectionDisplay();
         } catch (error) {
@@ -753,7 +735,6 @@ class TimestampNormalization {
             toast.success('楽曲ではないとマークしました。');
             this.selectedTimestamps = [];
 
-            this.resetUnlinkedFilter();
             await this.loadTimestamps(this.currentPage, this.currentSearchQuery);
             this.updateSelectionDisplay();
         } catch (error) {

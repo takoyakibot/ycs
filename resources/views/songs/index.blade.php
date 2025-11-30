@@ -37,11 +37,24 @@
                 <!-- タイムスタンプ一覧 -->
                 <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
                     <div class="p-6 text-gray-900 dark:text-gray-100">
-                        <div class="flex justify-between items-center mb-3">
-                            <h3 class="text-lg font-semibold">タイムスタンプ一覧</h3>
-                            <button id="unlinkedOnlyBtn" class="px-3 py-1 bg-gray-200 dark:bg-gray-700 text-sm rounded hover:bg-gray-300 dark:hover:bg-gray-600">
-                                未連携のみ
-                            </button>
+                        <div class="flex flex-col gap-2 mb-3">
+                            <div class="flex justify-between items-center">
+                                <h3 class="text-lg font-semibold">タイムスタンプ一覧</h3>
+                            </div>
+                            <div class="flex gap-1 flex-wrap" id="filterButtons">
+                                <button data-filter="all" class="filter-btn px-3 py-1 text-sm rounded bg-blue-600 text-white">
+                                    すべて
+                                </button>
+                                <button data-filter="unlinked" class="filter-btn px-3 py-1 text-sm rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">
+                                    未紐づけ
+                                </button>
+                                <button data-filter="linked" class="filter-btn px-3 py-1 text-sm rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">
+                                    紐づけ済み
+                                </button>
+                                <button data-filter="not_song" class="filter-btn px-3 py-1 text-sm rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">
+                                    楽曲ではない
+                                </button>
+                            </div>
                         </div>
 
                         <!-- 全選択・全選択解除ボタンと動画情報 -->

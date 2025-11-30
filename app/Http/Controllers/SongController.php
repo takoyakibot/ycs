@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Helpers\QueryHelper;
 use App\Helpers\TextNormalizer;
-use App\Helpers\ValidationHelper;
 use App\Http\Requests\FetchTimestampsRequest;
 use App\Http\Requests\LinkTimestampRequest;
 use App\Http\Requests\MarkAsNotSongRequest;
@@ -47,6 +46,7 @@ class SongController extends Controller
 
     /**
      * 全タイムスタンプを取得（マッピング情報付き）
+     * DBレベルでフィルタリング・ページネーションを実行
      */
     public function fetchTimestamps(FetchTimestampsRequest $request)
     {
@@ -54,17 +54,16 @@ class SongController extends Controller
 
         $perPage = $validated['per_page'] ?? 50;
         $search = $validated['search'] ?? '';
-        $unlinkedOnly = ValidationHelper::parseBoolean($validated['unlinked_only'] ?? false);
+        $filter = $validated['filter'] ?? 'all';
         $currentPage = $validated['page'] ?? 1;
 
+        // ベースクエリ: ts_itemsとtimestamp_song_mappingsをLEFT JOIN
         $query = TsItem::with(['archive'])
-            ->whereNotNull('text')
-            ->where('text', '!=', '')
-            // ts_items自体のis_displayが0のものを除外
-            // （change_listの内容はRefreshArchiveServiceによりis_displayに反映済み）
-            ->where('is_display', 1)
-            // archiveのis_displayが0のものを除外
-            // （change_listの内容はRefreshArchiveServiceによりis_displayに反映済み）
+            ->leftJoin('timestamp_song_mappings', 'ts_items.normalized_text', '=', 'timestamp_song_mappings.normalized_text')
+            ->select('ts_items.*', 'timestamp_song_mappings.id as mapping_id', 'timestamp_song_mappings.song_id', 'timestamp_song_mappings.is_not_song')
+            ->whereNotNull('ts_items.text')
+            ->where('ts_items.text', '!=', '')
+            ->where('ts_items.is_display', 1)
             ->whereHas('archive', function ($q) {
                 $q->where('is_display', 1);
             });
@@ -72,81 +71,66 @@ class SongController extends Controller
         // 検索条件
         if ($search) {
             $escapedSearch = QueryHelper::escapeLikeString($search);
-            $query->where('text', 'like', "%{$escapedSearch}%");
+            $query->where('ts_items.text', 'like', "%{$escapedSearch}%");
         }
 
-        // 全件取得（ページネーション前）
-        $allTimestamps = $query->get();
+        // フィルター条件
+        switch ($filter) {
+            case 'unlinked':
+                // マッピングなし
+                $query->whereNull('timestamp_song_mappings.id');
+                break;
+            case 'linked':
+                // マッピングあり かつ is_not_song=false
+                $query->whereNotNull('timestamp_song_mappings.id')
+                    ->where('timestamp_song_mappings.is_not_song', false);
+                break;
+            case 'not_song':
+                // マッピングあり かつ is_not_song=true
+                $query->whereNotNull('timestamp_song_mappings.id')
+                    ->where('timestamp_song_mappings.is_not_song', true);
+                break;
+                // 'all' は条件なし
+        }
 
-        // N+1クエリ問題を回避: 全タイムスタンプの正規化テキストを事前に取得
-        $normalizedTexts = $allTimestamps->map(function ($item) {
-            return TextNormalizer::normalize($item->text);
-        })->unique()->values()->toArray();
+        // text昇順でソート
+        $query->orderBy('ts_items.text', 'asc');
 
-        // 一度にすべてのマッピングを取得
+        // DBページネーション
+        $paginated = $query->paginate($perPage, ['*'], 'page', $currentPage);
+
+        // ページネーション結果のタイムスタンプに対してマッピング・楽曲情報を取得
+        $normalizedTexts = $paginated->getCollection()->pluck('normalized_text')->unique()->values()->toArray();
+
         $mappings = TimestampSongMapping::whereIn('normalized_text', $normalizedTexts)
             ->with('song')
             ->get()
             ->keyBy('normalized_text');
 
         // 各タイムスタンプにマッピング情報を追加
-        $timestampsWithMapping = $allTimestamps->map(function ($item) use ($mappings) {
-            $normalizedText = TextNormalizer::normalize($item->text);
-            $mapping = $mappings->get($normalizedText);
+        $items = $paginated->getCollection()->map(function ($item) use ($mappings) {
+            $mapping = $mappings->get($item->normalized_text);
 
-            // モデルを配列に変換して、追加のフィールドをマージ
             $data = $item->toArray();
-            $data['normalized_text'] = $normalizedText;
+            $data['normalized_text'] = $item->normalized_text;
             $data['mapping'] = $mapping ? $mapping->toArray() : null;
             $data['song'] = $mapping && $mapping->song ? $mapping->song->toArray() : null;
             $data['is_not_song'] = $mapping ? $mapping->is_not_song : false;
 
+            // JOINで追加されたカラムを削除
+            unset($data['mapping_id'], $data['song_id']);
+
             return $data;
         });
 
-        // 未連携フィルター（ソート前に適用）
-        if ($unlinkedOnly) {
-            $timestampsWithMapping = $timestampsWithMapping->filter(function ($item) {
-                return ! $item['mapping'];
-            })->values();
-        }
-
-        // 紐づけた楽曲を最後に表示するようにソート
-        // 未紐づけ → 楽曲ではない → 紐づけ済み の順、それぞれtext昇順
-        $sorted = $timestampsWithMapping->sort(function ($a, $b) {
-            $aMapped = ! empty($a['mapping']);
-            $bMapped = ! empty($b['mapping']);
-            $aIsNotSong = $a['is_not_song'];
-            $bIsNotSong = $b['is_not_song'];
-
-            // 優先順位を決定（数値が小さいほど先に表示）
-            // 0: 未紐づけ, 1: 楽曲ではない, 2: 紐づけ済み
-            $aPriority = $aMapped ? ($aIsNotSong ? 1 : 2) : 0;
-            $bPriority = $bMapped ? ($bIsNotSong ? 1 : 2) : 0;
-
-            // 優先順位が異なる場合
-            if ($aPriority !== $bPriority) {
-                return $aPriority - $bPriority;
-            }
-
-            // 同じ優先順位の場合はtextで昇順ソート
-            return strcmp($a['text'], $b['text']);
-        })->values();
-
-        // 手動でページネーション
-        $total = $sorted->count();
-        $lastPage = (int) ceil($total / $perPage);
-        $offset = ($currentPage - 1) * $perPage;
-        $items = $sorted->slice($offset, $perPage)->values();
-
         return response()->json([
-            'data' => $items,
-            'current_page' => $currentPage,
-            'last_page' => $lastPage,
-            'per_page' => $perPage,
-            'total' => $total,
-            'from' => $total > 0 ? $offset + 1 : null,
-            'to' => $total > 0 ? min($offset + $perPage, $total) : null,
+            'data' => $items->values(),
+            'current_page' => $paginated->currentPage(),
+            'last_page' => $paginated->lastPage(),
+            'per_page' => $paginated->perPage(),
+            'total' => $paginated->total(),
+            'from' => $paginated->firstItem(),
+            'to' => $paginated->lastItem(),
         ]);
     }
 
