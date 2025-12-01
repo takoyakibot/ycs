@@ -8,6 +8,7 @@ use Google\Client as Google_Client;
 use Google\Service\YouTube as Google_Service_YouTube;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
@@ -18,6 +19,9 @@ use Illuminate\Support\Str;
  */
 class YouTubeApiService
 {
+    /** チャンネル情報のキャッシュ時間（24時間） */
+    private const CHANNEL_CACHE_TTL = 60 * 60 * 24;
+
     protected $client;
 
     protected $youtube;
@@ -92,13 +96,26 @@ class YouTubeApiService
     /**
      * ハンドル名からチャンネル情報を取得
      *
+     * チャンネル情報は24時間キャッシュされます。
+     *
      * @param  string  $handle  チャンネルハンドル
+     * @param  bool  $forceRefresh  trueの場合、キャッシュを無視して再取得
      * @return array|null チャンネル情報、見つからない場合null
      *
      * @throws Exception API quota超過またはレート制限時
      */
-    public function getChannelByHandle(string $handle): ?array
+    public function getChannelByHandle(string $handle, bool $forceRefresh = false): ?array
     {
+        $cacheKey = "youtube_channel_{$handle}";
+
+        // 強制再取得でない場合はキャッシュから取得を試みる
+        if (! $forceRefresh) {
+            $cached = Cache::get($cacheKey);
+            if ($cached !== null) {
+                return $cached;
+            }
+        }
+
         $this->setApiKey();
 
         try {
@@ -118,11 +135,16 @@ class YouTubeApiService
             $thumbnails = $snippet ? $snippet->getThumbnails() : null;
             $defaultThumb = $thumbnails ? ($thumbnails->getDefault() ? $thumbnails->getDefault()->getUrl() : null) : null;
 
-            return [
+            $channelInfo = [
                 'title' => $snippet ? $snippet->getTitle() : '',
                 'channel_id' => $channel->getId(),
                 'thumbnail' => $defaultThumb ?? '',
             ];
+
+            // キャッシュに保存（24時間）
+            Cache::put($cacheKey, $channelInfo, self::CHANNEL_CACHE_TTL);
+
+            return $channelInfo;
         }
 
         return null; // 該当するチャンネルが見つからない場合
