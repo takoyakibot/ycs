@@ -48,6 +48,14 @@ class SpotifyService
             return true;
         }
 
+        // レート制限エラーをチェック
+        if ($response->status() === 429) {
+            Log::warning('Spotify API rate limit exceeded in authenticate', [
+                'status' => $response->status(),
+            ]);
+            throw new \Exception('Spotify APIのレート制限に達しました。しばらく待ってからお試しください。');
+        }
+
         throw new \Exception('Spotify authentication failed with status '.$response->status());
     }
 
@@ -78,7 +86,11 @@ class SpotifyService
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
-            throw new \Exception('Spotify API authentication failed. Please check your credentials.');
+            // レート制限エラーの場合はそのまま再スロー
+            if (strpos($e->getMessage(), 'レート制限') !== false) {
+                throw $e;
+            }
+            throw new \Exception('Spotify API認証に失敗しました。認証情報を確認してください。');
         }
 
         // 検索処理
@@ -90,7 +102,11 @@ class SpotifyService
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
-            throw new \Exception('Spotify API search failed. Please try again later.');
+            // レート制限エラーの場合はそのまま再スロー
+            if (strpos($e->getMessage(), 'レート制限') !== false) {
+                throw $e;
+            }
+            throw new \Exception('Spotify API検索に失敗しました。しばらくしてから再度お試しください。');
         }
     }
 
@@ -99,6 +115,8 @@ class SpotifyService
      *
      * market=JP を指定することで、日本市場向けのローカライズされた
      * アーティスト名が返される可能性があります。
+     *
+     * @throws \Exception レート制限エラー時
      */
     public function searchTracks($query, $limit = 10)
     {
@@ -117,6 +135,15 @@ class SpotifyService
             return $response->json()['tracks']['items'];
         }
 
+        // レート制限エラーをチェック
+        if ($response->status() === 429) {
+            Log::warning('Spotify API rate limit exceeded in searchTracks', [
+                'query' => $query,
+                'status' => $response->status(),
+            ]);
+            throw new \Exception('Spotify APIのレート制限に達しました。しばらく待ってからお試しください。');
+        }
+
         throw new \Exception('Spotify search request failed with status '.$response->status());
     }
 
@@ -125,6 +152,8 @@ class SpotifyService
      *
      * market=JP を指定することで、日本市場向けのローカライズされた
      * アーティスト名が返される可能性があります。
+     *
+     * @throws \Exception レート制限エラー時
      */
     public function getTrack($trackId)
     {
@@ -138,6 +167,15 @@ class SpotifyService
 
         if ($response->successful()) {
             return $response->json();
+        }
+
+        // レート制限エラーをチェック
+        if ($response->status() === 429) {
+            Log::warning('Spotify API rate limit exceeded in getTrack', [
+                'track_id' => $trackId,
+                'status' => $response->status(),
+            ]);
+            throw new \Exception('Spotify APIのレート制限に達しました。しばらく待ってからお試しください。');
         }
 
         throw new \Exception('Spotify get track request failed with status '.$response->status());
