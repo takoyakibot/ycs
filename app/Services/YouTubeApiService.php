@@ -28,6 +28,45 @@ class YouTubeApiService
     }
 
     /**
+     * YouTube APIエラーを処理
+     *
+     * このメソッドは常に例外を再スローします。
+     * quota超過/レート制限エラーはユーザーに分かりやすいメッセージに変換されます。
+     *
+     * @param  Exception  $e  例外
+     * @param  string  $method  呼び出し元メソッド名
+     * @param  array  $context  追加コンテキスト
+     *
+     * @throws Exception 常に例外を再スロー
+     */
+    protected function handleApiError(Exception $e, string $method, array $context = []): never
+    {
+        $message = $e->getMessage();
+
+        // quota超過またはレート制限エラーをチェック
+        if (strpos($message, 'quotaExceeded') !== false) {
+            Log::warning("YouTube API quota exceeded in {$method}", array_merge($context, [
+                'error' => $message,
+            ]));
+            throw new Exception('YouTube APIの利用制限に達しました。明日以降にお試しください。');
+        }
+
+        if (strpos($message, 'rateLimitExceeded') !== false) {
+            Log::warning("YouTube API rate limit exceeded in {$method}", array_merge($context, [
+                'error' => $message,
+            ]));
+            throw new Exception('YouTube APIのレート制限に達しました。しばらく待ってからお試しください。');
+        }
+
+        // その他のエラーはログを残して再スロー
+        Log::error("YouTube API error in {$method}", array_merge($context, [
+            'error' => $message,
+            'code' => $e->getCode(),
+        ]));
+        throw $e;
+    }
+
+    /**
      * APIキーを設定してYouTube APIクライアントを初期化
      *
      * @throws Exception APIキーが設定されていない、または無効な場合
@@ -55,14 +94,20 @@ class YouTubeApiService
      *
      * @param  string  $handle  チャンネルハンドル
      * @return array|null チャンネル情報、見つからない場合null
+     *
+     * @throws Exception API quota超過またはレート制限時
      */
     public function getChannelByHandle(string $handle): ?array
     {
         $this->setApiKey();
 
-        $response = $this->youtube->channels->listChannels('snippet', [
-            'forHandle' => $handle,
-        ]);
+        try {
+            $response = $this->youtube->channels->listChannels('snippet', [
+                'forHandle' => $handle,
+            ]);
+        } catch (Exception $e) {
+            $this->handleApiError($e, 'getChannelByHandle', ['handle' => $handle]);
+        }
 
         // 検索結果が存在するかを確認
         if (count($response->getItems()) > 0) {
@@ -88,6 +133,8 @@ class YouTubeApiService
      *
      * @param  string  $channelId  チャンネルID
      * @return array アーカイブ配列
+     *
+     * @throws Exception API quota超過またはレート制限時
      */
     public function getArchives(string $channelId): array
     {
@@ -101,11 +148,15 @@ class YouTubeApiService
         $response = null;
         $archives = [];
         do {
-            $response = $this->youtube->playlistItems->listPlaylistItems('snippet', [
-                'playlistId' => $playlistId,
-                'maxResults' => $maxResults,
-                'pageToken' => $response ? $response->getNextPageToken() : '',
-            ]);
+            try {
+                $response = $this->youtube->playlistItems->listPlaylistItems('snippet', [
+                    'playlistId' => $playlistId,
+                    'maxResults' => $maxResults,
+                    'pageToken' => $response ? $response->getNextPageToken() : '',
+                ]);
+            } catch (Exception $e) {
+                $this->handleApiError($e, 'getArchives', ['channel_id' => $channelId]);
+            }
 
             if (is_array($response->getItems())) {
                 foreach ($response->getItems() as $item) {
@@ -142,6 +193,8 @@ class YouTubeApiService
      *
      * @param  string  $videoId  動画ID
      * @return array コメント配列
+     *
+     * @throws Exception API quota超過またはレート制限時
      */
     public function getComments(string $videoId): array
     {
@@ -162,20 +215,29 @@ class YouTubeApiService
                 // コメントスレッドを取得
                 $response = $this->youtube->commentThreads->listCommentThreads('snippet', $params);
             } catch (Exception $e) {
-                // コメントが無効な場合はスキップ
-                if (strpos($e->getMessage(), 'has disabled comments') !== false) {
+                $message = $e->getMessage();
+
+                // コメントが無効な場合はスキップ（正常な動作）
+                if (strpos($message, 'has disabled comments') !== false) {
                     Log::info('YouTube API: Comments disabled for video', [
                         'video_id' => $videoId,
                     ]);
-                    break; // コメントが無効の場合はループを抜ける
-                } else {
-                    Log::error('YouTube API: Failed to fetch comments', [
-                        'video_id' => $videoId,
-                        'error' => $e->getMessage(),
-                        'code' => $e->getCode(),
-                    ]);
-                    break; // その他のエラーもループを抜ける
+                    break;
                 }
+
+                // quota/レート制限エラーは例外をスロー（handleApiErrorは常に例外をスロー）
+                if (strpos($message, 'quotaExceeded') !== false ||
+                    strpos($message, 'rateLimitExceeded') !== false) {
+                    $this->handleApiError($e, 'getComments', ['video_id' => $videoId]);
+                }
+
+                // その他のエラーはログを残してスキップ
+                Log::warning('YouTube API: Failed to fetch comments', [
+                    'video_id' => $videoId,
+                    'error' => $message,
+                    'code' => $e->getCode(),
+                ]);
+                break;
             }
 
             // レスポンスがない場合はスキップ
