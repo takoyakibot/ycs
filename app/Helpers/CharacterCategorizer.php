@@ -99,4 +99,49 @@ class CharacterCategorizer
             '0-9', 'あ', 'か', 'さ', 'た', 'な', 'は', 'ま', 'や', 'ら', 'わ', 'その他',
         ];
     }
+
+    /**
+     * カテゴリに属する頭文字のリストを取得（SQL WHERE句用）
+     *
+     * @param  string  $category  カテゴリ名
+     * @return array<string> 頭文字のリスト
+     */
+    public static function getCharsForCategory(string $category): array
+    {
+        // アルファベットカテゴリ
+        $alphabetMap = [
+            'ABCDE' => ['A', 'B', 'C', 'D', 'E', 'a', 'b', 'c', 'd', 'e'],
+            'FGHIJ' => ['F', 'G', 'H', 'I', 'J', 'f', 'g', 'h', 'i', 'j'],
+            'KLMNO' => ['K', 'L', 'M', 'N', 'O', 'k', 'l', 'm', 'n', 'o'],
+            'PQRST' => ['P', 'Q', 'R', 'S', 'T', 'p', 'q', 'r', 's', 't'],
+            'UVWXYZ' => ['U', 'V', 'W', 'X', 'Y', 'Z', 'u', 'v', 'w', 'x', 'y', 'z'],
+        ];
+
+        if (isset($alphabetMap[$category])) {
+            return $alphabetMap[$category];
+        }
+
+        // 数字カテゴリ
+        if ($category === '0-9') {
+            return ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+        }
+
+        // 五十音カテゴリ
+        if (isset(self::KANA_MAP[$category])) {
+            return self::KANA_MAP[$category];
+        }
+
+        // その他（空配列を返す、特殊処理が必要）
+        return [];
+    }
+
+    /**
+     * 「その他」カテゴリかどうかを判定
+     *
+     * @param  string  $category  カテゴリ名
+     */
+    public static function isOtherCategory(string $category): bool
+    {
+        return $category === 'その他';
+    }
 }

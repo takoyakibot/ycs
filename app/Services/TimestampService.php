@@ -4,13 +4,11 @@ namespace App\Services;
 
 use App\Helpers\CharacterCategorizer;
 use App\Helpers\QueryHelper;
-use App\Helpers\TextNormalizer;
 use App\Helpers\ValidationHelper;
 use App\Models\Channel;
 use App\Models\TimestampReport;
-use App\Models\TimestampSongMapping;
 use App\Models\TsItem;
-use Illuminate\Support\Collection;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Log;
 
 class TimestampService
@@ -18,8 +16,10 @@ class TimestampService
     /**
      * チャンネルのタイムスタンプを取得（マッピング情報付き）
      *
+     * DBレベルでフィルタリング・ソート・ページネーションを実行
+     *
      * @return array{
-     *     data: Collection,
+     *     data: array,
      *     current_page: int,
      *     last_page: int,
      *     per_page: int,
@@ -34,109 +34,210 @@ class TimestampService
         string $search = '',
         string $index = ''
     ): array {
-        // タイムスタンプ取得（チャンネルフィルタ付き）
-        $query = $this->buildTimestampQuery($channel, withArchive: true);
+        // ベースクエリ: ts_itemsとtimestamp_song_mappings、songsをLEFT JOIN
+        $query = TsItem::with(['archive'])
+            ->leftJoin('timestamp_song_mappings', 'ts_items.normalized_text', '=', 'timestamp_song_mappings.normalized_text')
+            ->leftJoin('songs', 'timestamp_song_mappings.song_id', '=', 'songs.id')
+            ->select(
+                'ts_items.*',
+                'timestamp_song_mappings.id as mapping_id',
+                'timestamp_song_mappings.song_id',
+                'timestamp_song_mappings.is_not_song',
+                'songs.title as song_title',
+                'songs.artist as song_artist',
+                'songs.spotify_track_id'
+            )
+            ->whereHas('archive', function ($q) use ($channel) {
+                $q->where('channel_id', $channel->channel_id)
+                    ->where('is_display', 1);
+            })
+            ->whereNotNull('ts_items.text')
+            ->where('ts_items.text', '!=', '')
+            ->whereNotNull('ts_items.normalized_text')
+            ->where('ts_items.is_display', 1);
 
-        // 検索条件の追加（タイムスタンプテキスト）
+        // 「楽曲ではない」を除外
+        // - マッピングが存在しない（未分類）: 表示
+        // - マッピングが存在してis_not_song=false（楽曲）: 表示
+        // - マッピングが存在してis_not_song=true（楽曲でない）: 除外
+        $query->where(function ($q) {
+            $q->whereNull('timestamp_song_mappings.id')
+                ->orWhere('timestamp_song_mappings.is_not_song', false);
+        });
+
+        // 検索条件
         if ($search) {
             $escapedSearch = QueryHelper::escapeLikeString($search);
-            $query->where('text', 'like', "%{$escapedSearch}%");
+            $query->where('ts_items.text', 'like', "%{$escapedSearch}%");
         }
 
-        // 全件取得（ページネーション前）
-        $allTimestamps = $query->get();
+        // 頭文字インデックスでフィルタリング
+        if ($index) {
+            $this->applyIndexFilter($query, $index);
+        }
 
-        // マッピング情報を取得
-        $mappings = $this->fetchMappings($allTimestamps, $channel->channel_id);
+        // 楽曲名順でソート（楽曲名がなければタイムスタンプテキストを使用）
+        $query->orderByRaw('COALESCE(songs.title, ts_items.text) ASC');
+
+        // 利用可能な頭文字カテゴリを取得（フィルタリング前のベースクエリで）
+        $availableIndexes = $this->fetchAvailableIndexes($channel, $search);
+
+        // DBページネーション
+        $paginated = $query->paginate($perPage, ['*'], 'page', $currentPage);
 
         // 報告情報を取得
-        $reportedTsItemIds = $this->fetchReportedIds($allTimestamps, $channel->channel_id);
+        $tsItemIds = $paginated->getCollection()->pluck('id')->toArray();
+        $reportedTsItemIds = $this->fetchReportedIds($tsItemIds);
 
-        // 各タイムスタンプにマッピング情報を追加
-        $timestampsWithMapping = $this->attachMappingInfo($allTimestamps, $mappings, $reportedTsItemIds);
-
-        // 「楽曲ではない」タイムスタンプを除外
-        $timestampsWithMapping = $this->excludeNonSongs($timestampsWithMapping);
-
-        // ソート処理（楽曲名順）
-        $timestampsWithMapping = $this->sortByTitle($timestampsWithMapping);
-
-        // 利用可能な頭文字カテゴリを収集（フィルタリング前に行う）
-        $availableIndexes = $this->collectAvailableIndexes($timestampsWithMapping);
-
-        // 頭文字フィルタリング
-        if ($index) {
-            $timestampsWithMapping = $this->filterByIndex($timestampsWithMapping, $index);
-        }
-
-        // 手動でページネーション
-        $total = $timestampsWithMapping->count();
-        $lastPage = max(1, (int) ceil($total / $perPage));
-        $offset = ($currentPage - 1) * $perPage;
-        $items = $timestampsWithMapping->slice($offset, $perPage)->values();
+        // 各タイムスタンプを整形
+        $items = $paginated->getCollection()->map(function ($item) use ($reportedTsItemIds) {
+            return [
+                'id' => $item->id,
+                'ts_text' => $item->ts_text,
+                'ts_num' => $item->ts_num,
+                'text' => $item->text,
+                'video_id' => $item->video_id,
+                'archive' => [
+                    'title' => $item->archive->title,
+                    'published_at' => $item->archive->published_at,
+                ],
+                'mapping' => $item->mapping_id ? [
+                    'song' => $item->song_id ? [
+                        'title' => $item->song_title,
+                        'artist' => $item->song_artist,
+                        'spotify_track_id' => ValidationHelper::validateSpotifyTrackId($item->spotify_track_id),
+                    ] : null,
+                    'is_not_song' => (bool) $item->is_not_song,
+                ] : null,
+                'has_pending_report' => in_array($item->id, $reportedTsItemIds),
+            ];
+        });
 
         return [
-            'data' => $items,
-            'current_page' => $currentPage,
-            'last_page' => $lastPage,
-            'per_page' => $perPage,
-            'total' => $total,
+            'data' => $items->values()->toArray(),
+            'current_page' => $paginated->currentPage(),
+            'last_page' => $paginated->lastPage(),
+            'per_page' => $paginated->perPage(),
+            'total' => $paginated->total(),
             'available_indexes' => $availableIndexes,
         ];
     }
 
     /**
-     * タイムスタンプ取得クエリのベースを構築
+     * 頭文字インデックスでフィルタリング
+     *
+     * @param  Builder  $query  クエリビルダー
+     * @param  string  $index  頭文字インデックス（カテゴリ名）
      */
-    private function buildTimestampQuery(Channel $channel, bool $withArchive = false)
+    private function applyIndexFilter(Builder $query, string $index): void
     {
-        $query = TsItem::query();
+        $chars = CharacterCategorizer::getCharsForCategory($index);
 
-        if ($withArchive) {
-            $query->with(['archive']);
+        if (CharacterCategorizer::isOtherCategory($index)) {
+            // 「その他」カテゴリ: 既知のカテゴリに属さない文字
+            // 注: 多数のNOT LIKE条件が生成されるため、パフォーマンスに影響あり
+            $allKnownChars = [];
+            foreach (CharacterCategorizer::getAllCategories() as $category) {
+                if (! CharacterCategorizer::isOtherCategory($category)) {
+                    $allKnownChars = array_merge($allKnownChars, CharacterCategorizer::getCharsForCategory($category));
+                }
+            }
+
+            $query->where(function ($q) use ($allKnownChars) {
+                $q->where(function ($subQ) use ($allKnownChars) {
+                    // 楽曲名がある場合
+                    $subQ->whereNotNull('songs.title');
+                    foreach ($allKnownChars as $char) {
+                        $escapedChar = QueryHelper::escapeLikeString($char);
+                        $subQ->where('songs.title', 'not like', $escapedChar.'%');
+                    }
+                })->orWhere(function ($subQ) use ($allKnownChars) {
+                    // 楽曲名がない場合、タイムスタンプテキストで判定
+                    $subQ->whereNull('songs.title');
+                    foreach ($allKnownChars as $char) {
+                        $escapedChar = QueryHelper::escapeLikeString($char);
+                        $subQ->where('ts_items.text', 'not like', $escapedChar.'%');
+                    }
+                });
+            });
+        } elseif (! empty($chars)) {
+            // 通常のカテゴリ: 指定された文字で始まるものをフィルタ
+            $query->where(function ($q) use ($chars) {
+                $q->where(function ($subQ) use ($chars) {
+                    // 楽曲名がある場合
+                    $subQ->whereNotNull('songs.title');
+                    $subQ->where(function ($innerQ) use ($chars) {
+                        foreach ($chars as $char) {
+                            $escapedChar = QueryHelper::escapeLikeString($char);
+                            $innerQ->orWhere('songs.title', 'like', $escapedChar.'%');
+                        }
+                    });
+                })->orWhere(function ($subQ) use ($chars) {
+                    // 楽曲名がない場合、タイムスタンプテキストで判定
+                    $subQ->whereNull('songs.title');
+                    $subQ->where(function ($innerQ) use ($chars) {
+                        foreach ($chars as $char) {
+                            $escapedChar = QueryHelper::escapeLikeString($char);
+                            $innerQ->orWhere('ts_items.text', 'like', $escapedChar.'%');
+                        }
+                    });
+                });
+            });
         }
+    }
 
-        return $query
+    /**
+     * 利用可能な頭文字カテゴリを取得
+     */
+    private function fetchAvailableIndexes(Channel $channel, string $search): array
+    {
+        // ベースクエリを構築（頭文字抽出用）
+        $query = TsItem::query()
+            ->leftJoin('timestamp_song_mappings', 'ts_items.normalized_text', '=', 'timestamp_song_mappings.normalized_text')
+            ->leftJoin('songs', 'timestamp_song_mappings.song_id', '=', 'songs.id')
             ->whereHas('archive', function ($q) use ($channel) {
                 $q->where('channel_id', $channel->channel_id)
                     ->where('is_display', 1);
             })
-            ->whereNotNull('text')
-            ->where('text', '!=', '')
-            ->where('is_display', 1);
-    }
+            ->whereNotNull('ts_items.text')
+            ->where('ts_items.text', '!=', '')
+            ->whereNotNull('ts_items.normalized_text')
+            ->where('ts_items.is_display', 1)
+            ->where(function ($q) {
+                $q->whereNull('timestamp_song_mappings.id')
+                    ->orWhere('timestamp_song_mappings.is_not_song', false);
+            });
 
-    /**
-     * マッピング情報を一括取得
-     */
-    private function fetchMappings(Collection $timestamps, string $channelId): Collection
-    {
-        $normalizedTexts = $timestamps->map(function ($item) {
-            return TextNormalizer::normalize($item->text);
-        })->unique()->values()->toArray();
-
-        try {
-            return TimestampSongMapping::whereIn('normalized_text', $normalizedTexts)
-                ->with('song')
-                ->get()
-                ->keyBy('normalized_text');
-        } catch (\Exception $e) {
-            Log::error('Failed to fetch song mappings in TimestampService', [
-                'error' => $e->getMessage(),
-                'channel_id' => $channelId,
-            ]);
-
-            return collect();
+        // 検索条件
+        if ($search) {
+            $escapedSearch = QueryHelper::escapeLikeString($search);
+            $query->where('ts_items.text', 'like', "%{$escapedSearch}%");
         }
+
+        // 頭文字を取得（楽曲名優先、なければタイムスタンプテキスト）
+        $firstChars = $query
+            ->selectRaw('DISTINCT SUBSTRING(COALESCE(songs.title, ts_items.text), 1, 1) as first_char')
+            ->pluck('first_char')
+            ->filter()
+            ->toArray();
+
+        // 頭文字をカテゴリに変換
+        $availableIndexes = [];
+        foreach ($firstChars as $char) {
+            $category = CharacterCategorizer::categorize($char);
+            if ($category && ! in_array($category, $availableIndexes)) {
+                $availableIndexes[] = $category;
+            }
+        }
+
+        return $availableIndexes;
     }
 
     /**
      * 未解決の報告があるタイムスタンプIDを取得
      */
-    private function fetchReportedIds(Collection $timestamps, string $channelId): array
+    private function fetchReportedIds(array $tsItemIds): array
     {
-        $tsItemIds = $timestamps->pluck('id')->toArray();
-
         if (empty($tsItemIds)) {
             return [];
         }
@@ -150,96 +251,9 @@ class TimestampService
         } catch (\Exception $e) {
             Log::error('Failed to fetch timestamp reports', [
                 'error' => $e->getMessage(),
-                'channel_id' => $channelId,
             ]);
 
             return [];
         }
-    }
-
-    /**
-     * 各タイムスタンプにマッピング情報を追加
-     */
-    private function attachMappingInfo(Collection $timestamps, Collection $mappings, array $reportedTsItemIds): Collection
-    {
-        return $timestamps->map(function ($item) use ($mappings, $reportedTsItemIds) {
-            $normalizedText = TextNormalizer::normalize($item->text);
-            $mapping = $mappings->get($normalizedText);
-
-            return [
-                'id' => $item->id,
-                'ts_text' => $item->ts_text,
-                'ts_num' => $item->ts_num,
-                'text' => $item->text,
-                'video_id' => $item->video_id,
-                'archive' => [
-                    'title' => $item->archive->title,
-                    'published_at' => $item->archive->published_at,
-                ],
-                'mapping' => $mapping ? [
-                    'song' => $mapping->song ? [
-                        'title' => $mapping->song->title,
-                        'artist' => $mapping->song->artist,
-                        'spotify_track_id' => ValidationHelper::validateSpotifyTrackId($mapping->song->spotify_track_id),
-                    ] : null,
-                    'is_not_song' => $mapping->is_not_song,
-                ] : null,
-                'has_pending_report' => in_array($item->id, $reportedTsItemIds),
-            ];
-        });
-    }
-
-    /**
-     * 「楽曲ではない」タイムスタンプを除外
-     */
-    private function excludeNonSongs(Collection $timestamps): Collection
-    {
-        return $timestamps->filter(function ($ts) {
-            return ! ($ts['mapping'] && $ts['mapping']['is_not_song']);
-        })->values();
-    }
-
-    /**
-     * タイトル順でソート
-     */
-    private function sortByTitle(Collection $timestamps): Collection
-    {
-        return $timestamps->sort(function ($a, $b) {
-            $aTitle = $a['mapping']['song']['title'] ?? $a['text'] ?? '';
-            $bTitle = $b['mapping']['song']['title'] ?? $b['text'] ?? '';
-
-            return strcasecmp($aTitle, $bTitle);
-        })->values();
-    }
-
-    /**
-     * 利用可能な頭文字カテゴリを収集
-     */
-    private function collectAvailableIndexes(Collection $timestamps): array
-    {
-        $availableIndexes = [];
-
-        foreach ($timestamps as $ts) {
-            $title = $ts['mapping']['song']['title'] ?? $ts['text'] ?? '';
-            $category = CharacterCategorizer::getCategory($title);
-
-            if ($category && ! in_array($category, $availableIndexes)) {
-                $availableIndexes[] = $category;
-            }
-        }
-
-        return $availableIndexes;
-    }
-
-    /**
-     * 頭文字でフィルタリング
-     */
-    private function filterByIndex(Collection $timestamps, string $index): Collection
-    {
-        return $timestamps->filter(function ($ts) use ($index) {
-            $title = $ts['mapping']['song']['title'] ?? $ts['text'] ?? '';
-
-            return CharacterCategorizer::getCategory($title) === $index;
-        })->values();
     }
 }
