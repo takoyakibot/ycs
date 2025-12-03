@@ -32,14 +32,30 @@ class ChangeListService
             ', [$channelId]);
         } else {
             // Use Eloquent for SQLite/PostgreSQL (testability)
+            // N+1問題を回避するため、チャンクごとにバルク更新
             ChangeList::where('channel_id', $channelId)
                 ->whereNotNull('comment_id')
                 ->chunk(100, function ($changeLists) {
-                    foreach ($changeLists as $changeList) {
-                        TsItem::where('video_id', $changeList->video_id)
-                            ->where('comment_id', $changeList->comment_id)
-                            ->where('is_display', '!=', $changeList->is_display)
-                            ->update(['is_display' => $changeList->is_display]);
+                    // is_displayの値でグループ化
+                    $displayGroups = $changeLists->groupBy('is_display');
+
+                    foreach ($displayGroups as $isDisplay => $groupedChangeLists) {
+                        // video_id + comment_id のペアを収集
+                        $conditions = $groupedChangeLists->map(function ($cl) {
+                            return ['video_id' => $cl->video_id, 'comment_id' => $cl->comment_id];
+                        })->toArray();
+
+                        // 各ペアに対してOR条件でマッチするレコードを一括更新
+                        TsItem::where(function ($query) use ($conditions) {
+                            foreach ($conditions as $condition) {
+                                $query->orWhere(function ($q) use ($condition) {
+                                    $q->where('video_id', $condition['video_id'])
+                                        ->where('comment_id', $condition['comment_id']);
+                                });
+                            }
+                        })
+                            ->where('is_display', '!=', $isDisplay)
+                            ->update(['is_display' => $isDisplay]);
                     }
                 });
         }
@@ -68,13 +84,20 @@ class ChangeListService
             ', [$channelId]);
         } else {
             // Use Eloquent for SQLite/PostgreSQL (testability)
+            // N+1問題を回避するため、チャンクごとにバルク更新
             ChangeList::where('channel_id', $channelId)
                 ->whereNull('comment_id')
                 ->chunk(100, function ($changeLists) {
-                    foreach ($changeLists as $changeList) {
-                        Archive::where('video_id', $changeList->video_id)
-                            ->where('is_display', '!=', $changeList->is_display)
-                            ->update(['is_display' => $changeList->is_display]);
+                    // is_displayの値でグループ化
+                    $displayGroups = $changeLists->groupBy('is_display');
+
+                    foreach ($displayGroups as $isDisplay => $groupedChangeLists) {
+                        $videoIds = $groupedChangeLists->pluck('video_id')->toArray();
+
+                        // video_idリストに対して一括更新
+                        Archive::whereIn('video_id', $videoIds)
+                            ->where('is_display', '!=', $isDisplay)
+                            ->update(['is_display' => $isDisplay]);
                     }
                 });
         }
@@ -116,26 +139,48 @@ class ChangeListService
             ', [$channelId]);
         } else {
             // Use Eloquent for SQLite/PostgreSQL (testability)
+            // N+1問題を回避するため、チャンクごとに一括チェック
             $idsToDelete = [];
 
             ChangeList::where('channel_id', $channelId)
                 ->chunk(100, function ($changeLists) use (&$idsToDelete) {
-                    foreach ($changeLists as $changeList) {
-                        if ($changeList->comment_id !== null) {
-                            // タイムスタンプの場合: ts_itemsに紐づくかチェック
-                            $tsItemExists = TsItem::where('video_id', $changeList->video_id)
-                                ->where('comment_id', $changeList->comment_id)
-                                ->exists();
+                    // タイムスタンプ用のchange_list（comment_id IS NOT NULL）
+                    $timestampChangeLists = $changeLists->whereNotNull('comment_id');
+                    // アーカイブ用のchange_list（comment_id IS NULL）
+                    $archiveChangeLists = $changeLists->whereNull('comment_id');
 
-                            if (! $tsItemExists) {
+                    // タイムスタンプの存在確認を一括で行う
+                    if ($timestampChangeLists->isNotEmpty()) {
+                        $videoIds = $timestampChangeLists->pluck('video_id')->unique()->toArray();
+                        $commentIds = $timestampChangeLists->pluck('comment_id')->unique()->toArray();
+
+                        // 存在するts_itemsのvideo_id + comment_idペアを取得
+                        $existingTsItems = TsItem::whereIn('video_id', $videoIds)
+                            ->whereIn('comment_id', $commentIds)
+                            ->select('video_id', 'comment_id')
+                            ->get()
+                            ->map(fn ($item) => $item->video_id.'|'.$item->comment_id)
+                            ->toArray();
+
+                        foreach ($timestampChangeLists as $changeList) {
+                            $key = $changeList->video_id.'|'.$changeList->comment_id;
+                            if (! in_array($key, $existingTsItems)) {
                                 $idsToDelete[] = $changeList->id;
                             }
-                        } else {
-                            // アーカイブの場合: archivesに紐づくかチェック
-                            $archiveExists = Archive::where('video_id', $changeList->video_id)
-                                ->exists();
+                        }
+                    }
 
-                            if (! $archiveExists) {
+                    // アーカイブの存在確認を一括で行う
+                    if ($archiveChangeLists->isNotEmpty()) {
+                        $videoIds = $archiveChangeLists->pluck('video_id')->unique()->toArray();
+
+                        // 存在するarchivesのvideo_idを取得
+                        $existingArchiveVideoIds = Archive::whereIn('video_id', $videoIds)
+                            ->pluck('video_id')
+                            ->toArray();
+
+                        foreach ($archiveChangeLists as $changeList) {
+                            if (! in_array($changeList->video_id, $existingArchiveVideoIds)) {
                                 $idsToDelete[] = $changeList->id;
                             }
                         }
