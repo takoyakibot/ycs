@@ -6,6 +6,7 @@ use App\Exceptions\NotFoundException;
 use App\Http\Requests\EditTimestampsRequest;
 use App\Http\Requests\FetchCommentsRequest;
 use App\Http\Requests\ToggleDisplayRequest;
+use App\Jobs\RefreshChannelArchivesJob;
 use App\Models\Archive;
 use App\Models\ChangeList;
 use App\Models\Channel;
@@ -152,9 +153,27 @@ class ManageController extends Controller
             abort(403, 'このチャンネルへのアクセス権限がありません');
         }
 
-        $this->refreshArchiveService->refreshArchives($channel);
+        // キュー設定に応じて同期/非同期で実行
+        // sync: 同期実行（従来動作）, database/redis等: 非同期実行
+        $queueConnection = config('queue.default');
 
-        return response()->json('アーカイブを登録しました');
+        if ($queueConnection === 'sync') {
+            // 同期実行（従来動作）
+            $this->refreshArchiveService->refreshArchives($channel);
+
+            return response()->json([
+                'message' => 'アーカイブを登録しました',
+                'async' => false,
+            ]);
+        }
+
+        // 非同期実行
+        RefreshChannelArchivesJob::dispatch($channel, Auth::id());
+
+        return response()->json([
+            'message' => 'アーカイブの更新処理をキューに登録しました。完了までしばらくお待ちください。',
+            'async' => true,
+        ]);
     }
 
     // 動画の表示非表示切り替え

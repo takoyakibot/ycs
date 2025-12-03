@@ -146,6 +146,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
         axios.post('/api/manage/archives', formData)
             .then(function (response) {
+                const data = response.data;
+                // 非同期実行の場合はメッセージを表示
+                if (data.async) {
+                    alert(data.message || 'アーカイブの更新処理をキューに登録しました。完了までしばらくお待ちください。');
+                }
                 // 登録成功後にアーカイブ一覧を再取得
                 fetchArchives();
             })
