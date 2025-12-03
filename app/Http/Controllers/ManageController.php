@@ -20,6 +20,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class ManageController extends Controller
 {
@@ -90,8 +91,12 @@ class ManageController extends Controller
         try {
             $channel = $this->youtubeService->getChannelByHandle($request->handle);
         } catch (Exception $e) {
-            error_log($e->getMessage());
-            throw new Exception('youtubeとの接続でエラーが発生しました');
+            Log::error('YouTube API error in addChannel', [
+                'handle' => $request->handle,
+                'error' => $e->getMessage(),
+            ]);
+            // サービス層からのユーザーフレンドリーなメッセージをそのまま使用
+            throw $e;
         }
         if (! $channel || ! isset($channel['title']) || ! $channel['title']) {
             throw new NotFoundException('チャンネルが存在しません');
