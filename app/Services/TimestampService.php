@@ -9,6 +9,7 @@ use App\Models\Channel;
 use App\Models\TimestampReport;
 use App\Models\TsItem;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class TimestampService
@@ -134,32 +135,51 @@ class TimestampService
         $chars = CharacterCategorizer::getCharsForCategory($index);
 
         if (CharacterCategorizer::isOtherCategory($index)) {
-            // 「その他」カテゴリ: 既知のカテゴリに属さない文字
-            // 注: 多数のNOT LIKE条件が生成されるため、パフォーマンスに影響あり
-            $allKnownChars = [];
-            foreach (CharacterCategorizer::getAllCategories() as $category) {
-                if (! CharacterCategorizer::isOtherCategory($category)) {
-                    $allKnownChars = array_merge($allKnownChars, CharacterCategorizer::getCharsForCategory($category));
-                }
-            }
+            // 「その他」カテゴリ: 既知のカテゴリに属さない文字（主に漢字）
+            $driver = DB::getDriverName();
 
-            $query->where(function ($q) use ($allKnownChars) {
-                $q->where(function ($subQ) use ($allKnownChars) {
-                    // 楽曲名がある場合
-                    $subQ->whereNotNull('songs.title');
-                    foreach ($allKnownChars as $char) {
-                        $escapedChar = QueryHelper::escapeLikeString($char);
-                        $subQ->where('songs.title', 'not like', $escapedChar.'%');
-                    }
-                })->orWhere(function ($subQ) use ($allKnownChars) {
-                    // 楽曲名がない場合、タイムスタンプテキストで判定
-                    $subQ->whereNull('songs.title');
-                    foreach ($allKnownChars as $char) {
-                        $escapedChar = QueryHelper::escapeLikeString($char);
-                        $subQ->where('ts_items.text', 'not like', $escapedChar.'%');
-                    }
+            if ($driver === 'mysql') {
+                // MySQL: REGEXPで効率的にフィルタリング
+                // 既知カテゴリ（アルファベット、数字、ひらがな、カタカナ）以外を抽出
+                $pattern = '^[A-Za-z0-9あ-んア-ンー]';
+                $query->where(function ($q) use ($pattern) {
+                    $q->where(function ($subQ) use ($pattern) {
+                        // 楽曲名がある場合
+                        $subQ->whereNotNull('songs.title')
+                            ->whereRaw('songs.title NOT REGEXP ?', [$pattern]);
+                    })->orWhere(function ($subQ) use ($pattern) {
+                        // 楽曲名がない場合、タイムスタンプテキストで判定
+                        $subQ->whereNull('songs.title')
+                            ->whereRaw('ts_items.text NOT REGEXP ?', [$pattern]);
+                    });
                 });
-            });
+            } else {
+                // SQLite: NOT LIKEアプローチ（互換性優先）
+                $allKnownChars = [];
+                foreach (CharacterCategorizer::getAllCategories() as $category) {
+                    if (! CharacterCategorizer::isOtherCategory($category)) {
+                        $allKnownChars = array_merge($allKnownChars, CharacterCategorizer::getCharsForCategory($category));
+                    }
+                }
+
+                $query->where(function ($q) use ($allKnownChars) {
+                    $q->where(function ($subQ) use ($allKnownChars) {
+                        // 楽曲名がある場合
+                        $subQ->whereNotNull('songs.title');
+                        foreach ($allKnownChars as $char) {
+                            $escapedChar = QueryHelper::escapeLikeString($char);
+                            $subQ->where('songs.title', 'not like', $escapedChar.'%');
+                        }
+                    })->orWhere(function ($subQ) use ($allKnownChars) {
+                        // 楽曲名がない場合、タイムスタンプテキストで判定
+                        $subQ->whereNull('songs.title');
+                        foreach ($allKnownChars as $char) {
+                            $escapedChar = QueryHelper::escapeLikeString($char);
+                            $subQ->where('ts_items.text', 'not like', $escapedChar.'%');
+                        }
+                    });
+                });
+            }
         } elseif (! empty($chars)) {
             // 通常のカテゴリ: 指定された文字で始まるものをフィルタ
             $query->where(function ($q) use ($chars) {
