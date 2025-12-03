@@ -2,12 +2,15 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\RefreshChannelArchivesJob;
 use App\Models\Archive;
 use App\Models\ChangeList;
 use App\Models\Channel;
 use App\Models\TsItem;
 use App\Models\User;
+use App\Services\RefreshArchiveService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class ManageControllerTest extends TestCase
@@ -381,5 +384,63 @@ class ManageControllerTest extends TestCase
             ]);
 
         $response->assertStatus(403);
+    }
+
+    /**
+     * sync設定では同期実行される
+     */
+    public function test_add_archives_runs_synchronously_when_queue_is_sync(): void
+    {
+        config(['queue.default' => 'sync']);
+
+        $channel = Channel::factory()->create(['user_id' => $this->user->id]);
+
+        $mockService = $this->mock(RefreshArchiveService::class);
+        $mockService->shouldReceive('refreshArchives')
+            ->once()
+            ->andReturn(10);
+
+        $response = $this->actingAs($this->user)
+            ->postJson('/api/manage/archives', [
+                'handle' => \Illuminate\Support\Facades\Crypt::encryptString($channel->handle),
+            ]);
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'message' => 'アーカイブを登録しました',
+                'async' => false,
+            ]);
+    }
+
+    /**
+     * database設定では非同期実行される（ジョブがキューにディスパッチされる）
+     */
+    public function test_add_archives_dispatches_job_when_queue_is_database(): void
+    {
+        // configを変更してからQueue::fake()を呼ぶ
+        config(['queue.default' => 'database']);
+        Queue::fake();
+
+        $channel = Channel::factory()->create(['user_id' => $this->user->id]);
+
+        // デバッグ: 設定値を確認
+        $this->assertEquals('database', config('queue.default'), 'Config should be database');
+
+        $response = $this->actingAs($this->user)
+            ->postJson('/api/manage/archives', [
+                'handle' => \Illuminate\Support\Facades\Crypt::encryptString($channel->handle),
+            ]);
+
+        // レスポンスの内容を確認
+        $responseData = $response->json();
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'message' => 'アーカイブの更新処理をキューに登録しました。完了までしばらくお待ちください。',
+                'async' => true,
+            ]);
+
+        // シンプルにジョブがプッシュされたことを確認
+        Queue::assertPushed(RefreshChannelArchivesJob::class);
     }
 }
