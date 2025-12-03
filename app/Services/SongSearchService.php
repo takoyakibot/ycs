@@ -18,6 +18,8 @@ class SongSearchService
     /**
      * 類似する楽曲を検索
      *
+     * 正規化カラムを使用してDBレベルで候補を絞り込み、PHP側で類似度を計算。
+     *
      * @param  string  $normalizedTitle  正規化済みタイトル
      * @param  string  $normalizedArtist  正規化済みアーティスト名
      * @param  float  $threshold  類似度の閾値（デフォルト: 0.75）
@@ -25,21 +27,21 @@ class SongSearchService
      */
     public function findSimilarSongs(string $normalizedTitle, string $normalizedArtist, float $threshold = 0.75): array
     {
-        // パフォーマンス最適化：部分一致で候補を絞り込んでから類似度計算
-        // 正規化後のタイトル・アーティストの最初の3文字で絞り込み
+        // 正規化カラムを使用して候補を絞り込み（DBレベル最適化）
         $titlePrefix = mb_substr($normalizedTitle, 0, 3);
         $artistPrefix = mb_substr($normalizedArtist, 0, 3);
 
         $candidateSongs = Song::where(function ($query) use ($titlePrefix, $artistPrefix) {
-            $query->where('title', 'like', "{$titlePrefix}%")
-                ->orWhere('artist', 'like', "{$artistPrefix}%");
+            $query->where('normalized_title', 'like', "{$titlePrefix}%")
+                ->orWhere('normalized_artist', 'like', "{$artistPrefix}%");
         })->limit(100)->get();
 
         $similarSongs = [];
 
         foreach ($candidateSongs as $song) {
-            $songNormalizedTitle = TextNormalizer::normalize($song->title);
-            $songNormalizedArtist = TextNormalizer::normalize($song->artist);
+            // 正規化カラムを直接使用（normalize()呼び出し不要）
+            $songNormalizedTitle = $song->normalized_title ?? TextNormalizer::normalize($song->title);
+            $songNormalizedArtist = $song->normalized_artist ?? TextNormalizer::normalize($song->artist);
 
             // タイトルとアーティスト名の類似度を計算
             $titleSimilarity = $this->similarityService->calculateSimilarity($normalizedTitle, $songNormalizedTitle);
@@ -70,7 +72,7 @@ class SongSearchService
      * 正規化後のタイトル・アーティスト名で一致する楽曲を検索
      *
      * 1. まずtimestamp_song_mappingsを類似検索して、既存マッピング経由で楽曲を探す
-     * 2. マッピングで見つからない場合、楽曲マスタをchunkで検索（メモリ削減）
+     * 2. マッピングで見つからない場合、正規化カラムを使用してDBレベルで検索
      *
      * @param  string  $normalizedTitle  正規化済みタイトル
      * @param  string  $normalizedArtist  正規化済みアーティスト名
@@ -88,21 +90,9 @@ class SongSearchService
             return $mapping->song;
         }
 
-        // 2. フォールバック: 楽曲マスタを直接検索（chunkでメモリ削減）
-        $foundSong = null;
-        Song::chunk(100, function ($songs) use ($normalizedTitle, $normalizedArtist, &$foundSong) {
-            foreach ($songs as $song) {
-                $songNormalizedTitle = TextNormalizer::normalize($song->title);
-                $songNormalizedArtist = TextNormalizer::normalize($song->artist);
-
-                if ($songNormalizedTitle === $normalizedTitle && $songNormalizedArtist === $normalizedArtist) {
-                    $foundSong = $song;
-
-                    return false; // チャンク処理を中断
-                }
-            }
-        });
-
-        return $foundSong;
+        // 2. 正規化カラムを使用してDBレベルで検索（効率化）
+        return Song::where('normalized_title', $normalizedTitle)
+            ->where('normalized_artist', $normalizedArtist)
+            ->first();
     }
 }
