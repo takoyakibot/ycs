@@ -54,6 +54,7 @@ class TimestampExtractorService
                     'ts_text' => $timestamp,
                     'ts_num' => $this->timestampToSeconds($timestamp),
                     'text' => $comment,
+                    'normalized_text' => TextNormalizer::normalize($comment),
                 ];
             }
         }
