@@ -56,6 +56,8 @@ function registerArchiveListComponent() {
                 isPlaying: false,
                 playerReady: false,
                 youtubePlayer: null,
+                playerInitialized: false,
+                pendingVideo: null,
                 // ドラッグ機能用
                 isDragging: false,
                 playerPosition: { x: null, y: null },
@@ -455,9 +457,34 @@ function registerArchiveListComponent() {
                             origin: window.location.origin
                         },
                         events: {
-                            'onReady': () => {},
+                            'onReady': () => {
+                                this.playerInitialized = true;
+                                // 待機中の動画があれば再生
+                                // isPlayingはonStateChangeで更新されるため、ここでは設定しない
+                                if (this.pendingVideo) {
+                                    this.youtubePlayer.loadVideoById({
+                                        videoId: this.pendingVideo.videoId,
+                                        startSeconds: this.pendingVideo.time
+                                    });
+                                    this.pendingVideo = null;
+                                }
+                            },
                             'onStateChange': (event) => {
                                 this.isPlaying = event.data === YT.PlayerState.PLAYING;
+                            },
+                            'onError': (event) => {
+                                console.error('YouTube Player Error:', event.data);
+                                this.isPlaying = false;
+                                this.pendingVideo = null;
+                                const errorMessages = {
+                                    2: '無効なパラメータです',
+                                    5: 'HTML5プレイヤーエラーが発生しました',
+                                    100: '動画が見つかりません',
+                                    101: '動画の埋め込みが許可されていません',
+                                    150: '動画の埋め込みが許可されていません'
+                                };
+                                const message = errorMessages[event.data] || '動画の読み込みに失敗しました';
+                                toast.error(message);
                             }
                         }
                     });
@@ -474,25 +501,20 @@ function registerArchiveListComponent() {
                     this.currentVideoTime = time;
                     this.showVideoPlayer = true;
 
-                    if (this.youtubePlayer && this.youtubePlayer.loadVideoById) {
+                    // 既にプレイヤーが初期化完了している場合
+                    // isPlayingはonStateChangeで更新されるため、ここでは設定しない
+                    if (this.youtubePlayer && this.playerInitialized) {
                         this.youtubePlayer.loadVideoById({
                             videoId: videoId,
                             startSeconds: time
                         });
-                        this.isPlaying = true;
                     } else {
+                        // 初期化が完了していない場合、待機動画として保存
+                        this.pendingVideo = { videoId, time };
+
                         this.$nextTick(() => {
                             if (!this.youtubePlayer && this.playerReady) {
                                 this.initPlayer();
-                                setTimeout(() => {
-                                    if (this.youtubePlayer && this.youtubePlayer.loadVideoById) {
-                                        this.youtubePlayer.loadVideoById({
-                                            videoId: videoId,
-                                            startSeconds: time
-                                        });
-                                        this.isPlaying = true;
-                                    }
-                                }, 500);
                             }
                         });
                     }
@@ -542,6 +564,8 @@ function registerArchiveListComponent() {
                         this.youtubePlayer.destroy();
                         this.youtubePlayer = null;
                     }
+                    this.playerInitialized = false;
+                    this.pendingVideo = null;
                     this.showVideoPlayer = false;
                     this.isPlaying = false;
                     this.currentVideoId = null;
