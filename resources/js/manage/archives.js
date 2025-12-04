@@ -326,12 +326,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // タイムスタンプ押下時（編集モードのみ）
         // 子要素のクリックでも反応させる
+        // Shiftキー押下時はコメント単位、通常クリックはタイムスタンプ単位でトグル
         if (target.classList.contains('timestamp')) {
-            toggleTsItemGrayout(target);
+            toggleTsItemGrayout(target, event.shiftKey);
         } else {
             const parent = target.closest('.timestamp');
             if (parent) {
-                toggleTsItemGrayout(parent);
+                toggleTsItemGrayout(parent, event.shiftKey);
             }
         }
 
@@ -451,6 +452,20 @@ function toggleTsItemsStyle(btn, currentIsEdit) {
         // キャンセルボタンの表示
         camcelBtn.classList.toggle('hidden', !newIsEditFlg);
     }
+    // 編集モードのヒント表示/非表示
+    let hintElement = timestampsElement.querySelector('.edit-hint');
+    if (newIsEditFlg) {
+        if (!hintElement) {
+            hintElement = document.createElement('div');
+            hintElement.className = 'edit-hint text-xs text-gray-500 mb-2 bg-yellow-50 p-1 rounded';
+            hintElement.textContent = 'クリック: 個別切替 / Shift+クリック: コメント一括切替';
+            timestampsElement.insertBefore(hintElement, timestampsElement.firstChild);
+        }
+    } else {
+        if (hintElement) {
+            hintElement.remove();
+        }
+    }
     // TS項目のモード変更
     tsItems.forEach(tsItem => {
         tsItem.classList.toggle('border-[0.5px]', newIsEditFlg);
@@ -466,9 +481,10 @@ function toggleTsItemsStyle(btn, currentIsEdit) {
 
 /**
  * TS項目クリック時の表示切替
- * フラグの変更などは内部で実施してくれるので、グレイアウトを反転させたいTS項目を指定して実行するだけでよい
+ * shiftKey=true: コメント単位でトグル（同じcomment_idを持つ全タイムスタンプ）
+ * shiftKey=false: タイムスタンプ単位でトグル（クリックした項目のみ）
  */
-function toggleTsItemGrayout(tsItem) {
+function toggleTsItemGrayout(tsItem, shiftKey = false) {
     // 編集モードでなければ終了（リンクが非表示の場合は通常モードなので終了）
     const linkElement = tsItem.querySelector('a');
     if (!linkElement || !linkElement.classList.contains('hidden')) { return; }
@@ -476,26 +492,33 @@ function toggleTsItemGrayout(tsItem) {
     // 現在の表示状態を取得し、状態を反転させてそれに合わせてclassを更新する
     const newIsDisplayFlg = !tsItem.classList.contains('is-display');
 
-    // 対象の data-comment を取得
-    const commentId = tsItem.dataset.comment;
+    if (shiftKey) {
+        // Shiftキー押下時: コメント単位でトグル（既存の動作）
+        const commentId = tsItem.dataset.comment;
+        const container = tsItem.closest('.timestamps');
+        if (!container) { return; }
 
-    // tsItemの親である .timestamps 要素を取得
-    const container = tsItem.closest('.timestamps');
-    if (!container) { return; }
+        const matchingItems = container.querySelectorAll(`.timestamp[data-comment="${commentId}"]`);
+        matchingItems.forEach(item => {
+            updateTsItemStyle(item, newIsDisplayFlg);
+        });
+    } else {
+        // 通常クリック: タイムスタンプ単位でトグル（新機能）
+        updateTsItemStyle(tsItem, newIsDisplayFlg);
+    }
+}
 
-    // container内の、同じ data-comment を持つ timestamp 要素を取得
-    const matchingItems = container.querySelectorAll(`.timestamp[data-comment="${commentId}"]`);
-
-    // tsItemのclassを更新
-    matchingItems.forEach(item => {
-        // 表示時
-        item.classList.toggle('is-display', newIsDisplayFlg);
-        item.classList.toggle('text-gray-700', newIsDisplayFlg);
-        // 非表示時
-        item.classList.toggle('text-gray-500', !newIsDisplayFlg);
-        item.classList.toggle('pl-4', !newIsDisplayFlg);
-        item.classList.toggle('bg-gray-200', !newIsDisplayFlg);
-    });
+/**
+ * タイムスタンプ項目のスタイルを更新
+ */
+function updateTsItemStyle(item, isDisplay) {
+    // 表示時
+    item.classList.toggle('is-display', isDisplay);
+    item.classList.toggle('text-gray-700', isDisplay);
+    // 非表示時
+    item.classList.toggle('text-gray-500', !isDisplay);
+    item.classList.toggle('pl-4', !isDisplay);
+    item.classList.toggle('bg-gray-200', !isDisplay);
 }
 
 function getTsItems(tsItems) {
