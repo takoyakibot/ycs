@@ -725,4 +725,236 @@ class RefreshArchiveServiceTest extends TestCase
 
         $this->service->refreshTimeStampsFromComments($videoId);
     }
+
+    /**
+     * isCoverSong: 「歌ってみた」を含むタイトルを検出
+     */
+    public function test_is_cover_song_detects_utatte_mita(): void
+    {
+        $this->assertTrue($this->service->isCoverSong('【歌ってみた】夜に駆ける / YOASOBI'));
+        $this->assertTrue($this->service->isCoverSong('夜に駆ける 歌ってみた'));
+    }
+
+    /**
+     * isCoverSong: 「cover」を含むタイトルを検出（大文字小文字無視）
+     */
+    public function test_is_cover_song_detects_cover(): void
+    {
+        $this->assertTrue($this->service->isCoverSong('【Cover】夜に駆ける'));
+        $this->assertTrue($this->service->isCoverSong('夜に駆ける cover'));
+        $this->assertTrue($this->service->isCoverSong('夜に駆ける COVER'));
+    }
+
+    /**
+     * isCoverSong: 「カバー」を含むタイトルを検出
+     */
+    public function test_is_cover_song_detects_katakana_cover(): void
+    {
+        $this->assertTrue($this->service->isCoverSong('夜に駆ける【カバー】'));
+        $this->assertTrue($this->service->isCoverSong('カバー曲集'));
+    }
+
+    /**
+     * isCoverSong: 関連キーワードを含まないタイトルはfalse
+     */
+    public function test_is_cover_song_returns_false_for_normal_title(): void
+    {
+        $this->assertFalse($this->service->isCoverSong('【歌枠】歌います！'));
+        $this->assertFalse($this->service->isCoverSong('雑談配信'));
+        $this->assertFalse($this->service->isCoverSong('ゲーム実況'));
+    }
+
+    /**
+     * createCoverSongTsItem: カバー曲用のts_itemが正しく生成される
+     */
+    public function test_create_cover_song_ts_item(): void
+    {
+        $archive = [
+            'video_id' => 'video123',
+            'title' => '【歌ってみた】夜に駆ける / YOASOBI',
+        ];
+
+        $tsItem = $this->service->createCoverSongTsItem($archive);
+
+        $this->assertEquals('video123', $tsItem['video_id']);
+        $this->assertEquals('video123', $tsItem['comment_id']);
+        $this->assertEquals('3', $tsItem['type']);
+        $this->assertEquals('0:00', $tsItem['ts_text']);
+        $this->assertEquals(0, $tsItem['ts_num']);
+        $this->assertEquals('【歌ってみた】夜に駆ける / YOASOBI', $tsItem['text']);
+        $this->assertTrue($tsItem['is_display']);
+        $this->assertNotEmpty($tsItem['id']);
+        $this->assertNotEmpty($tsItem['normalized_text']);
+    }
+
+    /**
+     * extractCoverSongTsItems: カバー曲のみがts_itemsとして抽出される
+     */
+    public function test_extract_cover_song_ts_items(): void
+    {
+        $archives = [
+            ['video_id' => 'video1', 'title' => '【歌ってみた】夜に駆ける'],
+            ['video_id' => 'video2', 'title' => '【歌枠】歌います！'],
+            ['video_id' => 'video3', 'title' => '【Cover】群青'],
+            ['video_id' => 'video4', 'title' => '雑談配信'],
+        ];
+
+        $coverTsItems = $this->service->extractCoverSongTsItems($archives);
+
+        // video1とvideo3のみがカバー曲として抽出される
+        $this->assertCount(2, $coverTsItems);
+
+        $videoIds = array_column($coverTsItems, 'video_id');
+        $this->assertContains('video1', $videoIds);
+        $this->assertContains('video3', $videoIds);
+        $this->assertNotContains('video2', $videoIds);
+        $this->assertNotContains('video4', $videoIds);
+    }
+
+    /**
+     * refreshArchives: カバー曲動画が0:00のts_itemとして登録される
+     */
+    public function test_refresh_archives_registers_cover_songs(): void
+    {
+        $channel = Channel::factory()->create(['channel_id' => 'UC123456789']);
+
+        // YouTubeServiceのモック設定
+        $this->youtubeService
+            ->shouldReceive('getArchivesAndTsItems')
+            ->once()
+            ->andReturn([
+                [
+                    'id' => Str::uuid()->toString(),
+                    'video_id' => 'cover_video',
+                    'channel_id' => $channel->channel_id,
+                    'title' => '【歌ってみた】夜に駆ける / YOASOBI',
+                    'thumbnail' => 'https://example.com/thumb.jpg',
+                    'is_public' => true,
+                    'is_display' => true,
+                    'published_at' => now(),
+                    'comments_updated_at' => now(),
+                    'description' => '',
+                    'ts_items' => [], // 概要欄にタイムスタンプなし
+                ],
+                [
+                    'id' => Str::uuid()->toString(),
+                    'video_id' => 'normal_video',
+                    'channel_id' => $channel->channel_id,
+                    'title' => '【歌枠】歌います！',
+                    'thumbnail' => 'https://example.com/thumb2.jpg',
+                    'is_public' => true,
+                    'is_display' => true,
+                    'published_at' => now(),
+                    'comments_updated_at' => now(),
+                    'description' => '',
+                    'ts_items' => [
+                        [
+                            'id' => Str::uuid()->toString(),
+                            'video_id' => 'normal_video',
+                            'type' => '1',
+                            'ts_text' => '1:00',
+                            'ts_num' => 60,
+                            'text' => 'Test Song',
+                            'is_display' => true,
+                        ],
+                    ],
+                ],
+            ]);
+
+        $this->service->refreshArchives($channel);
+
+        // カバー曲動画に0:00のts_itemが登録されていることを確認
+        $this->assertDatabaseHas('ts_items', [
+            'video_id' => 'cover_video',
+            'type' => '3',
+            'ts_text' => '0:00',
+            'ts_num' => 0,
+            'text' => '【歌ってみた】夜に駆ける / YOASOBI',
+        ]);
+
+        // 通常動画にはカバー曲のts_itemがないことを確認
+        $this->assertDatabaseMissing('ts_items', [
+            'video_id' => 'normal_video',
+            'type' => '3',
+        ]);
+
+        // 通常動画の概要欄タイムスタンプは登録されていることを確認
+        $this->assertDatabaseHas('ts_items', [
+            'video_id' => 'normal_video',
+            'type' => '1',
+            'text' => 'Test Song',
+        ]);
+    }
+
+    /**
+     * refreshArchives: カバー曲動画でも概要欄のタイムスタンプがあれば両方登録される
+     */
+    public function test_refresh_archives_registers_both_cover_and_timestamps(): void
+    {
+        $channel = Channel::factory()->create(['channel_id' => 'UC123456789']);
+
+        // YouTubeServiceのモック設定
+        $this->youtubeService
+            ->shouldReceive('getArchivesAndTsItems')
+            ->once()
+            ->andReturn([
+                [
+                    'id' => Str::uuid()->toString(),
+                    'video_id' => 'cover_video',
+                    'channel_id' => $channel->channel_id,
+                    'title' => '【Cover】カバー曲集',
+                    'thumbnail' => 'https://example.com/thumb.jpg',
+                    'is_public' => true,
+                    'is_display' => true,
+                    'published_at' => now(),
+                    'comments_updated_at' => now(),
+                    'description' => '',
+                    'ts_items' => [
+                        [
+                            'id' => Str::uuid()->toString(),
+                            'video_id' => 'cover_video',
+                            'type' => '1',
+                            'ts_text' => '1:00',
+                            'ts_num' => 60,
+                            'text' => '夜に駆ける',
+                            'is_display' => true,
+                        ],
+                        [
+                            'id' => Str::uuid()->toString(),
+                            'video_id' => 'cover_video',
+                            'type' => '1',
+                            'ts_text' => '5:00',
+                            'ts_num' => 300,
+                            'text' => '群青',
+                            'is_display' => true,
+                        ],
+                    ],
+                ],
+            ]);
+
+        $this->service->refreshArchives($channel);
+
+        // カバー曲として0:00のts_itemが登録される
+        $this->assertDatabaseHas('ts_items', [
+            'video_id' => 'cover_video',
+            'type' => '3',
+            'ts_text' => '0:00',
+            'ts_num' => 0,
+        ]);
+
+        // 概要欄のタイムスタンプも登録される
+        $this->assertDatabaseHas('ts_items', [
+            'video_id' => 'cover_video',
+            'type' => '1',
+            'text' => '夜に駆ける',
+        ]);
+        $this->assertDatabaseHas('ts_items', [
+            'video_id' => 'cover_video',
+            'type' => '1',
+            'text' => '群青',
+        ]);
+
+        // 合計3件のts_itemが登録されていること
+        $this->assertEquals(3, TsItem::where('video_id', 'cover_video')->count());
+    }
 }

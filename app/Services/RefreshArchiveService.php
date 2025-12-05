@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Helpers\TextNormalizer;
 use App\Models\Archive;
 use App\Models\Channel;
 use App\Models\TsItem;
@@ -9,6 +10,7 @@ use App\Models\User;
 use Exception;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class RefreshArchiveService
 {
@@ -128,8 +130,11 @@ class RefreshArchiveService
         }
         unset($ts_items);
 
+        // カバー曲（歌ってみた）のts_itemsを生成
+        $cover_ts_items = $this->extractCoverSongTsItems($rtn_archives);
+
         // 全てのDB操作を1つのトランザクションで実行（原子性を保証）
-        DB::transaction(function () use ($channel, $rtn_archives, $rtn_ts_items, $comment_ts_items_map) {
+        DB::transaction(function () use ($channel, $rtn_archives, $rtn_ts_items, $comment_ts_items_map, $cover_ts_items) {
             // 2.一度関連情報を削除（cascadeでTsItemsも消える）
             Archive::where('channel_id', $channel->channel_id)->delete();
 
@@ -143,6 +148,14 @@ class RefreshArchiveService
             }
             if ($rtn_ts_items) {
                 $chunked = array_chunk($rtn_ts_items, 100);
+                foreach ($chunked as $chunk) {
+                    DB::table('ts_items')->insert($chunk);
+                }
+            }
+
+            // 4.1.1.カバー曲のts_itemsを登録
+            if ($cover_ts_items) {
+                $chunked = array_chunk($cover_ts_items, 100);
                 foreach ($chunked as $chunk) {
                     DB::table('ts_items')->insert($chunk);
                 }
@@ -217,5 +230,72 @@ class RefreshArchiveService
     public function getChannelCountForUser(int $userId): int
     {
         return $this->channelQueryService->getChannelCountForUser($userId);
+    }
+
+    /**
+     * カバー曲（歌ってみた）動画かどうかを判定
+     *
+     * タイトルに「歌ってみた」「cover」「カバー」が含まれる場合はカバー曲と判定
+     */
+    public function isCoverSong(string $title): bool
+    {
+        $lowerTitle = mb_strtolower($title);
+
+        // 検出キーワード
+        $keywords = ['歌ってみた', 'cover', 'カバー'];
+
+        foreach ($keywords as $keyword) {
+            if (mb_strpos($lowerTitle, mb_strtolower($keyword)) !== false) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * カバー曲用のts_itemを作成
+     *
+     * @param  array  $archive  アーカイブ情報（video_id, title が必要）
+     * @return array ts_item配列
+     */
+    public function createCoverSongTsItem(array $archive): array
+    {
+        $title = $archive['title'];
+
+        return [
+            'id' => Str::ulid(),
+            'comment_id' => $archive['video_id'], // 概要欄と同様にvideo_idを設定
+            'video_id' => $archive['video_id'],
+            'type' => '3', // カバー曲
+            'ts_text' => '0:00',
+            'ts_num' => 0,
+            'text' => $title,
+            'normalized_text' => TextNormalizer::normalize($title),
+            'is_display' => true,
+        ];
+    }
+
+    /**
+     * アーカイブ配列からカバー曲のts_itemsを生成
+     *
+     * @param  array  $archives  アーカイブ配列
+     * @return array カバー曲のts_items配列
+     */
+    public function extractCoverSongTsItems(array $archives): array
+    {
+        $coverTsItems = [];
+        $now = now();
+
+        foreach ($archives as $archive) {
+            if ($this->isCoverSong($archive['title'])) {
+                $tsItem = $this->createCoverSongTsItem($archive);
+                $tsItem['created_at'] = $now;
+                $tsItem['updated_at'] = $now;
+                $coverTsItems[] = $tsItem;
+            }
+        }
+
+        return $coverTsItems;
     }
 }
