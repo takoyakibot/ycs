@@ -729,7 +729,10 @@ class TimestampNormalization {
             this.showLoading();
 
             for (const ts of this.selectedTimestamps) {
-                await timestampApiService.markAsNotSong(ts.normalized_text);
+                // normalized_textが空の場合は元のtextも送信
+                const normalizedText = ts.normalized_text || null;
+                const text = !ts.normalized_text ? ts.text : null;
+                await timestampApiService.markAsNotSong(normalizedText, text);
             }
 
             toast.success('楽曲ではないとマークしました。');

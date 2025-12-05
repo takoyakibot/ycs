@@ -37,12 +37,18 @@ export class TimestampApiService {
     /**
      * タイムスタンプを「楽曲ではない」とマーク
      * @param {string} normalizedText - 正規化されたテキスト
+     * @param {string} [text] - 元のテキスト（正規化前）
      * @returns {Promise<Object>} レスポンスデータ
      */
-    async markAsNotSong(normalizedText) {
-        const response = await axios.post('/api/songs/mark-not-song', {
-            normalized_text: normalizedText
-        });
+    async markAsNotSong(normalizedText, text = null) {
+        const data = {};
+        if (normalizedText) {
+            data.normalized_text = normalizedText;
+        }
+        if (text) {
+            data.text = text;
+        }
+        const response = await axios.post('/api/songs/mark-not-song', data);
         return response.data;
     }
 
