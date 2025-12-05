@@ -443,4 +443,107 @@ class ManageControllerTest extends TestCase
         // シンプルにジョブがプッシュされたことを確認
         Queue::assertPushed(RefreshChannelArchivesJob::class);
     }
+
+    /**
+     * 同一コメント内のタイムスタンプに異なる表示設定をした場合、タイムスタンプ単位でchange_listが作成される
+     */
+    public function test_edit_timestamps_creates_ts_item_level_change_list(): void
+    {
+        $channel = Channel::factory()->create();
+        $archive = Archive::factory()->create(['channel_id' => $channel->channel_id]);
+
+        // 同じコメント内に3つのタイムスタンプを作成
+        $tsItems = TsItem::factory()->count(3)->create([
+            'video_id' => $archive->video_id,
+            'comment_id' => 'comment-123',
+            'is_display' => 1,
+        ]);
+
+        // 最初の2つは表示、3つ目は非表示に設定（異なる設定を混在させる）
+        $requestData = [
+            ['id' => $tsItems[0]->id, 'comment_id' => $tsItems[0]->comment_id, 'is_display' => true],
+            ['id' => $tsItems[1]->id, 'comment_id' => $tsItems[1]->comment_id, 'is_display' => true],
+            ['id' => $tsItems[2]->id, 'comment_id' => $tsItems[2]->comment_id, 'is_display' => false],
+        ];
+
+        $response = $this->actingAs($this->user)
+            ->patchJson('/api/manage/archives/edit-timestamps', $requestData);
+
+        $response->assertStatus(200);
+
+        // ts_itemsの表示状態が更新されている
+        $this->assertDatabaseHas('ts_items', ['id' => $tsItems[0]->id, 'is_display' => 1]);
+        $this->assertDatabaseHas('ts_items', ['id' => $tsItems[1]->id, 'is_display' => 1]);
+        $this->assertDatabaseHas('ts_items', ['id' => $tsItems[2]->id, 'is_display' => 0]);
+
+        // タイムスタンプ単位でchange_listが作成されている（ts_item_idが設定されている）
+        $this->assertDatabaseHas('change_list', [
+            'video_id' => $archive->video_id,
+            'comment_id' => 'comment-123',
+            'ts_item_id' => $tsItems[0]->id,
+            'is_display' => 1,
+        ]);
+        $this->assertDatabaseHas('change_list', [
+            'video_id' => $archive->video_id,
+            'comment_id' => 'comment-123',
+            'ts_item_id' => $tsItems[1]->id,
+            'is_display' => 1,
+        ]);
+        $this->assertDatabaseHas('change_list', [
+            'video_id' => $archive->video_id,
+            'comment_id' => 'comment-123',
+            'ts_item_id' => $tsItems[2]->id,
+            'is_display' => 0,
+        ]);
+
+        // コメント単位のchange_list（ts_item_id=null）が作成されていない
+        $this->assertDatabaseMissing('change_list', [
+            'video_id' => $archive->video_id,
+            'comment_id' => 'comment-123',
+            'ts_item_id' => null,
+        ]);
+    }
+
+    /**
+     * 同一コメント内のタイムスタンプが全て同じ表示設定の場合、コメント単位でchange_listが作成される
+     */
+    public function test_edit_timestamps_creates_comment_level_change_list_when_all_same(): void
+    {
+        $channel = Channel::factory()->create();
+        $archive = Archive::factory()->create(['channel_id' => $channel->channel_id]);
+
+        // 同じコメント内に3つのタイムスタンプを作成
+        $tsItems = TsItem::factory()->count(3)->create([
+            'video_id' => $archive->video_id,
+            'comment_id' => 'comment-456',
+            'is_display' => 1,
+        ]);
+
+        // 全て非表示に設定
+        $requestData = $tsItems->map(fn ($item) => [
+            'id' => $item->id,
+            'comment_id' => $item->comment_id,
+            'is_display' => false,
+        ])->toArray();
+
+        $response = $this->actingAs($this->user)
+            ->patchJson('/api/manage/archives/edit-timestamps', $requestData);
+
+        $response->assertStatus(200);
+
+        // コメント単位でchange_listが作成されている（ts_item_id=null）
+        $this->assertDatabaseHas('change_list', [
+            'video_id' => $archive->video_id,
+            'comment_id' => 'comment-456',
+            'ts_item_id' => null,
+            'is_display' => 0,
+        ]);
+
+        // タイムスタンプ単位のchange_list（ts_item_idが設定されている）が作成されていない
+        $count = ChangeList::where('video_id', $archive->video_id)
+            ->where('comment_id', 'comment-456')
+            ->whereNotNull('ts_item_id')
+            ->count();
+        $this->assertEquals(0, $count);
+    }
 }

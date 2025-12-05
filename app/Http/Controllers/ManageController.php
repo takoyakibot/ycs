@@ -234,6 +234,9 @@ class ManageController extends Controller
     public function editTimestamps(EditTimestampsRequest $request)
     {
         $validatedData = $request->validated();
+        if (empty($validatedData)) {
+            throw new \InvalidArgumentException('タイムスタンプデータが空です');
+        }
         DB::transaction(function () use ($validatedData) {
             // リクエストで渡されたタイムスタンプIDに紐づくarchiveを取得
             $firstItemId = $validatedData[0]['id'];
