@@ -107,6 +107,27 @@ class RefreshArchiveService
             }
         }
 
+        // DB::table()->insert()はEloquentのtimestampsが動作しないため、手動で追加
+        $now = now();
+        foreach ($rtn_archives as &$archive) {
+            $archive['created_at'] = $now;
+            $archive['updated_at'] = $now;
+        }
+        unset($archive);
+        foreach ($rtn_ts_items as &$ts_item) {
+            $ts_item['created_at'] = $now;
+            $ts_item['updated_at'] = $now;
+        }
+        unset($ts_item);
+        foreach ($comment_ts_items_map as &$ts_items) {
+            foreach ($ts_items as &$ts_item) {
+                $ts_item['created_at'] = $now;
+                $ts_item['updated_at'] = $now;
+            }
+            unset($ts_item);
+        }
+        unset($ts_items);
+
         // 全てのDB操作を1つのトランザクションで実行（原子性を保証）
         DB::transaction(function () use ($channel, $rtn_archives, $rtn_ts_items, $comment_ts_items_map) {
             // 2.一度関連情報を削除（cascadeでTsItemsも消える）
@@ -161,6 +182,15 @@ class RefreshArchiveService
             error_log($e->getMessage());
             throw new Exception('youtubeとの接続でエラーが発生しました');
         }
+
+        // DB::table()->insert()はEloquentのtimestampsが動作しないため、手動で追加
+        $now = now();
+        foreach ($ts_items as &$ts_item) {
+            $ts_item['created_at'] = $now;
+            $ts_item['updated_at'] = $now;
+        }
+        unset($ts_item);
+
         TsItem::where('video_id', $videoId)
             ->where('type', '2')
             ->delete();
