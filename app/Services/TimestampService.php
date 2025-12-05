@@ -254,6 +254,69 @@ class TimestampService
     }
 
     /**
+     * チャンネルのタイムスタンプからランダムに1件取得
+     *
+     * @return array|null タイムスタンプデータ（見つからない場合はnull）
+     */
+    public function getRandomTimestamp(Channel $channel): ?array
+    {
+        // ベースクエリ: ts_itemsとtimestamp_song_mappings、songsをLEFT JOIN
+        $query = TsItem::with(['archive'])
+            ->leftJoin('timestamp_song_mappings', 'ts_items.normalized_text', '=', 'timestamp_song_mappings.normalized_text')
+            ->leftJoin('songs', 'timestamp_song_mappings.song_id', '=', 'songs.id')
+            ->select(
+                'ts_items.*',
+                'timestamp_song_mappings.id as mapping_id',
+                'timestamp_song_mappings.song_id',
+                'timestamp_song_mappings.is_not_song',
+                'songs.title as song_title',
+                'songs.artist as song_artist',
+                'songs.spotify_track_id'
+            )
+            ->whereHas('archive', function ($q) use ($channel) {
+                $q->where('channel_id', $channel->channel_id)
+                    ->where('is_display', 1);
+            })
+            ->whereNotNull('ts_items.text')
+            ->where('ts_items.text', '!=', '')
+            ->whereNotNull('ts_items.normalized_text')
+            ->where('ts_items.is_display', 1);
+
+        // 「楽曲ではない」を除外
+        $query->where(function ($q) {
+            $q->whereNull('timestamp_song_mappings.id')
+                ->orWhere('timestamp_song_mappings.is_not_song', false);
+        });
+
+        // ランダムに1件取得
+        $item = $query->inRandomOrder()->first();
+
+        if (! $item) {
+            return null;
+        }
+
+        return [
+            'id' => $item->id,
+            'ts_text' => $item->ts_text,
+            'ts_num' => $item->ts_num,
+            'text' => $item->text,
+            'video_id' => $item->video_id,
+            'archive' => [
+                'title' => $item->archive->title,
+                'published_at' => $item->archive->published_at,
+            ],
+            'mapping' => $item->mapping_id ? [
+                'song' => $item->song_id ? [
+                    'title' => $item->song_title,
+                    'artist' => $item->song_artist,
+                    'spotify_track_id' => ValidationHelper::validateSpotifyTrackId($item->spotify_track_id),
+                ] : null,
+                'is_not_song' => (bool) $item->is_not_song,
+            ] : null,
+        ];
+    }
+
+    /**
      * 未解決の報告があるタイムスタンプIDを取得
      */
     private function fetchReportedIds(array $tsItemIds): array
