@@ -25,6 +25,49 @@
         </button>
     </div>
 
+    {{-- ガチャで選ばれた楽曲の表示 --}}
+    <template x-if="selectedTimestamp && selectedTimestamp.id">
+        <div class="mb-4 p-3 bg-gradient-to-r from-pink-50 to-purple-50 dark:from-pink-900/20 dark:to-purple-900/20 border-2 border-pink-300 dark:border-pink-600 rounded-lg">
+            <div class="flex items-center gap-2 mb-2">
+                <span class="text-xs font-bold text-pink-600 dark:text-pink-400 uppercase tracking-wider">選択中</span>
+            </div>
+            <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                {{-- 楽曲情報 --}}
+                <div class="flex-shrink-0 w-full sm:w-[300px]">
+                    <div class="truncate">
+                        <span class="font-medium text-sm" x-text="selectedSong?.title || selectedTimestamp.text || '-'"></span>
+                        <template x-if="selectedSong?.artist">
+                            <span>
+                                <span class="text-sm text-gray-500 dark:text-gray-400"> / </span>
+                                <span class="text-sm text-gray-500 dark:text-gray-400" x-text="selectedSong.artist"></span>
+                            </span>
+                        </template>
+                    </div>
+                </div>
+
+                {{-- アーカイブタイトル & 公開日 --}}
+                <div class="hidden sm:block text-sm truncate flex-1">
+                    <div class="truncate text-gray-600 dark:text-gray-400" x-text="selectedTimestamp.archive?.title || ''"></div>
+                    <div class="mt-0.5 text-xs text-gray-500 dark:text-gray-500">
+                        <span x-text="'公開日: ' + (selectedTimestamp.archive?.published_at ? formatPublishedDate(selectedTimestamp.archive.published_at) : '不明')"></span>
+                        <span x-text="'　タイムスタンプ: ' + selectedTimestamp.ts_text"></span>
+                    </div>
+                </div>
+
+                {{-- 動画リンク --}}
+                <a :href="getYoutubeUrl(selectedTimestamp.video_id, selectedTimestamp.ts_num)"
+                   class="inline-flex items-center gap-1 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-xs sm:text-sm whitespace-nowrap transition-colors"
+                   target="_blank"
+                   title="YouTubeで再生">
+                    <svg class="w-3 h-3 sm:w-4 sm:h-4" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                    </svg>
+                    <span>YTで開く</span>
+                </a>
+            </div>
+        </div>
+    </template>
+
     {{-- ページネーション（上） --}}
     <div class="flex justify-center gap-2 mb-4">
         <button @click="fetchTimestamps(1, searchQuery, selectedIndex)"
