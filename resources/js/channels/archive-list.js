@@ -657,7 +657,8 @@ function registerArchiveListComponent() {
                             videoId: timestamp.video_id,
                             tsNum: timestamp.ts_num,
                             songTitle: timestamp.mapping?.song?.title,
-                            text: timestamp.text
+                            text: timestamp.text,
+                            page: timestamp.page
                         });
 
                         // 楽曲情報または疑似楽曲オブジェクトを設定
@@ -680,6 +681,11 @@ function registerArchiveListComponent() {
                         // 動画を再生
                         if (timestamp.video_id) {
                             this.loadAndPlayVideo(timestamp.video_id, timestamp.ts_num || 0);
+                        }
+
+                        // 該当ページに切り替え
+                        if (timestamp.page && timestamp.page !== this.currentTimestampPage) {
+                            await this.fetchTimestamps(timestamp.page, this.searchQuery, this.selectedIndex);
                         }
 
                         toast.success('ランダムで楽曲を選びました！');

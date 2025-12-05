@@ -256,9 +256,10 @@ class TimestampService
     /**
      * チャンネルのタイムスタンプからランダムに1件取得
      *
+     * @param  int  $perPage  1ページあたりの件数（ページ番号計算用）
      * @return array|null タイムスタンプデータ（見つからない場合はnull）
      */
-    public function getRandomTimestamp(Channel $channel): ?array
+    public function getRandomTimestamp(Channel $channel, int $perPage = 50): ?array
     {
         // ベースクエリ: ts_itemsとtimestamp_song_mappings、songsをLEFT JOIN
         $query = TsItem::with(['archive'])
@@ -295,6 +296,11 @@ class TimestampService
             return null;
         }
 
+        // 選ばれたアイテムのソート順での位置を計算（ページ番号算出用）
+        $sortKey = $item->song_title ?? $item->text;
+        $position = $this->calculateItemPosition($channel, $sortKey, $item->id);
+        $page = (int) ceil($position / $perPage);
+
         return [
             'id' => $item->id,
             'ts_text' => $item->ts_text,
@@ -313,7 +319,55 @@ class TimestampService
                 ] : null,
                 'is_not_song' => (bool) $item->is_not_song,
             ] : null,
+            'page' => max(1, $page),
         ];
+    }
+
+    /**
+     * アイテムのソート順での位置を計算
+     */
+    private function calculateItemPosition(Channel $channel, string $sortKey, string $itemId): int
+    {
+        // ソートキーより前にあるアイテム数をカウント
+        $countBefore = TsItem::query()
+            ->leftJoin('timestamp_song_mappings', 'ts_items.normalized_text', '=', 'timestamp_song_mappings.normalized_text')
+            ->leftJoin('songs', 'timestamp_song_mappings.song_id', '=', 'songs.id')
+            ->whereHas('archive', function ($q) use ($channel) {
+                $q->where('channel_id', $channel->channel_id)
+                    ->where('is_display', 1);
+            })
+            ->whereNotNull('ts_items.text')
+            ->where('ts_items.text', '!=', '')
+            ->whereNotNull('ts_items.normalized_text')
+            ->where('ts_items.is_display', 1)
+            ->where(function ($q) {
+                $q->whereNull('timestamp_song_mappings.id')
+                    ->orWhere('timestamp_song_mappings.is_not_song', false);
+            })
+            ->whereRaw('COALESCE(songs.title, ts_items.text) < ?', [$sortKey])
+            ->count();
+
+        // 同じソートキーを持つアイテムの中での位置も考慮
+        $countSameKey = TsItem::query()
+            ->leftJoin('timestamp_song_mappings', 'ts_items.normalized_text', '=', 'timestamp_song_mappings.normalized_text')
+            ->leftJoin('songs', 'timestamp_song_mappings.song_id', '=', 'songs.id')
+            ->whereHas('archive', function ($q) use ($channel) {
+                $q->where('channel_id', $channel->channel_id)
+                    ->where('is_display', 1);
+            })
+            ->whereNotNull('ts_items.text')
+            ->where('ts_items.text', '!=', '')
+            ->whereNotNull('ts_items.normalized_text')
+            ->where('ts_items.is_display', 1)
+            ->where(function ($q) {
+                $q->whereNull('timestamp_song_mappings.id')
+                    ->orWhere('timestamp_song_mappings.is_not_song', false);
+            })
+            ->whereRaw('COALESCE(songs.title, ts_items.text) = ?', [$sortKey])
+            ->where('ts_items.id', '<', $itemId)
+            ->count();
+
+        return $countBefore + $countSameKey + 1;
     }
 
     /**
