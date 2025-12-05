@@ -13,6 +13,15 @@ import { ChannelApiService } from './services/ChannelApiService.js';
 import { ReportService } from './services/ReportService.js';
 
 /**
+ * ユーザー操作ログを出力
+ * @param {string} action - 操作名
+ * @param {Object} data - ログデータ
+ */
+const logUserAction = (action, data) => {
+    console.log(`[UserAction] ${action}:`, data);
+};
+
+/**
  * アーカイブ一覧とタイムスタンプ管理コンポーネント
  * Alpine.jsコンポーネント登録
  */
@@ -113,6 +122,11 @@ function registerArchiveListComponent() {
                     params.append('visible', '');
                     params.append('ts', this.tsFlg);
 
+                    logUserAction('archiveSearch', {
+                        query: this.archiveQuery,
+                        tsFilter: this.tsFlg
+                    });
+
                     const hasQuery = this.archiveQuery.length > 0;
                     this.$dispatch('filter-changed', hasQuery);
 
@@ -121,6 +135,12 @@ function registerArchiveListComponent() {
                 },
 
                 async fetchTimestamps(page = 1, search = '', index = '') {
+                    logUserAction('fetchTimestamps', {
+                        page,
+                        search,
+                        index
+                    });
+
                     try {
                         this.loading = true;
                         this.error = null;
@@ -214,6 +234,17 @@ function registerArchiveListComponent() {
                     const url = isNext ? this.archives.next_page_url : this.archives.prev_page_url;
 
                     if (!url) return;
+
+                    const targetPage = isNext
+                        ? this.archives.current_page + 1
+                        : this.archives.current_page - 1;
+
+                    logUserAction('archivePagination', {
+                        direction: isNext ? 'next' : 'prev',
+                        fromPage: this.archives.current_page,
+                        toPage: targetPage
+                    });
+
                     this.fetchData(url);
                     window.scroll({top: 0, behavior: 'auto'});
                 },
@@ -348,6 +379,16 @@ function registerArchiveListComponent() {
                 // 配信リンクパネル関連メソッド
                 selectSong(song, timestamp = null) {
                     if (!song) return;
+
+                    logUserAction('selectTimestamp', {
+                        type: 'song',
+                        songTitle: song.title,
+                        songArtist: song.artist,
+                        timestampId: timestamp?.id,
+                        videoId: timestamp?.video_id,
+                        tsNum: timestamp?.ts_num
+                    });
+
                     this.selectedSong = song;
                     this.selectedTimestamp = timestamp;
                     if (!this.panelDismissed) {
@@ -361,6 +402,15 @@ function registerArchiveListComponent() {
 
                 selectText(text, timestamp = null) {
                     if (!text || text.trim() === '') return;
+
+                    logUserAction('selectTimestamp', {
+                        type: 'text',
+                        text: text.trim(),
+                        timestampId: timestamp?.id,
+                        videoId: timestamp?.video_id,
+                        tsNum: timestamp?.ts_num
+                    });
+
                     const pseudoSong = {
                         title: text.trim(),
                         artist: '',
@@ -496,6 +546,11 @@ function registerArchiveListComponent() {
                         console.error('Invalid video ID:', videoId);
                         return;
                     }
+
+                    logUserAction('playVideo', {
+                        videoId,
+                        startTime: time
+                    });
 
                     this.currentVideoId = videoId;
                     this.currentVideoTime = time;
