@@ -69,15 +69,11 @@ class TimestampNormalization {
             document.getElementById('spotifyTracks').innerHTML = '';
         });
 
-        // 更新ボタン
-        document.getElementById('refreshTimestampsBtn').addEventListener('click', () => {
-            this.loadTimestamps(this.currentPage, this.currentSearchQuery);
-        });
-
-        // 楽曲マスタ一覧表示
-        document.getElementById('showSongsBtn').addEventListener('click', () => {
-            this.showTab('songsTab');
-            this.loadSongs();
+        // タイムスタンプ検索クリアボタン
+        document.getElementById('clearTimestampSearchBtn').addEventListener('click', () => {
+            document.getElementById('timestampSearch').value = '';
+            this.currentSearchQuery = '';
+            this.loadTimestamps(1, '');
         });
 
         // 手動登録フォーム
@@ -278,6 +274,9 @@ class TimestampNormalization {
         Pagination.render(container, data, (page) => {
             this.loadTimestamps(page, this.currentSearchQuery);
             document.getElementById('timestampsList').scrollTop = 0;
+        }, {
+            showJumpButtons: false,
+            showFirstLast: false
         });
     }
 
@@ -639,7 +638,7 @@ class TimestampNormalization {
 
         // 削除ボタン
         const deleteBtn = document.createElement('button');
-        deleteBtn.className = 'px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700';
+        deleteBtn.className = 'px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 flex-shrink-0 ml-2';
         deleteBtn.textContent = '削除';
         deleteBtn.addEventListener('click', async (e) => {
             e.stopPropagation();

@@ -4,31 +4,26 @@
             <!-- 検索エリア -->
             <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg mb-6">
                 <div class="p-6 text-gray-900 dark:text-gray-100">
-                    <div class="flex flex-col sm:flex-row gap-4 mb-4">
-                        <div class="flex-1">
-                            <label class="block text-sm font-medium mb-2">タイムスタンプ検索</label>
-                            <input type="text" id="timestampSearch" placeholder="楽曲名やアーティスト名で検索..." class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        </div>
-                        <div class="flex-1">
-                            <label class="block text-sm font-medium mb-2">Spotify検索</label>
-                            <div class="flex gap-2">
-                                <input type="text" id="spotifySearch" placeholder="楽曲名 アーティスト名" class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                <button id="searchSpotifyBtn" class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500">
-                                    検索
-                                </button>
-                                <button id="clearSpotifySearchBtn" class="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600">
-                                    クリア
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="flex gap-2">
-                        <button id="refreshTimestampsBtn" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
-                            タイムスタンプ更新
+                    <div class="flex gap-2 items-center">
+                        <input type="text" id="timestampSearch" placeholder="タイムスタンプを検索..." class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <button id="clearTimestampSearchBtn" class="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600">
+                            クリア
                         </button>
-                        <button id="showSongsBtn" class="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700">
-                            楽曲マスタ一覧
-                        </button>
+                        <!-- 絞り込みボタン -->
+                        <div class="flex gap-1" id="filterButtons">
+                            <button data-filter="all" class="filter-btn px-3 py-1 text-sm rounded bg-blue-600 text-white">
+                                全
+                            </button>
+                            <button data-filter="unlinked" class="filter-btn px-3 py-1 text-sm rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">
+                                未紐付
+                            </button>
+                            <button data-filter="linked" class="filter-btn px-3 py-1 text-sm rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">
+                                紐付済
+                            </button>
+                            <button data-filter="not_song" class="filter-btn px-3 py-1 text-sm rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">
+                                非楽曲
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -37,24 +32,8 @@
                 <!-- タイムスタンプ一覧 -->
                 <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
                     <div class="p-6 text-gray-900 dark:text-gray-100">
-                        <div class="flex flex-col gap-2 mb-3">
-                            <div class="flex justify-between items-center">
-                                <h3 class="text-lg font-semibold">タイムスタンプ一覧</h3>
-                            </div>
-                            <div class="flex gap-1 flex-wrap" id="filterButtons">
-                                <button data-filter="all" class="filter-btn px-3 py-1 text-sm rounded bg-blue-600 text-white">
-                                    すべて
-                                </button>
-                                <button data-filter="unlinked" class="filter-btn px-3 py-1 text-sm rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">
-                                    未紐づけ
-                                </button>
-                                <button data-filter="linked" class="filter-btn px-3 py-1 text-sm rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">
-                                    紐づけ済み
-                                </button>
-                                <button data-filter="not_song" class="filter-btn px-3 py-1 text-sm rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">
-                                    楽曲ではない
-                                </button>
-                            </div>
+                        <div class="flex justify-between items-center mb-3">
+                            <h3 class="text-lg font-semibold">タイムスタンプ一覧</h3>
                         </div>
 
                         <!-- 全選択・全選択解除ボタンと動画情報 -->
