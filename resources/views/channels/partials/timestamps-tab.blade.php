@@ -153,6 +153,7 @@
 
         <template x-for="ts in (timestamps.data || [])" :key="ts.id">
             <div class="p-2 border rounded transition-colors"
+                 :data-timestamp-id="ts.id"
                  :class="{
                      'border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-400': selectedSong && ((ts.mapping?.song && ts.mapping.song.title === selectedSong.title && ts.mapping.song.artist === selectedSong.artist) || (!ts.mapping?.song && ts.text === selectedSong.title)),
                      'bg-gray-200 dark:bg-gray-700 border-gray-300 dark:border-gray-500': ts.has_pending_report && !(selectedSong && ((ts.mapping?.song && ts.mapping.song.title === selectedSong.title && ts.mapping.song.artist === selectedSong.artist) || (!ts.mapping?.song && ts.text === selectedSong.title))),

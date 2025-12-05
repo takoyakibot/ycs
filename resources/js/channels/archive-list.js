@@ -688,6 +688,14 @@ function registerArchiveListComponent() {
                             await this.fetchTimestamps(timestamp.page, this.searchQuery, this.selectedIndex);
                         }
 
+                        // 選択された楽曲の位置までスクロール
+                        this.$nextTick(() => {
+                            const selectedElement = document.querySelector(`[data-timestamp-id="${timestamp.id}"]`);
+                            if (selectedElement) {
+                                selectedElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }
+                        });
+
                         toast.success('ランダムで楽曲を選びました！');
                     } catch (error) {
                         console.error('ランダム再生に失敗しました:', error);
