@@ -32,11 +32,16 @@
             </template>
         </div>
         <template x-if="activeTab === 'archives'">
-            <button
-                type="submit"
-                class="bg-blue-500 text-white px-4 py-2 rounded sm:min-w-[100px] hover:bg-blue-600">
-                検索
-            </button>
+            <div class="flex items-center gap-2">
+                <button
+                    type="submit"
+                    class="bg-blue-500 text-white px-4 py-2 rounded sm:min-w-[100px] hover:bg-blue-600">
+                    検索
+                </button>
+                {{-- 件数表示 --}}
+                <span class="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap"
+                      x-text="archives.total !== undefined ? `${archives.total}件` : ''"></span>
+            </div>
         </template>
         <template x-if="activeTab === 'timestamps'">
             <div class="flex items-center gap-2">
