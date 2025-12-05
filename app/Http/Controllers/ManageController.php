@@ -234,10 +234,13 @@ class ManageController extends Controller
     public function editTimestamps(EditTimestampsRequest $request)
     {
         $validatedData = $request->validated();
+        if (empty($validatedData)) {
+            throw new \InvalidArgumentException('タイムスタンプデータが空です');
+        }
         DB::transaction(function () use ($validatedData) {
-            // リクエストで渡されたコメントIDに紐づくarchiveを取得
-            $commentIds = array_column($validatedData, 'comment_id');
-            $tsItem = TsItem::where('comment_id', $commentIds[0])
+            // リクエストで渡されたタイムスタンプIDに紐づくarchiveを取得
+            $firstItemId = $validatedData[0]['id'];
+            $tsItem = TsItem::where('id', $firstItemId)
                 ->with(['archive'])->first();
             if (! $tsItem) {
                 throw new NotFoundException('tsItem is not found');
@@ -268,18 +271,34 @@ class ManageController extends Controller
                 TsItem::whereIn('id', $hideItemIds)->update(['is_display' => '0']);
             }
 
-            // ChangeList作成（コメント単位で実行）
-            $lastCommentId = '';
-            foreach ($validatedData as $item) {
-                if ($lastCommentId !== $item['comment_id']) {
+            // コメントごとにグループ化
+            $groupedByComment = collect($validatedData)->groupBy('comment_id');
+
+            foreach ($groupedByComment as $commentId => $items) {
+                // コメント内の全タイムスタンプのis_displayを取得
+                $displayValues = $items->pluck('is_display')->unique();
+
+                if ($displayValues->count() === 1) {
+                    // 全て同じ設定→コメント単位でchange_listを作成
                     ChangeList::create([
                         'channel_id' => $channelId,
                         'video_id' => $videoId,
-                        'comment_id' => $item['comment_id'],
-                        'is_display' => $item['is_display'],
+                        'comment_id' => $commentId,
+                        'ts_item_id' => null,
+                        'is_display' => $displayValues->first(),
                     ]);
+                } else {
+                    // 異なる設定がある→タイムスタンプ単位でchange_listを作成
+                    foreach ($items as $item) {
+                        ChangeList::create([
+                            'channel_id' => $channelId,
+                            'video_id' => $videoId,
+                            'comment_id' => $commentId,
+                            'ts_item_id' => $item['id'],
+                            'is_display' => $item['is_display'],
+                        ]);
+                    }
                 }
-                $lastCommentId = $item['comment_id'];
             }
         });
 
