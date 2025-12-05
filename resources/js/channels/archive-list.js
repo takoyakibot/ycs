@@ -462,6 +462,15 @@ function registerArchiveListComponent() {
                     return getLineMusicUrl(song);
                 },
 
+                // 配信サービスリンククリックのログ出力
+                logDistributionLinkClick(service) {
+                    logUserAction('clickDistributionLink', {
+                        service,
+                        songTitle: this.selectedSong?.title,
+                        songArtist: this.selectedSong?.artist
+                    });
+                },
+
                 // YouTube IFrame APIの読み込み
                 loadYouTubeAPI() {
                     if (window.YT && window.YT.Player) {

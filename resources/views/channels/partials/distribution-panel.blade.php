@@ -55,6 +55,7 @@
             <div class="flex flex-wrap gap-2 flex-1">
                 {{-- Spotify --}}
                 <a :href="getSpotifyUrl(selectedSong)"
+                   @click="logDistributionLinkClick('spotify')"
                    target="_blank"
                    rel="noopener noreferrer"
                    class="inline-flex items-center gap-1.5 px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-sm rounded-md transition-colors">
@@ -65,6 +66,7 @@
                 </a>
                 {{-- Apple Music --}}
                 <a :href="getAppleMusicUrl(selectedSong)"
+                   @click="logDistributionLinkClick('apple_music')"
                    target="_blank"
                    rel="noopener noreferrer"
                    class="inline-flex items-center gap-1.5 px-3 py-2 bg-pink-600 hover:bg-pink-700 text-white text-sm rounded-md transition-colors">
@@ -75,6 +77,7 @@
                 </a>
                 {{-- YouTube Music --}}
                 <a :href="getYouTubeMusicUrl(selectedSong)"
+                   @click="logDistributionLinkClick('youtube_music')"
                    target="_blank"
                    rel="noopener noreferrer"
                    class="inline-flex items-center gap-1.5 px-3 py-2 bg-red-500 hover:bg-red-600 text-white text-sm rounded-md transition-colors">
@@ -85,6 +88,7 @@
                 </a>
                 {{-- Amazon Music --}}
                 <a :href="getAmazonMusicUrl(selectedSong)"
+                   @click="logDistributionLinkClick('amazon_music')"
                    target="_blank"
                    rel="noopener noreferrer"
                    class="inline-flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-md transition-colors">
@@ -95,6 +99,7 @@
                 </a>
                 {{-- LINE MUSIC --}}
                 <a :href="getLineMusicUrl(selectedSong)"
+                   @click="logDistributionLinkClick('line_music')"
                    target="_blank"
                    rel="noopener noreferrer"
                    class="inline-flex items-center gap-1.5 px-3 py-2 bg-green-500 hover:bg-green-600 text-white text-sm rounded-md transition-colors">
