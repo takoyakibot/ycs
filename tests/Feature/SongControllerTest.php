@@ -663,6 +663,42 @@ class SongControllerTest extends TestCase
     }
 
     /**
+     * 「楽曲ではない」マークのテスト（正規化結果が空になるテキスト）
+     */
+    public function test_mark_as_not_song_with_dash_only_text(): void
+    {
+        $rawText = '-';  // 正規化すると空になるテキスト
+
+        $response = $this->actingAs($this->user)->postJson(route('songs.markAsNotSong'), [
+            'text' => $rawText,
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'message' => '楽曲ではないとマークしました。',
+        ]);
+
+        // 正規化結果が空の場合は元のテキストが使用される
+        $this->assertDatabaseHas('timestamp_song_mappings', [
+            'normalized_text' => '-',
+            'is_not_song' => 1,
+            'song_id' => null,
+        ]);
+    }
+
+    /**
+     * 「楽曲ではない」マークのテスト（空文字列はエラー）
+     */
+    public function test_mark_as_not_song_with_empty_text_returns_error(): void
+    {
+        $response = $this->actingAs($this->user)->postJson(route('songs.markAsNotSong'), [
+            'text' => '',
+        ]);
+
+        $response->assertStatus(422);
+    }
+
+    /**
      * 「楽曲ではない」マーク解除のテスト
      */
     public function test_unmark_as_not_song(): void

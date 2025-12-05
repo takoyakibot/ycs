@@ -326,7 +326,20 @@ class SongController extends Controller
         $validated = $request->validated();
 
         // textが渡された場合は正規化する
-        $normalizedText = $validated['normalized_text'] ?? TextNormalizer::normalize($validated['text']);
+        // 正規化結果が空文字列になる場合（例: "-"のみ）は元のテキストを使用
+        if (isset($validated['normalized_text']) && $validated['normalized_text'] !== '') {
+            $normalizedText = $validated['normalized_text'];
+        } else {
+            $originalText = $validated['text'] ?? '';
+            $normalizedText = TextNormalizer::normalize($originalText);
+            if ($normalizedText === '') {
+                $normalizedText = mb_strtolower(trim($originalText), 'UTF-8');
+            }
+        }
+
+        if ($normalizedText === '') {
+            return response()->json(['message' => 'テキストが空です。'], 422);
+        }
 
         $this->songMappingService->markAsNotSong($normalizedText);
 
