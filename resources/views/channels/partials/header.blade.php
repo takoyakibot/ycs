@@ -3,10 +3,9 @@
     {{-- デスクトップ表示: 全体を中央寄せ --}}
     <div class="flex justify-center">
         <div class="text-gray-500 flex items-center gap-4 hidden sm:flex">
-            <img :src="escapeHTML(channel.thumbnail || '')" alt="アイコン" class="w-20 h-20 rounded-full">
-            <span class="text-lg font-bold" x-text="channel.title || '未設定'"></span>
-            <a :href="'https://youtube.com/@' + escapeHTML(channel.handle || '')" target="_blank" rel="noopener noreferrer" class="hover:opacity-80">
-                Youtubeチャンネルはこちら
+            <a :href="'https://youtube.com/@' + escapeHTML(channel.handle || '')" target="_blank" rel="noopener noreferrer" class="flex items-center gap-4 hover:opacity-80">
+                <img :src="escapeHTML(channel.thumbnail || '')" alt="アイコン" class="w-20 h-20 rounded-full">
+                <span class="text-lg font-bold" x-text="channel.title || '未設定'"></span>
             </a>
             {{-- 区切り線 --}}
             <div class="h-8 w-px bg-gray-300 dark:bg-gray-600 mx-2"></div>
