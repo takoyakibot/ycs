@@ -57,7 +57,15 @@
     {{-- 頭文字フィルタナビゲーション --}}
     <div x-show="timestamps.available_indexes && timestamps.available_indexes.length > 0" class="mb-4 hidden sm:block">
         <div class="flex flex-wrap items-center gap-1">
-            <span class="text-xs text-gray-500 dark:text-gray-400 mr-1">絞り込み:</span>
+            {{-- 折りたたみトグル --}}
+            <button
+                @click="toggleFilterExpanded()"
+                class="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 mr-1 flex items-center gap-1">
+                絞り込み
+                <svg class="w-3 h-3 transition-transform" :class="filterExpanded ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                </svg>
+            </button>
             {{-- すべて --}}
             <button
                 @click="clearIndexFilter()"
@@ -67,62 +75,87 @@
                 class="px-2 h-7 text-xs rounded transition-colors">
                 すべて
             </button>
-            <span class="text-gray-300 dark:text-gray-600 mx-1">|</span>
-            {{-- 数字 --}}
-            <button
-                @click="filterByIndex('0-9')"
-                :disabled="!timestamps.available_indexes?.includes('0-9')"
-                :class="selectedIndex === '0-9'
-                    ? 'bg-purple-700 text-white cursor-pointer ring-2 ring-purple-300'
-                    : (timestamps.available_indexes?.includes('0-9')
-                        ? 'bg-purple-500 hover:bg-purple-600 text-white cursor-pointer'
-                        : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed')"
-                class="px-2 h-7 text-xs rounded transition-colors">
-                0-9
-            </button>
-            <span class="text-gray-300 dark:text-gray-600 mx-1">|</span>
-            {{-- アルファベット（ABCDE, FGHIJ, KLMNO, PQRST, UVWXYZ） --}}
-            <template x-for="group in ['ABCDE','FGHIJ','KLMNO','PQRST','UVWXYZ']" :key="group">
-                <button
-                    @click="filterByIndex(group)"
-                    :disabled="!timestamps.available_indexes?.includes(group)"
-                    :class="selectedIndex === group
-                        ? 'bg-blue-700 text-white cursor-pointer ring-2 ring-blue-300'
-                        : (timestamps.available_indexes?.includes(group)
-                            ? 'bg-blue-500 hover:bg-blue-600 text-white cursor-pointer'
-                            : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed')"
-                    class="px-2 h-7 text-xs rounded transition-colors">
-                    <span x-text="group"></span>
-                </button>
+            {{-- 最近使用したフィルタ（常に表示） --}}
+            <template x-if="recentFilters.length > 0 && !filterExpanded">
+                <span class="flex items-center gap-1">
+                    <span class="text-gray-300 dark:text-gray-600 mx-1">|</span>
+                    <span class="text-xs text-gray-400">最近:</span>
+                    <template x-for="filter in recentFilters" :key="'recent-' + filter">
+                        <button
+                            @click="filterByIndex(filter)"
+                            :disabled="!timestamps.available_indexes?.includes(filter)"
+                            :class="selectedIndex === filter
+                                ? 'bg-indigo-700 text-white cursor-pointer ring-2 ring-indigo-300'
+                                : (timestamps.available_indexes?.includes(filter)
+                                    ? 'bg-indigo-500 hover:bg-indigo-600 text-white cursor-pointer'
+                                    : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed')"
+                            class="px-2 h-7 text-xs rounded transition-colors">
+                            <span x-text="filter"></span>
+                        </button>
+                    </template>
+                </span>
             </template>
-            <span class="text-gray-300 dark:text-gray-600 mx-1">|</span>
-            {{-- 五十音 --}}
-            <template x-for="kana in ['あ','か','さ','た','な','は','ま','や','ら','わ']" :key="kana">
-                <button
-                    @click="filterByIndex(kana)"
-                    :disabled="!timestamps.available_indexes?.includes(kana)"
-                    :class="selectedIndex === kana
-                        ? 'bg-green-700 text-white cursor-pointer ring-2 ring-green-300'
-                        : (timestamps.available_indexes?.includes(kana)
-                            ? 'bg-green-500 hover:bg-green-600 text-white cursor-pointer'
-                            : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed')"
-                    class="w-7 h-7 text-xs rounded transition-colors">
-                    <span x-text="kana"></span>
-                </button>
+            {{-- フィルタ本体（展開時のみ表示） --}}
+            <template x-if="filterExpanded">
+                <span class="flex flex-wrap items-center gap-1">
+                    <span class="text-gray-300 dark:text-gray-600 mx-1">|</span>
+                    {{-- 数字 --}}
+                    <button
+                        @click="filterByIndex('0-9')"
+                        :disabled="!timestamps.available_indexes?.includes('0-9')"
+                        :class="selectedIndex === '0-9'
+                            ? 'bg-purple-700 text-white cursor-pointer ring-2 ring-purple-300'
+                            : (timestamps.available_indexes?.includes('0-9')
+                                ? 'bg-purple-500 hover:bg-purple-600 text-white cursor-pointer'
+                                : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed')"
+                        class="px-2 h-7 text-xs rounded transition-colors">
+                        0-9
+                    </button>
+                    <span class="text-gray-300 dark:text-gray-600 mx-1">|</span>
+                    {{-- アルファベット（ABCDE, FGHIJ, KLMNO, PQRST, UVWXYZ） --}}
+                    <template x-for="group in ['ABCDE','FGHIJ','KLMNO','PQRST','UVWXYZ']" :key="group">
+                        <button
+                            @click="filterByIndex(group)"
+                            :disabled="!timestamps.available_indexes?.includes(group)"
+                            :class="selectedIndex === group
+                                ? 'bg-blue-700 text-white cursor-pointer ring-2 ring-blue-300'
+                                : (timestamps.available_indexes?.includes(group)
+                                    ? 'bg-blue-500 hover:bg-blue-600 text-white cursor-pointer'
+                                    : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed')"
+                            class="px-2 h-7 text-xs rounded transition-colors">
+                            <span x-text="group"></span>
+                        </button>
+                    </template>
+                    <span class="text-gray-300 dark:text-gray-600 mx-1">|</span>
+                    {{-- 五十音 --}}
+                    <template x-for="kana in ['あ','か','さ','た','な','は','ま','や','ら','わ']" :key="kana">
+                        <button
+                            @click="filterByIndex(kana)"
+                            :disabled="!timestamps.available_indexes?.includes(kana)"
+                            :class="selectedIndex === kana
+                                ? 'bg-green-700 text-white cursor-pointer ring-2 ring-green-300'
+                                : (timestamps.available_indexes?.includes(kana)
+                                    ? 'bg-green-500 hover:bg-green-600 text-white cursor-pointer'
+                                    : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed')"
+                            class="w-7 h-7 text-xs rounded transition-colors">
+                            <span x-text="kana"></span>
+                        </button>
+                    </template>
+                    <span class="text-gray-300 dark:text-gray-600 mx-1">|</span>
+                    {{-- 漢字・その他 --}}
+                    <button
+                        @click="filterByIndex('その他')"
+                        :disabled="!timestamps.available_indexes?.includes('その他')"
+                        :class="selectedIndex === 'その他'
+                            ? 'bg-orange-700 text-white cursor-pointer ring-2 ring-orange-300'
+                            : (timestamps.available_indexes?.includes('その他')
+                                ? 'bg-orange-500 hover:bg-orange-600 text-white cursor-pointer'
+                                : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed')"
+                        class="px-2 h-7 text-xs rounded transition-colors">
+                        漢字
+                    </button>
+                </span>
             </template>
-            <span class="text-gray-300 dark:text-gray-600 mx-1">|</span>
-            {{-- 漢字・その他 --}}
-            <button
-                @click="filterByIndex('その他')"
-                :disabled="!timestamps.available_indexes?.includes('その他')"
-                :class="selectedIndex === 'その他'
-                    ? 'bg-orange-700 text-white cursor-pointer ring-2 ring-orange-300'
-                    : (timestamps.available_indexes?.includes('その他')
-                        ? 'bg-orange-500 hover:bg-orange-600 text-white cursor-pointer'
-                        : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed')"
-                class="px-2 h-7 text-xs rounded transition-colors">
-                漢字
-            </button>
         </div>
     </div>
 
