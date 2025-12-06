@@ -1,86 +1,90 @@
 <x-app-layout>
     <div class="py-2">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-            <!-- 検索エリア -->
-            <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg mb-6">
-                <div class="p-6 text-gray-900 dark:text-gray-100">
-                    <div class="flex gap-2 items-center">
-                        <input type="text" id="timestampSearch" placeholder="タイムスタンプを検索..." class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <button id="clearTimestampSearchBtn" class="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600">
-                            クリア
-                        </button>
-                        <!-- 絞り込みボタン -->
-                        <div class="flex gap-1" id="filterButtons">
-                            <button data-filter="all" class="filter-btn px-3 py-1 text-sm rounded bg-blue-600 text-white">
-                                全
-                            </button>
-                            <button data-filter="unlinked" class="filter-btn px-3 py-1 text-sm rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">
-                                未紐付
-                            </button>
-                            <button data-filter="linked" class="filter-btn px-3 py-1 text-sm rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">
-                                紐付済
-                            </button>
-                            <button data-filter="not_song" class="filter-btn px-3 py-1 text-sm rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">
-                                非楽曲
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <!-- タイムスタンプ一覧 -->
-                <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
-                    <div class="p-6 text-gray-900 dark:text-gray-100">
-                        <div class="flex justify-between items-center mb-3">
-                            <h3 class="text-lg font-semibold">タイムスタンプ一覧</h3>
-                        </div>
-
-                        <!-- 全選択・全選択解除ボタンと動画情報 -->
-                        <div class="flex justify-between items-center gap-4 mb-3">
-                            <div class="flex gap-2">
-                                <button id="selectAllBtn" class="px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600">
-                                    全選択
-                                </button>
-                                <button id="deselectAllBtn" class="px-3 py-1 bg-gray-500 text-white text-sm rounded hover:bg-gray-600">
-                                    全選択解除
-                                </button>
-                            </div>
-
-                            <!-- 動画情報表示エリア -->
-                            <div id="videoInfoArea" class="flex-1 flex items-center justify-end gap-2">
-                                <div class="text-xs text-gray-600 dark:text-gray-400 cursor-pointer hover:text-blue-600 transition-colors transition-all duration-200 ease-in-out max-w-[300px]"
-                                     id="videoTitle"
-                                     title=""
-                                     x-data="{ expanded: false }"
-                                     :class="expanded ? '' : 'truncate'"
-                                     :style="expanded ? 'max-width: none;' : ''"
-                                     @click="expanded = !expanded"
-                                     role="button"
-                                     tabindex="0"
-                                     :aria-expanded="expanded"
-                                     aria-label="タイトルを展開/折りたたみ"
-                                     @keydown.enter="expanded = !expanded"
-                                     @keydown.space.prevent="expanded = !expanded">
+                <!-- 左カラム: 検索 + タイムスタンプ一覧 -->
+                <div class="space-y-4">
+                    <!-- 検索エリア -->
+                    <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
+                        <div class="p-4 text-gray-900 dark:text-gray-100">
+                            <div class="flex flex-col gap-2">
+                                <div class="flex gap-2">
+                                    <input type="text" id="timestampSearch" placeholder="タイムスタンプを検索..." class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    <button id="clearTimestampSearchBtn" class="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600">
+                                        クリア
+                                    </button>
                                 </div>
-                                <button id="videoLinkBtn" class="px-3 py-1 text-white text-xs rounded flex-shrink-0 flex items-center gap-1 transition-colors bg-gray-400 cursor-not-allowed" disabled aria-label="動画を開く" aria-disabled="true">
-                                    ▶ 動画を開く
-                                </button>
+                                <!-- 絞り込みボタン -->
+                                <div class="flex gap-1 flex-wrap" id="filterButtons">
+                                    <button data-filter="all" class="filter-btn px-3 py-1 text-sm rounded bg-blue-600 text-white">
+                                        全
+                                    </button>
+                                    <button data-filter="unlinked" class="filter-btn px-3 py-1 text-sm rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">
+                                        未紐付
+                                    </button>
+                                    <button data-filter="linked" class="filter-btn px-3 py-1 text-sm rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">
+                                        紐付済
+                                    </button>
+                                    <button data-filter="not_song" class="filter-btn px-3 py-1 text-sm rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">
+                                        非楽曲
+                                    </button>
+                                </div>
                             </div>
                         </div>
+                    </div>
 
-                        <div id="timestampsList" class="space-y-1 max-h-[500px] overflow-y-auto">
-                            <!-- タイムスタンプリストがここに表示される -->
-                        </div>
-                        <div id="timestampPagination" class="mt-4 flex justify-center gap-2">
-                            <!-- ページネーション -->
+                    <!-- タイムスタンプ一覧 -->
+                    <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
+                        <div class="p-4 text-gray-900 dark:text-gray-100">
+                            <div class="flex justify-between items-center mb-3">
+                                <h3 class="text-lg font-semibold">タイムスタンプ一覧</h3>
+                            </div>
+
+                            <!-- 全選択・全選択解除ボタンと動画情報 -->
+                            <div class="flex flex-col gap-2 mb-3">
+                                <div class="flex gap-2">
+                                    <button id="selectAllBtn" class="px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600">
+                                        全選択
+                                    </button>
+                                    <button id="deselectAllBtn" class="px-3 py-1 bg-gray-500 text-white text-sm rounded hover:bg-gray-600">
+                                        全選択解除
+                                    </button>
+                                </div>
+
+                                <!-- 動画情報表示エリア -->
+                                <div id="videoInfoArea" class="flex items-center gap-2">
+                                    <div class="text-xs text-gray-600 dark:text-gray-400 cursor-pointer hover:text-blue-600 transition-colors transition-all duration-200 ease-in-out flex-1"
+                                         id="videoTitle"
+                                         title=""
+                                         x-data="{ expanded: false }"
+                                         :class="expanded ? '' : 'truncate'"
+                                         @click="expanded = !expanded"
+                                         role="button"
+                                         tabindex="0"
+                                         :aria-expanded="expanded"
+                                         aria-label="タイトルを展開/折りたたみ"
+                                         @keydown.enter="expanded = !expanded"
+                                         @keydown.space.prevent="expanded = !expanded">
+                                    </div>
+                                    <button id="videoLinkBtn" class="px-3 py-1 text-white text-xs rounded flex-shrink-0 flex items-center gap-1 transition-colors bg-gray-400 cursor-not-allowed" disabled aria-label="動画を開く" aria-disabled="true">
+                                        ▶ 動画を開く
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div id="timestampsList" class="space-y-1 max-h-[500px] overflow-y-auto">
+                                <!-- タイムスタンプリストがここに表示される -->
+                            </div>
+                            <div id="timestampPagination" class="mt-4 flex justify-center gap-2">
+                                <!-- ページネーション -->
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- 楽曲情報・Spotify検索結果 -->
+                <!-- 右カラム: 楽曲情報・Spotify検索結果 -->
                 <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
-                    <div class="p-6 text-gray-900 dark:text-gray-100">
+                    <div class="p-4 text-gray-900 dark:text-gray-100">
                         <div class="flex justify-between items-center mb-4">
                             <h3 class="text-lg font-semibold">楽曲情報</h3>
                             <button id="clearSelectionBtn" class="px-3 py-1 bg-gray-500 text-white text-sm rounded hover:bg-gray-600">
