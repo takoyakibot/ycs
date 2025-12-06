@@ -63,4 +63,20 @@ export class ChannelApiService {
     static getDownloadUrl(channelHandle) {
         return `/api/channels/${channelHandle}/timestamps/download`;
     }
+
+    /**
+     * ランダムなタイムスタンプを1件取得
+     * @param {string} channelHandle - チャンネルハンドル
+     * @returns {Promise<Object>} ランダムなタイムスタンプデータ
+     */
+    static async fetchRandomTimestamp(channelHandle) {
+        const response = await fetch(`/api/channels/${channelHandle}/timestamps/random`);
+        if (!response.ok) {
+            if (response.status === 404) {
+                throw new Error('タイムスタンプが見つかりませんでした');
+            }
+            throw new Error('ランダムタイムスタンプの取得に失敗しました');
+        }
+        return response.json();
+    }
 }

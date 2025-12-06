@@ -169,6 +169,24 @@ class ChannelController extends Controller
     }
 
     /**
+     * チャンネルのタイムスタンプからランダムに1件取得
+     */
+    public function fetchRandomTimestamp(string $id)
+    {
+        $channel = Channel::where('handle', $id)->firstOrFail();
+
+        $result = $this->timestampService->getRandomTimestamp($channel);
+
+        if (! $result) {
+            return response()->json([
+                'error' => 'タイムスタンプが見つかりませんでした',
+            ], 404);
+        }
+
+        return response()->json($result);
+    }
+
+    /**
      * タイムスタンプ取得クエリのベースを構築
      *
      * @param  bool  $withArchive  archiveリレーションを事前ロードするか

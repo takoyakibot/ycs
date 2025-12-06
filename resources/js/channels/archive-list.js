@@ -67,6 +67,9 @@ function registerArchiveListComponent() {
                 youtubePlayer: null,
                 playerInitialized: false,
                 pendingVideo: null,
+                // ランダム再生機能
+                isRandomPlaying: false,
+
                 // ドラッグ機能用
                 isDragging: false,
                 playerPosition: { x: null, y: null },
@@ -638,6 +641,68 @@ function registerArchiveListComponent() {
                 // 自動再生設定の保存
                 saveAutoPlay() {
                     sessionStorage.setItem('videoAutoPlay', this.autoPlay.toString());
+                },
+
+                // ランダム再生
+                async playRandomTimestamp() {
+                    if (this.isRandomPlaying) return;
+
+                    try {
+                        this.isRandomPlaying = true;
+
+                        const timestamp = await ChannelApiService.fetchRandomTimestamp(this.channel.handle);
+
+                        logUserAction('playRandomTimestamp', {
+                            timestampId: timestamp.id,
+                            videoId: timestamp.video_id,
+                            tsNum: timestamp.ts_num,
+                            songTitle: timestamp.mapping?.song?.title,
+                            text: timestamp.text,
+                            page: timestamp.page
+                        });
+
+                        // 楽曲情報または疑似楽曲オブジェクトを設定
+                        if (timestamp.mapping?.song) {
+                            this.selectedSong = timestamp.mapping.song;
+                        } else {
+                            this.selectedSong = {
+                                title: timestamp.text || '-',
+                                artist: '',
+                                spotify_track_id: null
+                            };
+                        }
+                        this.selectedTimestamp = timestamp;
+
+                        // 配信パネルを表示
+                        if (!this.panelDismissed) {
+                            this.showDistributionPanel = true;
+                        }
+
+                        // 動画を再生
+                        if (timestamp.video_id) {
+                            this.loadAndPlayVideo(timestamp.video_id, timestamp.ts_num || 0);
+                        }
+
+                        // 該当ページに切り替え
+                        if (timestamp.page && timestamp.page !== this.currentTimestampPage) {
+                            await this.fetchTimestamps(timestamp.page, this.searchQuery, this.selectedIndex);
+                        }
+
+                        // 選択された楽曲の位置までスクロール
+                        this.$nextTick(() => {
+                            const selectedElement = document.querySelector(`[data-timestamp-id="${timestamp.id}"]`);
+                            if (selectedElement) {
+                                selectedElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }
+                        });
+
+                        toast.success('ランダムで楽曲を選びました！');
+                    } catch (error) {
+                        console.error('ランダム再生に失敗しました:', error);
+                        toast.error(error.message || 'ランダム再生に失敗しました');
+                    } finally {
+                        this.isRandomPlaying = false;
+                    }
                 },
 
                 // ドラッグ開始
