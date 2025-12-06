@@ -195,6 +195,25 @@ class ChannelController extends Controller
     }
 
     /**
+     * タイムスタンプの検索候補用テキスト一覧を取得
+     */
+    public function fetchTimestampTexts(string $id)
+    {
+        $channel = Channel::where('handle', $id)->firstOrFail();
+
+        // ユニークなテキスト一覧を取得（表示対象のみ）
+        $texts = $this->buildTimestampQuery($channel)
+            ->select('text')
+            ->distinct()
+            ->pluck('text')
+            ->filter()
+            ->values()
+            ->toArray();
+
+        return response()->json($texts);
+    }
+
+    /**
      * タイムスタンプ取得クエリのベースを構築
      *
      * @param  bool  $withArchive  archiveリレーションを事前ロードするか

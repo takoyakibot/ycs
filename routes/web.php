@@ -84,6 +84,9 @@ Route::get('api/channels/{id}/timestamps', [ChannelController::class, 'fetchTime
 Route::get('api/channels/{id}/timestamps/random', [ChannelController::class, 'fetchRandomTimestamp'])
     ->name('channels.fetchRandomTimestamp')
     ->middleware('throttle:30,1'); // 1分間に30回まで
+Route::get('api/channels/{id}/timestamps/texts', [ChannelController::class, 'fetchTimestampTexts'])
+    ->name('channels.fetchTimestampTexts')
+    ->middleware('throttle:10,1'); // 1分間に10回まで
 Route::get('api/channels/{id}/timestamps/download', [ChannelController::class, 'downloadTimestamps'])
     ->name('channels.downloadTimestamps')
     ->middleware('throttle:10,1'); // 1分間に10回まで
