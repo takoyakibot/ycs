@@ -171,8 +171,7 @@
                 {{-- 上部: 楽曲情報 --}}
                 <div class="p-2 cursor-pointer transition-colors"
                      :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : 'hover:text-blue-600 dark:hover:text-blue-400'"
-                     @click="ts.mapping?.song ? selectSong(ts.mapping.song, ts) : (ts.text ? selectText(ts.text, ts) : null)"
-                     :title="ts.mapping?.song ? `配信サービスで聴く: ${ts.mapping.song.title} / ${ts.mapping.song.artist}` : (ts.text ? `配信サービスで検索: ${ts.text}` : '')">
+                     @click="ts.mapping?.song ? selectSong(ts.mapping.song, ts) : (ts.text ? selectText(ts.text, ts) : null)">
                     <div :class="expanded ? '' : 'line-clamp-2'"
                          @click.stop="expanded = !expanded">
                         <template x-if="ts.mapping?.song">
