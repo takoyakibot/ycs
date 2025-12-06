@@ -154,6 +154,7 @@
         <template x-for="ts in (timestamps.data || [])" :key="ts.id">
             <div class="p-2 border rounded transition-colors"
                  :data-timestamp-id="ts.id"
+                 x-data="{ expanded: false }"
                  :class="{
                      'border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-400': selectedSong && ((ts.mapping?.song && ts.mapping.song.title === selectedSong.title && ts.mapping.song.artist === selectedSong.artist) || (!ts.mapping?.song && ts.text === selectedSong.title)),
                      'bg-gray-200 dark:bg-gray-700 border-gray-300 dark:border-gray-500': ts.has_pending_report && !(selectedSong && ((ts.mapping?.song && ts.mapping.song.title === selectedSong.title && ts.mapping.song.artist === selectedSong.artist) || (!ts.mapping?.song && ts.text === selectedSong.title))),
@@ -165,7 +166,8 @@
                          :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : 'hover:text-blue-600 dark:hover:text-blue-400'"
                          @click="ts.mapping?.song ? selectSong(ts.mapping.song, ts) : (ts.text ? selectText(ts.text, ts) : null)"
                          :title="ts.mapping?.song ? `配信サービスで聴く: ${ts.mapping.song.title} / ${ts.mapping.song.artist}` : (ts.text ? `配信サービスで検索: ${ts.text}` : '')">
-                        <div class="truncate">
+                        <div :class="expanded ? '' : 'line-clamp-2 sm:truncate'"
+                             @click.stop="expanded = !expanded">
                             <template x-if="ts.mapping?.song">
                                 <span>
                                     <span class="font-bold text-sm sm:text-base" :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : ''" x-text="ts.mapping.song.title"></span>
