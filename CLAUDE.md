@@ -73,6 +73,35 @@ php artisan test tests/Feature/SongControllerTest.php::test_specific_method  # R
 - `resources/js/manage/archives.js`: 管理画面のアーカイブ管理
 - `resources/js/songs/normalize.js`: 楽曲正規化画面
 
+### Data Flow: タイムスタンプ → 楽曲マスタ
+
+1. **タイムスタンプ取得**
+   - YouTube API → `RefreshArchiveService` → `ts_items` テーブル
+   - `ts_items.text`: 元テキスト（ユーザーが入力した曲名）
+   - `ts_items.type`: '1' = 概要欄, '2' = コメント, '3' = カバー曲
+
+2. **正規化処理**
+   - `TsItem::saving` イベントで自動実行
+   - `TextNormalizer::normalize()` を適用
+   - 結果: `ts_items.normalized_text`（全角→半角、記号統一、小文字化）
+
+3. **楽曲マッピング（3テーブルJOIN）**
+   ```sql
+   ts_items
+     LEFT JOIN timestamp_song_mappings ON ts_items.normalized_text = timestamp_song_mappings.normalized_text
+     LEFT JOIN songs ON timestamp_song_mappings.song_id = songs.id
+   ```
+   - `timestamp_song_mappings.is_not_song`: 「楽曲ではない」フラグ
+   - `songs`: 楽曲マスタ（Spotify Track IDなど保持）
+
+4. **検索フロー**
+   - 検索: `ts_items.text LIKE '%query%'` (元テキストで検索)
+   - 結合: `normalized_text` でマッピングテーブルと結合
+
+5. **表示フロー**
+   - `TimestampService::getTimestampsWithMapping()`
+   - 3テーブルJOIN → フィルター → ソート → ページング
+
 ## Testing Notes
 
 - テストはSQLite in-memoryを使用 (`phpunit.xml`で設定)
