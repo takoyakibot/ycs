@@ -1,6 +1,20 @@
-{{-- スティッキータブバー（タブ + ガチャボタン） --}}
+{{-- 統合スティッキーバー（チャンネル情報 + タブ + ガチャボタン） --}}
 <div class="sticky top-0 z-30 bg-white dark:bg-gray-900 -mx-2 px-2 py-2 mb-2 border-b border-gray-200 dark:border-gray-700">
-    <div class="flex items-center justify-center gap-2 sm:gap-4">
+    <div class="flex items-center justify-center gap-2 sm:gap-4 flex-wrap">
+        {{-- チャンネル情報 --}}
+        <a :href="'https://youtube.com/@' + escapeHTML(channel.handle || '')"
+           target="_blank"
+           rel="noopener noreferrer"
+           class="flex items-center gap-2 hover:opacity-80 text-gray-600 dark:text-gray-400">
+            <img :src="escapeHTML(channel.thumbnail || '')"
+                 alt="アイコン"
+                 class="w-8 h-8 sm:w-10 sm:h-10 rounded-full">
+            <span class="font-bold text-sm sm:text-base hidden sm:inline" x-text="channel.title || '未設定'"></span>
+        </a>
+
+        {{-- 区切り線 --}}
+        <div class="h-6 w-px bg-gray-300 dark:bg-gray-600 hidden sm:block"></div>
+
         {{-- タブ切り替えボタン --}}
         <div class="flex gap-1 sm:gap-2">
             <button @click="activeTab = 'timestamps'"
@@ -8,7 +22,7 @@
                     :aria-pressed="activeTab === 'timestamps'"
                     role="tab"
                     aria-label="タイムスタンプタブに切り替え"
-                    class="px-3 sm:px-4 py-2 rounded-lg font-medium text-sm transition-colors hover:opacity-80">
+                    class="px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg font-medium text-sm transition-colors hover:opacity-80">
                 タイムスタンプ
             </button>
             <button @click="activeTab = 'archives'"
@@ -16,10 +30,14 @@
                     :aria-pressed="activeTab === 'archives'"
                     role="tab"
                     aria-label="アーカイブタブに切り替え"
-                    class="px-3 sm:px-4 py-2 rounded-lg font-medium text-sm transition-colors hover:opacity-80">
+                    class="px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg font-medium text-sm transition-colors hover:opacity-80">
                 アーカイブ
             </button>
         </div>
+
+        {{-- 区切り線（タイムスタンプタブのみ） --}}
+        <div x-show="activeTab === 'timestamps'" class="h-6 w-px bg-gray-300 dark:bg-gray-600 hidden sm:block"></div>
+
         {{-- 楽曲ガチャボタン（タイムスタンプタブのみ表示） --}}
         <button x-show="activeTab === 'timestamps'"
                 x-transition:enter="transition ease-out duration-200"
@@ -30,7 +48,7 @@
                 x-transition:leave-end="opacity-0 scale-95"
                 @click="playRandomTimestamp()"
                 :disabled="isRandomPlaying"
-                class="inline-flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white font-bold rounded-lg shadow transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 text-sm">
+                class="inline-flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white font-bold rounded-lg shadow transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 text-sm">
             <template x-if="!isRandomPlaying">
                 <span class="flex items-center gap-1 sm:gap-2">
                     <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
