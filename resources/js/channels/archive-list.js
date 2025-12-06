@@ -62,6 +62,7 @@ function registerArchiveListComponent() {
                 autoPlay: false,
                 isMobile: false,
                 showVideoPlayer: false,
+                playerMinimized: false,
                 currentVideoId: null,
                 currentVideoTime: 0,
                 isPlaying: false,
@@ -636,7 +637,13 @@ function registerArchiveListComponent() {
                     this.showVideoPlayer = false;
                     this.isPlaying = false;
                     this.currentVideoId = null;
+                    this.playerMinimized = false;
                     this.resetPlayerPosition();
+                },
+
+                // プレイヤーの最小化トグル
+                togglePlayerMinimize() {
+                    this.playerMinimized = !this.playerMinimized;
                 },
 
                 // プレイヤーの破棄
