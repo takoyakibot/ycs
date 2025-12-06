@@ -198,16 +198,15 @@
                         </div>
                     </div>
 
-                    {{-- 動画リンク: YouTubeらしい赤いボタン（報告済みの場合は暗め） --}}
+                    {{-- 動画リンク: YouTubeアイコンボタン（報告済みの場合は暗め） --}}
                     <a :href="getYoutubeUrl(ts.video_id, ts.ts_num)"
-                       class="inline-flex items-center gap-1 px-3 py-1.5 text-white rounded text-xs sm:text-sm whitespace-nowrap transition-colors"
+                       class="inline-flex items-center justify-center p-2 text-white rounded transition-colors"
                        :class="ts.has_pending_report ? 'bg-red-800 hover:bg-red-900' : 'bg-red-600 hover:bg-red-700'"
                        target="_blank"
                        title="YouTubeで再生">
-                        <svg class="w-3 h-3 sm:w-4 sm:h-4" viewBox="0 0 24 24" fill="currentColor">
+                        <svg class="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
                         </svg>
-                        <span>YTで開く</span>
                     </a>
                 </div>
             </div>
