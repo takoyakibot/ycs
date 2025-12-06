@@ -152,7 +152,7 @@
         </template>
 
         <template x-for="ts in (timestamps.data || [])" :key="ts.id">
-            <div class="p-2 border rounded transition-colors"
+            <div class="border rounded transition-colors overflow-hidden"
                  :data-timestamp-id="ts.id"
                  x-data="{ expanded: false }"
                  :class="{
@@ -160,56 +160,58 @@
                      'bg-gray-200 dark:bg-gray-700 border-gray-300 dark:border-gray-500': ts.has_pending_report && !(selectedSong && ((ts.mapping?.song && ts.mapping.song.title === selectedSong.title && ts.mapping.song.artist === selectedSong.artist) || (!ts.mapping?.song && ts.text === selectedSong.title))),
                      'dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 active:bg-gray-100 dark:active:bg-gray-600': !ts.has_pending_report && !(selectedSong && ((ts.mapping?.song && ts.mapping.song.title === selectedSong.title && ts.mapping.song.artist === selectedSong.artist) || (!ts.mapping?.song && ts.text === selectedSong.title)))
                  }">
-                <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-                    {{-- 楽曲情報 --}}
-                    <div class="flex-shrink-0 w-full sm:w-[300px] cursor-pointer transition-colors"
-                         :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : 'hover:text-blue-600 dark:hover:text-blue-400'"
-                         @click="ts.mapping?.song ? selectSong(ts.mapping.song, ts) : (ts.text ? selectText(ts.text, ts) : null)"
-                         :title="ts.mapping?.song ? `配信サービスで聴く: ${ts.mapping.song.title} / ${ts.mapping.song.artist}` : (ts.text ? `配信サービスで検索: ${ts.text}` : '')">
-                        <div :class="expanded ? '' : 'line-clamp-2 sm:truncate'"
-                             @click.stop="expanded = !expanded">
-                            <template x-if="ts.mapping?.song">
-                                <span>
-                                    <span class="font-bold text-sm sm:text-base" :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : ''" x-text="ts.mapping.song.title"></span>
-                                    <span class="text-xs sm:text-sm" :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : 'text-gray-500 dark:text-gray-400'"> / </span>
-                                    <span class="text-xs sm:text-sm" :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : 'text-gray-500 dark:text-gray-400'" x-text="ts.mapping.song.artist"></span>
-                                </span>
-                            </template>
-                            <template x-if="!ts.mapping?.song && ts.text">
-                                <span class="text-xs sm:text-sm"
-                                      :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-300'"
-                                      x-text="ts.text"></span>
-                            </template>
-                            <template x-if="!ts.mapping?.song && !ts.text">
-                                <span class="text-xs sm:text-sm" :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-300'">-</span>
-                            </template>
-                        </div>
+                {{-- 上部: 楽曲情報 --}}
+                <div class="p-2 cursor-pointer transition-colors"
+                     :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : 'hover:text-blue-600 dark:hover:text-blue-400'"
+                     @click="ts.mapping?.song ? selectSong(ts.mapping.song, ts) : (ts.text ? selectText(ts.text, ts) : null)"
+                     :title="ts.mapping?.song ? `配信サービスで聴く: ${ts.mapping.song.title} / ${ts.mapping.song.artist}` : (ts.text ? `配信サービスで検索: ${ts.text}` : '')">
+                    <div :class="expanded ? '' : 'line-clamp-2'"
+                         @click.stop="expanded = !expanded">
+                        <template x-if="ts.mapping?.song">
+                            <span>
+                                <span class="font-bold text-sm sm:text-base" :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : ''" x-text="ts.mapping.song.title"></span>
+                                <span class="text-xs sm:text-sm" :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : 'text-gray-500 dark:text-gray-400'"> / </span>
+                                <span class="text-xs sm:text-sm" :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : 'text-gray-500 dark:text-gray-400'" x-text="ts.mapping.song.artist"></span>
+                            </span>
+                        </template>
+                        <template x-if="!ts.mapping?.song && ts.text">
+                            <span class="font-bold text-sm sm:text-base"
+                                  :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-300'"
+                                  x-text="ts.text"></span>
+                        </template>
+                        <template x-if="!ts.mapping?.song && !ts.text">
+                            <span class="text-sm" :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-300'">-</span>
+                        </template>
                     </div>
+                </div>
 
-                    {{-- アーカイブタイトル & 公開日: モバイルでは非表示 --}}
-                    <div class="hidden sm:block text-sm truncate flex-1 cursor-pointer transition-colors"
-                         @click="ts.mapping?.song ? selectSong(ts.mapping.song, ts) : (ts.text ? selectText(ts.text, ts) : null)"
-                         :title="ts.mapping?.song ? `配信サービスで聴く: ${ts.mapping.song.title} / ${ts.mapping.song.artist}` : (ts.text ? `配信サービスで検索: ${ts.text}` : ts.archive.title)">
-                        <div class="truncate"
-                             :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : 'text-gray-600 dark:text-gray-400'"
-                             x-text="ts.archive.title">
-                        </div>
-                        <div class="mt-0.5"
-                             :class="ts.has_pending_report ? 'text-xs text-gray-400 dark:text-gray-500' : 'text-xs text-gray-500 dark:text-gray-500'"
-                             x-text="'公開日: ' + (ts.archive.published_at ? formatPublishedDate(ts.archive.published_at) : '不明') + '　タイムスタンプ: ' + ts.ts_text">
-                        </div>
+                {{-- 下部: メタ情報グレー帯 --}}
+                <div class="px-2 py-1.5 bg-gray-100 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center justify-between gap-2">
+                        {{-- タイムスタンプ --}}
+                        <span class="text-xs font-mono"
+                              :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : 'text-gray-600 dark:text-gray-400'"
+                              x-text="ts.ts_text"></span>
+                        {{-- 公開日 --}}
+                        <span class="text-xs hidden sm:inline"
+                              :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : 'text-gray-500 dark:text-gray-500'"
+                              x-text="ts.archive.published_at ? formatPublishedDate(ts.archive.published_at) : ''"></span>
+                        {{-- 配信タイトル（デスクトップのみ） --}}
+                        <span class="hidden sm:inline text-xs truncate flex-1 max-w-[200px] text-right"
+                              :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : 'text-gray-500 dark:text-gray-500'"
+                              :title="ts.archive.title"
+                              x-text="ts.archive.title"></span>
+                        {{-- YouTubeボタン --}}
+                        <a :href="getYoutubeUrl(ts.video_id, ts.ts_num)"
+                           class="inline-flex items-center justify-center p-1.5 text-white rounded transition-colors flex-shrink-0"
+                           :class="ts.has_pending_report ? 'bg-red-800 hover:bg-red-900' : 'bg-red-600 hover:bg-red-700'"
+                           target="_blank"
+                           title="YouTubeで再生">
+                            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                            </svg>
+                        </a>
                     </div>
-
-                    {{-- 動画リンク: YouTubeアイコンボタン（報告済みの場合は暗め） --}}
-                    <a :href="getYoutubeUrl(ts.video_id, ts.ts_num)"
-                       class="inline-flex items-center justify-center p-2 text-white rounded transition-colors"
-                       :class="ts.has_pending_report ? 'bg-red-800 hover:bg-red-900' : 'bg-red-600 hover:bg-red-700'"
-                       target="_blank"
-                       title="YouTubeで再生">
-                        <svg class="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-                        </svg>
-                    </a>
                 </div>
             </div>
         </template>
