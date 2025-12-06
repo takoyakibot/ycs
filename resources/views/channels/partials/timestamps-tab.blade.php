@@ -171,9 +171,8 @@
                 {{-- 上部: 楽曲情報 --}}
                 <div class="p-2 cursor-pointer transition-colors"
                      :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : 'hover:text-blue-600 dark:hover:text-blue-400'"
-                     @click="ts.mapping?.song ? selectSong(ts.mapping.song, ts) : (ts.text ? selectText(ts.text, ts) : null)">
-                    <div :class="expanded ? '' : 'line-clamp-2'"
-                         @click.stop="expanded = !expanded">
+                     @click="ts.mapping?.song ? selectSong(ts.mapping.song, ts) : (ts.text ? selectText(ts.text, ts) : null); expanded = !expanded">
+                    <div :class="expanded ? '' : 'line-clamp-2'">
                         <template x-if="ts.mapping?.song">
                             <span>
                                 <span class="font-bold text-sm sm:text-base" :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : ''" x-text="ts.mapping.song.title"></span>
