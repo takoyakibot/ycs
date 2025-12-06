@@ -46,6 +46,11 @@ function registerArchiveListComponent() {
                 filterExpanded: false,
                 recentFilters: JSON.parse(localStorage.getItem('recentFilters') || '[]'),
 
+                // 検索サジェスト機能
+                suggestionTexts: [],
+                showSuggestions: false,
+                suggestionsLoaded: false,
+
                 // 報告機能の状態管理
                 showReportModal: false,
                 reportTarget: null,
@@ -196,6 +201,45 @@ function registerArchiveListComponent() {
                     localStorage.setItem('recentFilters', JSON.stringify(this.recentFilters));
                 },
 
+                // 検索サジェスト用テキスト一覧を読み込み
+                async loadSuggestionTexts() {
+                    if (this.suggestionsLoaded) return;
+                    try {
+                        const url = `/api/channels/${this.channel.handle}/timestamps/texts`;
+                        const response = await fetch(url);
+                        if (response.ok) {
+                            this.suggestionTexts = await response.json();
+                            this.suggestionsLoaded = true;
+                        }
+                    } catch (error) {
+                        console.error('Failed to load suggestion texts:', error);
+                    }
+                },
+
+                // フィルタされたサジェスト一覧を取得
+                get filteredSuggestions() {
+                    if (!this.searchQuery || this.searchQuery.length < 2) return [];
+                    const query = this.searchQuery.toLowerCase();
+                    return this.suggestionTexts
+                        .filter(text => text.toLowerCase().includes(query))
+                        .slice(0, 10);
+                },
+
+                // サジェストを選択
+                selectSuggestion(text) {
+                    this.searchQuery = text;
+                    this.showSuggestions = false;
+                    this.searchTimestamps();
+                },
+
+                // サジェストを閉じる
+                closeSuggestions() {
+                    // 少し遅延させてクリックイベントを先に処理
+                    setTimeout(() => {
+                        this.showSuggestions = false;
+                    }, 200);
+                },
+
                 downloadTimestamps() {
                     try {
                         const url = ChannelApiService.getDownloadUrl(this.channel.handle);
@@ -338,6 +382,9 @@ function registerArchiveListComponent() {
 
                     // YouTube IFrame APIの読み込み
                     this.loadYouTubeAPI();
+
+                    // 検索サジェスト用テキスト一覧を読み込み
+                    this.loadSuggestionTexts();
 
                     // ページ離脱時のクリーンアップ
                     window.addEventListener('beforeunload', () => {

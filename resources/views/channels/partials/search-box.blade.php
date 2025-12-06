@@ -11,15 +11,38 @@
                     aria-label="タイムスタンプを検索"
                     class="border p-2 rounded w-full dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100" />
             </template>
-            {{-- タイムスタンプタブ用の検索ボックス --}}
+            {{-- タイムスタンプタブ用の検索ボックス（サジェスト機能付き） --}}
             <template x-if="activeTab === 'timestamps'">
-                <input
-                    type="text"
-                    x-model="searchQuery"
-                    placeholder="楽曲名・アーティスト名・タイムスタンプで検索..."
-                    aria-label="楽曲名・アーティスト名・タイムスタンプで検索"
-                    maxlength="255"
-                    class="border p-2 rounded w-full dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100" />
+                <div class="relative w-full">
+                    <input
+                        type="text"
+                        x-model="searchQuery"
+                        @focus="showSuggestions = true"
+                        @blur="closeSuggestions()"
+                        @keydown.escape="showSuggestions = false"
+                        @keydown.enter="showSuggestions = false"
+                        placeholder="楽曲名・アーティスト名・タイムスタンプで検索..."
+                        aria-label="楽曲名・アーティスト名・タイムスタンプで検索"
+                        maxlength="255"
+                        autocomplete="off"
+                        class="border p-2 rounded w-full dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100" />
+                    {{-- サジェストドロップダウン --}}
+                    <div x-show="showSuggestions && filteredSuggestions.length > 0"
+                         x-transition:enter="transition ease-out duration-100"
+                         x-transition:enter-start="opacity-0 scale-95"
+                         x-transition:enter-end="opacity-100 scale-100"
+                         x-transition:leave="transition ease-in duration-75"
+                         x-transition:leave-start="opacity-100 scale-100"
+                         x-transition:leave-end="opacity-0 scale-95"
+                         class="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border dark:border-gray-600 rounded shadow-lg z-50 max-h-60 overflow-y-auto">
+                        <template x-for="(suggestion, index) in filteredSuggestions" :key="index">
+                            <button type="button"
+                                    @mousedown.prevent="selectSuggestion(suggestion)"
+                                    class="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer truncate dark:text-gray-100"
+                                    x-text="suggestion"></button>
+                        </template>
+                    </div>
+                </div>
             </template>
             <template x-if="activeTab === 'archives'">
                 <div class="flex flex-row gap-2">
