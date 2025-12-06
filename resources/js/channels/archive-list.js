@@ -43,6 +43,8 @@ function registerArchiveListComponent() {
                 loading: false,
                 error: null,
                 isFiltered: false,
+                filterExpanded: false,
+                recentFilters: JSON.parse(localStorage.getItem('recentFilters') || '[]'),
 
                 // 報告機能の状態管理
                 showReportModal: false,
@@ -172,6 +174,7 @@ function registerArchiveListComponent() {
                 filterByIndex(index) {
                     this.selectedIndex = index;
                     this.currentTimestampPage = 1;
+                    this.saveRecentFilter(index);
                     this.fetchTimestamps(1, this.searchQuery, this.selectedIndex);
                 },
 
@@ -179,6 +182,17 @@ function registerArchiveListComponent() {
                     this.selectedIndex = '';
                     this.currentTimestampPage = 1;
                     this.fetchTimestamps(1, this.searchQuery, '');
+                },
+
+                toggleFilterExpanded() {
+                    this.filterExpanded = !this.filterExpanded;
+                },
+
+                saveRecentFilter(filter) {
+                    let recent = this.recentFilters.filter(f => f !== filter);
+                    recent.unshift(filter);
+                    this.recentFilters = recent.slice(0, 3);
+                    localStorage.setItem('recentFilters', JSON.stringify(this.recentFilters));
                 },
 
                 downloadTimestamps() {
