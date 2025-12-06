@@ -27,7 +27,7 @@
                         autocomplete="off"
                         class="border p-2 rounded w-full dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100" />
                     {{-- サジェストドロップダウン --}}
-                    <div x-show="showSuggestions && filteredSuggestions.length > 0"
+                    <div x-show="showSuggestions && filteredSuggestionsList.length > 0"
                          x-transition:enter="transition ease-out duration-100"
                          x-transition:enter-start="opacity-0 scale-95"
                          x-transition:enter-end="opacity-100 scale-100"
@@ -35,7 +35,7 @@
                          x-transition:leave-start="opacity-100 scale-100"
                          x-transition:leave-end="opacity-0 scale-95"
                          class="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border dark:border-gray-600 rounded shadow-lg z-50 max-h-60 overflow-y-auto">
-                        <template x-for="(suggestion, index) in filteredSuggestions" :key="index">
+                        <template x-for="(suggestion, index) in filteredSuggestionsList" :key="index">
                             <button type="button"
                                     @mousedown.prevent="selectSuggestion(suggestion)"
                                     class="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer truncate dark:text-gray-100"

@@ -50,6 +50,7 @@ function registerArchiveListComponent() {
                 suggestionTexts: [],
                 showSuggestions: false,
                 suggestionsLoaded: false,
+                filteredSuggestionsList: [],
 
                 // 報告機能の状態管理
                 showReportModal: false,
@@ -210,19 +211,29 @@ function registerArchiveListComponent() {
                         if (response.ok) {
                             this.suggestionTexts = await response.json();
                             this.suggestionsLoaded = true;
+                            // 読み込み完了後にフィルタリストを更新
+                            this.updateFilteredSuggestions();
                         }
                     } catch (error) {
                         console.error('Failed to load suggestion texts:', error);
                     }
                 },
 
-                // フィルタされたサジェスト一覧を取得
-                get filteredSuggestions() {
-                    if (!this.searchQuery || this.searchQuery.length < 2) return [];
+                // フィルタされたサジェスト一覧を更新（リアクティブプロパティ用）
+                updateFilteredSuggestions() {
+                    if (!this.searchQuery || this.searchQuery.length < 2) {
+                        this.filteredSuggestionsList = [];
+                        return;
+                    }
                     const query = this.searchQuery.toLowerCase();
-                    return this.suggestionTexts
+                    this.filteredSuggestionsList = this.suggestionTexts
                         .filter(text => text.toLowerCase().includes(query))
                         .slice(0, 10);
+                },
+
+                // 後方互換性のためのgetter（テンプレートでfilteredSuggestionsを使用可能）
+                get filteredSuggestions() {
+                    return this.filteredSuggestionsList;
                 },
 
                 // サジェストを選択
@@ -356,6 +367,9 @@ function registerArchiveListComponent() {
                     });
 
                     this.$watch('searchQuery', () => {
+                        // サジェストリストを即時更新
+                        this.updateFilteredSuggestions();
+                        // 検索は遅延実行
                         clearTimeout(this.searchTimeout);
                         this.searchTimeout = setTimeout(() => {
                             this.searchTimestamps();
