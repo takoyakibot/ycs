@@ -7,8 +7,11 @@
      x-transition:leave="transition ease-in duration-200"
      x-transition:leave-start="opacity-100 scale-100"
      x-transition:leave-end="opacity-0 scale-95"
-     class="fixed z-50 shadow-2xl rounded-lg overflow-hidden w-[320px] max-w-[calc(100vw-2rem)]"
-     :class="playerPosition.x === null ? (showDistributionPanel ? 'bottom-28 right-4' : 'bottom-4 right-4') : ''"
+     class="fixed z-50 shadow-2xl rounded-lg overflow-hidden transition-all duration-200"
+     :class="[
+         playerMinimized ? 'w-[200px]' : 'w-[320px] max-w-[calc(100vw-2rem)]',
+         playerPosition.x === null ? (showDistributionPanel ? 'bottom-28 right-4' : 'bottom-4 right-4') : ''
+     ]"
      :style="getPlayerStyle()">
     {{-- プレイヤーヘッダー（ドラッグ可能） --}}
     <div class="bg-gray-800 text-white px-2 py-1 flex items-center justify-between cursor-move select-none"
@@ -16,18 +19,37 @@
          @touchstart="startDrag($event)">
         <span class="text-xs truncate flex-1"
               x-text="selectedSong ? `${selectedSong.title}${selectedSong.artist ? ' / ' + selectedSong.artist : ''}` : '動画プレビュー'"></span>
-        <button @click="closeVideoPlayer()"
-                @mousedown.stop
-                @touchstart.stop
-                class="text-gray-400 hover:text-white p-1"
-                aria-label="プレイヤーを閉じる">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-            </svg>
-        </button>
+        <div class="flex items-center gap-1">
+            {{-- 最小化/最大化ボタン --}}
+            <button @click="togglePlayerMinimize()"
+                    @mousedown.stop
+                    @touchstart.stop
+                    class="text-gray-400 hover:text-white p-1"
+                    :aria-label="playerMinimized ? 'プレイヤーを展開' : 'プレイヤーを最小化'">
+                <svg x-show="!playerMinimized" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                </svg>
+                <svg x-show="playerMinimized" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+                </svg>
+            </button>
+            {{-- 閉じるボタン --}}
+            <button @click="closeVideoPlayer()"
+                    @mousedown.stop
+                    @touchstart.stop
+                    class="text-gray-400 hover:text-white p-1"
+                    aria-label="プレイヤーを閉じる">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
     </div>
-    {{-- YouTube Player --}}
-    <div class="bg-black" style="aspect-ratio: 16/9;">
+    {{-- YouTube Player（最小化時は非表示） --}}
+    <div x-show="!playerMinimized"
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:leave="transition ease-in duration-150"
+         class="bg-black" style="aspect-ratio: 16/9;">
         <div id="youtube-player"></div>
     </div>
 </div>
