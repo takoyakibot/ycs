@@ -32,8 +32,16 @@ class ChannelController extends Controller
         // チャンネル情報を取得して表示
         $page = config('utils.page');
         $paginatedChannels = Channel::paginate($page);
+
+        // 各チャンネルに最終更新日を追加
+        $channelsWithLastUpdate = collect($paginatedChannels->items())->map(function ($channel) {
+            $channel->last_refresh_at = $channel->archives()->max('updated_at');
+
+            return $channel;
+        });
+
         $channels = [
-            'data' => $paginatedChannels->items(),
+            'data' => $channelsWithLastUpdate->toArray(),
             'current_page' => $paginatedChannels->currentPage(),
             'last_page' => $paginatedChannels->lastPage(),
             'per_page' => $paginatedChannels->perPage(),
