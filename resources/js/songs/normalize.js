@@ -276,7 +276,7 @@ class TimestampNormalization {
             document.getElementById('timestampsList').scrollTop = 0;
         }, {
             showJumpButtons: false,
-            showFirstLast: false
+            showFirstLast: true
         });
     }
 

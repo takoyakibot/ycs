@@ -9,40 +9,39 @@
                             <h3 class="text-lg font-semibold">タイムスタンプ一覧</h3>
                         </div>
 
-                        <!-- 検索と絞り込み -->
-                        <div class="flex flex-col gap-2 mb-3">
-                            <div class="flex gap-2">
-                                <input type="text" id="timestampSearch" placeholder="タイムスタンプを検索..." class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                <button id="clearTimestampSearchBtn" class="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600">
-                                    クリア
-                                </button>
-                            </div>
-                            <!-- 絞り込みボタン -->
-                            <div class="flex gap-1 flex-wrap" id="filterButtons">
-                                <button data-filter="all" class="filter-btn px-3 py-1 text-sm rounded bg-blue-600 text-white">
-                                    全
-                                </button>
-                                <button data-filter="unlinked" class="filter-btn px-3 py-1 text-sm rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">
-                                    未紐付
-                                </button>
-                                <button data-filter="linked" class="filter-btn px-3 py-1 text-sm rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">
-                                    紐付済
-                                </button>
-                                <button data-filter="not_song" class="filter-btn px-3 py-1 text-sm rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">
-                                    非楽曲
-                                </button>
-                            </div>
+                        <!-- 検索 -->
+                        <div class="flex gap-2 mb-3">
+                            <input type="text" id="timestampSearch" placeholder="タイムスタンプを検索..." class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <button id="clearTimestampSearchBtn" class="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600">
+                                クリア
+                            </button>
                         </div>
 
-                        <!-- 全選択・全選択解除ボタンと動画情報 -->
+                        <!-- 全選択・選択解除ボタンと絞り込み -->
                         <div class="flex flex-col gap-2 mb-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                            <div class="flex gap-2">
+                            <div class="flex items-center gap-2 flex-wrap">
                                 <button id="selectAllBtn" class="px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600">
                                     全選択
                                 </button>
                                 <button id="deselectAllBtn" class="px-3 py-1 bg-gray-500 text-white text-sm rounded hover:bg-gray-600">
-                                    全選択解除
+                                    選択解除
                                 </button>
+                                <span class="text-gray-300 dark:text-gray-600 mx-1">|</span>
+                                <!-- 絞り込みボタン -->
+                                <div class="flex gap-1 flex-wrap" id="filterButtons">
+                                    <button data-filter="all" class="filter-btn px-3 py-1 text-sm rounded bg-blue-600 text-white">
+                                        全
+                                    </button>
+                                    <button data-filter="unlinked" class="filter-btn px-3 py-1 text-sm rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">
+                                        未紐付
+                                    </button>
+                                    <button data-filter="linked" class="filter-btn px-3 py-1 text-sm rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">
+                                        紐付済
+                                    </button>
+                                    <button data-filter="not_song" class="filter-btn px-3 py-1 text-sm rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">
+                                        非楽曲
+                                    </button>
+                                </div>
                             </div>
 
                             <!-- 動画情報表示エリア -->
