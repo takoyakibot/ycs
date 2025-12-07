@@ -13,12 +13,23 @@ import { ChannelApiService } from './services/ChannelApiService.js';
 import { ReportService } from './services/ReportService.js';
 
 /**
- * ユーザー操作ログを出力
+ * ユーザー操作ログをサーバーに送信
  * @param {string} action - 操作名
  * @param {Object} data - ログデータ
  */
-const logUserAction = (action, data) => {
-    console.log(`[UserAction] ${action}:`, data);
+const logUserAction = async (action, data) => {
+    try {
+        await fetch('/api/user-actions/log', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+            },
+            body: JSON.stringify({ action, data }),
+        });
+    } catch (error) {
+        // ログ送信失敗は無視（ユーザー体験に影響を与えない）
+    }
 };
 
 /**

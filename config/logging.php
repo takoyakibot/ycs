@@ -134,6 +134,14 @@ return [
             'level' => env('LOG_SEARCH_LEVEL', 'info'),
             'replace_placeholders' => true,
         ],
+
+        'user_actions' => [
+            'driver' => 'daily',
+            'days' => 30,
+            'path' => storage_path('logs/user_actions.log'),
+            'level' => 'info',
+            'replace_placeholders' => true,
+        ],
     ],
 
 ];

@@ -102,4 +102,9 @@ Route::post('/contact', [ContactController::class, 'store'])
 // タイムスタンプ報告API（ゲスト可）
 Route::post('api/timestamp-reports', [TimestampReportController::class, 'store'])->name('timestamp-reports.store');
 
+// ユーザー操作ログAPI（ゲスト可、レートリミット適用）
+Route::post('api/user-actions/log', [\App\Http\Controllers\UserActionLogController::class, 'log'])
+    ->name('user-actions.log')
+    ->middleware('throttle:60,1'); // 1分間に60回まで
+
 require __DIR__.'/auth.php';
