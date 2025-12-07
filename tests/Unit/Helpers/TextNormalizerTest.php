@@ -131,5 +131,10 @@ class TextNormalizerTest extends TestCase
 
         // チルダのみ（チルダは区切り文字ではない）
         $this->assertEquals('artist~title~version', TextNormalizer::normalize('artist～title〜version'));
+
+        // ハイフンのみ（区切り文字として認識され、trimで除去されるため空文字になる）
+        $this->assertEquals('', TextNormalizer::normalize('-'));
+        $this->assertEquals('', TextNormalizer::normalize('ー'));
+        $this->assertEquals('', TextNormalizer::normalize('－'));
     }
 }
