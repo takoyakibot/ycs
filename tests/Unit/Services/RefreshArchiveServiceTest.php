@@ -9,6 +9,7 @@ use App\Models\TsItem;
 use App\Services\ChangeListService;
 use App\Services\ChannelQueryService;
 use App\Services\RefreshArchiveService;
+use App\Services\VideoAnalyzerService;
 use App\Services\YouTubeService;
 use Exception;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -32,11 +33,13 @@ class RefreshArchiveServiceTest extends TestCase
         // 実際のサービスインスタンスを使用（DBテストのため）
         $changeListService = app(ChangeListService::class);
         $channelQueryService = app(ChannelQueryService::class);
+        $videoAnalyzerService = app(VideoAnalyzerService::class);
 
         $this->service = new RefreshArchiveService(
             $this->youtubeService,
             $changeListService,
-            $channelQueryService
+            $channelQueryService,
+            $videoAnalyzerService
         );
     }
 

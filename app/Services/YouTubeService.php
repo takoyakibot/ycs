@@ -62,14 +62,16 @@ class YouTubeService
                 $archive['video_id'],
             );
 
-            // 歌枠の場合は一旦表示にする
-            $archive['is_display'] = $this->videoAnalyzerService->isSingingStream($archive['title']);
+            // 歌枠またはカバー曲の場合は一旦表示にする
+            $isSingingStream = $this->videoAnalyzerService->isSingingStream($archive['title']);
+            $isCoverSong = $this->videoAnalyzerService->isCoverSong($archive['title']);
+            $archive['is_display'] = $isSingingStream || $isCoverSong;
 
             // コメントを個別取得のみにする場合はここをコメントアウト
             // 以下の場合にコメントを検索する
             // 概要欄にタイムスタンプが1件以下（過去のコピペなどで0:00:00が残っている場合がある）
-            // かつ、歌枠の場合（タイトルに特定の文字列が含まれる場合）
-            if ((empty($archive['ts_items']) || count($archive['ts_items']) <= 1) && $archive['is_display']) {
+            // かつ、歌枠の場合（カバー曲は0:00タイムスタンプのみで十分なためコメント取得は不要）
+            if ((empty($archive['ts_items']) || count($archive['ts_items']) <= 1) && $isSingingStream) {
                 $commentTsItems = $this->getTimeStampsFromComments($archive['video_id']);
                 foreach ($commentTsItems as $tsItem) {
                     $archive['ts_items'][] = $tsItem;
