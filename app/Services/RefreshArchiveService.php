@@ -20,14 +20,18 @@ class RefreshArchiveService
 
     protected ChannelQueryService $channelQueryService;
 
+    protected VideoAnalyzerService $videoAnalyzerService;
+
     public function __construct(
         YouTubeService $youtubeService,
         ChangeListService $changeListService,
-        ChannelQueryService $channelQueryService
+        ChannelQueryService $channelQueryService,
+        VideoAnalyzerService $videoAnalyzerService
     ) {
         $this->youtubeService = $youtubeService;
         $this->changeListService = $changeListService;
         $this->channelQueryService = $channelQueryService;
+        $this->videoAnalyzerService = $videoAnalyzerService;
     }
 
     public function cliLogin(string $userId): void
@@ -235,22 +239,11 @@ class RefreshArchiveService
     /**
      * カバー曲（歌ってみた）動画かどうかを判定
      *
-     * タイトルに「歌ってみた」「cover」「カバー」が含まれる場合はカバー曲と判定
+     * VideoAnalyzerService に委譲
      */
     public function isCoverSong(string $title): bool
     {
-        $lowerTitle = mb_strtolower($title);
-
-        // 検出キーワード
-        $keywords = ['歌ってみた', 'cover', 'カバー'];
-
-        foreach ($keywords as $keyword) {
-            if (mb_strpos($lowerTitle, mb_strtolower($keyword)) !== false) {
-                return true;
-            }
-        }
-
-        return false;
+        return $this->videoAnalyzerService->isCoverSong($title);
     }
 
     /**
