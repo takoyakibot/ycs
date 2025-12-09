@@ -224,12 +224,19 @@ class TimestampNormalization {
             statusDiv.className += ' text-red-600 dark:text-red-400';
             statusDiv.textContent = '楽曲ではない';
         } else if (ts.song) {
-            statusDiv.className += ' text-green-600 dark:text-green-400';
-            const statusText = `${ts.song.title} / ${ts.song.artist}`;
+            // 自動紐付けの場合は黄色、手動紐付けの場合は緑
+            const isAutoLinked = ts.is_manual === false;
+            if (isAutoLinked) {
+                statusDiv.className += ' text-yellow-600 dark:text-yellow-400';
+            } else {
+                statusDiv.className += ' text-green-600 dark:text-green-400';
+            }
+            const prefix = isAutoLinked ? '[自動] ' : '';
+            const statusText = `${prefix}${ts.song.title} / ${ts.song.artist}`;
             statusDiv.textContent = statusText.length > CONSTANTS.MAX_STATUS_LENGTH
                 ? statusText.substring(0, CONSTANTS.MAX_STATUS_LENGTH) + '...'
                 : statusText;
-            statusDiv.title = `${ts.song.title} / ${ts.song.artist}`;
+            statusDiv.title = `${prefix}${ts.song.title} / ${ts.song.artist}`;
         } else {
             statusDiv.className += ' text-gray-400';
             statusDiv.textContent = '未紐づけ';

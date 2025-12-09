@@ -81,6 +81,14 @@ class TimestampSongMappingFactory extends Factory
     }
 
     /**
+     * Alias for automatic() - Indicate that the mapping was auto-linked.
+     */
+    public function autoLinked(): static
+    {
+        return $this->automatic();
+    }
+
+    /**
      * Set a specific normalized text.
      */
     public function withText(string $text): static
