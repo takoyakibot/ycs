@@ -174,11 +174,19 @@
                      @click="ts.mapping?.song ? selectSong(ts.mapping.song, ts) : (ts.text ? selectText(ts.text, ts) : null); expanded = !expanded">
                     <div :class="expanded ? '' : 'line-clamp-2'">
                         <template x-if="ts.mapping?.song">
-                            <span>
-                                <span class="font-bold text-sm sm:text-base" :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : ''" x-text="ts.mapping.song.title"></span>
-                                <span class="text-xs sm:text-sm" :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : 'text-gray-500 dark:text-gray-400'"> / </span>
-                                <span class="text-xs sm:text-sm" :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : 'text-gray-500 dark:text-gray-400'" x-text="ts.mapping.song.artist"></span>
-                            </span>
+                            <div>
+                                <div>
+                                    <span class="font-bold text-sm sm:text-base" :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : ''" x-text="ts.mapping.song.title"></span>
+                                    <span class="text-xs sm:text-sm" :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : 'text-gray-500 dark:text-gray-400'"> / </span>
+                                    <span class="text-xs sm:text-sm" :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : 'text-gray-500 dark:text-gray-400'" x-text="ts.mapping.song.artist"></span>
+                                </div>
+                                {{-- 自動紐付けの場合、元のタイムスタンプテキストを表示 --}}
+                                <template x-if="ts.mapping.is_manual === false && ts.text && ts.text !== ts.mapping.song.title">
+                                    <div class="text-xs text-yellow-600 dark:text-yellow-400 mt-0.5">
+                                        <span class="opacity-75">[自動]</span> <span x-text="ts.text"></span>
+                                    </div>
+                                </template>
+                            </div>
                         </template>
                         <template x-if="!ts.mapping?.song && ts.text">
                             <span class="font-bold text-sm sm:text-base"
