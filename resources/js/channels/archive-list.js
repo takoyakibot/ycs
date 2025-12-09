@@ -90,6 +90,13 @@ function registerArchiveListComponent() {
                 // ランダム再生機能
                 isRandomPlaying: false,
 
+                // 自動再抽選機能
+                autoReshuffle: false,
+                reshuffleMonitorId: null,
+                currentSongEndTime: null,
+                fadeOutIntervalId: null,
+                originalVolume: 100,
+
                 // ドラッグ機能用
                 isDragging: false,
                 playerPosition: { x: null, y: null },
@@ -405,6 +412,10 @@ function registerArchiveListComponent() {
                         this.autoPlay = autoPlaySaved === 'true';
                     }
 
+                    // 自動再抽選設定を読み込み（sessionStorageから、デフォルトOFF）
+                    const autoReshuffleSaved = sessionStorage.getItem('autoReshuffle');
+                    this.autoReshuffle = autoReshuffleSaved === 'true';
+
                     // YouTube IFrame APIの読み込み
                     this.loadYouTubeAPI();
 
@@ -413,6 +424,7 @@ function registerArchiveListComponent() {
 
                     // ページ離脱時のクリーンアップ
                     window.addEventListener('beforeunload', () => {
+                        this.stopReshuffleMonitor();
                         this.destroyPlayer();
                     });
                 },
@@ -479,6 +491,14 @@ function registerArchiveListComponent() {
                         tsNum: timestamp?.ts_num
                     });
 
+                    // 自動ガチャ中に手動で楽曲を選択した場合、自動再抽選をOFFにする
+                    if (this.autoReshuffle) {
+                        this.autoReshuffle = false;
+                        this.saveAutoReshuffle();
+                        this.stopReshuffleMonitor();
+                        toast.info('自動再抽選をOFFにしました');
+                    }
+
                     this.selectedSong = song;
                     this.selectedTimestamp = timestamp;
                     if (!this.panelDismissed) {
@@ -500,6 +520,14 @@ function registerArchiveListComponent() {
                         videoId: timestamp?.video_id,
                         tsNum: timestamp?.ts_num
                     });
+
+                    // 自動ガチャ中に手動で楽曲を選択した場合、自動再抽選をOFFにする
+                    if (this.autoReshuffle) {
+                        this.autoReshuffle = false;
+                        this.saveAutoReshuffle();
+                        this.stopReshuffleMonitor();
+                        toast.info('自動再抽選をOFFにしました');
+                    }
 
                     const pseudoSong = {
                         title: text.trim(),
@@ -620,6 +648,15 @@ function registerArchiveListComponent() {
                             },
                             'onStateChange': (event) => {
                                 this.isPlaying = event.data === YT.PlayerState.PLAYING;
+                                // 自動再抽選: 再生状態に応じて監視を開始/停止
+                                if (this.autoReshuffle && this.currentSongEndTime !== null) {
+                                    if (event.data === YT.PlayerState.PLAYING) {
+                                        this.startReshuffleMonitor();
+                                    } else if (event.data === YT.PlayerState.PAUSED ||
+                                               event.data === YT.PlayerState.ENDED) {
+                                        this.stopReshuffleMonitor();
+                                    }
+                                }
                             },
                             'onError': (event) => {
                                 console.error('YouTube Player Error:', event.data);
@@ -771,6 +808,9 @@ function registerArchiveListComponent() {
                             this.showDistributionPanel = true;
                         }
 
+                        // 自動再抽選用: 終了時刻を計算
+                        this.currentSongEndTime = this.calculateEndTime(timestamp);
+
                         // 動画を再生
                         if (timestamp.video_id) {
                             this.loadAndPlayVideo(timestamp.video_id, timestamp.ts_num || 0);
@@ -790,12 +830,164 @@ function registerArchiveListComponent() {
                         });
 
                         toast.success('ランダムで楽曲を選びました！');
+
+                        // 自動再抽選: 有効な場合は監視を開始
+                        if (this.autoReshuffle && this.currentSongEndTime !== null) {
+                            this.startReshuffleMonitor();
+                        }
                     } catch (error) {
                         console.error('ランダム再生に失敗しました:', error);
                         toast.error(error.message || 'ランダム再生に失敗しました');
                     } finally {
                         this.isRandomPlaying = false;
                     }
+                },
+
+                /**
+                 * 終了時刻を計算（自動再抽選用）
+                 *
+                 * 優先順位:
+                 * 1. 楽曲長さあり & 次のTSあり → min(開始 + 楽曲長さ + 10秒, 次のTS)
+                 * 2. 楽曲長さのみあり → 開始 + 楽曲長さ + 10秒
+                 * 3. 次のTSのみあり → 次のTS - 10秒
+                 * 4. どちらもなし → デフォルト5分
+                 */
+                calculateEndTime(timestamp) {
+                    const startTime = timestamp.ts_num || 0;
+                    const nextTsNum = timestamp.next_ts_num;
+                    const durationMs = timestamp.mapping?.song?.duration_ms;
+                    const durationSec = durationMs ? Math.ceil(durationMs / 1000) : null;
+                    const defaultDuration = 5 * 60; // 5分
+
+                    if (durationSec !== null && nextTsNum !== null) {
+                        // 楽曲長さあり & 次のTSあり
+                        return Math.min(startTime + durationSec + 10, nextTsNum);
+                    } else if (durationSec !== null) {
+                        // 楽曲長さのみあり
+                        return startTime + durationSec + 10;
+                    } else if (nextTsNum !== null) {
+                        // 次のTSのみあり
+                        return Math.max(startTime, nextTsNum - 10);
+                    } else {
+                        // どちらもなし（デフォルト5分）
+                        return startTime + defaultDuration;
+                    }
+                },
+
+                /**
+                 * 再生位置監視を開始（自動再抽選用）
+                 */
+                startReshuffleMonitor() {
+                    // 既存の監視を停止
+                    this.stopReshuffleMonitor();
+
+                    if (!this.youtubePlayer || this.currentSongEndTime === null) return;
+
+                    const FADE_OUT_DURATION = 3; // フェードアウト秒数
+                    const CHECK_INTERVAL = 500; // チェック間隔（ミリ秒）
+
+                    this.reshuffleMonitorId = setInterval(() => {
+                        if (!this.youtubePlayer || typeof this.youtubePlayer.getCurrentTime !== 'function') {
+                            this.stopReshuffleMonitor();
+                            return;
+                        }
+
+                        const currentTime = this.youtubePlayer.getCurrentTime();
+                        const fadeOutStartTime = this.currentSongEndTime - FADE_OUT_DURATION;
+
+                        // フェードアウト開始時刻に到達
+                        if (currentTime >= fadeOutStartTime && !this.fadeOutIntervalId) {
+                            this.startFadeOut();
+                        }
+
+                        // 終了時刻に到達
+                        if (currentTime >= this.currentSongEndTime) {
+                            this.stopReshuffleMonitor();
+                            // 次の曲を抽選
+                            this.playRandomTimestamp();
+                        }
+                    }, CHECK_INTERVAL);
+                },
+
+                /**
+                 * 再生位置監視を停止
+                 */
+                stopReshuffleMonitor() {
+                    if (this.reshuffleMonitorId) {
+                        clearInterval(this.reshuffleMonitorId);
+                        this.reshuffleMonitorId = null;
+                    }
+                    this.stopFadeOut();
+                },
+
+                /**
+                 * フェードアウトを開始
+                 */
+                startFadeOut() {
+                    if (this.fadeOutIntervalId || !this.youtubePlayer) return;
+
+                    // 現在の音量を保存
+                    if (typeof this.youtubePlayer.getVolume === 'function') {
+                        this.originalVolume = this.youtubePlayer.getVolume();
+                    }
+
+                    const FADE_STEPS = 10;
+                    const FADE_INTERVAL = 300; // 3秒 / 10ステップ = 300ms
+                    let step = 0;
+
+                    this.fadeOutIntervalId = setInterval(() => {
+                        step++;
+                        const newVolume = Math.max(0, this.originalVolume * (1 - step / FADE_STEPS));
+
+                        if (this.youtubePlayer && typeof this.youtubePlayer.setVolume === 'function') {
+                            this.youtubePlayer.setVolume(newVolume);
+                        }
+
+                        if (step >= FADE_STEPS) {
+                            this.stopFadeOut();
+                        }
+                    }, FADE_INTERVAL);
+                },
+
+                /**
+                 * フェードアウトを停止して音量を復元
+                 */
+                stopFadeOut() {
+                    if (this.fadeOutIntervalId) {
+                        clearInterval(this.fadeOutIntervalId);
+                        this.fadeOutIntervalId = null;
+                    }
+                    // 音量を復元
+                    if (this.youtubePlayer && typeof this.youtubePlayer.setVolume === 'function') {
+                        this.youtubePlayer.setVolume(this.originalVolume);
+                    }
+                },
+
+                /**
+                 * 自動再抽選のON/OFF切り替え
+                 */
+                toggleAutoReshuffle() {
+                    this.autoReshuffle = !this.autoReshuffle;
+                    this.saveAutoReshuffle();
+
+                    if (this.autoReshuffle) {
+                        // ONにした場合、現在再生中で終了時刻が設定されていれば監視開始
+                        if (this.isPlaying && this.currentSongEndTime !== null) {
+                            this.startReshuffleMonitor();
+                        }
+                        toast.success('自動再抽選をONにしました');
+                    } else {
+                        // OFFにした場合、監視を停止
+                        this.stopReshuffleMonitor();
+                        toast.info('自動再抽選をOFFにしました');
+                    }
+                },
+
+                /**
+                 * 自動再抽選設定を保存
+                 */
+                saveAutoReshuffle() {
+                    sessionStorage.setItem('autoReshuffle', this.autoReshuffle.toString());
                 },
 
                 // ドラッグ開始

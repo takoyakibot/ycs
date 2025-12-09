@@ -272,7 +272,8 @@ class TimestampService
                 'timestamp_song_mappings.is_not_song',
                 'songs.title as song_title',
                 'songs.artist as song_artist',
-                'songs.spotify_track_id'
+                'songs.spotify_track_id',
+                'songs.spotify_data'
             )
             ->whereHas('archive', function ($q) use ($channel) {
                 $q->where('channel_id', $channel->channel_id)
@@ -301,6 +302,18 @@ class TimestampService
         $position = $this->calculateItemPosition($channel, $sortKey, $item->id);
         $page = (int) ceil($position / $perPage);
 
+        // 同じ動画内の次のタイムスタンプを取得（自動再抽選用）
+        $nextTsNum = $this->getNextTimestampInVideo($item->video_id, $item->ts_num);
+
+        // spotify_dataから楽曲の長さを取得（ミリ秒）
+        $songDurationMs = null;
+        if ($item->spotify_data) {
+            $spotifyData = is_string($item->spotify_data)
+                ? json_decode($item->spotify_data, true)
+                : $item->spotify_data;
+            $songDurationMs = $spotifyData['duration_ms'] ?? null;
+        }
+
         return [
             'id' => $item->id,
             'ts_text' => $item->ts_text,
@@ -316,11 +329,33 @@ class TimestampService
                     'title' => $item->song_title,
                     'artist' => $item->song_artist,
                     'spotify_track_id' => ValidationHelper::validateSpotifyTrackId($item->spotify_track_id),
+                    'duration_ms' => $songDurationMs,
                 ] : null,
                 'is_not_song' => (bool) $item->is_not_song,
             ] : null,
             'page' => max(1, $page),
+            'next_ts_num' => $nextTsNum,
         ];
+    }
+
+    /**
+     * 同じ動画内の次のタイムスタンプ（秒数）を取得
+     */
+    private function getNextTimestampInVideo(string $videoId, ?int $currentTsNum): ?int
+    {
+        if ($currentTsNum === null) {
+            return null;
+        }
+
+        $nextItem = TsItem::where('video_id', $videoId)
+            ->where('ts_num', '>', $currentTsNum)
+            ->where('is_display', 1)
+            ->whereNotNull('text')
+            ->where('text', '!=', '')
+            ->orderBy('ts_num', 'asc')
+            ->first(['ts_num']);
+
+        return $nextItem?->ts_num;
     }
 
     /**

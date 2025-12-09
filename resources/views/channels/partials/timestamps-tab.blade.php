@@ -193,33 +193,36 @@
 
                 {{-- 下部: メタ情報グレー帯 --}}
                 <div class="px-2 py-1.5 bg-gray-100 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
-                    <div class="flex items-center justify-between gap-2">
+                    <div class="flex items-center gap-2">
                         {{-- タイムスタンプ --}}
-                        <span class="text-xs font-mono"
+                        <span class="text-xs font-mono w-20 flex-shrink-0"
                               :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : 'text-gray-600 dark:text-gray-400'"
                               x-text="ts.ts_text"></span>
                         {{-- 公開日 --}}
-                        <span class="text-xs hidden sm:inline"
+                        <span class="text-xs hidden sm:inline w-32 flex-shrink-0"
                               :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : 'text-gray-500 dark:text-gray-500'"
                               x-text="ts.archive.published_at ? formatPublishedDate(ts.archive.published_at) : ''"></span>
                         {{-- 配信タイトル（デスクトップのみ） --}}
-                        <span class="hidden sm:inline text-xs truncate flex-1 max-w-[200px] text-right"
+                        <span class="hidden sm:inline text-xs truncate flex-1 min-w-0"
                               :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : 'text-gray-500 dark:text-gray-500'"
                               :title="ts.archive.title"
                               x-text="ts.archive.title"></span>
-                        {{-- YouTubeボタン --}}
-                        <a :href="getYoutubeUrl(ts.video_id, ts.ts_num)"
-                           class="inline-flex items-center justify-center p-1.5 text-white rounded transition-colors flex-shrink-0"
-                           :class="ts.has_pending_report ? 'bg-red-800 hover:bg-red-900' : 'bg-red-600 hover:bg-red-700'"
-                           target="_blank"
-                           title="YouTubeで再生">
-                            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-                            </svg>
-                        </a>
-                        {{-- 共有メニュー --}}
-                        <div class="relative flex-shrink-0" x-data="{ shareOpen: false, menuPos: { top: 0, left: 0 } }" x-ref="shareContainer">
-                            <button @click="shareOpen = !shareOpen; if(shareOpen) { const rect = $refs.shareContainer.getBoundingClientRect(); menuPos = { top: rect.bottom + 4, left: rect.right - 144 }; }"
+                        {{-- スペーサー（モバイル時に右寄せ用） --}}
+                        <span class="flex-1 sm:hidden"></span>
+                        {{-- YouTubeボタン & 共有メニュー --}}
+                        <div class="flex items-center gap-2 flex-shrink-0">
+                            <a :href="getYoutubeUrl(ts.video_id, ts.ts_num)"
+                               class="inline-flex items-center justify-center p-1.5 text-white rounded transition-colors"
+                               :class="ts.has_pending_report ? 'bg-red-800 hover:bg-red-900' : 'bg-red-600 hover:bg-red-700'"
+                               target="_blank"
+                               title="YouTubeで再生">
+                                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                                </svg>
+                            </a>
+                            {{-- 共有メニュー --}}
+                            <div class="relative" x-data="{ shareOpen: false, menuPos: { top: 0, left: 0 } }" x-ref="shareContainer">
+                                <button @click="shareOpen = !shareOpen; if(shareOpen) { const rect = $refs.shareContainer.getBoundingClientRect(); menuPos = { top: rect.bottom + 4, left: rect.right - 144 }; }"
                                     class="inline-flex items-center justify-center p-1.5 text-white rounded transition-colors"
                                     :class="ts.has_pending_report ? 'bg-gray-500 hover:bg-gray-600' : 'bg-gray-600 hover:bg-gray-700'"
                                     title="共有">
@@ -261,6 +264,7 @@
                                     </button>
                                 </div>
                             </template>
+                            </div>
                         </div>
                     </div>
                 </div>
