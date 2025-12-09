@@ -61,6 +61,40 @@
             return 'https://youtu.be/' + encodeURIComponentLocal(videoId || '') + (tsNum !== 0 ? '?t=' + tsNum + 's' : '');
         }
 
+        function isCoverSong(title) {
+            if (!title) return false;
+            const lowerTitle = title.toLowerCase();
+            return lowerTitle.includes('歌ってみた') || lowerTitle.includes('cover') || lowerTitle.includes('カバー');
+        }
+
+        function getTwitterShareUrl(tsText, text, archiveTitle, videoId, tsNum = 0) {
+            const youtubeUrl = getArchiveUrl(videoId, tsNum);
+            let tweetText = '';
+            // カバー曲（0:00）の場合はアーカイブ名のみ
+            const isCover = tsNum === 0 && isCoverSong(archiveTitle);
+            if (isCover) {
+                tweetText += '📺 ' + archiveTitle + '\n';
+            } else {
+                if (tsText && text) {
+                    tweetText += tsText + ' ' + text + '\n';
+                } else if (text) {
+                    tweetText += text + '\n';
+                }
+                if (archiveTitle) {
+                    tweetText += '📺 ' + archiveTitle + '\n';
+                }
+            }
+            return 'https://twitter.com/intent/tweet?text=' + encodeURIComponentLocal(tweetText) + '&url=' + encodeURIComponentLocal(youtubeUrl);
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(function() {
+                // Success - will be handled by Alpine
+            }).catch(function(err) {
+                console.error('Failed to copy: ', err);
+            });
+        }
+
         function getCookie(name) {
             const value = `; ${document.cookie}`;
             const parts = value.split(`; ${name}=`);

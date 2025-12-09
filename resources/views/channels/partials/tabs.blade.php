@@ -1,6 +1,25 @@
 {{-- 統合スティッキーバー（チャンネル情報 + タブ + ガチャボタン） --}}
-<div class="sticky top-0 z-30 bg-white dark:bg-gray-900 -mx-2 px-2 py-2 mb-2 border-b border-gray-200 dark:border-gray-700">
-    <div class="flex items-center justify-center gap-2 sm:gap-4 flex-wrap">
+<div class="sticky top-0 z-30 bg-white dark:bg-gray-900 -mx-2 px-2 py-2 mb-2 border-b border-gray-200 dark:border-gray-700"
+     x-data="{ showChannelName: true, resizeTimeout: null }"
+     x-init="
+        const container = $refs.headerContainer;
+        const checkWrap = () => {
+            // 一時的にチャンネル名を表示して高さを測定
+            showChannelName = true;
+            $nextTick(() => {
+                const singleLineHeight = 48;
+                if (container.offsetHeight > singleLineHeight) {
+                    showChannelName = false;
+                }
+            });
+        };
+        checkWrap();
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(checkWrap, 150);
+        });
+     ">
+    <div class="flex items-center justify-center gap-2 sm:gap-4 flex-wrap" x-ref="headerContainer">
         {{-- チャンネル情報 --}}
         <a :href="'https://youtube.com/@' + escapeHTML(channel.handle || '')"
            target="_blank"
@@ -9,7 +28,7 @@
             <img :src="escapeHTML(channel.thumbnail || '')"
                  alt="アイコン"
                  class="w-8 h-8 sm:w-10 sm:h-10 rounded-full">
-            <span class="font-bold text-sm sm:text-base hidden sm:inline" x-text="channel.title || '未設定'"></span>
+            <span x-show="showChannelName" class="font-bold text-sm sm:text-base" x-text="channel.title || '未設定'"></span>
         </a>
 
         {{-- 区切り線 --}}
