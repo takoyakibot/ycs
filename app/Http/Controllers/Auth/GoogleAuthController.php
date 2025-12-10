@@ -55,7 +55,7 @@ class GoogleAuthController extends Controller
                 ]
             );
 
-            Auth::login($user);
+            Auth::login($user, true);  // Remember Me を有効化
 
             return redirect()->intended(RouteServiceProvider::HOME);
         } catch (\Exception $e) {
