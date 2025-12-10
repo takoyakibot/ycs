@@ -109,4 +109,29 @@ class SongMappingService
     {
         TimestampSongMapping::where('song_id', $songId)->delete();
     }
+
+    /**
+     * 自動紐付けを確定（手動紐付けに変更）
+     *
+     * @param  string  $normalizedText  正規化済みテキスト
+     * @return bool 確定成功した場合true
+     */
+    public function confirmAutoLink(string $normalizedText): bool
+    {
+        $mapping = TimestampSongMapping::where('normalized_text', $normalizedText)
+            ->where('is_manual', false)
+            ->whereNotNull('song_id')
+            ->first();
+
+        if (! $mapping) {
+            return false;
+        }
+
+        $mapping->update([
+            'is_manual' => true,
+            'confidence' => 1.0,
+        ]);
+
+        return true;
+    }
 }

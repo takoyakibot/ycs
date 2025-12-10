@@ -382,6 +382,22 @@ class SongController extends Controller
     }
 
     /**
+     * 自動紐付けを確定（手動紐付けに変更）
+     */
+    public function confirmAutoLink(NormalizedTextRequest $request)
+    {
+        $validated = $request->validated();
+
+        $confirmed = $this->songMappingService->confirmAutoLink($validated['normalized_text']);
+
+        if (! $confirmed) {
+            return response()->json(['message' => '確定対象のマッピングが見つかりません。'], 404);
+        }
+
+        return response()->json(['message' => '自動紐付けを確定しました。']);
+    }
+
+    /**
      * あいまい検索で類似するマッピングを検索
      */
     public function fuzzySearch(Request $request)

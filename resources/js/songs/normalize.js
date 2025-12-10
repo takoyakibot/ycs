@@ -209,9 +209,20 @@ class TimestampNormalization {
         // コピーボタン
         const copyBtn = this.createCopyButton(ts.text);
 
+        // ボタンコンテナ
+        const buttonContainer = document.createElement('div');
+        buttonContainer.className = 'flex items-center gap-1 flex-shrink-0';
+        buttonContainer.appendChild(copyBtn);
+
+        // 自動紐付け確定ボタン（自動紐付けの場合のみ表示）
+        if (ts.is_manual === false && ts.song) {
+            const confirmBtn = this.createConfirmButton(ts.normalized_text);
+            buttonContainer.appendChild(confirmBtn);
+        }
+
         div.appendChild(checkbox);
         div.appendChild(contentDiv);
-        div.appendChild(copyBtn);
+        div.appendChild(buttonContainer);
 
         return div;
     }
@@ -274,6 +285,35 @@ class TimestampNormalization {
         });
 
         return copyBtn;
+    }
+
+    createConfirmButton(normalizedText) {
+        const confirmBtn = document.createElement('button');
+        confirmBtn.className = 'px-2 py-1 text-xs bg-yellow-500 hover:bg-yellow-600 text-white rounded transition-colors';
+        confirmBtn.textContent = '確定';
+        confirmBtn.title = '自動紐付けを確定';
+
+        confirmBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.confirmAutoLink(normalizedText);
+        });
+
+        return confirmBtn;
+    }
+
+    async confirmAutoLink(normalizedText) {
+        try {
+            await axios.post('/api/songs/confirm-auto-link', { normalized_text: normalizedText });
+            toast.success('自動紐付けを確定しました');
+            this.loadTimestamps(this.currentPage, this.currentSearchQuery);
+        } catch (error) {
+            console.error('確定エラー:', error);
+            if (error.response?.status === 404) {
+                toast.error('確定対象のマッピングが見つかりません');
+            } else {
+                toast.error('確定に失敗しました');
+            }
+        }
     }
 
     displayPagination(data) {

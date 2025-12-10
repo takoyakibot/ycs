@@ -8,8 +8,6 @@ use App\Models\Song;
 use App\Models\TimestampSongMapping;
 use App\Models\TsItem;
 use App\Services\AutoLinkService;
-use App\Services\SongSearchService;
-use App\Services\SpotifyService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -273,7 +271,7 @@ class AutoLinkServiceTest extends TestCase
                 'tracks' => [
                     'items' => [
                         [
-                            'id' => 'spotify_track_' . uniqid(),
+                            'id' => 'spotify_track_'.uniqid(),
                             'name' => 'Song',
                             'artists' => [['name' => 'Artist']],
                         ],

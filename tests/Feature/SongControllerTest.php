@@ -249,6 +249,7 @@ class SongControllerTest extends TestCase
         TimestampSongMapping::factory()
             ->withSong($song2)
             ->withText($manualLinked->text)
+            ->manual()
             ->create();
 
         // 未紐付けタイムスタンプ
@@ -1053,5 +1054,74 @@ class SongControllerTest extends TestCase
         ])->assertStatus(401);
 
         $this->deleteJson(route('songs.deleteSong', 'test-id'))->assertStatus(401);
+    }
+
+    /**
+     * 自動紐付け確定のテスト（成功）
+     */
+    public function test_confirm_auto_link_success(): void
+    {
+        $song = Song::factory()->create();
+        $mapping = TimestampSongMapping::factory()
+            ->withSong($song)
+            ->withText('Auto Linked Song')
+            ->autoLinked()
+            ->create();
+
+        $this->assertFalse($mapping->is_manual);
+
+        $response = $this->actingAs($this->user)->postJson(route('songs.confirmAutoLink'), [
+            'normalized_text' => $mapping->normalized_text,
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'message' => '自動紐付けを確定しました。',
+        ]);
+
+        $mapping->refresh();
+        $this->assertTrue($mapping->is_manual);
+        $this->assertEquals(1.0, $mapping->confidence);
+    }
+
+    /**
+     * 自動紐付け確定のテスト（手動紐付けは確定不可）
+     */
+    public function test_confirm_auto_link_manual_mapping_not_found(): void
+    {
+        $song = Song::factory()->create();
+        $mapping = TimestampSongMapping::factory()
+            ->withSong($song)
+            ->withText('Manual Linked Song')
+            ->manual()
+            ->create();
+
+        $response = $this->actingAs($this->user)->postJson(route('songs.confirmAutoLink'), [
+            'normalized_text' => $mapping->normalized_text,
+        ]);
+
+        $response->assertStatus(404);
+    }
+
+    /**
+     * 自動紐付け確定のテスト（未紐付けは確定不可）
+     */
+    public function test_confirm_auto_link_unlinked_not_found(): void
+    {
+        $response = $this->actingAs($this->user)->postJson(route('songs.confirmAutoLink'), [
+            'normalized_text' => 'nonexistent text',
+        ]);
+
+        $response->assertStatus(404);
+    }
+
+    /**
+     * 自動紐付け確定のテスト（未認証アクセス）
+     */
+    public function test_confirm_auto_link_unauthenticated(): void
+    {
+        $this->postJson(route('songs.confirmAutoLink'), [
+            'normalized_text' => 'test',
+        ])->assertStatus(401);
     }
 }
