@@ -60,7 +60,7 @@ class SongController extends Controller
         // ベースクエリ: ts_itemsとtimestamp_song_mappingsをLEFT JOIN
         $query = TsItem::with(['archive'])
             ->leftJoin('timestamp_song_mappings', 'ts_items.normalized_text', '=', 'timestamp_song_mappings.normalized_text')
-            ->select('ts_items.*', 'timestamp_song_mappings.id as mapping_id', 'timestamp_song_mappings.song_id', 'timestamp_song_mappings.is_not_song')
+            ->select('ts_items.*', 'timestamp_song_mappings.id as mapping_id', 'timestamp_song_mappings.song_id', 'timestamp_song_mappings.is_not_song', 'timestamp_song_mappings.is_manual')
             ->whereNotNull('ts_items.text')
             ->where('ts_items.text', '!=', '')
             ->whereNotNull('ts_items.normalized_text') // マイグレーション後の未更新レコードを除外
@@ -91,6 +91,12 @@ class SongController extends Controller
                 $query->whereNotNull('timestamp_song_mappings.id')
                     ->where('timestamp_song_mappings.is_not_song', true);
                 break;
+            case 'auto_linked':
+                // 自動紐付け: マッピングあり かつ is_manual=false かつ is_not_song=false
+                $query->whereNotNull('timestamp_song_mappings.id')
+                    ->where('timestamp_song_mappings.is_manual', false)
+                    ->where('timestamp_song_mappings.is_not_song', false);
+                break;
                 // 'all' は条件なし
         }
 
@@ -117,9 +123,14 @@ class SongController extends Controller
             $data['mapping'] = $mapping ? $mapping->toArray() : null;
             $data['song'] = $mapping && $mapping->song ? $mapping->song->toArray() : null;
             $data['is_not_song'] = $mapping ? $mapping->is_not_song : false;
+            // is_manual は mapping から取得（JOINのカラムは後で削除）
+            $isManual = $mapping ? $mapping->is_manual : null;
 
             // JOINで追加されたカラムを削除
-            unset($data['mapping_id'], $data['song_id']);
+            unset($data['mapping_id'], $data['song_id'], $data['is_manual']);
+
+            // mapping から取得した is_manual を設定
+            $data['is_manual'] = $isManual;
 
             return $data;
         });
@@ -368,6 +379,22 @@ class SongController extends Controller
         $this->songMappingService->unlinkTimestamp($validated['normalized_text']);
 
         return response()->json(['message' => 'マッピングを解除しました。']);
+    }
+
+    /**
+     * 自動紐付けを確定（手動紐付けに変更）
+     */
+    public function confirmAutoLink(NormalizedTextRequest $request)
+    {
+        $validated = $request->validated();
+
+        $confirmed = $this->songMappingService->confirmAutoLink($validated['normalized_text']);
+
+        if (! $confirmed) {
+            return response()->json(['message' => '確定対象のマッピングが見つかりません。'], 404);
+        }
+
+        return response()->json(['message' => '自動紐付けを確定しました。']);
     }
 
     /**

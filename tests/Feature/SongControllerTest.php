@@ -217,6 +217,86 @@ class SongControllerTest extends TestCase
     }
 
     /**
+     * タイムスタンプ一覧取得のテスト（フィルター: auto_linked）
+     */
+    public function test_fetch_timestamps_with_auto_linked_filter(): void
+    {
+        $channel = Channel::factory()->create();
+        $archive = Archive::factory()->create(['channel_id' => $channel->channel_id]);
+
+        // 自動紐付けタイムスタンプ
+        $autoLinked = TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'text' => 'Auto Linked Song',
+            'is_display' => 1,
+        ]);
+
+        $song1 = Song::factory()->create();
+        TimestampSongMapping::factory()
+            ->withSong($song1)
+            ->withText($autoLinked->text)
+            ->autoLinked()
+            ->create();
+
+        // 手動紐付けタイムスタンプ
+        $manualLinked = TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'text' => 'Manual Linked Song',
+            'is_display' => 1,
+        ]);
+
+        $song2 = Song::factory()->create();
+        TimestampSongMapping::factory()
+            ->withSong($song2)
+            ->withText($manualLinked->text)
+            ->manual()
+            ->create();
+
+        // 未紐付けタイムスタンプ
+        TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'text' => 'Unlinked Song',
+            'is_display' => 1,
+        ]);
+
+        $response = $this->actingAs($this->user)->getJson(route('songs.fetchTimestamps', [
+            'filter' => 'auto_linked',
+        ]));
+
+        $response->assertStatus(200);
+        $this->assertEquals(1, $response->json('total'));
+        $this->assertEquals('Auto Linked Song', $response->json('data.0.text'));
+    }
+
+    /**
+     * タイムスタンプ一覧取得のテスト（is_manual情報が含まれる）
+     */
+    public function test_fetch_timestamps_includes_is_manual_info(): void
+    {
+        $channel = Channel::factory()->create();
+        $archive = Archive::factory()->create(['channel_id' => $channel->channel_id]);
+
+        // 自動紐付けタイムスタンプ
+        $autoLinked = TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'text' => 'Auto Linked Song',
+            'is_display' => 1,
+        ]);
+
+        $song = Song::factory()->create();
+        TimestampSongMapping::factory()
+            ->withSong($song)
+            ->withText($autoLinked->text)
+            ->autoLinked()
+            ->create();
+
+        $response = $this->actingAs($this->user)->getJson(route('songs.fetchTimestamps'));
+
+        $response->assertStatus(200);
+        $this->assertFalse($response->json('data.0.is_manual'));
+    }
+
+    /**
      * タイムスタンプ一覧取得のテスト（マッピング情報付き）
      */
     public function test_fetch_timestamps_with_mapping_info(): void
@@ -974,5 +1054,74 @@ class SongControllerTest extends TestCase
         ])->assertStatus(401);
 
         $this->deleteJson(route('songs.deleteSong', 'test-id'))->assertStatus(401);
+    }
+
+    /**
+     * 自動紐付け確定のテスト（成功）
+     */
+    public function test_confirm_auto_link_success(): void
+    {
+        $song = Song::factory()->create();
+        $mapping = TimestampSongMapping::factory()
+            ->withSong($song)
+            ->withText('Auto Linked Song')
+            ->autoLinked()
+            ->create();
+
+        $this->assertFalse($mapping->is_manual);
+
+        $response = $this->actingAs($this->user)->postJson(route('songs.confirmAutoLink'), [
+            'normalized_text' => $mapping->normalized_text,
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'message' => '自動紐付けを確定しました。',
+        ]);
+
+        $mapping->refresh();
+        $this->assertTrue($mapping->is_manual);
+        $this->assertEquals(1.0, $mapping->confidence);
+    }
+
+    /**
+     * 自動紐付け確定のテスト（手動紐付けは確定不可）
+     */
+    public function test_confirm_auto_link_manual_mapping_not_found(): void
+    {
+        $song = Song::factory()->create();
+        $mapping = TimestampSongMapping::factory()
+            ->withSong($song)
+            ->withText('Manual Linked Song')
+            ->manual()
+            ->create();
+
+        $response = $this->actingAs($this->user)->postJson(route('songs.confirmAutoLink'), [
+            'normalized_text' => $mapping->normalized_text,
+        ]);
+
+        $response->assertStatus(404);
+    }
+
+    /**
+     * 自動紐付け確定のテスト（未紐付けは確定不可）
+     */
+    public function test_confirm_auto_link_unlinked_not_found(): void
+    {
+        $response = $this->actingAs($this->user)->postJson(route('songs.confirmAutoLink'), [
+            'normalized_text' => 'nonexistent text',
+        ]);
+
+        $response->assertStatus(404);
+    }
+
+    /**
+     * 自動紐付け確定のテスト（未認証アクセス）
+     */
+    public function test_confirm_auto_link_unauthenticated(): void
+    {
+        $this->postJson(route('songs.confirmAutoLink'), [
+            'normalized_text' => 'test',
+        ])->assertStatus(401);
     }
 }

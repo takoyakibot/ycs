@@ -38,6 +38,9 @@
                                     <button data-filter="linked" class="filter-btn px-3 py-1 text-sm rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">
                                         紐付済
                                     </button>
+                                    <button data-filter="auto_linked" class="filter-btn px-3 py-1 text-sm rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">
+                                        自動
+                                    </button>
                                     <button data-filter="not_song" class="filter-btn px-3 py-1 text-sm rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">
                                         非楽曲
                                     </button>

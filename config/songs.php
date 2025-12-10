@@ -22,4 +22,23 @@ return [
     |
     */
     'fuzzy_search_threshold' => env('SONG_FUZZY_SEARCH_THRESHOLD', 0.7),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Auto Link Settings
+    |--------------------------------------------------------------------------
+    |
+    | 自動紐付け機能の設定です。
+    |
+    */
+    'auto_link' => [
+        // 1リクエストあたりの遅延時間（ミリ秒）
+        'delay_ms' => env('AUTO_LINK_DELAY_MS', 500),
+
+        // レート制限エラー時の待機時間（秒）
+        'rate_limit_wait_seconds' => env('AUTO_LINK_RATE_LIMIT_WAIT_SECONDS', 60),
+
+        // 自動紐付け時の類似度チェックしきい値（高めに設定）
+        'similarity_threshold' => env('AUTO_LINK_SIMILARITY_THRESHOLD', 0.9),
+    ],
 ];

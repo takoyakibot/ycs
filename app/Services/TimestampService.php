@@ -44,6 +44,7 @@ class TimestampService
                 'timestamp_song_mappings.id as mapping_id',
                 'timestamp_song_mappings.song_id',
                 'timestamp_song_mappings.is_not_song',
+                'timestamp_song_mappings.is_manual',
                 'songs.title as song_title',
                 'songs.artist as song_artist',
                 'songs.spotify_track_id'
@@ -109,6 +110,7 @@ class TimestampService
                         'spotify_track_id' => ValidationHelper::validateSpotifyTrackId($item->spotify_track_id),
                     ] : null,
                     'is_not_song' => (bool) $item->is_not_song,
+                    'is_manual' => (bool) $item->is_manual,
                 ] : null,
                 'has_pending_report' => in_array($item->id, $reportedTsItemIds),
             ];
@@ -270,6 +272,7 @@ class TimestampService
                 'timestamp_song_mappings.id as mapping_id',
                 'timestamp_song_mappings.song_id',
                 'timestamp_song_mappings.is_not_song',
+                'timestamp_song_mappings.is_manual',
                 'songs.title as song_title',
                 'songs.artist as song_artist',
                 'songs.spotify_track_id',
@@ -332,6 +335,7 @@ class TimestampService
                     'duration_ms' => $songDurationMs,
                 ] : null,
                 'is_not_song' => (bool) $item->is_not_song,
+                'is_manual' => (bool) $item->is_manual,
             ] : null,
             'page' => max(1, $page),
             'next_ts_num' => $nextTsNum,
