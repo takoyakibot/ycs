@@ -6,6 +6,7 @@ use App\Models\Archive;
 use App\Models\ChangeList;
 use App\Models\TsItem;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class ChangeListService
 {
@@ -136,6 +137,38 @@ class ChangeListService
     }
 
     /**
+     * アーカイブ更新後、change_listのts_item_idを新しいts_item.idに更新する
+     * タイムスタンプの内容（video_id, comment_id, ts_text, ts_num）で照合
+     *
+     * Note: This method should be called within a database transaction,
+     * BEFORE applyChangeListToTsItems and deleteObsoleteChangeLists.
+     */
+    public function updateTsItemIdsAfterRefresh(string $channelId): void
+    {
+        // ts_item_id が設定されている change_list レコードを取得
+        $tsItemChangeLists = ChangeList::where('channel_id', $channelId)
+            ->whereNotNull('ts_item_id')
+            ->whereNotNull('ts_text')
+            ->whereNotNull('ts_num')
+            ->get();
+
+        foreach ($tsItemChangeLists as $changeList) {
+            // 対応する新しい ts_item を検索
+            // video_id + comment_id + ts_text + ts_num の組み合わせで照合
+            $newTsItem = TsItem::where('video_id', $changeList->video_id)
+                ->where('comment_id', $changeList->comment_id)
+                ->where('ts_text', $changeList->ts_text)
+                ->where('ts_num', $changeList->ts_num)
+                ->first();
+
+            if ($newTsItem && $newTsItem->id !== $changeList->ts_item_id) {
+                // 新しいts_item_idに更新
+                $changeList->update(['ts_item_id' => $newTsItem->id]);
+            }
+        }
+    }
+
+    /**
      * 不要なchange_listレコードを削除
      * 以下の条件に該当するレコードを削除:
      * a. タイムスタンプ単位(ts_item_id IS NOT NULL)でts_itemsに紐づかないレコード
@@ -188,6 +221,17 @@ class ChangeListService
 
                         foreach ($tsItemChangeLists as $changeList) {
                             if (! in_array($changeList->ts_item_id, $existingTsItemIds)) {
+                                // ts_item_idで照合できなかったレコードを削除
+                                // updateTsItemIdsAfterRefreshで更新されなかった = ts_text/ts_numが変わった可能性
+                                Log::info('Deleting orphaned ts_item-level change_list', [
+                                    'change_list_id' => $changeList->id,
+                                    'channel_id' => $changeList->channel_id,
+                                    'video_id' => $changeList->video_id,
+                                    'comment_id' => $changeList->comment_id,
+                                    'ts_item_id' => $changeList->ts_item_id,
+                                    'ts_text' => $changeList->ts_text,
+                                    'ts_num' => $changeList->ts_num,
+                                ]);
                                 $idsToDelete[] = $changeList->id;
                             }
                         }

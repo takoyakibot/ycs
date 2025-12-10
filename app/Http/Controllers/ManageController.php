@@ -260,6 +260,13 @@ class ManageController extends Controller
                 ->whereNotNull('comment_id')
                 ->delete();
 
+            // ts_item単位の設定保存時に必要なts_text, ts_numを取得するため、
+            // 対象のTsItemをあらかじめ全件ロード
+            $tsItemIds = collect($validatedData)->pluck('id')->toArray();
+            $tsItemsById = TsItem::whereIn('id', $tsItemIds)
+                ->get()
+                ->keyBy('id');
+
             // is_display=1 と is_display=0 でグループ化してバッチ更新
             $displayItemIds = collect($validatedData)->where('is_display', '1')->pluck('id')->toArray();
             $hideItemIds = collect($validatedData)->where('is_display', '0')->pluck('id')->toArray();
@@ -290,12 +297,16 @@ class ManageController extends Controller
                 } else {
                     // 異なる設定がある→タイムスタンプ単位でchange_listを作成
                     foreach ($items as $item) {
+                        $tsItemModel = $tsItemsById->get($item['id']);
                         ChangeList::create([
                             'channel_id' => $channelId,
                             'video_id' => $videoId,
                             'comment_id' => $commentId,
                             'ts_item_id' => $item['id'],
                             'is_display' => $item['is_display'],
+                            // アーカイブ更新時にts_item_idで照合できるようにts_text, ts_numを保存
+                            'ts_text' => $tsItemModel?->ts_text,
+                            'ts_num' => $tsItemModel?->ts_num,
                         ]);
                     }
                 }
