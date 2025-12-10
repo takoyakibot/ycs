@@ -175,7 +175,11 @@ class RefreshArchiveService
                 }
             }
 
-            // 4.2.履歴情報から、タイムスタンプの表示非表示を反映させる
+            // 4.2.1.アーカイブ更新でts_item_idが変わったので、change_listのts_item_idを更新
+            // ts_text + ts_num の組み合わせで新旧ts_itemをマッチング
+            $this->changeListService->updateTsItemIdsAfterRefresh($channel->channel_id);
+
+            // 4.2.2.履歴情報から、タイムスタンプの表示非表示を反映させる
             $this->changeListService->applyChangeListToTsItems($channel->channel_id);
 
             // 4.3.履歴情報から、動画の表示非表示を反映させる

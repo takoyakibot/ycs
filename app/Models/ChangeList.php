@@ -17,6 +17,8 @@ class ChangeList extends Model
         'video_id',
         'comment_id',
         'ts_item_id',
+        'ts_text',
+        'ts_num',
         'is_display',
     ];
 

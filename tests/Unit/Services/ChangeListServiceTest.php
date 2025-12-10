@@ -260,4 +260,111 @@ class ChangeListServiceTest extends TestCase
         $this->assertDatabaseHas('change_list', ['id' => $validCommentChangeList->id]);
         $this->assertDatabaseHas('change_list', ['id' => $validArchiveChangeList->id]);
     }
+
+    /**
+     * updateTsItemIdsAfterRefresh: ts_text+ts_numで照合して新しいts_item_idに更新される
+     */
+    public function test_update_ts_item_ids_after_refresh_updates_matched_record(): void
+    {
+        $channel = Channel::factory()->create();
+        $archive = Archive::factory()->create(['channel_id' => $channel->channel_id]);
+
+        // 古いts_item（実際にはアーカイブ更新で削除される想定）
+        $oldTsItemId = '01HTEST_OLD_TSITEM_ID_1234';
+
+        // 新しいts_item（アーカイブ更新で再作成された想定）
+        $newTsItem = TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'comment_id' => 'comment-refresh-test',
+            'ts_text' => '1:23:45',
+            'ts_num' => 5025,
+        ]);
+
+        // ts_text, ts_numを持つchange_listレコード（古いts_item_idを参照）
+        $changeList = ChangeList::create([
+            'channel_id' => $channel->channel_id,
+            'video_id' => $archive->video_id,
+            'comment_id' => 'comment-refresh-test',
+            'ts_item_id' => $oldTsItemId,
+            'ts_text' => '1:23:45',
+            'ts_num' => 5025,
+            'is_display' => 0,
+        ]);
+
+        $this->service->updateTsItemIdsAfterRefresh($channel->channel_id);
+
+        // change_listのts_item_idが新しいts_itemのIDに更新される
+        $this->assertDatabaseHas('change_list', [
+            'id' => $changeList->id,
+            'ts_item_id' => $newTsItem->id,
+        ]);
+    }
+
+    /**
+     * updateTsItemIdsAfterRefresh: ts_text/ts_numが異なる場合は更新されない
+     */
+    public function test_update_ts_item_ids_after_refresh_does_not_update_unmatched_record(): void
+    {
+        $channel = Channel::factory()->create();
+        $archive = Archive::factory()->create(['channel_id' => $channel->channel_id]);
+
+        $oldTsItemId = '01HTEST_OLD_TSITEM_ID_5678';
+
+        // 新しいts_item（ts_textが異なる）
+        TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'comment_id' => 'comment-unmatched-test',
+            'ts_text' => '0:00:30',
+            'ts_num' => 30,
+        ]);
+
+        // 古いts_textを持つchange_listレコード
+        $changeList = ChangeList::create([
+            'channel_id' => $channel->channel_id,
+            'video_id' => $archive->video_id,
+            'comment_id' => 'comment-unmatched-test',
+            'ts_item_id' => $oldTsItemId,
+            'ts_text' => '0:00:25',  // 異なるts_text
+            'ts_num' => 25,          // 異なるts_num
+            'is_display' => 0,
+        ]);
+
+        $this->service->updateTsItemIdsAfterRefresh($channel->channel_id);
+
+        // change_listのts_item_idは更新されない
+        $this->assertDatabaseHas('change_list', [
+            'id' => $changeList->id,
+            'ts_item_id' => $oldTsItemId,
+        ]);
+    }
+
+    /**
+     * updateTsItemIdsAfterRefresh: ts_text/ts_numがNULLの場合はスキップされる
+     */
+    public function test_update_ts_item_ids_after_refresh_skips_records_without_ts_text_ts_num(): void
+    {
+        $channel = Channel::factory()->create();
+        $archive = Archive::factory()->create(['channel_id' => $channel->channel_id]);
+
+        $oldTsItemId = '01HTEST_OLD_TSITEM_ID_9999';
+
+        // ts_text, ts_numがNULLのchange_listレコード
+        $changeList = ChangeList::create([
+            'channel_id' => $channel->channel_id,
+            'video_id' => $archive->video_id,
+            'comment_id' => 'comment-null-test',
+            'ts_item_id' => $oldTsItemId,
+            'ts_text' => null,
+            'ts_num' => null,
+            'is_display' => 0,
+        ]);
+
+        $this->service->updateTsItemIdsAfterRefresh($channel->channel_id);
+
+        // ts_item_idは変更されない
+        $this->assertDatabaseHas('change_list', [
+            'id' => $changeList->id,
+            'ts_item_id' => $oldTsItemId,
+        ]);
+    }
 }
