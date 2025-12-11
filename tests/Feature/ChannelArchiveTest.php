@@ -465,8 +465,9 @@ class ChannelArchiveTest extends TestCase
 
         // 報告を作成（pending状態）
         TimestampReport::create([
-            'ts_item_id' => $reportedTs->id,
             'video_id' => $archive->video_id,
+            'ts_text' => $reportedTs->ts_text,
+            'ts_num' => $reportedTs->ts_num,
             'report_type' => 'wrong_song',
             'status' => 'pending',
             'reporter_ip' => '127.0.0.1',
@@ -505,8 +506,9 @@ class ChannelArchiveTest extends TestCase
 
         // 解決済みの報告を作成
         TimestampReport::create([
-            'ts_item_id' => $ts->id,
             'video_id' => $archive->video_id,
+            'ts_text' => $ts->ts_text,
+            'ts_num' => $ts->ts_num,
             'report_type' => 'wrong_song',
             'status' => 'resolved',
             'resolved_at' => now(),

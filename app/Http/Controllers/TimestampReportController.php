@@ -34,17 +34,31 @@ class TimestampReportController extends Controller
         }
 
         $validated = $request->validate([
-            'ts_item_id' => 'required|string|max:26|exists:ts_items,id',
             'video_id' => 'required|string|max:11',
+            'ts_text' => 'required|string|max:20',
+            'ts_num' => 'required|integer|min:0',
             'report_type' => 'required|string|max:20',
             'comment' => 'nullable|string|max:1000',
         ]);
 
+        // ts_itemが存在するか確認
+        $tsItemExists = \App\Models\TsItem::where('video_id', $validated['video_id'])
+            ->where('ts_text', $validated['ts_text'])
+            ->where('ts_num', $validated['ts_num'])
+            ->exists();
+
+        if (! $tsItemExists) {
+            return response()->json([
+                'message' => '報告対象のタイムスタンプが見つかりません。',
+            ], 422);
+        }
+
         RateLimiter::hit($key, 60);
 
         $report = TimestampReport::create([
-            'ts_item_id' => $validated['ts_item_id'],
             'video_id' => $validated['video_id'],
+            'ts_text' => $validated['ts_text'],
+            'ts_num' => $validated['ts_num'],
             'report_type' => $validated['report_type'],
             'comment' => $validated['comment'] ?? null,
             'reporter_ip' => $request->ip(),
@@ -61,8 +75,7 @@ class TimestampReportController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = TimestampReport::with(['tsItem.archive'])
-            ->orderBy('created_at', 'desc');
+        $query = TimestampReport::orderBy('created_at', 'desc');
 
         // ステータスフィルター
         if ($request->has('status') && in_array($request->status, ['pending', 'resolved'])) {
@@ -71,7 +84,48 @@ class TimestampReportController extends Controller
 
         $reports = $query->paginate(20);
 
+        // N+1回避: 報告に対応するts_itemsをまとめて取得
+        $this->loadTsItemsForReports($reports->getCollection());
+
         return response()->json($reports);
+    }
+
+    /**
+     * 報告のコレクションに対応するts_itemsを一括で読み込む（N+1回避）
+     */
+    private function loadTsItemsForReports(\Illuminate\Support\Collection $reports): void
+    {
+        if ($reports->isEmpty()) {
+            return;
+        }
+
+        // 報告に対応するts_itemsを一括取得
+        $conditions = $reports->map(fn ($report) => [
+            'video_id' => $report->video_id,
+            'ts_text' => $report->ts_text,
+            'ts_num' => $report->ts_num,
+        ])->toArray();
+
+        $tsItems = \App\Models\TsItem::with('archive')
+            ->where(function ($query) use ($conditions) {
+                foreach ($conditions as $cond) {
+                    $query->orWhere(function ($q) use ($cond) {
+                        $q->where('video_id', $cond['video_id'])
+                            ->where('ts_text', $cond['ts_text'])
+                            ->where('ts_num', $cond['ts_num']);
+                    });
+                }
+            })
+            ->get()
+            ->keyBy(fn ($item) => $item->video_id.'|'.$item->ts_text.'|'.$item->ts_num);
+
+        // 各報告にts_itemをセット
+        $reports->transform(function ($report) use ($tsItems) {
+            $key = $report->video_id.'|'.$report->ts_text.'|'.$report->ts_num;
+            $report->ts_item = $tsItems->get($key);
+
+            return $report;
+        });
     }
 
     /**
@@ -92,7 +146,11 @@ class TimestampReportController extends Controller
      */
     public function show(TimestampReport $report): JsonResponse
     {
-        $report->load(['tsItem.archive']);
+        // 対応するts_itemを取得
+        $report->ts_item = $report->tsItem;
+        if ($report->ts_item) {
+            $report->ts_item->load('archive');
+        }
 
         return response()->json($report);
     }

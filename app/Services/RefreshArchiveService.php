@@ -5,11 +5,13 @@ namespace App\Services;
 use App\Helpers\TextNormalizer;
 use App\Models\Archive;
 use App\Models\Channel;
+use App\Models\TimestampReport;
 use App\Models\TsItem;
 use App\Models\User;
 use Exception;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class RefreshArchiveService
@@ -187,9 +189,74 @@ class RefreshArchiveService
 
             // 4.4.不要な履歴は削除する
             $this->changeListService->deleteObsoleteChangeLists($channel->channel_id);
+
+            // 4.5.不要な報告を削除する（対応するts_itemが存在しなくなった報告）
+            $this->deleteObsoleteReports($channel->channel_id);
         });
 
         return count($rtn_archives);
+    }
+
+    /**
+     * 対応するts_itemが存在しなくなった報告を削除
+     * video_id + ts_text + ts_num で照合し、ts_itemsに存在しない報告を削除
+     */
+    protected function deleteObsoleteReports(string $channelId): void
+    {
+        $driver = DB::getDriverName();
+
+        if ($driver === 'mysql') {
+            // MySQL用の最適化クエリ
+            $deletedCount = DB::affectingStatement('
+                DELETE r FROM timestamp_reports r
+                INNER JOIN archives a ON a.video_id = r.video_id
+                LEFT JOIN ts_items t ON t.video_id = r.video_id
+                    AND t.ts_text = r.ts_text
+                    AND t.ts_num = r.ts_num
+                WHERE a.channel_id = ?
+                    AND t.id IS NULL
+            ', [$channelId]);
+
+            if ($deletedCount > 0) {
+                Log::info('Deleted obsolete timestamp reports', [
+                    'channel_id' => $channelId,
+                    'deleted_count' => $deletedCount,
+                ]);
+            }
+        } else {
+            // SQLite/PostgreSQL用（テスト環境）- N+1回避版
+            $videoIds = Archive::where('channel_id', $channelId)->pluck('video_id')->toArray();
+
+            if (empty($videoIds)) {
+                return;
+            }
+
+            // 存在するts_itemsの複合キーを一括取得
+            $existingKeys = TsItem::whereIn('video_id', $videoIds)
+                ->select('video_id', 'ts_text', 'ts_num')
+                ->get()
+                ->map(fn ($item) => $item->video_id.'|'.$item->ts_text.'|'.$item->ts_num)
+                ->flip();
+
+            // 対応するts_itemが存在しない報告を抽出
+            $reportsToDelete = TimestampReport::whereIn('video_id', $videoIds)
+                ->get()
+                ->filter(function ($report) use ($existingKeys) {
+                    $key = $report->video_id.'|'.$report->ts_text.'|'.$report->ts_num;
+
+                    return ! $existingKeys->has($key);
+                });
+
+            if ($reportsToDelete->isNotEmpty()) {
+                $deleteIds = $reportsToDelete->pluck('id')->toArray();
+                TimestampReport::whereIn('id', $deleteIds)->delete();
+
+                Log::info('Deleted obsolete timestamp reports', [
+                    'channel_id' => $channelId,
+                    'deleted_count' => count($deleteIds),
+                ]);
+            }
+        }
     }
 
     /**

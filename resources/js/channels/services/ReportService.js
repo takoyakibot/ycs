@@ -5,8 +5,9 @@ export class ReportService {
     /**
      * タイムスタンプの問題を報告
      * @param {Object} reportData - 報告データ
-     * @param {string} reportData.ts_item_id - タイムスタンプアイテムID
      * @param {string} reportData.video_id - 動画ID
+     * @param {string} reportData.ts_text - タイムスタンプテキスト（例: "1:23:45"）
+     * @param {number} reportData.ts_num - タイムスタンプ秒数
      * @param {string} reportData.report_type - 報告タイプ
      * @param {string|null} reportData.comment - コメント
      * @returns {Promise<{success: boolean, message: string}>} 送信結果

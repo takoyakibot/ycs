@@ -6,7 +6,6 @@ use App\Helpers\CharacterCategorizer;
 use App\Helpers\QueryHelper;
 use App\Helpers\ValidationHelper;
 use App\Models\Channel;
-use App\Models\TimestampReport;
 use App\Models\TsItem;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
@@ -419,9 +418,15 @@ class TimestampService
         }
 
         try {
-            return TimestampReport::whereIn('ts_item_id', $tsItemIds)
-                ->where('status', 'pending')
-                ->pluck('ts_item_id')
+            // ts_itemsと複合キー(video_id, ts_text, ts_num)でJOINして報告のあるts_item.idを取得
+            return TsItem::whereIn('ts_items.id', $tsItemIds)
+                ->join('timestamp_reports', function ($join) {
+                    $join->on('ts_items.video_id', '=', 'timestamp_reports.video_id')
+                        ->on('ts_items.ts_text', '=', 'timestamp_reports.ts_text')
+                        ->on('ts_items.ts_num', '=', 'timestamp_reports.ts_num');
+                })
+                ->where('timestamp_reports.status', 'pending')
+                ->pluck('ts_items.id')
                 ->unique()
                 ->toArray();
         } catch (\Exception $e) {
