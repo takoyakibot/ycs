@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Services\AutoLinkService;
 use App\Services\RefreshArchiveService;
 use Exception;
 use Illuminate\Console\Command;
@@ -13,7 +14,10 @@ class RefreshArchives extends Command
      *
      * @var string
      */
-    protected $signature = 'app:refresh-archives {--user-id=}';
+    protected $signature = 'app:refresh-archives
+                            {--user-id= : 処理を実行するユーザーID}
+                            {--auto-link : アーカイブ更新後に自動楽曲紐付けを実行}
+                            {--auto-link-limit=100 : 自動紐付けの処理件数上限}';
 
     /**
      * The console command description.
@@ -25,7 +29,7 @@ class RefreshArchives extends Command
     /**
      * Execute the console command.
      */
-    public function handle(RefreshArchiveService $service)
+    public function handle(RefreshArchiveService $service, AutoLinkService $autoLinkService)
     {
         try {
             $userId = $this->option('user-id');
@@ -50,7 +54,14 @@ class RefreshArchives extends Command
             }
 
             // 単一ユーザーのチャンネルを更新
-            return $this->refreshUserChannels($service, $userId);
+            $result = $this->refreshUserChannels($service, $userId);
+
+            // --auto-link オプションが指定されている場合、自動楽曲紐付けを実行
+            if ($result === 0 && $this->option('auto-link')) {
+                $this->runAutoLink($autoLinkService);
+            }
+
+            return $result;
         } catch (Exception $e) {
             echo ' 更新失敗: '.$e->getMessage()."\n";
 
@@ -83,5 +94,38 @@ class RefreshArchives extends Command
         }
 
         return 0;
+    }
+
+    /**
+     * 自動楽曲紐付け処理を実行
+     */
+    protected function runAutoLink(AutoLinkService $autoLinkService): void
+    {
+        $limit = (int) $this->option('auto-link-limit');
+
+        $this->newLine();
+        $this->info('=== 自動楽曲紐付け処理 ===');
+        $this->info(sprintf('処理件数上限: %d件', $limit));
+
+        $startTime = microtime(true);
+
+        $result = $autoLinkService->autoLinkUnlinkedTimestamps($limit, function ($message) {
+            $this->line($message);
+        });
+
+        $duration = round(microtime(true) - $startTime, 2);
+
+        $this->newLine();
+        $this->info('=== 自動紐付け結果 ===');
+        $this->table(
+            ['項目', '件数'],
+            [
+                ['処理件数', $result['processed']],
+                ['紐付け成功', $result['linked']],
+                ['検索結果なし/エラー', $result['failed']],
+                ['スキップ（類似曲あり）', $result['skipped']],
+            ]
+        );
+        $this->info(sprintf('処理時間: %s秒', $duration));
     }
 }
