@@ -95,7 +95,9 @@ function registerArchiveListComponent() {
                 reshuffleMonitorId: null,
                 currentSongEndTime: null,
                 fadeOutIntervalId: null,
+                fadeInIntervalId: null,
                 originalVolume: 100,
+                needsFadeIn: false,
 
                 // ドラッグ機能用
                 isDragging: false,
@@ -648,6 +650,10 @@ function registerArchiveListComponent() {
                             },
                             'onStateChange': (event) => {
                                 this.isPlaying = event.data === YT.PlayerState.PLAYING;
+                                // 再生開始時にフェードインが必要な場合は開始
+                                if (event.data === YT.PlayerState.PLAYING && this.needsFadeIn) {
+                                    this.startFadeIn();
+                                }
                                 // 自動再抽選: 再生状態に応じて監視を開始/停止
                                 if (this.autoReshuffle && this.currentSongEndTime !== null) {
                                     if (event.data === YT.PlayerState.PLAYING) {
@@ -950,14 +956,58 @@ function registerArchiveListComponent() {
                 },
 
                 /**
-                 * フェードアウトを停止して音量を復元
+                 * フェードアウトを停止（音量は復元しない）
                  */
                 stopFadeOut() {
                     if (this.fadeOutIntervalId) {
                         clearInterval(this.fadeOutIntervalId);
                         this.fadeOutIntervalId = null;
+                        // フェードアウト中だった場合、次の曲でフェードインが必要
+                        this.needsFadeIn = true;
                     }
-                    // 音量を復元
+                },
+
+                /**
+                 * フェードインを開始
+                 */
+                startFadeIn() {
+                    if (this.fadeInIntervalId || !this.youtubePlayer) return;
+                    if (!this.needsFadeIn) return;
+
+                    this.needsFadeIn = false;
+
+                    // 音量0から開始
+                    if (typeof this.youtubePlayer.setVolume === 'function') {
+                        this.youtubePlayer.setVolume(0);
+                    }
+
+                    const FADE_STEPS = 10;
+                    const FADE_INTERVAL = 200; // 2秒 / 10ステップ = 200ms（フェードアウトより短め）
+                    let step = 0;
+
+                    this.fadeInIntervalId = setInterval(() => {
+                        step++;
+                        const newVolume = Math.min(this.originalVolume, this.originalVolume * (step / FADE_STEPS));
+
+                        if (this.youtubePlayer && typeof this.youtubePlayer.setVolume === 'function') {
+                            this.youtubePlayer.setVolume(newVolume);
+                        }
+
+                        if (step >= FADE_STEPS) {
+                            this.stopFadeIn();
+                        }
+                    }, FADE_INTERVAL);
+                },
+
+                /**
+                 * フェードインを停止
+                 */
+                stopFadeIn() {
+                    if (this.fadeInIntervalId) {
+                        clearInterval(this.fadeInIntervalId);
+                        this.fadeInIntervalId = null;
+                    }
+                    // 最終的に元の音量に設定
                     if (this.youtubePlayer && typeof this.youtubePlayer.setVolume === 'function') {
                         this.youtubePlayer.setVolume(this.originalVolume);
                     }
