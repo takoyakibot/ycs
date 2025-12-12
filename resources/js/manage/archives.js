@@ -526,6 +526,9 @@ function getTsItems(tsItems) {
     let html = '';
     let lastCommentId = '';
     tsItems.forEach(tsItem => {
+        // マッピング状態に応じたスタイルとテキストを決定
+        const mappingStatus = getMappingStatusDisplay(tsItem.mapping_status);
+
         html += `
                 <div class="timestamp text-sm ${tsItem.is_display ? 'text-gray-700 is-display default-display' : 'text-gray-500 pl-4 bg-gray-200'}
                     ${lastCommentId != tsItem.comment_id && lastCommentId != '' ? 'mt-2' : ''}" data-key="${tsItem.id}" data-comment="${tsItem.comment_id}">
@@ -537,11 +540,33 @@ function getTsItems(tsItems) {
                         ${tsItem.ts_text || '0:00:00'}
                     </span>
                     <span class="ml-2">${escapeHTML(tsItem.text || '')}</span>
+                    <span class="ml-2 text-xs ${mappingStatus.class}" title="${escapeHTML(mappingStatus.title)}">${escapeHTML(mappingStatus.text)}</span>
                 </div>
         `;
         lastCommentId = tsItem.comment_id;
     });
     return html;
+}
+
+/**
+ * マッピング状態に応じた表示情報を返す
+ */
+function getMappingStatusDisplay(mappingStatus) {
+    if (!mappingStatus) {
+        return { class: 'text-gray-400', text: '[未紐付]', title: '未紐付' };
+    }
+
+    switch (mappingStatus.status) {
+        case 'not_song':
+            return { class: 'text-red-500 font-semibold', text: '[楽曲ではない]', title: '楽曲ではない' };
+        case 'linked':
+            return { class: 'text-green-600', text: '[紐付済]', title: mappingStatus.song_info || '紐付済' };
+        case 'auto_linked':
+            return { class: 'text-yellow-600', text: '[自動]', title: mappingStatus.song_info || '自動紐付' };
+        case 'unlinked':
+        default:
+            return { class: 'text-gray-400', text: '[未紐付]', title: '未紐付' };
+    }
 }
 
 // ページネーション関連を追加する
