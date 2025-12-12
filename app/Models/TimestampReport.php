@@ -5,15 +5,15 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class TimestampReport extends Model
 {
     use HasFactory, HasUlids;
 
     protected $fillable = [
-        'ts_item_id',
         'video_id',
+        'ts_text',
+        'ts_num',
         'report_type',
         'comment',
         'status',
@@ -23,14 +23,19 @@ class TimestampReport extends Model
 
     protected $casts = [
         'resolved_at' => 'datetime',
+        'ts_num' => 'integer',
     ];
 
     /**
-     * 報告対象のタイムスタンプ
+     * 対応するts_itemを取得（複合キーでの検索）
+     * belongsToリレーションは複合キーに対応していないため、アクセサで実装
      */
-    public function tsItem(): BelongsTo
+    public function getTsItemAttribute()
     {
-        return $this->belongsTo(TsItem::class, 'ts_item_id');
+        return TsItem::where('video_id', $this->video_id)
+            ->where('ts_text', $this->ts_text)
+            ->where('ts_num', $this->ts_num)
+            ->first();
     }
 
     /**

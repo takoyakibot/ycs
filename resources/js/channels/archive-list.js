@@ -453,8 +453,9 @@ function registerArchiveListComponent() {
                     }
 
                     const result = await ReportService.submitReport({
-                        ts_item_id: this.reportTarget.id,
                         video_id: this.reportTarget.video_id,
+                        ts_text: this.reportTarget.ts_text,
+                        ts_num: this.reportTarget.ts_num,
                         report_type: this.reportType,
                         comment: this.reportComment || null,
                     });

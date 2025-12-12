@@ -5,6 +5,7 @@ namespace Tests\Unit\Services;
 use App\Models\Archive;
 use App\Models\ChangeList;
 use App\Models\Channel;
+use App\Models\TimestampReport;
 use App\Models\TsItem;
 use App\Services\ChangeListService;
 use App\Services\ChannelQueryService;
@@ -959,5 +960,253 @@ class RefreshArchiveServiceTest extends TestCase
 
         // 合計3件のts_itemが登録されていること
         $this->assertEquals(3, TsItem::where('video_id', 'cover_video')->count());
+    }
+
+    /**
+     * アーカイブ更新時に報告が維持されることをテスト
+     */
+    public function test_refresh_archives_preserves_reports(): void
+    {
+        $channel = Channel::factory()->create(['channel_id' => 'UC123456789']);
+
+        // 既存のアーカイブとタイムスタンプを作成
+        Archive::create([
+            'id' => 'video123',
+            'video_id' => 'video123',
+            'channel_id' => $channel->channel_id,
+            'title' => 'Test Archive',
+            'thumbnail' => 'https://example.com/thumb.jpg',
+            'is_public' => true,
+            'is_display' => true,
+            'published_at' => now(),
+            'comments_updated_at' => now(),
+        ]);
+
+        TsItem::create([
+            'id' => Str::ulid(),
+            'video_id' => 'video123',
+            'type' => '1',
+            'ts_text' => '1:00',
+            'ts_num' => 60,
+            'text' => 'Test Song',
+            'is_display' => true,
+        ]);
+
+        // 報告を作成
+        $report = TimestampReport::create([
+            'video_id' => 'video123',
+            'ts_text' => '1:00',
+            'ts_num' => 60,
+            'report_type' => 'wrong_song',
+            'reporter_ip' => '127.0.0.1',
+        ]);
+
+        // YouTubeServiceのモック設定（同じタイムスタンプを返す）
+        $this->youtubeService
+            ->shouldReceive('getArchivesAndTsItems')
+            ->once()
+            ->andReturn([
+                [
+                    'id' => Str::uuid()->toString(),
+                    'video_id' => 'video123',
+                    'channel_id' => $channel->channel_id,
+                    'title' => 'Test Archive Updated',
+                    'thumbnail' => 'https://example.com/thumb.jpg',
+                    'is_public' => true,
+                    'is_display' => true,
+                    'published_at' => now(),
+                    'comments_updated_at' => now(),
+                    'description' => '',
+                    'ts_items' => [
+                        [
+                            'id' => Str::uuid()->toString(),
+                            'video_id' => 'video123',
+                            'type' => '1',
+                            'ts_text' => '1:00',
+                            'ts_num' => 60,
+                            'text' => 'Test Song Updated',
+                            'is_display' => true,
+                        ],
+                    ],
+                ],
+            ]);
+
+        $this->service->refreshArchives($channel);
+
+        // 報告が維持されていることを確認
+        $this->assertDatabaseHas('timestamp_reports', [
+            'id' => $report->id,
+            'video_id' => 'video123',
+            'ts_text' => '1:00',
+            'ts_num' => 60,
+        ]);
+    }
+
+    /**
+     * アーカイブ更新時にts_itemが消えた報告が削除されることをテスト
+     */
+    public function test_refresh_archives_deletes_obsolete_reports(): void
+    {
+        $channel = Channel::factory()->create(['channel_id' => 'UC123456789']);
+
+        // 既存のアーカイブとタイムスタンプを作成
+        Archive::create([
+            'id' => 'video123',
+            'video_id' => 'video123',
+            'channel_id' => $channel->channel_id,
+            'title' => 'Test Archive',
+            'thumbnail' => 'https://example.com/thumb.jpg',
+            'is_public' => true,
+            'is_display' => true,
+            'published_at' => now(),
+            'comments_updated_at' => now(),
+        ]);
+
+        TsItem::create([
+            'id' => Str::ulid(),
+            'video_id' => 'video123',
+            'type' => '1',
+            'ts_text' => '1:00',
+            'ts_num' => 60,
+            'text' => 'Test Song',
+            'is_display' => true,
+        ]);
+
+        // 報告を作成
+        $report = TimestampReport::create([
+            'video_id' => 'video123',
+            'ts_text' => '1:00',
+            'ts_num' => 60,
+            'report_type' => 'wrong_song',
+            'reporter_ip' => '127.0.0.1',
+        ]);
+
+        // YouTubeServiceのモック設定（タイムスタンプが変更された）
+        $this->youtubeService
+            ->shouldReceive('getArchivesAndTsItems')
+            ->once()
+            ->andReturn([
+                [
+                    'id' => Str::uuid()->toString(),
+                    'video_id' => 'video123',
+                    'channel_id' => $channel->channel_id,
+                    'title' => 'Test Archive',
+                    'thumbnail' => 'https://example.com/thumb.jpg',
+                    'is_public' => true,
+                    'is_display' => true,
+                    'published_at' => now(),
+                    'comments_updated_at' => now(),
+                    'description' => '',
+                    'ts_items' => [
+                        [
+                            'id' => Str::uuid()->toString(),
+                            'video_id' => 'video123',
+                            'type' => '1',
+                            'ts_text' => '2:00', // 時間が変更された
+                            'ts_num' => 120,
+                            'text' => 'Test Song',
+                            'is_display' => true,
+                        ],
+                    ],
+                ],
+            ]);
+
+        $this->service->refreshArchives($channel);
+
+        // 古いタイムスタンプに紐づく報告が削除されていることを確認
+        $this->assertDatabaseMissing('timestamp_reports', [
+            'id' => $report->id,
+        ]);
+    }
+
+    /**
+     * 他のチャンネルの報告は削除されないことをテスト
+     */
+    public function test_refresh_archives_does_not_delete_other_channel_reports(): void
+    {
+        $channel1 = Channel::factory()->create(['channel_id' => 'UC111111111']);
+        $channel2 = Channel::factory()->create(['channel_id' => 'UC222222222']);
+
+        // チャンネル1のアーカイブとタイムスタンプ
+        Archive::create([
+            'id' => 'video111',
+            'video_id' => 'video111',
+            'channel_id' => $channel1->channel_id,
+            'title' => 'Channel 1 Archive',
+            'thumbnail' => 'https://example.com/thumb.jpg',
+            'is_public' => true,
+            'is_display' => true,
+            'published_at' => now(),
+            'comments_updated_at' => now(),
+        ]);
+
+        TsItem::create([
+            'id' => Str::ulid(),
+            'video_id' => 'video111',
+            'type' => '1',
+            'ts_text' => '1:00',
+            'ts_num' => 60,
+            'text' => 'Song 1',
+            'is_display' => true,
+        ]);
+
+        // チャンネル2のアーカイブとタイムスタンプ
+        Archive::create([
+            'id' => 'video222',
+            'video_id' => 'video222',
+            'channel_id' => $channel2->channel_id,
+            'title' => 'Channel 2 Archive',
+            'thumbnail' => 'https://example.com/thumb.jpg',
+            'is_public' => true,
+            'is_display' => true,
+            'published_at' => now(),
+            'comments_updated_at' => now(),
+        ]);
+
+        TsItem::create([
+            'id' => Str::ulid(),
+            'video_id' => 'video222',
+            'type' => '1',
+            'ts_text' => '3:00',
+            'ts_num' => 180,
+            'text' => 'Song 2',
+            'is_display' => true,
+        ]);
+
+        // チャンネル2の報告を作成
+        $report2 = TimestampReport::create([
+            'video_id' => 'video222',
+            'ts_text' => '3:00',
+            'ts_num' => 180,
+            'report_type' => 'wrong_song',
+            'reporter_ip' => '127.0.0.1',
+        ]);
+
+        // YouTubeServiceのモック設定（チャンネル1のみ更新）
+        $this->youtubeService
+            ->shouldReceive('getArchivesAndTsItems')
+            ->once()
+            ->andReturn([
+                [
+                    'id' => Str::uuid()->toString(),
+                    'video_id' => 'video111',
+                    'channel_id' => $channel1->channel_id,
+                    'title' => 'Channel 1 Archive Updated',
+                    'thumbnail' => 'https://example.com/thumb.jpg',
+                    'is_public' => true,
+                    'is_display' => true,
+                    'published_at' => now(),
+                    'comments_updated_at' => now(),
+                    'description' => '',
+                    'ts_items' => [],
+                ],
+            ]);
+
+        $this->service->refreshArchives($channel1);
+
+        // チャンネル2の報告は残っていることを確認
+        $this->assertDatabaseHas('timestamp_reports', [
+            'id' => $report2->id,
+        ]);
     }
 }

@@ -13,8 +13,9 @@ return new class extends Migration
     {
         Schema::create('timestamp_reports', function (Blueprint $table) {
             $table->ulid('id')->primary();
-            $table->string('ts_item_id', 26);
             $table->string('video_id', 11);
+            $table->string('ts_text', 20)->nullable();
+            $table->integer('ts_num')->nullable();
             $table->string('report_type', 20);
             $table->text('comment')->nullable();
             $table->enum('status', ['pending', 'resolved'])->default('pending');
@@ -22,8 +23,7 @@ return new class extends Migration
             $table->timestamp('resolved_at')->nullable();
             $table->timestamps();
 
-            $table->foreign('ts_item_id')->references('id')->on('ts_items')
-                ->onDelete('cascade');
+            $table->index(['video_id', 'ts_text', 'ts_num'], 'timestamp_reports_composite_key');
             $table->index(['status', 'created_at']);
             $table->index('reporter_ip');
         });

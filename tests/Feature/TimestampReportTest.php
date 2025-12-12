@@ -72,8 +72,9 @@ class TimestampReportTest extends TestCase
         RateLimiter::clear('timestamp-report:127.0.0.1');
 
         $response = $this->postJson('/api/timestamp-reports', [
-            'ts_item_id' => $this->tsItem->id,
             'video_id' => 'video123',
+            'ts_text' => '1:23',
+            'ts_num' => 83,
             'report_type' => 'wrong_song',
             'comment' => 'テストコメント',
         ]);
@@ -85,8 +86,9 @@ class TimestampReportTest extends TestCase
             ->assertJsonStructure(['report_id']);
 
         $this->assertDatabaseHas('timestamp_reports', [
-            'ts_item_id' => $this->tsItem->id,
             'video_id' => 'video123',
+            'ts_text' => '1:23',
+            'ts_num' => 83,
             'report_type' => 'wrong_song',
             'comment' => 'テストコメント',
             'status' => 'pending',
@@ -101,15 +103,18 @@ class TimestampReportTest extends TestCase
         RateLimiter::clear('timestamp-report:127.0.0.1');
 
         $response = $this->postJson('/api/timestamp-reports', [
-            'ts_item_id' => $this->tsItem->id,
             'video_id' => 'video123',
+            'ts_text' => '1:23',
+            'ts_num' => 83,
             'report_type' => 'not_song',
         ]);
 
         $response->assertStatus(201);
 
         $this->assertDatabaseHas('timestamp_reports', [
-            'ts_item_id' => $this->tsItem->id,
+            'video_id' => 'video123',
+            'ts_text' => '1:23',
+            'ts_num' => 83,
             'report_type' => 'not_song',
             'comment' => null,
         ]);
@@ -125,24 +130,27 @@ class TimestampReportTest extends TestCase
         $response = $this->postJson('/api/timestamp-reports', []);
 
         $response->assertStatus(422)
-            ->assertJsonValidationErrors(['ts_item_id', 'video_id', 'report_type']);
+            ->assertJsonValidationErrors(['video_id', 'ts_text', 'ts_num', 'report_type']);
     }
 
     /**
-     * 存在しないts_item_idでバリデーションエラーになることをテスト
+     * 存在しないts_itemでエラーになることをテスト
      */
-    public function test_validation_fails_with_invalid_ts_item_id(): void
+    public function test_validation_fails_with_invalid_ts_item(): void
     {
         RateLimiter::clear('timestamp-report:127.0.0.1');
 
         $response = $this->postJson('/api/timestamp-reports', [
-            'ts_item_id' => 'nonexistent_id',
             'video_id' => 'video123',
+            'ts_text' => '99:99',
+            'ts_num' => 9999,
             'report_type' => 'wrong_song',
         ]);
 
         $response->assertStatus(422)
-            ->assertJsonValidationErrors(['ts_item_id']);
+            ->assertJson([
+                'message' => '報告対象のタイムスタンプが見つかりません。',
+            ]);
     }
 
     /**
@@ -155,8 +163,9 @@ class TimestampReportTest extends TestCase
         // 5回の報告を送信（制限内）
         for ($i = 0; $i < 5; $i++) {
             $response = $this->postJson('/api/timestamp-reports', [
-                'ts_item_id' => $this->tsItem->id,
                 'video_id' => 'video123',
+                'ts_text' => '1:23',
+                'ts_num' => 83,
                 'report_type' => 'wrong_song',
             ]);
             $response->assertStatus(201);
@@ -164,8 +173,9 @@ class TimestampReportTest extends TestCase
 
         // 6回目の報告はレートリミットエラー
         $response = $this->postJson('/api/timestamp-reports', [
-            'ts_item_id' => $this->tsItem->id,
             'video_id' => 'video123',
+            'ts_text' => '1:23',
+            'ts_num' => 83,
             'report_type' => 'wrong_song',
         ]);
 
@@ -180,8 +190,9 @@ class TimestampReportTest extends TestCase
     {
         // 報告を作成
         TimestampReport::create([
-            'ts_item_id' => $this->tsItem->id,
             'video_id' => 'video123',
+            'ts_text' => '1:23',
+            'ts_num' => 83,
             'report_type' => 'wrong_song',
             'comment' => 'テスト',
             'reporter_ip' => '127.0.0.1',
@@ -195,8 +206,9 @@ class TimestampReportTest extends TestCase
                 'data' => [
                     '*' => [
                         'id',
-                        'ts_item_id',
                         'video_id',
+                        'ts_text',
+                        'ts_num',
                         'report_type',
                         'comment',
                         'status',
@@ -226,8 +238,9 @@ class TimestampReportTest extends TestCase
     {
         // pending報告を作成
         TimestampReport::create([
-            'ts_item_id' => $this->tsItem->id,
             'video_id' => 'video123',
+            'ts_text' => '1:23',
+            'ts_num' => 83,
             'report_type' => 'wrong_song',
             'status' => 'pending',
             'reporter_ip' => '127.0.0.1',
@@ -235,8 +248,9 @@ class TimestampReportTest extends TestCase
 
         // resolved報告を作成
         TimestampReport::create([
-            'ts_item_id' => $this->tsItem->id,
             'video_id' => 'video123',
+            'ts_text' => '1:23',
+            'ts_num' => 83,
             'report_type' => 'not_song',
             'status' => 'resolved',
             'resolved_at' => now(),
@@ -258,8 +272,9 @@ class TimestampReportTest extends TestCase
     public function test_can_resolve_report(): void
     {
         $report = TimestampReport::create([
-            'ts_item_id' => $this->tsItem->id,
             'video_id' => 'video123',
+            'ts_text' => '1:23',
+            'ts_num' => 83,
             'report_type' => 'wrong_song',
             'reporter_ip' => '127.0.0.1',
         ]);
@@ -287,8 +302,9 @@ class TimestampReportTest extends TestCase
     public function test_guest_cannot_resolve_report(): void
     {
         $report = TimestampReport::create([
-            'ts_item_id' => $this->tsItem->id,
             'video_id' => 'video123',
+            'ts_text' => '1:23',
+            'ts_num' => 83,
             'report_type' => 'wrong_song',
             'reporter_ip' => '127.0.0.1',
         ]);
@@ -304,8 +320,9 @@ class TimestampReportTest extends TestCase
     public function test_can_view_report_detail(): void
     {
         $report = TimestampReport::create([
-            'ts_item_id' => $this->tsItem->id,
             'video_id' => 'video123',
+            'ts_text' => '1:23',
+            'ts_num' => 83,
             'report_type' => 'wrong_song',
             'comment' => 'テストコメント',
             'reporter_ip' => '127.0.0.1',
@@ -317,7 +334,9 @@ class TimestampReportTest extends TestCase
         $response->assertStatus(200)
             ->assertJson([
                 'id' => $report->id,
-                'ts_item_id' => $this->tsItem->id,
+                'video_id' => 'video123',
+                'ts_text' => '1:23',
+                'ts_num' => 83,
                 'report_type' => 'wrong_song',
                 'comment' => 'テストコメント',
             ]);
@@ -329,8 +348,9 @@ class TimestampReportTest extends TestCase
     public function test_guest_cannot_view_report_detail(): void
     {
         $report = TimestampReport::create([
-            'ts_item_id' => $this->tsItem->id,
             'video_id' => 'video123',
+            'ts_text' => '1:23',
+            'ts_num' => 83,
             'report_type' => 'wrong_song',
             'reporter_ip' => '127.0.0.1',
         ]);
@@ -349,15 +369,18 @@ class TimestampReportTest extends TestCase
 
         $response = $this->withServerVariables(['REMOTE_ADDR' => '192.168.1.1'])
             ->postJson('/api/timestamp-reports', [
-                'ts_item_id' => $this->tsItem->id,
                 'video_id' => 'video123',
+                'ts_text' => '1:23',
+                'ts_num' => 83,
                 'report_type' => 'wrong_song',
             ]);
 
         $response->assertStatus(201);
 
         $this->assertDatabaseHas('timestamp_reports', [
-            'ts_item_id' => $this->tsItem->id,
+            'video_id' => 'video123',
+            'ts_text' => '1:23',
+            'ts_num' => 83,
             'reporter_ip' => '192.168.1.1',
         ]);
     }
@@ -372,8 +395,9 @@ class TimestampReportTest extends TestCase
         $longComment = str_repeat('あ', 1001);
 
         $response = $this->postJson('/api/timestamp-reports', [
-            'ts_item_id' => $this->tsItem->id,
             'video_id' => 'video123',
+            'ts_text' => '1:23',
+            'ts_num' => 83,
             'report_type' => 'wrong_song',
             'comment' => $longComment,
         ]);
@@ -383,13 +407,15 @@ class TimestampReportTest extends TestCase
     }
 
     /**
-     * TsItemが削除されると関連する報告も削除されることをテスト
+     * 報告はts_itemが削除されても維持されることをテスト（複合キーで紐付けのため）
+     * 不要な報告の削除はRefreshArchiveServiceで行う
      */
-    public function test_reports_are_deleted_when_ts_item_is_deleted(): void
+    public function test_reports_persist_when_ts_item_is_deleted(): void
     {
         $report = TimestampReport::create([
-            'ts_item_id' => $this->tsItem->id,
             'video_id' => 'video123',
+            'ts_text' => '1:23',
+            'ts_num' => 83,
             'report_type' => 'wrong_song',
             'reporter_ip' => '127.0.0.1',
         ]);
@@ -399,8 +425,8 @@ class TimestampReportTest extends TestCase
         // TsItemを削除
         $this->tsItem->delete();
 
-        // 報告も削除されていることを確認
-        $this->assertDatabaseMissing('timestamp_reports', [
+        // 報告は維持されている（外部キー制約がないため）
+        $this->assertDatabaseHas('timestamp_reports', [
             'id' => $reportId,
         ]);
     }
@@ -411,16 +437,18 @@ class TimestampReportTest extends TestCase
     public function test_pending_scope_works(): void
     {
         TimestampReport::create([
-            'ts_item_id' => $this->tsItem->id,
             'video_id' => 'video123',
+            'ts_text' => '1:23',
+            'ts_num' => 83,
             'report_type' => 'wrong_song',
             'status' => 'pending',
             'reporter_ip' => '127.0.0.1',
         ]);
 
         TimestampReport::create([
-            'ts_item_id' => $this->tsItem->id,
             'video_id' => 'video123',
+            'ts_text' => '1:23',
+            'ts_num' => 83,
             'report_type' => 'not_song',
             'status' => 'resolved',
             'resolved_at' => now(),
@@ -439,16 +467,18 @@ class TimestampReportTest extends TestCase
     public function test_resolved_scope_works(): void
     {
         TimestampReport::create([
-            'ts_item_id' => $this->tsItem->id,
             'video_id' => 'video123',
+            'ts_text' => '1:23',
+            'ts_num' => 83,
             'report_type' => 'wrong_song',
             'status' => 'pending',
             'reporter_ip' => '127.0.0.1',
         ]);
 
         TimestampReport::create([
-            'ts_item_id' => $this->tsItem->id,
             'video_id' => 'video123',
+            'ts_text' => '1:23',
+            'ts_num' => 83,
             'report_type' => 'not_song',
             'status' => 'resolved',
             'resolved_at' => now(),
@@ -481,5 +511,43 @@ class TimestampReportTest extends TestCase
         $response = $this->get('/manage/reports');
 
         $response->assertRedirect('/login');
+    }
+
+    /**
+     * 報告に対応するts_itemを取得できることをテスト
+     */
+    public function test_can_get_ts_item_from_report(): void
+    {
+        $report = TimestampReport::create([
+            'video_id' => 'video123',
+            'ts_text' => '1:23',
+            'ts_num' => 83,
+            'report_type' => 'wrong_song',
+            'reporter_ip' => '127.0.0.1',
+        ]);
+
+        $tsItem = $report->tsItem;
+
+        $this->assertNotNull($tsItem);
+        $this->assertEquals($this->tsItem->id, $tsItem->id);
+        $this->assertEquals('Test Song', $tsItem->text);
+    }
+
+    /**
+     * ts_itemが存在しない場合はnullが返ることをテスト
+     */
+    public function test_ts_item_returns_null_when_not_exists(): void
+    {
+        $report = TimestampReport::create([
+            'video_id' => 'video123',
+            'ts_text' => '99:99',
+            'ts_num' => 9999,
+            'report_type' => 'wrong_song',
+            'reporter_ip' => '127.0.0.1',
+        ]);
+
+        $tsItem = $report->tsItem;
+
+        $this->assertNull($tsItem);
     }
 }
