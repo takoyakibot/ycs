@@ -10,6 +10,7 @@ use App\Jobs\RefreshChannelArchivesJob;
 use App\Models\Archive;
 use App\Models\ChangeList;
 use App\Models\Channel;
+use App\Models\TimestampSongMapping;
 use App\Models\TsItem;
 use App\Services\GetArchiveService;
 use App\Services\ImageService;
@@ -141,7 +142,85 @@ class ManageController extends Controller
         )
             ->appends($request->query());
 
+        // ts_itemsのマッピング状態を付加
+        $this->appendMappingStatus($archives);
+
         return response()->json($archives);
+    }
+
+    /**
+     * アーカイブ一覧のts_itemsにマッピング状態を付加
+     */
+    private function appendMappingStatus($archives): void
+    {
+        // 全ts_itemsのnormalized_textを収集
+        $normalizedTexts = collect();
+        foreach ($archives->items() as $archive) {
+            foreach ($archive->tsItems as $tsItem) {
+                if ($tsItem->normalized_text) {
+                    $normalizedTexts->push($tsItem->normalized_text);
+                }
+            }
+        }
+
+        if ($normalizedTexts->isEmpty()) {
+            return;
+        }
+
+        // マッピング情報を一括取得
+        $mappings = TimestampSongMapping::with('song')
+            ->whereIn('normalized_text', $normalizedTexts->unique())
+            ->get()
+            ->keyBy('normalized_text');
+
+        // 各ts_itemにマッピング情報を付加
+        foreach ($archives->items() as $archive) {
+            foreach ($archive->tsItems as $tsItem) {
+                $mapping = $mappings->get($tsItem->normalized_text);
+                $tsItem->mapping_status = $this->getMappingStatus($mapping);
+            }
+        }
+    }
+
+    /**
+     * マッピング状態を判定して返す
+     *
+     * @return array{status: string, label: string, song_info: string|null}
+     */
+    private function getMappingStatus($mapping): array
+    {
+        if (! $mapping) {
+            return [
+                'status' => 'unlinked',
+                'label' => '未紐付',
+                'song_info' => null,
+            ];
+        }
+
+        if ($mapping->is_not_song) {
+            return [
+                'status' => 'not_song',
+                'label' => '楽曲ではない',
+                'song_info' => null,
+            ];
+        }
+
+        if ($mapping->song) {
+            $prefix = $mapping->is_manual ? '' : '[自動] ';
+            $songInfo = $prefix.$mapping->song->title.' / '.$mapping->song->artist;
+
+            return [
+                'status' => $mapping->is_manual ? 'linked' : 'auto_linked',
+                'label' => '紐付済',
+                'song_info' => $songInfo,
+            ];
+        }
+
+        return [
+            'status' => 'unlinked',
+            'label' => '未紐付',
+            'song_info' => null,
+        ];
     }
 
     public function addArchives(Request $request)
