@@ -22,6 +22,8 @@ class TimestampNormalization {
         this.currentSearchQuery = ''; // 検索条件を保持
         this.searchTimeout = null;
         this.currentFilter = 'all'; // all, unlinked, linked, not_song
+        this.operationHistory = []; // 操作履歴
+        this.maxHistoryItems = 20; // 最大履歴保持数
 
         this.init();
     }
@@ -31,6 +33,7 @@ class TimestampNormalization {
         this.loadTimestamps();
         this.showTab('spotifyTab');
         this.updateSelectionDisplay();
+        this.initHistoryPanel();
     }
 
     bindEvents() {
@@ -216,7 +219,7 @@ class TimestampNormalization {
 
         // 自動紐付け確定ボタン（自動紐付けの場合のみ表示）
         if (ts.is_manual === false && ts.song) {
-            const confirmBtn = this.createConfirmButton(ts.normalized_text);
+            const confirmBtn = this.createConfirmButton(ts);
             buttonContainer.appendChild(confirmBtn);
         }
 
@@ -287,7 +290,7 @@ class TimestampNormalization {
         return copyBtn;
     }
 
-    createConfirmButton(normalizedText) {
+    createConfirmButton(ts) {
         const confirmBtn = document.createElement('button');
         confirmBtn.className = 'px-2 py-1 text-xs bg-yellow-500 hover:bg-yellow-600 text-white rounded transition-colors';
         confirmBtn.textContent = '確定';
@@ -295,16 +298,20 @@ class TimestampNormalization {
 
         confirmBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            this.confirmAutoLink(normalizedText);
+            this.confirmAutoLink(ts);
         });
 
         return confirmBtn;
     }
 
-    async confirmAutoLink(normalizedText) {
+    async confirmAutoLink(ts) {
         try {
-            await axios.post('/api/songs/confirm-auto-link', { normalized_text: normalizedText });
+            await axios.post('/api/songs/confirm-auto-link', { normalized_text: ts.normalized_text });
             toast.success('自動紐付けを確定しました');
+
+            // 履歴に追加
+            this.addToHistory('confirm_auto_link', [ts], ts.song);
+
             this.loadTimestamps(this.currentPage, this.currentSearchQuery);
         } catch (error) {
             console.error('確定エラー:', error);
@@ -742,11 +749,18 @@ class TimestampNormalization {
         try {
             this.showLoading();
 
+            // 履歴用にコピーを保持
+            const linkedTimestamps = [...this.selectedTimestamps];
+            const linkedSong = { ...this.selectedSong };
+
             for (const ts of this.selectedTimestamps) {
                 await timestampApiService.linkTimestamp(ts.normalized_text, this.selectedSong.id);
             }
 
             toast.success(`${this.selectedTimestamps.length}件のタイムスタンプを紐づけました。`);
+
+            // 履歴に追加
+            this.addToHistory('link', linkedTimestamps, linkedSong);
 
             this.selectedTimestamps = [];
             this.selectedSpotifyTrack = null;
@@ -774,6 +788,9 @@ class TimestampNormalization {
         try {
             this.showLoading();
 
+            // 履歴用にコピーを保持
+            const markedTimestamps = [...this.selectedTimestamps];
+
             for (const ts of this.selectedTimestamps) {
                 // normalized_textが空の場合は元のtextも送信
                 const normalizedText = ts.normalized_text || null;
@@ -782,6 +799,10 @@ class TimestampNormalization {
             }
 
             toast.success('楽曲ではないとマークしました。');
+
+            // 履歴に追加
+            this.addToHistory('not_song', markedTimestamps);
+
             this.selectedTimestamps = [];
 
             await this.loadTimestamps(this.currentPage, this.currentSearchQuery);
@@ -814,11 +835,18 @@ class TimestampNormalization {
         try {
             this.showLoading();
 
+            // 履歴用にコピーを保持
+            const unmarkedTimestamps = [...notSongTimestamps];
+
             for (const ts of notSongTimestamps) {
                 await timestampApiService.unmarkAsNotSong(ts.normalized_text);
             }
 
             toast.success('「楽曲ではない」マークを解除しました。');
+
+            // 履歴に追加
+            this.addToHistory('unmark_not_song', unmarkedTimestamps);
+
             this.selectedTimestamps = [];
 
             await this.loadTimestamps(this.currentPage, this.currentSearchQuery);
@@ -844,11 +872,18 @@ class TimestampNormalization {
         try {
             this.showLoading();
 
+            // 履歴用にコピーを保持
+            const unlinkedTimestamps = [...this.selectedTimestamps];
+
             for (const ts of this.selectedTimestamps) {
                 await timestampApiService.unlinkTimestamp(ts.normalized_text);
             }
 
             toast.success('紐づけを解除しました。');
+
+            // 履歴に追加
+            this.addToHistory('unlink', unlinkedTimestamps);
+
             this.selectedTimestamps = [];
 
             await this.loadTimestamps(this.currentPage, this.currentSearchQuery);
@@ -935,6 +970,234 @@ class TimestampNormalization {
             videoLinkBtn.classList.add('bg-gray-400', 'cursor-not-allowed');
             videoLinkBtn.classList.remove('bg-red-600', 'hover:bg-red-700', 'cursor-pointer');
         }
+    }
+
+    // ===== 操作履歴機能 =====
+
+    /**
+     * 操作履歴パネルの初期化
+     */
+    initHistoryPanel() {
+        // フローティングボタンを作成
+        this.createHistoryButton();
+        this.createHistoryPanel();
+    }
+
+    /**
+     * フローティングボタンを作成
+     */
+    createHistoryButton() {
+        const button = document.createElement('button');
+        button.id = 'historyButton';
+        button.className = 'fixed bottom-6 right-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg flex items-center justify-center transition-all z-40';
+        button.title = '操作履歴';
+        button.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span id="historyBadge" class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center hidden">0</span>
+        `;
+        button.addEventListener('click', () => this.toggleHistoryPanel());
+        document.body.appendChild(button);
+    }
+
+    /**
+     * 履歴パネルを作成
+     */
+    createHistoryPanel() {
+        const panel = document.createElement('div');
+        panel.id = 'historyPanel';
+        panel.className = 'fixed bottom-24 right-6 w-80 max-h-96 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 hidden z-50 flex flex-col';
+        panel.innerHTML = `
+            <div class="p-3 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center flex-shrink-0">
+                <h4 class="font-semibold text-gray-900 dark:text-gray-100">操作履歴</h4>
+                <button id="clearHistoryBtn" class="text-xs text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400">
+                    クリア
+                </button>
+            </div>
+            <div id="historyList" class="flex-1 overflow-y-auto p-2 space-y-2">
+                <p class="text-gray-500 dark:text-gray-400 text-sm text-center py-4">履歴はありません</p>
+            </div>
+        `;
+        document.body.appendChild(panel);
+
+        // クリアボタンのイベント
+        document.getElementById('clearHistoryBtn').addEventListener('click', () => {
+            this.clearHistory();
+        });
+
+        // パネル外クリックで閉じる
+        document.addEventListener('click', (e) => {
+            const panel = document.getElementById('historyPanel');
+            const button = document.getElementById('historyButton');
+            if (!panel.contains(e.target) && !button.contains(e.target) && !panel.classList.contains('hidden')) {
+                panel.classList.add('hidden');
+            }
+        });
+    }
+
+    /**
+     * 履歴パネルの表示/非表示を切り替え
+     */
+    toggleHistoryPanel() {
+        const panel = document.getElementById('historyPanel');
+        panel.classList.toggle('hidden');
+    }
+
+    /**
+     * 操作を履歴に追加
+     * @param {string} type - 操作種別 (link, not_song, unlink, unmark_not_song, confirm_auto_link)
+     * @param {Array} timestamps - 操作対象のタイムスタンプ
+     * @param {Object|null} song - 紐付けた楽曲情報
+     */
+    addToHistory(type, timestamps, song = null) {
+        const typeLabels = {
+            'link': '紐付け',
+            'not_song': '非楽曲',
+            'unlink': '解除',
+            'unmark_not_song': '非楽曲解除',
+            'confirm_auto_link': '自動確定'
+        };
+
+        const typeColors = {
+            'link': 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200',
+            'not_song': 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200',
+            'unlink': 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200',
+            'unmark_not_song': 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200',
+            'confirm_auto_link': 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200'
+        };
+
+        const entry = {
+            id: Date.now(),
+            type,
+            typeLabel: typeLabels[type] || type,
+            typeColor: typeColors[type] || 'bg-gray-100 text-gray-800',
+            timestamps: timestamps.map(ts => ({
+                text: ts.text,
+                normalized_text: ts.normalized_text
+            })),
+            song: song ? { title: song.title, artist: song.artist } : null,
+            createdAt: new Date()
+        };
+
+        this.operationHistory.unshift(entry);
+
+        // 最大件数を超えたら古いものを削除
+        if (this.operationHistory.length > this.maxHistoryItems) {
+            this.operationHistory = this.operationHistory.slice(0, this.maxHistoryItems);
+        }
+
+        this.updateHistoryDisplay();
+    }
+
+    /**
+     * 履歴表示を更新
+     */
+    updateHistoryDisplay() {
+        const listContainer = document.getElementById('historyList');
+        const badge = document.getElementById('historyBadge');
+
+        // バッジ更新
+        if (this.operationHistory.length > 0) {
+            badge.textContent = this.operationHistory.length;
+            badge.classList.remove('hidden');
+        } else {
+            badge.classList.add('hidden');
+        }
+
+        // リスト更新
+        if (this.operationHistory.length === 0) {
+            listContainer.innerHTML = '<p class="text-gray-500 dark:text-gray-400 text-sm text-center py-4">履歴はありません</p>';
+            return;
+        }
+
+        listContainer.innerHTML = '';
+        this.operationHistory.forEach(entry => {
+            const item = this.createHistoryItem(entry);
+            listContainer.appendChild(item);
+        });
+    }
+
+    /**
+     * 履歴アイテム要素を作成
+     */
+    createHistoryItem(entry) {
+        const div = document.createElement('div');
+        div.className = 'p-2 bg-gray-50 dark:bg-gray-700 rounded text-sm';
+
+        // ヘッダー（種別と時刻）
+        const header = document.createElement('div');
+        header.className = 'flex justify-between items-center mb-1';
+
+        const typeSpan = document.createElement('span');
+        typeSpan.className = `px-2 py-0.5 rounded text-xs font-medium ${entry.typeColor}`;
+        typeSpan.textContent = entry.typeLabel;
+
+        const timeSpan = document.createElement('span');
+        timeSpan.className = 'text-xs text-gray-400';
+        timeSpan.textContent = this.formatTime(entry.createdAt);
+
+        header.appendChild(typeSpan);
+        header.appendChild(timeSpan);
+        div.appendChild(header);
+
+        // タイムスタンプテキスト
+        entry.timestamps.forEach(ts => {
+            const tsDiv = document.createElement('div');
+            tsDiv.className = 'flex items-center gap-1 mt-1';
+
+            const textSpan = document.createElement('span');
+            textSpan.className = 'text-gray-700 dark:text-gray-300 truncate flex-1 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400';
+            textSpan.textContent = ts.text;
+            textSpan.title = `クリックでコピー: ${ts.text}`;
+            textSpan.addEventListener('click', () => {
+                navigator.clipboard.writeText(ts.text);
+                toast.success('コピーしました');
+            });
+
+            tsDiv.appendChild(textSpan);
+            div.appendChild(tsDiv);
+        });
+
+        // 楽曲情報（紐付けの場合）
+        if (entry.song) {
+            const songDiv = document.createElement('div');
+            songDiv.className = 'mt-1 text-xs text-gray-500 dark:text-gray-400 truncate cursor-pointer hover:text-blue-600 dark:hover:text-blue-400';
+            songDiv.textContent = `→ ${entry.song.title} / ${entry.song.artist}`;
+            songDiv.title = `クリックでコピー: ${entry.song.title} / ${entry.song.artist}`;
+            songDiv.addEventListener('click', () => {
+                navigator.clipboard.writeText(`${entry.song.title} / ${entry.song.artist}`);
+                toast.success('コピーしました');
+            });
+            div.appendChild(songDiv);
+        }
+
+        return div;
+    }
+
+    /**
+     * 時刻をフォーマット
+     */
+    formatTime(date) {
+        const now = new Date();
+        const diff = now - date;
+
+        if (diff < 60000) {
+            return 'たった今';
+        } else if (diff < 3600000) {
+            return `${Math.floor(diff / 60000)}分前`;
+        } else {
+            return date.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+        }
+    }
+
+    /**
+     * 履歴をクリア
+     */
+    clearHistory() {
+        this.operationHistory = [];
+        this.updateHistoryDisplay();
+        toast.info('履歴をクリアしました');
     }
 }
 
