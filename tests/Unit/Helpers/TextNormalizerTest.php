@@ -116,6 +116,48 @@ class TextNormalizerTest extends TestCase
     }
 
     /**
+     * ゼロ幅スペースなどの不可視文字が除去されることをテスト
+     */
+    public function test_zero_width_character_removal(): void
+    {
+        // U+200B: Zero Width Space
+        $this->assertEquals('testvalue', TextNormalizer::normalize("test\u{200B}value"));
+
+        // U+200C: Zero Width Non-Joiner
+        $this->assertEquals('testvalue', TextNormalizer::normalize("test\u{200C}value"));
+
+        // U+200D: Zero Width Joiner
+        $this->assertEquals('testvalue', TextNormalizer::normalize("test\u{200D}value"));
+
+        // U+FEFF: BOM
+        $this->assertEquals('testvalue', TextNormalizer::normalize("\u{FEFF}testvalue"));
+
+        // 複数の不可視文字が混在
+        $this->assertEquals('abc def', TextNormalizer::normalize("a\u{200B}bc\u{200C} \u{200D}def"));
+
+        // 先頭にゼロ幅スペースがある実際のケース
+        $this->assertEquals('天野由梨 魂の扉', TextNormalizer::normalize("\u{200B} 天野由梨 魂の扉"));
+    }
+
+    /**
+     * trimFullwidthSpace で不可視文字が除去されることをテスト
+     */
+    public function test_trim_fullwidth_space_removes_zero_width_characters(): void
+    {
+        // 先頭のゼロ幅スペース
+        $this->assertEquals('test', TextNormalizer::trimFullwidthSpace("\u{200B}test"));
+
+        // 全角スペースとゼロ幅スペースの組み合わせ
+        $this->assertEquals('test', TextNormalizer::trimFullwidthSpace("　\u{200B}test"));
+
+        // 中間にあるゼロ幅スペース
+        $this->assertEquals('test value', TextNormalizer::trimFullwidthSpace("\u{200B}test\u{200B} value"));
+
+        // BOM
+        $this->assertEquals('test', TextNormalizer::trimFullwidthSpace("\u{FEFF}test"));
+    }
+
+    /**
      * エッジケースのテスト
      */
     public function test_edge_cases(): void
