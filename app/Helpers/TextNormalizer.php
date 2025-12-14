@@ -36,6 +36,13 @@ class TextNormalizer
         // 連続する区切り文字を1つに
         $text = preg_replace('/\/+/', '/', $text);
 
+        // ゼロ幅スペースなどの不可視文字を除去
+        // U+200B: Zero Width Space
+        // U+200C: Zero Width Non-Joiner
+        // U+200D: Zero Width Joiner
+        // U+FEFF: Byte Order Mark (BOM)
+        $text = preg_replace('/[\x{200B}-\x{200D}\x{FEFF}]/u', '', $text);
+
         // 全角スペース・タブなどを半角スペースに統一
         $text = preg_replace('/[\s\x{3000}]+/u', ' ', $text);
 
@@ -57,13 +64,16 @@ class TextNormalizer
     }
 
     /**
-     * 先頭の全角スペース（および半角スペース）を除外
+     * 先頭の全角スペース（および半角スペース）を除外し、不可視文字を除去
      */
     public static function trimFullwidthSpace(?string $text): string
     {
         if (empty($text)) {
             return '';
         }
+
+        // ゼロ幅スペースなどの不可視文字を除去
+        $text = preg_replace('/[\x{200B}-\x{200D}\x{FEFF}]/u', '', $text);
 
         // 先頭の全角スペース（U+3000）と半角スペース、その他の空白文字を除去
         return preg_replace('/^[\s\x{3000}]+/u', '', $text);
