@@ -342,13 +342,13 @@ class YouTubeApiService
      * ISO 8601形式の期間をミリ秒に変換
      *
      * @param  string  $duration  ISO 8601形式の期間（例: "PT1H2M3S"）
-     * @return int ミリ秒
+     * @return int|null ミリ秒、パース失敗時はnull
      */
-    protected function parseDuration(string $duration): int
+    protected function parseDuration(string $duration): ?int
     {
         try {
             $interval = new \DateInterval($duration);
-            $seconds = ($interval->h * 3600) + ($interval->i * 60) + $interval->s;
+            $seconds = ($interval->d * 86400) + ($interval->h * 3600) + ($interval->i * 60) + $interval->s;
 
             return $seconds * 1000; // ミリ秒に変換
         } catch (\Exception $e) {
@@ -357,7 +357,7 @@ class YouTubeApiService
                 'error' => $e->getMessage(),
             ]);
 
-            return 0;
+            return null;
         }
     }
 }

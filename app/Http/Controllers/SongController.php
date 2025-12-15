@@ -475,8 +475,8 @@ class SongController extends Controller
         $validated = $request->validate([
             'title' => 'sometimes|required|string|max:255',
             'artist' => 'sometimes|required|string|max:255',
-            'youtube_url' => 'nullable|string|max:255',
-            'duration_ms' => 'nullable|integer|min:0',
+            'youtube_url' => 'nullable|url|max:255',
+            'duration_ms' => 'nullable|integer|min:0|max:86400000', // 最大24時間
         ]);
 
         $song = Song::findOrFail($id);
