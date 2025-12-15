@@ -28,8 +28,10 @@ class TimestampReportTest extends TestCase
     {
         parent::setUp();
 
-        // テスト用のユーザーを作成
-        $this->user = User::factory()->create();
+        // テスト用のユーザーを作成（スーパー管理者権限付き）
+        $this->user = User::factory()->create([
+            'role' => User::ROLE_SUPER_ADMIN,
+        ]);
 
         // テスト用のチャンネルとアーカイブを作成
         $this->channel = Channel::create([

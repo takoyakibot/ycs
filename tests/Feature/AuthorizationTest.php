@@ -80,14 +80,17 @@ class AuthorizationTest extends TestCase
     }
 
     /**
-     * メール未認証ユーザーでも管理画面にアクセスできる
+     * メール未認証でも管理者権限があれば管理画面にアクセスできる
      *
      * Note: メール認証は不要としています（Issue #196でOption Bを選択）
-     * 認証（auth）のみで管理画面にアクセス可能です。
+     * 管理者権限（admin以上）で管理画面にアクセス可能です。
      */
-    public function test_unverified_user_can_access_manage_pages(): void
+    public function test_unverified_admin_can_access_manage_pages(): void
     {
-        $user = User::factory()->create(['email_verified_at' => null]);
+        $user = User::factory()->create([
+            'email_verified_at' => null,
+            'role' => User::ROLE_SUPER_ADMIN,
+        ]);
 
         $response = $this->actingAs($user)->get('/channels/manage');
         $response->assertStatus(200);
@@ -97,13 +100,30 @@ class AuthorizationTest extends TestCase
     }
 
     /**
-     * メール未認証ユーザーでも管理APIにアクセスできる
+     * 一般ユーザーは管理画面にアクセスできない
+     */
+    public function test_regular_user_cannot_access_manage_pages(): void
+    {
+        $user = User::factory()->create(['email_verified_at' => now()]);
+
+        $response = $this->actingAs($user)->get('/channels/manage');
+        $response->assertStatus(403);
+
+        $response = $this->actingAs($user)->get('/manage/logs');
+        $response->assertStatus(403);
+    }
+
+    /**
+     * メール未認証でも管理者権限があれば管理APIにアクセスできる
      *
      * Note: メール認証は不要としています（Issue #196でOption Bを選択）
      */
-    public function test_unverified_user_can_access_manage_api(): void
+    public function test_unverified_admin_can_access_manage_api(): void
     {
-        $user = User::factory()->create(['email_verified_at' => null]);
+        $user = User::factory()->create([
+            'email_verified_at' => null,
+            'role' => User::ROLE_SUPER_ADMIN,
+        ]);
 
         $response = $this->actingAs($user)->getJson('/api/manage/channels');
         $response->assertStatus(200);
@@ -113,17 +133,34 @@ class AuthorizationTest extends TestCase
     }
 
     /**
-     * 認証済みユーザーは管理APIにアクセスできる
+     * 管理者権限を持つ認証済みユーザーは管理APIにアクセスできる
      */
-    public function test_verified_user_can_access_manage_api(): void
+    public function test_admin_can_access_manage_api(): void
     {
-        $user = User::factory()->create(['email_verified_at' => now()]);
+        $user = User::factory()->create([
+            'email_verified_at' => now(),
+            'role' => User::ROLE_ADMIN,
+        ]);
 
         $response = $this->actingAs($user)->getJson('/api/manage/channels');
         $response->assertStatus(200);
 
         $response = $this->actingAs($user)->getJson('/api/songs/timestamps');
         $response->assertStatus(200);
+    }
+
+    /**
+     * 一般ユーザーは管理APIにアクセスできない
+     */
+    public function test_regular_user_cannot_access_manage_api(): void
+    {
+        $user = User::factory()->create(['email_verified_at' => now()]);
+
+        $response = $this->actingAs($user)->getJson('/api/manage/channels');
+        $response->assertStatus(403);
+
+        $response = $this->actingAs($user)->getJson('/api/songs/timestamps');
+        $response->assertStatus(403);
     }
 
     /**

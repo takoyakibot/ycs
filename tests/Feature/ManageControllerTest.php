@@ -22,7 +22,10 @@ class ManageControllerTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->user = User::factory()->create(['email_verified_at' => now()]);
+        $this->user = User::factory()->create([
+            'email_verified_at' => now(),
+            'role' => User::ROLE_SUPER_ADMIN,
+        ]);
     }
 
     /**
