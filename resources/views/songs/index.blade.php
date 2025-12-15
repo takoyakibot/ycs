@@ -94,6 +94,12 @@
                             </div>
                             <div id="selectedText" class="font-medium break-words overflow-hidden" style="word-break: break-word; overflow-wrap: break-word;">タイムスタンプを選択してください</div>
                             <div id="selectedNormalized" class="text-xs text-gray-500 dark:text-gray-400 mt-1 break-words" style="word-break: break-word; overflow-wrap: break-word;"></div>
+                            <div id="selectedLinkedSongContainer" class="flex items-center gap-2 mt-1">
+                                <div id="selectedLinkedSong" class="text-xs break-words hidden" style="word-break: break-word; overflow-wrap: break-word;"></div>
+                                <button id="selectedConfirmBtn" class="px-2 py-1 text-xs bg-yellow-500 hover:bg-yellow-600 text-white rounded transition-colors hidden flex-shrink-0">
+                                    確定
+                                </button>
+                            </div>
                         </div>
 
                         <!-- Spotify選択楽曲情報表示 -->
