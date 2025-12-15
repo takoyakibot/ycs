@@ -9,6 +9,7 @@ use App\Http\Requests\LinkTimestampRequest;
 use App\Http\Requests\MarkAsNotSongRequest;
 use App\Http\Requests\NormalizedTextRequest;
 use App\Http\Requests\StoreSongRequest;
+use App\Models\NormalizationLog;
 use App\Models\Song;
 use App\Models\TimestampSongMapping;
 use App\Models\TsItem;
@@ -16,6 +17,7 @@ use App\Services\SongMappingService;
 use App\Services\SongSearchService;
 use App\Services\SpotifyService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 
 class SongController extends Controller
@@ -47,10 +49,12 @@ class SongController extends Controller
     /**
      * 全タイムスタンプを取得（マッピング情報付き）
      * DBレベルでフィルタリング・ページネーションを実行
+     * Channel Adminの場合は自チャンネルのタイムスタンプのみ表示
      */
     public function fetchTimestamps(FetchTimestampsRequest $request)
     {
         $validated = $request->validated();
+        $user = Auth::user();
 
         $perPage = $validated['per_page'] ?? 50;
         $search = $validated['search'] ?? '';
@@ -68,6 +72,14 @@ class SongController extends Controller
             ->whereHas('archive', function ($q) {
                 $q->where('is_display', 1);
             });
+
+        // Channel Admin（非Super Admin）の場合は自チャンネルのみ表示
+        if (! $user->isSuperAdmin()) {
+            $userChannelIds = $user->channels()->pluck('channel_id')->toArray();
+            $query->whereHas('archive', function ($q) use ($userChannelIds) {
+                $q->whereIn('channel_id', $userChannelIds);
+            });
+        }
 
         // 検索条件
         if ($search) {
@@ -203,13 +215,27 @@ class SongController extends Controller
         // 強制新規登録フラグがある場合はチェックをスキップ
         if (! empty($validated['force_create'])) {
             try {
+                $userId = Auth::id();
                 $song = Song::create([
                     'id' => Str::ulid(),
                     'title' => $title,
                     'artist' => $artist,
                     'spotify_track_id' => $validated['spotify_track_id'] ?? null,
                     'spotify_data' => $validated['spotify_data'] ?? null,
+                    'created_by' => $userId,
+                    'updated_by' => $userId,
                 ]);
+
+                // 操作ログを記録
+                if ($userId) {
+                    NormalizationLog::log(
+                        $userId,
+                        NormalizationLog::ACTION_CREATE_SONG,
+                        NormalizationLog::TARGET_SONG,
+                        $song->id,
+                        ['title' => $title, 'artist' => $artist]
+                    );
+                }
 
                 return response()->json([
                     'status' => 'created',
@@ -284,13 +310,27 @@ class SongController extends Controller
 
         // 新規登録
         try {
+            $userId = Auth::id();
             $song = Song::create([
                 'id' => Str::ulid(),
                 'title' => $title,
                 'artist' => $artist,
                 'spotify_track_id' => $validated['spotify_track_id'] ?? null,
                 'spotify_data' => $validated['spotify_data'] ?? null,
+                'created_by' => $userId,
+                'updated_by' => $userId,
             ]);
+
+            // 操作ログを記録
+            if ($userId) {
+                NormalizationLog::log(
+                    $userId,
+                    NormalizationLog::ACTION_CREATE_SONG,
+                    NormalizationLog::TARGET_SONG,
+                    $song->id,
+                    ['title' => $title, 'artist' => $artist]
+                );
+            }
 
             return response()->json([
                 'status' => 'created',
@@ -453,9 +493,21 @@ class SongController extends Controller
     public function deleteSong(Request $request, $id)
     {
         $song = Song::findOrFail($id);
+        $userId = Auth::id();
 
-        // この楽曲に紐づいているマッピングを削除
-        $this->songMappingService->deleteMappingsBySongId($id);
+        // この楽曲に紐づいているマッピングを削除（ログ記録含む）
+        $this->songMappingService->deleteMappingsBySongId($id, $userId);
+
+        // 操作ログを記録
+        if ($userId) {
+            NormalizationLog::log(
+                $userId,
+                NormalizationLog::ACTION_DELETE_SONG,
+                NormalizationLog::TARGET_SONG,
+                $song->id,
+                ['title' => $song->title, 'artist' => $song->artist]
+            );
+        }
 
         $song->delete();
 

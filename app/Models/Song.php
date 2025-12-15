@@ -22,6 +22,8 @@ class Song extends Model
         'spotify_data',
         'normalized_title',
         'normalized_artist',
+        'created_by',
+        'updated_by',
     ];
 
     protected $casts = [
@@ -44,5 +46,15 @@ class Song extends Model
     public function mappings()
     {
         return $this->hasMany(TimestampSongMapping::class, 'song_id', 'id');
+    }
+
+    public function creator()
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function updater()
+    {
+        return $this->belongsTo(User::class, 'updated_by');
     }
 }
