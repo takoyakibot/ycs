@@ -109,6 +109,25 @@ class TimestampNormalization {
         document.getElementById('unmarkAsNotSongBtn').addEventListener('click', () => this.unmarkAsNotSong());
         document.getElementById('unlinkBtn').addEventListener('click', () => this.unlinkTimestamps());
         document.getElementById('clearSelectionBtn').addEventListener('click', () => this.clearSelection());
+
+        // 編集モーダル
+        document.getElementById('closeEditModalBtn').addEventListener('click', () => this.closeEditModal());
+        document.getElementById('cancelEditBtn').addEventListener('click', () => this.closeEditModal());
+        document.getElementById('editSongForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.updateSong();
+        });
+        document.getElementById('fetchDurationBtn').addEventListener('click', () => this.fetchYoutubeDuration());
+        document.getElementById('editSongDurationMs').addEventListener('input', (e) => {
+            this.updateDurationDisplay(e.target.value);
+        });
+
+        // モーダル外クリックで閉じる
+        document.getElementById('editSongModal').addEventListener('click', (e) => {
+            if (e.target.id === 'editSongModal') {
+                this.closeEditModal();
+            }
+        });
     }
 
     setFilter(filter) {
@@ -540,13 +559,19 @@ class TimestampNormalization {
     async createSong() {
         const title = document.getElementById('songTitle').value.trim();
         const artist = document.getElementById('songArtist').value.trim();
+        const youtubeUrl = document.getElementById('songYoutubeUrl')?.value.trim() || '';
 
         if (!title || !artist) {
             toast.warning('楽曲名とアーティスト名を入力してください。');
             return;
         }
 
-        await this.registerSong({ title, artist });
+        const songData = { title, artist };
+        if (youtubeUrl) {
+            songData.youtube_url = youtubeUrl;
+        }
+
+        await this.registerSong(songData);
     }
 
     async registerSong(songData, options = {}) {
@@ -671,7 +696,7 @@ class TimestampNormalization {
         }`;
 
         const contentDiv = document.createElement('div');
-        contentDiv.className = 'flex-1';
+        contentDiv.className = 'flex-1 min-w-0';
 
         const songInfo = document.createElement('div');
         songInfo.className = 'text-sm truncate';
@@ -690,9 +715,30 @@ class TimestampNormalization {
 
         contentDiv.appendChild(songInfo);
 
+        // 楽曲の長さを表示（ある場合）
+        if (song.duration_ms) {
+            const durationSpan = document.createElement('span');
+            durationSpan.className = 'text-xs text-gray-400 dark:text-gray-500 ml-2';
+            durationSpan.textContent = this.formatDuration(song.duration_ms);
+            songInfo.appendChild(durationSpan);
+        }
+
+        // ボタンコンテナ
+        const buttonContainer = document.createElement('div');
+        buttonContainer.className = 'flex items-center gap-1 flex-shrink-0 ml-2';
+
+        // 編集ボタン
+        const editBtn = document.createElement('button');
+        editBtn.className = 'px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700';
+        editBtn.textContent = '編集';
+        editBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.openEditModal(song);
+        });
+
         // 削除ボタン
         const deleteBtn = document.createElement('button');
-        deleteBtn.className = 'px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 flex-shrink-0 ml-2';
+        deleteBtn.className = 'px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700';
         deleteBtn.textContent = '削除';
         deleteBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
@@ -701,8 +747,11 @@ class TimestampNormalization {
             }
         });
 
+        buttonContainer.appendChild(editBtn);
+        buttonContainer.appendChild(deleteBtn);
+
         div.appendChild(contentDiv);
-        div.appendChild(deleteBtn);
+        div.appendChild(buttonContainer);
 
         div.addEventListener('click', () => {
             this.selectedSong = song;
@@ -1198,6 +1247,135 @@ class TimestampNormalization {
         this.operationHistory = [];
         this.updateHistoryDisplay();
         toast.info('履歴をクリアしました');
+    }
+
+    // ===== 楽曲編集機能 =====
+
+    /**
+     * 編集モーダルを開く
+     * @param {Object} song - 編集対象の楽曲
+     */
+    openEditModal(song) {
+        this.editingSong = song;
+        document.getElementById('editSongId').value = song.id;
+        document.getElementById('editSongTitle').value = song.title;
+        document.getElementById('editSongArtist').value = song.artist;
+        document.getElementById('editSongYoutubeUrl').value = song.youtube_url || '';
+        document.getElementById('editSongDurationMs').value = song.duration_ms || '';
+        this.updateDurationDisplay(song.duration_ms);
+        document.getElementById('editSongModal').classList.remove('hidden');
+    }
+
+    /**
+     * 編集モーダルを閉じる
+     */
+    closeEditModal() {
+        this.editingSong = null;
+        document.getElementById('editSongModal').classList.add('hidden');
+        document.getElementById('editSongForm').reset();
+        document.getElementById('editSongDurationFormatted').textContent = '';
+    }
+
+    /**
+     * 楽曲マスタを更新
+     */
+    async updateSong() {
+        const songId = document.getElementById('editSongId').value;
+        const title = document.getElementById('editSongTitle').value.trim();
+        const artist = document.getElementById('editSongArtist').value.trim();
+        const youtubeUrl = document.getElementById('editSongYoutubeUrl').value.trim();
+        const durationMs = document.getElementById('editSongDurationMs').value;
+
+        if (!title || !artist) {
+            toast.warning('楽曲名とアーティスト名を入力してください。');
+            return;
+        }
+
+        const updateData = { title, artist };
+        if (youtubeUrl) {
+            updateData.youtube_url = youtubeUrl;
+        } else {
+            updateData.youtube_url = null;
+        }
+        if (durationMs) {
+            updateData.duration_ms = parseInt(durationMs, 10);
+        } else {
+            updateData.duration_ms = null;
+        }
+
+        try {
+            this.showLoading();
+            const response = await songApiService.updateSong(songId, updateData);
+            toast.success('楽曲マスタを更新しました。');
+            this.closeEditModal();
+            await this.loadSongs(document.getElementById('songsSearch').value);
+
+            // 選択中の楽曲が更新された場合は更新
+            if (this.selectedSong?.id === songId) {
+                this.selectedSong = response.song;
+                this.updateSelectionDisplay();
+            }
+        } catch (error) {
+            console.error('更新に失敗しました:', error);
+            toast.error('更新に失敗しました。');
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    /**
+     * YouTube URLから秒数を取得
+     */
+    async fetchYoutubeDuration() {
+        const youtubeUrl = document.getElementById('editSongYoutubeUrl').value.trim();
+
+        if (!youtubeUrl) {
+            toast.warning('YouTube URLを入力してください。');
+            return;
+        }
+
+        try {
+            this.showLoading();
+            const response = await songApiService.fetchYoutubeDuration(youtubeUrl);
+            document.getElementById('editSongDurationMs').value = response.duration_ms;
+            this.updateDurationDisplay(response.duration_ms);
+            toast.success('秒数を取得しました。');
+        } catch (error) {
+            console.error('秒数取得に失敗しました:', error);
+            const errorMessage = error.response?.data?.error || '秒数の取得に失敗しました。';
+            toast.error(errorMessage);
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    /**
+     * 秒数表示を更新
+     * @param {number|string} durationMs - ミリ秒
+     */
+    updateDurationDisplay(durationMs) {
+        const formatted = durationMs ? this.formatDuration(durationMs) : '';
+        document.getElementById('editSongDurationFormatted').textContent = formatted;
+    }
+
+    /**
+     * ミリ秒を時間フォーマットに変換
+     * @param {number|string} durationMs - ミリ秒
+     * @returns {string} フォーマットされた時間（例: "3:45" または "1:23:45"）
+     */
+    formatDuration(durationMs) {
+        const ms = parseInt(durationMs, 10);
+        if (isNaN(ms) || ms <= 0) return '';
+
+        const totalSeconds = Math.floor(ms / 1000);
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+
+        if (hours > 0) {
+            return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
+        return `${minutes}:${seconds.toString().padStart(2, '0')}`;
     }
 }
 

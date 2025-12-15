@@ -47,6 +47,33 @@ export class SongApiService {
     }
 
     /**
+     * 楽曲マスタを更新
+     * @param {string} songId - 楽曲ID
+     * @param {Object} songData - 更新データ
+     * @param {string} songData.title - 楽曲名
+     * @param {string} songData.artist - アーティスト名
+     * @param {string} songData.youtube_url - YouTube URL
+     * @param {number} songData.duration_ms - 動画の長さ（ミリ秒）
+     * @returns {Promise<Object>} 更新結果
+     */
+    async updateSong(songId, songData) {
+        const response = await axios.put(`/api/songs/${songId}`, songData);
+        return response.data;
+    }
+
+    /**
+     * YouTube URLから動画の長さを取得
+     * @param {string} youtubeUrl - YouTube URL
+     * @returns {Promise<Object>} duration_ms と video_id を含むオブジェクト
+     */
+    async fetchYoutubeDuration(youtubeUrl) {
+        const response = await axios.post('/api/songs/youtube-duration', {
+            youtube_url: youtubeUrl
+        });
+        return response.data;
+    }
+
+    /**
      * Spotify APIで楽曲を検索
      * @param {string} query - 検索クエリ
      * @param {number} limit - 取得件数

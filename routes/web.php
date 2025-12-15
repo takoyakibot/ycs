@@ -60,7 +60,9 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('api/songs/unlink', [SongController::class, 'unlinkTimestamp'])->name('songs.unlinkTimestamp');
     Route::get('api/songs/fuzzy-search', [SongController::class, 'fuzzySearch'])->name('songs.fuzzySearch');
     Route::get('api/songs/search-spotify', [SongController::class, 'searchSpotify'])->name('songs.searchSpotify');
+    Route::post('api/songs/youtube-duration', [SongController::class, 'fetchYoutubeDuration'])->name('songs.fetchYoutubeDuration');
     // Parameterized route - must be last to avoid capturing specific route names
+    Route::put('api/songs/{id}', [SongController::class, 'updateSong'])->name('songs.updateSong');
     Route::delete('api/songs/{id}', [SongController::class, 'deleteSong'])->name('songs.deleteSong');
 
     // タイムスタンプ報告管理API

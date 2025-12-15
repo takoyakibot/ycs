@@ -144,6 +144,10 @@
                                     <label class="block text-sm font-medium mb-2">アーティスト名 *</label>
                                     <input type="text" id="songArtist" name="artist" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
                                 </div>
+                                <div>
+                                    <label class="block text-sm font-medium mb-2">YouTube URL（任意）</label>
+                                    <input type="text" id="songYoutubeUrl" name="youtube_url" placeholder="https://www.youtube.com/watch?v=..." class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                </div>
                                 <div class="flex gap-2">
                                     <button type="submit" class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
                                         楽曲マスタ作成
@@ -196,6 +200,56 @@
                 <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mr-3"></div>
                 <span class="text-gray-900 dark:text-gray-100">処理中...</span>
             </div>
+        </div>
+    </div>
+
+    <!-- 楽曲編集モーダル -->
+    <div id="editSongModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+        <div class="bg-white dark:bg-gray-800 p-6 rounded-lg w-full max-w-md mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">楽曲マスタ編集</h3>
+                <button id="closeEditModalBtn" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <form id="editSongForm" class="space-y-4">
+                <input type="hidden" id="editSongId" name="id">
+                <div>
+                    <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">楽曲名 *</label>
+                    <input type="text" id="editSongTitle" name="title" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">アーティスト名 *</label>
+                    <input type="text" id="editSongArtist" name="artist" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">YouTube URL（任意）</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="editSongYoutubeUrl" name="youtube_url" placeholder="https://www.youtube.com/watch?v=..." class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <button type="button" id="fetchDurationBtn" class="px-3 py-2 bg-red-600 text-white text-sm rounded-md hover:bg-red-700 whitespace-nowrap">
+                            秒数取得
+                        </button>
+                    </div>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">※ 秒数取得ボタンでYouTube APIを使用します（クォータ消費）</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">楽曲の長さ</label>
+                    <div class="flex items-center gap-2">
+                        <input type="number" id="editSongDurationMs" name="duration_ms" placeholder="ミリ秒" class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <span id="editSongDurationFormatted" class="text-sm text-gray-500 dark:text-gray-400 min-w-[80px]"></span>
+                    </div>
+                </div>
+                <div class="flex gap-2 pt-2">
+                    <button type="submit" class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                        保存
+                    </button>
+                    <button type="button" id="cancelEditBtn" class="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600">
+                        キャンセル
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </x-app-layout>
