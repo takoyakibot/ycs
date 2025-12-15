@@ -312,6 +312,10 @@ class TimestampNormalization {
             // 履歴に追加
             this.addToHistory('confirm_auto_link', [ts], ts.song);
 
+            // 選択を解除
+            this.selectedTimestamps = [];
+            this.updateSelectionDisplay();
+
             this.loadTimestamps(this.currentPage, this.currentSearchQuery);
         } catch (error) {
             console.error('確定エラー:', error);
