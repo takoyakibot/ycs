@@ -519,8 +519,12 @@ class SongController extends Controller
                 'video_id' => $videoId,
             ]);
         } catch (\Exception $e) {
+            $message = app()->environment('production')
+                ? '動画情報の取得に失敗しました。'
+                : $e->getMessage();
+
             return response()->json([
-                'error' => $e->getMessage(),
+                'error' => $message,
             ], 500);
         }
     }
