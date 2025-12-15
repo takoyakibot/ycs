@@ -76,7 +76,7 @@ class AdminController extends Controller
     /**
      * 管理者権限を削除
      */
-    public function destroy(Request $request, $id)
+    public function destroy(Request $request, int $id)
     {
         $user = User::findOrFail($id);
 
