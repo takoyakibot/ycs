@@ -9,10 +9,13 @@
      x-transition:leave-end="opacity-0 scale-95"
      class="fixed z-50 shadow-2xl rounded-lg overflow-hidden transition-all duration-200"
      :class="[
-         playerMinimized ? 'w-[200px]' : 'w-[320px] max-w-[calc(100vw-2rem)]',
          playerPosition.x === null ? (showDistributionPanel ? 'bottom-28 right-4' : 'bottom-4 right-4') : ''
      ]"
-     :style="getPlayerStyle()">
+     :style="{
+         ...getPlayerStyle(),
+         width: getPipWidth() + 'px',
+         maxWidth: 'calc(100vw - 2rem)'
+     }">
     {{-- プレイヤーヘッダー（ドラッグ可能） --}}
     <div class="bg-gray-800 text-white px-2 py-1 flex items-center justify-between cursor-move select-none"
          @mousedown="startDrag($event)"
