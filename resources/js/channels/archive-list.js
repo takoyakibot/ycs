@@ -8,7 +8,7 @@ import {
     getAmazonMusicUrl,
     getLineMusicUrl
 } from '../utils/music-services.js';
-import { REPORT_TYPES, MOBILE_REGEX, YOUTUBE_PLAYER_CONFIG } from './utils/constants.js';
+import { REPORT_TYPES, MOBILE_REGEX, YOUTUBE_PLAYER_CONFIG, PIP_SIZES } from './utils/constants.js';
 import { ChannelApiService } from './services/ChannelApiService.js';
 import { ReportService } from './services/ReportService.js';
 
@@ -153,6 +153,10 @@ function registerArchiveListComponent() {
                 dragOffset: { x: 0, y: 0 },
                 boundOnDrag: null,
                 boundStopDrag: null,
+
+                // ワイプサイズ設定
+                pipSize: 'medium',
+                pipSizes: PIP_SIZES,
 
                 // computed property
                 get maxPage() {
@@ -466,6 +470,12 @@ function registerArchiveListComponent() {
                     const autoReshuffleSaved = sessionStorage.getItem('autoReshuffle');
                     this.autoReshuffle = autoReshuffleSaved === 'true';
 
+                    // ワイプサイズ設定を読み込み（sessionStorageから、デフォルトmedium）
+                    const pipSizeSaved = sessionStorage.getItem('pipSize');
+                    if (pipSizeSaved && PIP_SIZES[pipSizeSaved]) {
+                        this.pipSize = pipSizeSaved;
+                    }
+
                     // YouTube IFrame APIの読み込み
                     this.loadYouTubeAPI();
 
@@ -684,9 +694,10 @@ function registerArchiveListComponent() {
                     const playerElement = document.getElementById('youtube-player');
                     if (!playerElement) return;
 
+                    const currentSize = this.getCurrentPipSize();
                     this.youtubePlayer = new YT.Player('youtube-player', {
-                        height: YOUTUBE_PLAYER_CONFIG.height,
-                        width: YOUTUBE_PLAYER_CONFIG.width,
+                        height: currentSize.height.toString(),
+                        width: currentSize.width.toString(),
                         playerVars: {
                             ...YOUTUBE_PLAYER_CONFIG.playerVars,
                             origin: window.location.origin
@@ -694,12 +705,17 @@ function registerArchiveListComponent() {
                         events: {
                             'onReady': () => {
                                 this.playerInitialized = true;
+                                // 画質を最低に設定（推奨のみ、強制は不可）
+                                if (this.youtubePlayer.setPlaybackQuality) {
+                                    this.youtubePlayer.setPlaybackQuality(YOUTUBE_PLAYER_CONFIG.suggestedQuality);
+                                }
                                 // 待機中の動画があれば再生
                                 // isPlayingはonStateChangeで更新されるため、ここでは設定しない
                                 if (this.pendingVideo) {
                                     this.youtubePlayer.loadVideoById({
                                         videoId: this.pendingVideo.videoId,
-                                        startSeconds: this.pendingVideo.time
+                                        startSeconds: this.pendingVideo.time,
+                                        suggestedQuality: YOUTUBE_PLAYER_CONFIG.suggestedQuality
                                     });
                                     this.pendingVideo = null;
                                 }
@@ -759,7 +775,8 @@ function registerArchiveListComponent() {
                     if (this.youtubePlayer && this.playerInitialized) {
                         this.youtubePlayer.loadVideoById({
                             videoId: videoId,
-                            startSeconds: time
+                            startSeconds: time,
+                            suggestedQuality: YOUTUBE_PLAYER_CONFIG.suggestedQuality
                         });
                     } else {
                         // 初期化が完了していない場合、待機動画として保存
@@ -833,6 +850,25 @@ function registerArchiveListComponent() {
                 // 自動再生設定の保存
                 saveAutoPlay() {
                     sessionStorage.setItem('videoAutoPlay', this.autoPlay.toString());
+                },
+
+                // ワイプサイズの変更
+                changePipSize(size) {
+                    if (PIP_SIZES[size]) {
+                        this.pipSize = size;
+                        sessionStorage.setItem('pipSize', size);
+                    }
+                },
+
+                // 現在のワイプサイズ設定を取得
+                getCurrentPipSize() {
+                    return PIP_SIZES[this.pipSize] || PIP_SIZES.medium;
+                },
+
+                // ワイプの幅を取得（CSSで使用）
+                getPipWidth() {
+                    const size = this.getCurrentPipSize();
+                    return this.playerMinimized ? size.minimizedWidth : size.width;
                 },
 
                 // ランダム再生

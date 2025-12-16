@@ -23,5 +23,30 @@ export const YOUTUBE_PLAYER_CONFIG = {
         controls: 1,
         rel: 0,
         modestbranding: 1
+    },
+    // 推奨画質（small=240p, tiny=144p相当）
+    // YouTubeのポリシーにより強制は不可だが、推奨として設定
+    suggestedQuality: 'small'
+};
+
+// ワイプ（PiP）サイズ設定
+export const PIP_SIZES = {
+    small: {
+        width: 240,
+        height: 135,
+        minimizedWidth: 160,
+        label: '小'
+    },
+    medium: {
+        width: 320,
+        height: 180,
+        minimizedWidth: 200,
+        label: '中'
+    },
+    large: {
+        width: 480,
+        height: 270,
+        minimizedWidth: 240,
+        label: '大'
     }
 };

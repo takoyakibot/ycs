@@ -36,6 +36,17 @@
                     </svg>
                     <span class="hidden sm:inline" x-text="isPlaying ? '停止' : '再生'"></span>
                 </button>
+                {{-- ワイプサイズ選択（モバイルでは非表示） --}}
+                <div x-show="!isMobile" class="hidden sm:inline-flex items-center rounded overflow-hidden border border-gray-300 dark:border-gray-600">
+                    <template x-for="(config, size) in pipSizes" :key="size">
+                        <button @click="changePipSize(size)"
+                                :class="pipSize === size ? 'bg-blue-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'"
+                                class="px-2 py-1 text-xs transition-colors border-r border-gray-300 dark:border-gray-600 last:border-r-0"
+                                :title="'ワイプサイズ: ' + config.label"
+                                x-text="config.label">
+                        </button>
+                    </template>
+                </div>
             </div>
             {{-- 楽曲タイトル --}}
             <div class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate flex-1"
