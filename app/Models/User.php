@@ -18,6 +18,7 @@ use Laravel\Sanctum\HasApiTokens;
  * @property array|null $google_token
  * @property string|null $google_refresh_token
  * @property string|null $avatar
+ * @property string $role
  * @property \Illuminate\Support\Carbon|null $email_verified_at
  * @property string|null $remember_token
  * @property \Illuminate\Support\Carbon|null $created_at
@@ -32,6 +33,12 @@ class User extends Authenticatable
      *
      * @var array<int, string>
      */
+    public const ROLE_SUPER_ADMIN = 'super_admin';
+
+    public const ROLE_ADMIN = 'admin';
+
+    public const ROLE_USER = 'user';
+
     protected $fillable = [
         'name',
         'email',
@@ -41,6 +48,7 @@ class User extends Authenticatable
         'google_token',
         'google_refresh_token',
         'avatar',
+        'role',
         'email_verified_at',
     ];
 
@@ -73,5 +81,44 @@ class User extends Authenticatable
     public function channels()
     {
         return $this->hasMany(Channel::class);
+    }
+
+    /**
+     * スーパー管理者かどうか判定
+     * 環境変数で指定されたメールアドレスの場合はtrue
+     */
+    public function isSuperAdmin(): bool
+    {
+        $superAdminEmail = config('auth.super_admin_email');
+
+        if ($superAdminEmail && $this->email === $superAdminEmail) {
+            return true;
+        }
+
+        return $this->role === self::ROLE_SUPER_ADMIN;
+    }
+
+    /**
+     * 管理者（Channel Admin）かどうか判定
+     */
+    public function isAdmin(): bool
+    {
+        return $this->isSuperAdmin() || $this->role === self::ROLE_ADMIN;
+    }
+
+    /**
+     * 管理機能にアクセスできるかどうか判定
+     */
+    public function canAccessManage(): bool
+    {
+        return $this->isAdmin();
+    }
+
+    /**
+     * スーパー管理者専用機能にアクセスできるかどうか判定
+     */
+    public function canAccessSuperAdminFeatures(): bool
+    {
+        return $this->isSuperAdmin();
     }
 }

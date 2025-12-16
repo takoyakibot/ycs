@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AdminController;
 use App\Http\Controllers\ChannelController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\LogController;
@@ -21,7 +22,8 @@ use Illuminate\Support\Facades\Route;
 |
  */
 
-Route::middleware(['auth'])->group(function () {
+// 管理者（Channel Admin以上）専用機能
+Route::middleware(['auth', 'admin'])->group(function () {
     // TODO: 別のサービスができるまでは自動的に歌枠検索に飛ばす
     Route::redirect('/manage', '/channels/manage', 301);
 
@@ -30,15 +32,6 @@ Route::middleware(['auth'])->group(function () {
 
     // 楽曲マスタ管理
     Route::get('/songs/normalize', [SongController::class, 'index'])->name('songs.index');
-
-    // ログ管理
-    Route::get('/manage/logs', [LogController::class, 'index'])->name('logs.index');
-    Route::get('/manage/logs/{filename}', [LogController::class, 'show'])->name('logs.show');
-    Route::get('/manage/logs/{filename}/download', [LogController::class, 'download'])->name('logs.download');
-    Route::delete('/manage/logs/{filename}', [LogController::class, 'delete'])->name('logs.delete');
-
-    // タイムスタンプ報告管理
-    Route::get('/manage/reports', [TimestampReportController::class, 'manage'])->name('reports.index');
 
     Route::get('api/manage/channels', [ManageController::class, 'fetchChannel'])->name('manage.fetchChannel');
     Route::post('api/manage/channels', [ManageController::class, 'addChannel'])->name('manage.addChannel');
@@ -62,11 +55,29 @@ Route::middleware(['auth'])->group(function () {
     Route::get('api/songs/search-spotify', [SongController::class, 'searchSpotify'])->name('songs.searchSpotify');
     // Parameterized route - must be last to avoid capturing specific route names
     Route::delete('api/songs/{id}', [SongController::class, 'deleteSong'])->name('songs.deleteSong');
+});
+
+// スーパー管理者専用機能
+Route::middleware(['auth', 'super_admin'])->group(function () {
+    // ログ管理
+    Route::get('/manage/logs', [LogController::class, 'index'])->name('logs.index');
+    Route::get('/manage/logs/{filename}', [LogController::class, 'show'])->name('logs.show');
+    Route::get('/manage/logs/{filename}/download', [LogController::class, 'download'])->name('logs.download');
+    Route::delete('/manage/logs/{filename}', [LogController::class, 'delete'])->name('logs.delete');
+
+    // タイムスタンプ報告管理
+    Route::get('/manage/reports', [TimestampReportController::class, 'manage'])->name('reports.index');
 
     // タイムスタンプ報告管理API
     Route::get('api/manage/timestamp-reports', [TimestampReportController::class, 'index'])->name('timestamp-reports.index');
     Route::get('api/manage/timestamp-reports/{report}', [TimestampReportController::class, 'show'])->name('timestamp-reports.show');
     Route::patch('api/manage/timestamp-reports/{report}/resolve', [TimestampReportController::class, 'resolve'])->name('timestamp-reports.resolve');
+
+    // 管理者管理
+    Route::get('/manage/admins', [AdminController::class, 'index'])->name('admins.index');
+    Route::get('api/manage/admins', [AdminController::class, 'fetchAdmins'])->name('admins.fetchAdmins');
+    Route::post('api/manage/admins', [AdminController::class, 'store'])->name('admins.store');
+    Route::delete('api/manage/admins/{id}', [AdminController::class, 'destroy'])->name('admins.destroy');
 });
 
 Route::middleware('auth')->group(function () {
