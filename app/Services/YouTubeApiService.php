@@ -285,4 +285,79 @@ class YouTubeApiService
 
         return $comments;
     }
+
+    /**
+     * YouTubeのURLからVideo IDを抽出
+     *
+     * @param  string  $url  YouTube URL
+     * @return string|null Video ID、抽出できない場合null
+     */
+    public function extractVideoId(string $url): ?string
+    {
+        // 対応フォーマット:
+        // https://www.youtube.com/watch?v=VIDEO_ID
+        // https://youtu.be/VIDEO_ID
+        // https://www.youtube.com/embed/VIDEO_ID
+        // https://www.youtube.com/v/VIDEO_ID
+        $pattern = '/(?:youtube\.com\/(?:watch\?v=|embed\/|v\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/';
+
+        if (preg_match($pattern, $url, $matches)) {
+            return $matches[1];
+        }
+
+        return null;
+    }
+
+    /**
+     * 動画IDから動画の長さ（ミリ秒）を取得
+     *
+     * @param  string  $videoId  動画ID
+     * @return int|null 動画の長さ（ミリ秒）、取得できない場合null
+     *
+     * @throws Exception API quota超過またはレート制限時
+     */
+    public function getVideoDuration(string $videoId): ?int
+    {
+        $this->setApiKey();
+
+        try {
+            $response = $this->youtube->videos->listVideos('contentDetails', [
+                'id' => $videoId,
+            ]);
+        } catch (Exception $e) {
+            $this->handleApiError($e, 'getVideoDuration', ['video_id' => $videoId]);
+        }
+
+        if (count($response->getItems()) > 0) {
+            $contentDetails = $response->getItems()[0]->getContentDetails();
+            $duration = $contentDetails->getDuration(); // ISO 8601形式: "PT1H2M3S"
+
+            return $this->parseDuration($duration);
+        }
+
+        return null;
+    }
+
+    /**
+     * ISO 8601形式の期間をミリ秒に変換
+     *
+     * @param  string  $duration  ISO 8601形式の期間（例: "PT1H2M3S"）
+     * @return int|null ミリ秒、パース失敗時はnull
+     */
+    protected function parseDuration(string $duration): ?int
+    {
+        try {
+            $interval = new \DateInterval($duration);
+            $seconds = ($interval->d * 86400) + ($interval->h * 3600) + ($interval->i * 60) + $interval->s;
+
+            return $seconds * 1000; // ミリ秒に変換
+        } catch (\Exception $e) {
+            Log::warning('Failed to parse duration', [
+                'duration' => $duration,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
 }

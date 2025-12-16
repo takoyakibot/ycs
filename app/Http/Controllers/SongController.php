@@ -16,6 +16,7 @@ use App\Models\TsItem;
 use App\Services\SongMappingService;
 use App\Services\SongSearchService;
 use App\Services\SpotifyService;
+use App\Services\YouTubeApiService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
@@ -28,14 +29,18 @@ class SongController extends Controller
 
     protected SpotifyService $spotifyService;
 
+    protected YouTubeApiService $youtubeApiService;
+
     public function __construct(
         SongSearchService $songSearchService,
         SongMappingService $songMappingService,
-        SpotifyService $spotifyService
+        SpotifyService $spotifyService,
+        YouTubeApiService $youtubeApiService
     ) {
         $this->songSearchService = $songSearchService;
         $this->songMappingService = $songMappingService;
         $this->spotifyService = $spotifyService;
+        $this->youtubeApiService = $youtubeApiService;
     }
 
     /**
@@ -512,5 +517,67 @@ class SongController extends Controller
         $song->delete();
 
         return response()->json(['message' => '楽曲マスタを削除しました。']);
+    }
+
+    /**
+     * 楽曲マスタを更新
+     */
+    public function updateSong(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'title' => 'sometimes|required|string|max:255',
+            'artist' => 'sometimes|required|string|max:255',
+            'youtube_url' => 'nullable|url|max:255',
+            'duration_ms' => 'nullable|integer|min:0|max:86400000', // 最大24時間
+        ]);
+
+        $song = Song::findOrFail($id);
+        $song->update($validated);
+
+        return response()->json([
+            'message' => '楽曲マスタを更新しました。',
+            'song' => $song,
+        ]);
+    }
+
+    /**
+     * YouTube URLから動画の長さを取得
+     */
+    public function fetchYoutubeDuration(Request $request)
+    {
+        $validated = $request->validate([
+            'youtube_url' => 'required|string|max:255',
+        ]);
+
+        $videoId = $this->youtubeApiService->extractVideoId($validated['youtube_url']);
+
+        if (! $videoId) {
+            return response()->json([
+                'error' => '有効なYouTube URLではありません。',
+            ], 422);
+        }
+
+        try {
+            $durationMs = $this->youtubeApiService->getVideoDuration($videoId);
+
+            if ($durationMs === null) {
+                return response()->json([
+                    'error' => '動画情報を取得できませんでした。動画が存在しないか、非公開の可能性があります。',
+                ], 404);
+            }
+
+            return response()->json([
+                'duration_ms' => $durationMs,
+                'video_id' => $videoId,
+            ]);
+        } catch (\Exception $e) {
+            $message = app()->environment('production')
+                ? '動画情報の取得に失敗しました。'
+                : $e->getMessage();
+
+            return response()->json([
+                'error' => $message,
+            ], 500);
+        }
     }
 }
