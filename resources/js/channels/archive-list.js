@@ -33,6 +33,54 @@ const logUserAction = async (action, data) => {
 };
 
 /**
+ * 再生履歴をsessionStorageに保存
+ * @param {Object} song - 楽曲情報
+ * @param {Object} timestamp - タイムスタンプ情報
+ * @param {Object} channel - チャンネル情報
+ */
+const savePlayHistory = (song, timestamp, channel) => {
+    if (!song) return;
+
+    const STORAGE_KEY = 'playHistory';
+    const MAX_HISTORY = 5;
+
+    try {
+        const history = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || '[]');
+
+        const entry = {
+            title: song.title || '',
+            artist: song.artist || '',
+            videoId: timestamp?.video_id || null,
+            tsNum: timestamp?.ts_num || 0,
+            channelHandle: channel?.handle || '',
+            channelTitle: channel?.title || '',
+            playedAt: new Date().toISOString()
+        };
+
+        // 重複チェック（同じ曲を連続で追加しない）
+        if (history.length > 0) {
+            const last = history[0];
+            if (last.title === entry.title &&
+                last.artist === entry.artist &&
+                last.videoId === entry.videoId &&
+                last.tsNum === entry.tsNum) {
+                return; // 直前と同じなら追加しない
+            }
+        }
+
+        // 先頭に追加し、最大件数を超えたら古いものを削除
+        history.unshift(entry);
+        if (history.length > MAX_HISTORY) {
+            history.splice(MAX_HISTORY);
+        }
+
+        sessionStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+    } catch (error) {
+        // sessionStorage操作失敗は無視
+    }
+};
+
+/**
  * アーカイブ一覧とタイムスタンプ管理コンポーネント
  * Alpine.jsコンポーネント登録
  */
@@ -494,6 +542,9 @@ function registerArchiveListComponent() {
                         tsNum: timestamp?.ts_num
                     });
 
+                    // 再生履歴に保存
+                    savePlayHistory(song, timestamp, this.channel);
+
                     // 自動ガチャ中に手動で楽曲を選択した場合、自動再抽選をOFFにする
                     if (this.autoReshuffle) {
                         this.autoReshuffle = false;
@@ -537,6 +588,10 @@ function registerArchiveListComponent() {
                         artist: '',
                         spotify_track_id: null
                     };
+
+                    // 再生履歴に保存
+                    savePlayHistory(pseudoSong, timestamp, this.channel);
+
                     this.selectedSong = pseudoSong;
                     this.selectedTimestamp = timestamp;
                     if (!this.panelDismissed) {
