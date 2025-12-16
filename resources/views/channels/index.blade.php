@@ -1,5 +1,6 @@
 <x-app-layout>
     <x-slot name="alpine_script">
+        @vite('resources/js/channels/play-history.js')
         <script>
             window.channels = @json($channels['data'] ?? []);
         </script>

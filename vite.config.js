@@ -13,6 +13,7 @@ export default defineConfig(() => {
                     'resources/js/manage/channels.js',
                     'resources/js/manage/reports.js',
                     'resources/js/channels/archive-list.js',
+                    'resources/js/channels/play-history.js',
                     'resources/js/songs/normalize.js',
                 ],
                 refresh: true,
