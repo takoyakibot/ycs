@@ -147,6 +147,11 @@ function registerArchiveListComponent() {
                 originalVolume: 100,
                 needsFadeIn: false,
 
+                // 再生失敗検知機能
+                bufferingTimeoutId: null,
+                lastPlaybackTime: 0,
+                stallCount: 0,
+
                 // ドラッグ機能用
                 isDragging: false,
                 playerPosition: { x: null, y: null },
@@ -485,6 +490,7 @@ function registerArchiveListComponent() {
                     // ページ離脱時のクリーンアップ
                     window.addEventListener('beforeunload', () => {
                         this.stopReshuffleMonitor();
+                        this.clearBufferingTimeout();
                         this.destroyPlayer();
                     });
                 },
@@ -722,10 +728,27 @@ function registerArchiveListComponent() {
                             },
                             'onStateChange': (event) => {
                                 this.isPlaying = event.data === YT.PlayerState.PLAYING;
-                                // 再生開始時にフェードインが必要な場合は開始
-                                if (event.data === YT.PlayerState.PLAYING && this.needsFadeIn) {
-                                    this.startFadeIn();
+
+                                // 再生開始時の処理
+                                if (event.data === YT.PlayerState.PLAYING) {
+                                    // バッファリングタイムアウトをクリア
+                                    this.clearBufferingTimeout();
+                                    // スタック検知用の初期化
+                                    this.lastPlaybackTime = this.youtubePlayer?.getCurrentTime() || 0;
+                                    this.stallCount = 0;
+                                    // フェードインが必要な場合は開始
+                                    if (this.needsFadeIn) {
+                                        this.startFadeIn();
+                                    }
                                 }
+
+                                // バッファリング状態の監視（自動再抽選中のみ）
+                                if (event.data === YT.PlayerState.BUFFERING && this.autoReshuffle) {
+                                    this.startBufferingTimeout();
+                                } else if (event.data !== YT.PlayerState.BUFFERING) {
+                                    this.clearBufferingTimeout();
+                                }
+
                                 // 自動再抽選: 再生状態に応じて監視を開始/停止
                                 if (this.autoReshuffle && this.currentSongEndTime !== null) {
                                     if (event.data === YT.PlayerState.PLAYING) {
@@ -740,6 +763,8 @@ function registerArchiveListComponent() {
                                 console.error('YouTube Player Error:', event.data);
                                 this.isPlaying = false;
                                 this.pendingVideo = null;
+                                this.clearBufferingTimeout();
+
                                 const errorMessages = {
                                     2: '無効なパラメータです',
                                     5: 'HTML5プレイヤーエラーが発生しました',
@@ -748,7 +773,17 @@ function registerArchiveListComponent() {
                                     150: '動画の埋め込みが許可されていません'
                                 };
                                 const message = errorMessages[event.data] || '動画の読み込みに失敗しました';
-                                toast.error(message);
+
+                                // 自動再抽選中ならエラーをスキップして次の曲へ
+                                if (this.autoReshuffle) {
+                                    toast.warning(`${message} - 次の曲に進みます...`);
+                                    this.stopReshuffleMonitor();
+                                    setTimeout(() => {
+                                        this.playRandomTimestamp();
+                                    }, 1000);
+                                } else {
+                                    toast.error(message);
+                                }
                             }
                         }
                     });
@@ -983,6 +1018,11 @@ function registerArchiveListComponent() {
 
                     const FADE_OUT_DURATION = 3; // フェードアウト秒数
                     const CHECK_INTERVAL = 500; // チェック間隔（ミリ秒）
+                    const MAX_STALL_COUNT = 6; // 3秒間（500ms × 6回）進まなければスタックと判定
+
+                    // スタック検知用の初期化
+                    this.lastPlaybackTime = this.youtubePlayer.getCurrentTime();
+                    this.stallCount = 0;
 
                     this.reshuffleMonitorId = setInterval(() => {
                         if (!this.youtubePlayer || typeof this.youtubePlayer.getCurrentTime !== 'function') {
@@ -992,6 +1032,23 @@ function registerArchiveListComponent() {
 
                         const currentTime = this.youtubePlayer.getCurrentTime();
                         const fadeOutStartTime = this.currentSongEndTime - FADE_OUT_DURATION;
+
+                        // スタック検知: 再生中なのに時間が進まない状態を検知
+                        if (this.isPlaying) {
+                            if (Math.abs(currentTime - this.lastPlaybackTime) < 0.1) {
+                                this.stallCount++;
+                                if (this.stallCount >= MAX_STALL_COUNT) {
+                                    console.warn('再生がスタックしています（再生位置が進まない）');
+                                    toast.warning('読み込みに問題があります。次の曲に進みます...');
+                                    this.stopReshuffleMonitor();
+                                    this.playRandomTimestamp();
+                                    return;
+                                }
+                            } else {
+                                this.stallCount = 0;
+                            }
+                        }
+                        this.lastPlaybackTime = currentTime;
 
                         // フェードアウト開始時刻に到達
                         if (currentTime >= fadeOutStartTime && !this.fadeOutIntervalId) {
@@ -1016,6 +1073,34 @@ function registerArchiveListComponent() {
                         this.reshuffleMonitorId = null;
                     }
                     this.stopFadeOut();
+                },
+
+                /**
+                 * バッファリングタイムアウトを開始
+                 * バッファリング状態が10秒続いたら次の曲にスキップ
+                 */
+                startBufferingTimeout() {
+                    // 既存のタイムアウトをクリア
+                    this.clearBufferingTimeout();
+
+                    const BUFFERING_TIMEOUT = 10000; // 10秒
+
+                    this.bufferingTimeoutId = setTimeout(() => {
+                        console.warn('バッファリングタイムアウト');
+                        toast.warning('読み込みに時間がかかっています。次の曲に進みます...');
+                        this.stopReshuffleMonitor();
+                        this.playRandomTimestamp();
+                    }, BUFFERING_TIMEOUT);
+                },
+
+                /**
+                 * バッファリングタイムアウトをクリア
+                 */
+                clearBufferingTimeout() {
+                    if (this.bufferingTimeoutId) {
+                        clearTimeout(this.bufferingTimeoutId);
+                        this.bufferingTimeoutId = null;
+                    }
                 },
 
                 /**
