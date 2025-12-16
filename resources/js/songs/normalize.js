@@ -312,6 +312,10 @@ class TimestampNormalization {
             // 履歴に追加
             this.addToHistory('confirm_auto_link', [ts], ts.song);
 
+            // 選択を解除
+            this.selectedTimestamps = [];
+            this.updateSelectionDisplay();
+
             this.loadTimestamps(this.currentPage, this.currentSearchQuery);
         } catch (error) {
             console.error('確定エラー:', error);
@@ -373,25 +377,31 @@ class TimestampNormalization {
         const countSpan = document.getElementById('selectedCount');
         const textSpan = document.getElementById('selectedText');
         const normalizedSpan = document.getElementById('selectedNormalized');
+        const linkedSongSpan = document.getElementById('selectedLinkedSong');
+        const confirmBtn = document.getElementById('selectedConfirmBtn');
 
         container.classList.remove('hidden');
 
         if (this.selectedTimestamps.length === 0) {
-            this.displayNoSelection(countSpan, textSpan, normalizedSpan);
+            this.displayNoSelection(countSpan, textSpan, normalizedSpan, linkedSongSpan, confirmBtn);
         } else if (this.selectedTimestamps.length === 1) {
-            this.displaySingleSelection(countSpan, textSpan, normalizedSpan);
+            this.displaySingleSelection(countSpan, textSpan, normalizedSpan, linkedSongSpan, confirmBtn);
         } else {
-            this.displayMultipleSelection(countSpan, textSpan, normalizedSpan);
+            this.displayMultipleSelection(countSpan, textSpan, normalizedSpan, linkedSongSpan, confirmBtn);
         }
 
         this.updateSpotifySelectedDisplay();
         document.getElementById('linkSongBtn').disabled = !(this.selectedTimestamps.length > 0 && this.selectedSong);
     }
 
-    displayNoSelection(countSpan, textSpan, normalizedSpan) {
+    displayNoSelection(countSpan, textSpan, normalizedSpan, linkedSongSpan, confirmBtn) {
         countSpan.textContent = '未選択';
         textSpan.textContent = 'タイムスタンプを選択してください';
         normalizedSpan.textContent = '';
+        linkedSongSpan.textContent = '';
+        linkedSongSpan.classList.add('hidden');
+        confirmBtn.classList.add('hidden');
+        confirmBtn.onclick = null;
         document.getElementById('linkSongBtn').disabled = true;
         document.getElementById('markAsNotSongBtn').disabled = true;
         document.getElementById('unmarkAsNotSongBtn').disabled = true;
@@ -399,12 +409,44 @@ class TimestampNormalization {
         this.updateVideoButton(false);
     }
 
-    displaySingleSelection(countSpan, textSpan, normalizedSpan) {
+    displaySingleSelection(countSpan, textSpan, normalizedSpan, linkedSongSpan, confirmBtn) {
         const ts = this.selectedTimestamps[0];
         countSpan.textContent = '1件選択中';
         textSpan.textContent = ts.text;
         textSpan.title = ts.text;
         normalizedSpan.textContent = `正規化: ${ts.normalized_text}`;
+
+        // 紐づいている楽曲情報を表示
+        if (ts.is_not_song) {
+            linkedSongSpan.textContent = '楽曲ではない';
+            linkedSongSpan.className = 'text-xs break-words text-red-600 dark:text-red-400';
+            linkedSongSpan.classList.remove('hidden');
+            confirmBtn.classList.add('hidden');
+            confirmBtn.onclick = null;
+        } else if (ts.song) {
+            const isAutoLinked = ts.is_manual === false;
+            const prefix = isAutoLinked ? '[自動] ' : '';
+            linkedSongSpan.textContent = `紐づき: ${prefix}${ts.song.title} / ${ts.song.artist}`;
+            linkedSongSpan.className = isAutoLinked
+                ? 'text-xs break-words text-yellow-600 dark:text-yellow-400'
+                : 'text-xs break-words text-green-600 dark:text-green-400';
+            linkedSongSpan.classList.remove('hidden');
+
+            // 自動紐付けの場合は確定ボタンを表示
+            if (isAutoLinked) {
+                confirmBtn.classList.remove('hidden');
+                confirmBtn.onclick = () => this.confirmAutoLink(ts);
+            } else {
+                confirmBtn.classList.add('hidden');
+                confirmBtn.onclick = null;
+            }
+        } else {
+            linkedSongSpan.textContent = '';
+            linkedSongSpan.classList.add('hidden');
+            confirmBtn.classList.add('hidden');
+            confirmBtn.onclick = null;
+        }
+
         document.getElementById('markAsNotSongBtn').disabled = false;
         document.getElementById('unmarkAsNotSongBtn').disabled = !ts.is_not_song;
         document.getElementById('unlinkBtn').disabled = !ts.mapping;
@@ -416,7 +458,7 @@ class TimestampNormalization {
         }
     }
 
-    displayMultipleSelection(countSpan, textSpan, normalizedSpan) {
+    displayMultipleSelection(countSpan, textSpan, normalizedSpan, linkedSongSpan, confirmBtn) {
         countSpan.textContent = `${this.selectedTimestamps.length}件選択中`;
         const joinedText = this.selectedTimestamps.map(t => t.text).join(', ');
 
@@ -427,6 +469,10 @@ class TimestampNormalization {
         }
         textSpan.title = joinedText;
         normalizedSpan.textContent = '';
+        linkedSongSpan.textContent = '';
+        linkedSongSpan.classList.add('hidden');
+        confirmBtn.classList.add('hidden');
+        confirmBtn.onclick = null;
         document.getElementById('markAsNotSongBtn').disabled = false;
 
         const hasNotSong = this.selectedTimestamps.some(ts => ts.is_not_song);
