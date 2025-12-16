@@ -1,4 +1,3 @@
-import { escapeHTML } from '../utils.js';
 import { getYoutubeUrl } from '../utils/youtube.js';
 
 /**
@@ -184,7 +183,7 @@ class PlayHistory {
             // チャンネルページリンク
             if (entry.channelHandle) {
                 const channelLink = document.createElement('a');
-                channelLink.href = `/channels/${escapeHTML(entry.channelHandle)}`;
+                channelLink.href = `/channels/${encodeURIComponent(entry.channelHandle)}`;
                 channelLink.className = 'text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 flex items-center gap-1';
                 channelLink.innerHTML = `
                     <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
