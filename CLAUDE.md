@@ -135,6 +135,7 @@ php artisan test tests/Feature/SongControllerTest.php::test_specific_method  # R
 ### 留意点
 
 - ソースの修正を伴う作業は常にワークフローに従う
+- 基本的にdevelopには直接コミットしないこと
 - ワークフローの内容は、「ユーザー」の記載がない項目はclaudeが担当する
 - 対応は常に日本語で実施する
 - レビューで発見された問題がブランチの範囲外の場合は、PRへの指摘ではなくIssueを追加して対応する（類似のIssueがある場合はそのIssueに追記）
