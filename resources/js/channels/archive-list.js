@@ -667,6 +667,8 @@ function registerArchiveListComponent() {
                 loadYouTubeAPI() {
                     if (window.YT && window.YT.Player) {
                         this.playerReady = true;
+                        // 既にAPIが読み込まれている場合は即座に事前初期化
+                        this.$nextTick(() => this.preInitializePlayer());
                         return;
                     }
 
@@ -679,6 +681,8 @@ function registerArchiveListComponent() {
 
                     window.youtubeAPIReadyCallbacks.push(() => {
                         this.playerReady = true;
+                        // API準備完了時に事前初期化（モバイルの自動再生制限対策）
+                        this.$nextTick(() => this.preInitializePlayer());
                     });
 
                     if (!document.querySelector('script[src*="youtube.com/iframe_api"]')) {
@@ -691,6 +695,22 @@ function registerArchiveListComponent() {
                         const firstScriptTag = document.getElementsByTagName('script')[0];
                         firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
                     }
+                },
+
+                // プレイヤーの事前初期化（モバイルの自動再生制限対策）
+                // ページロード時にプレイヤーを初期化しておくことで、
+                // ユーザーの最初のタップ時に即座に再生できるようにする
+                preInitializePlayer() {
+                    if (this.youtubePlayer) return; // 既に初期化済み
+
+                    const playerElement = document.getElementById('youtube-player');
+                    if (!playerElement) {
+                        // 要素がまだ存在しない場合は少し待ってリトライ
+                        setTimeout(() => this.preInitializePlayer(), 100);
+                        return;
+                    }
+
+                    this.initPlayer();
                 },
 
                 // 動画プレイヤーの初期化
