@@ -2,6 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Alpine.js x-cloak: 初期化前に要素を非表示にする */
+[x-cloak] {
+    display: none !important;
+}
+
 .pagination-button {
     padding: 4px 20px;
     border: 1px solid #ccc;

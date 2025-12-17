@@ -6,6 +6,7 @@
             // window.archives = @json($archives ?? []);
         </script>
         @vite('resources/js/channels/archive-list.js')
+        @vite('resources/js/channels/play-history.js')
     </x-slot>
 
     <div class="px-2 sm:px-6 py-2 sm:py-6 transition-all duration-300"
