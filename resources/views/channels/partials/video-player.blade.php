@@ -1,5 +1,6 @@
 {{-- PIP風動画プレイヤー --}}
 <div x-show="showVideoPlayer"
+     x-cloak
      x-ref="videoPlayer"
      x-transition:enter="transition ease-out duration-300"
      x-transition:enter-start="opacity-0 scale-95"
@@ -59,6 +60,7 @@
 
 {{-- 戻すボタン（パネル非表示時、タイムスタンプタブのみ） --}}
 <button x-show="panelDismissed && !showDistributionPanel && activeTab === 'timestamps'"
+        x-cloak
         @click="openPanel()"
         x-transition:enter="transition ease-out duration-200"
         x-transition:enter-start="opacity-0 scale-95"
@@ -66,7 +68,7 @@
         x-transition:leave="transition ease-in duration-150"
         x-transition:leave-start="opacity-100 scale-100"
         x-transition:leave-end="opacity-0 scale-95"
-        class="fixed bottom-4 right-4 p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg z-40 transition-colors"
+        class="fixed bottom-24 right-6 p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg z-40 transition-colors"
         title="配信リンクを表示"
         aria-label="配信リンクを表示">
     <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">

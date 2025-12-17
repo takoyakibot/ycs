@@ -892,6 +892,16 @@ function registerArchiveListComponent() {
                     if (PIP_SIZES[size]) {
                         this.pipSize = size;
                         sessionStorage.setItem('pipSize', size);
+                        // YouTube Playerのサイズも更新
+                        this.updatePlayerSize();
+                    }
+                },
+
+                // YouTube Playerのサイズを更新
+                updatePlayerSize() {
+                    if (this.youtubePlayer && typeof this.youtubePlayer.setSize === 'function') {
+                        const currentSize = this.getCurrentPipSize();
+                        this.youtubePlayer.setSize(currentSize.width, currentSize.height);
                     }
                 },
 
