@@ -1,5 +1,6 @@
 {{-- 配信リンクパネル（タイムスタンプタブのみ表示） --}}
 <div x-show="showDistributionPanel && selectedSong && activeTab === 'timestamps'"
+     x-cloak
      x-transition:enter="transition ease-out duration-300"
      x-transition:enter-start="transform translate-y-full"
      x-transition:enter-end="transform translate-y-0"
