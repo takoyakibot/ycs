@@ -48,6 +48,34 @@
                         </button>
                     </template>
                 </div>
+                {{-- 音量調節 --}}
+                <div class="inline-flex items-center gap-1">
+                    <button @click="changeVolume(volume > 0 ? 0 : 100)"
+                            class="p-1 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+                            :title="volume > 0 ? 'ミュート' : 'ミュート解除'">
+                        {{-- 音量アイコン（ミュート時） --}}
+                        <svg x-show="volume === 0" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" clip-rule="evenodd"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"/>
+                        </svg>
+                        {{-- 音量アイコン（低音量） --}}
+                        <svg x-show="volume > 0 && volume < 50" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072M12 6v12m0-12L7.5 9H4v6h3.5L12 18V6z"/>
+                        </svg>
+                        {{-- 音量アイコン（高音量） --}}
+                        <svg x-show="volume >= 50" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/>
+                        </svg>
+                    </button>
+                    <input type="range"
+                           min="0"
+                           max="100"
+                           step="5"
+                           x-model="volume"
+                           @input="changeVolume($event.target.value)"
+                           class="w-16 sm:w-20 h-1 bg-gray-300 dark:bg-gray-600 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                           title="音量">
+                </div>
             </div>
             {{-- 楽曲タイトル --}}
             <div class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate flex-1"

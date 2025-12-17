@@ -1,8 +1,9 @@
 import { getYoutubeUrl } from '../utils/youtube.js';
+import toast from '../utils/toast.js';
 
 /**
  * 再生履歴表示コンポーネント
- * チャンネル一覧ページでsessionStorageに保存された再生履歴を表示
+ * チャンネル個別ページでsessionStorageに保存された再生履歴を表示
  */
 class PlayHistory {
     constructor() {
@@ -144,18 +145,31 @@ class PlayHistory {
         const content = document.createElement('div');
         content.className = 'text-gray-900 dark:text-gray-100';
 
+        // コピー用テキストを生成
+        const copyText = entry.artist
+            ? `${entry.title} / ${entry.artist}`
+            : entry.title || '-';
+
         const titleDiv = document.createElement('div');
-        titleDiv.className = 'font-medium truncate';
+        titleDiv.className = 'font-medium truncate cursor-pointer hover:text-blue-600 dark:hover:text-blue-400';
         titleDiv.textContent = entry.title || '-';
-        titleDiv.title = entry.title || '-';
+        titleDiv.title = `クリックでコピー: ${copyText}`;
+        titleDiv.addEventListener('click', () => {
+            navigator.clipboard.writeText(copyText);
+            toast.success('コピーしました');
+        });
 
         content.appendChild(titleDiv);
 
         if (entry.artist) {
             const artistDiv = document.createElement('div');
-            artistDiv.className = 'text-xs text-gray-500 dark:text-gray-400 truncate';
+            artistDiv.className = 'text-xs text-gray-500 dark:text-gray-400 truncate cursor-pointer hover:text-blue-600 dark:hover:text-blue-400';
             artistDiv.textContent = entry.artist;
-            artistDiv.title = entry.artist;
+            artistDiv.title = `クリックでコピー: ${copyText}`;
+            artistDiv.addEventListener('click', () => {
+                navigator.clipboard.writeText(copyText);
+                toast.success('コピーしました');
+            });
             content.appendChild(artistDiv);
         }
 
