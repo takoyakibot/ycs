@@ -100,17 +100,18 @@ class AuthorizationTest extends TestCase
     }
 
     /**
-     * 一般ユーザーは管理画面にアクセスできない
+     * 一般ユーザーは管理画面にアクセスできない（リダイレクトされる）
      */
     public function test_regular_user_cannot_access_manage_pages(): void
     {
         $user = User::factory()->create(['email_verified_at' => now()]);
 
         $response = $this->actingAs($user)->get('/channels/manage');
-        $response->assertStatus(403);
+        $response->assertRedirect(route('top'));
+        $response->assertSessionHas('error');
 
         $response = $this->actingAs($user)->get('/manage/logs');
-        $response->assertStatus(403);
+        $response->assertRedirect(route('top'));
     }
 
     /**

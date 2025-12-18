@@ -11,18 +11,21 @@ class AdminHierarchyTest extends TestCase
     use RefreshDatabase;
 
     /**
-     * 一般ユーザーは管理機能にアクセスできない
+     * 一般ユーザーは管理機能にアクセスできない（リダイレクトされる）
      */
     public function test_regular_user_cannot_access_admin_routes(): void
     {
         $user = User::factory()->create(['role' => User::ROLE_USER]);
 
+        // HTMLリクエストはトップページにリダイレクト
         $response = $this->actingAs($user)->get('/channels/manage');
-        $response->assertStatus(403);
+        $response->assertRedirect(route('top'));
+        $response->assertSessionHas('error');
 
         $response = $this->actingAs($user)->get('/songs/normalize');
-        $response->assertStatus(403);
+        $response->assertRedirect(route('top'));
 
+        // APIリクエストは403
         $response = $this->actingAs($user)->getJson('/api/manage/channels');
         $response->assertStatus(403);
     }
@@ -45,20 +48,22 @@ class AdminHierarchyTest extends TestCase
     }
 
     /**
-     * Channel Adminはスーパー管理者専用機能にアクセスできない
+     * Channel Adminはスーパー管理者専用機能にアクセスできない（リダイレクトされる）
      */
     public function test_admin_cannot_access_super_admin_routes(): void
     {
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
 
+        // HTMLリクエストはトップページにリダイレクト
         $response = $this->actingAs($admin)->get('/manage/logs');
-        $response->assertStatus(403);
+        $response->assertRedirect(route('top'));
+        $response->assertSessionHas('error');
 
         $response = $this->actingAs($admin)->get('/manage/reports');
-        $response->assertStatus(403);
+        $response->assertRedirect(route('top'));
 
         $response = $this->actingAs($admin)->get('/manage/admins');
-        $response->assertStatus(403);
+        $response->assertRedirect(route('top'));
     }
 
     /**

@@ -18,7 +18,7 @@ class EnsureUserIsSuperAdmin
                 return response()->json(['message' => 'この機能へのアクセス権限がありません'], 403);
             }
 
-            abort(403, 'この機能へのアクセス権限がありません');
+            return redirect()->route('top')->with('error', 'この機能へのアクセス権限がありません。管理者にお問い合わせください。');
         }
 
         return $next($request);
