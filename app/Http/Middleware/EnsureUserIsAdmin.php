@@ -9,16 +9,17 @@ use Symfony\Component\HttpFoundation\Response;
 class EnsureUserIsAdmin
 {
     /**
-     * 管理者（admin以上）のみアクセス可能
+     * 認証済みユーザーのみアクセス可能
+     * 登録ユーザーは全て管理者として扱う
      */
     public function handle(Request $request, Closure $next): Response
     {
-        if (! $request->user() || ! $request->user()->canAccessManage()) {
+        if (! $request->user()) {
             if ($request->expectsJson()) {
-                return response()->json(['message' => 'この機能へのアクセス権限がありません'], 403);
+                return response()->json(['message' => 'Unauthenticated.'], 401);
             }
 
-            return redirect()->route('top')->with('error', 'この機能へのアクセス権限がありません。管理者にお問い合わせください。');
+            return redirect()->route('login');
         }
 
         return $next($request);

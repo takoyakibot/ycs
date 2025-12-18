@@ -56,11 +56,9 @@
                             <x-dropdown-link :href="route('profile.edit')">
                                 {{ __('ユーザー情報') }}
                             </x-dropdown-link>
-                            @if(Auth::user()->canAccessManage())
                             <x-dropdown-link :href="route('songs.index')" :active="request()->routeIs('songs.index')">
                                 {{ __('タイムスタンプ正規化') }}
                             </x-dropdown-link>
-                            @endif
                             @if(Auth::user()->canAccessSuperAdminFeatures())
                             <x-dropdown-link :href="route('logs.index')" :active="request()->routeIs('logs.*')">
                                 {{ __('ログ管理') }}
@@ -139,11 +137,9 @@
                     <x-responsive-nav-link :href="route('profile.edit')">
                         {{ __('ユーザー情報') }}
                     </x-responsive-nav-link>
-                    @if(Auth::user()->canAccessManage())
                     <x-responsive-nav-link :href="route('songs.index')" :active="request()->routeIs('songs.index')">
                         {{ __('タイムスタンプ正規化') }}
                     </x-responsive-nav-link>
-                    @endif
                     @if(Auth::user()->canAccessSuperAdminFeatures())
                     <x-responsive-nav-link :href="route('logs.index')" :active="request()->routeIs('logs.*')">
                         {{ __('ログ管理') }}
