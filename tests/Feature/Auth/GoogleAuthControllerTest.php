@@ -170,4 +170,45 @@ class GoogleAuthControllerTest extends TestCase
         $user = User::where('google_id', 'google_123')->first();
         $this->assertEquals($user->id, auth()->id());
     }
+
+    public function test_callback_links_existing_email_user(): void
+    {
+        // 通常登録（google_idなし）の既存ユーザーを作成
+        $existingUser = User::factory()->create([
+            'google_id' => null,
+            'name' => 'Old Name',
+            'email' => 'existing@example.com',
+            'email_verified_at' => now(),
+        ]);
+
+        // Socialiteをモック（同じメールアドレスでGoogle認証）
+        $mockUser = \Mockery::mock(SocialiteUser::class);
+        $mockUser->shouldReceive('getId')->andReturn('google_new_123');
+        $mockUser->shouldReceive('getName')->andReturn('Google Name');
+        $mockUser->shouldReceive('getEmail')->andReturn('existing@example.com');
+        $mockUser->shouldReceive('getAvatar')->andReturn('https://example.com/avatar.jpg');
+        $mockUser->shouldReceive('getAccessToken')->andReturn('test_access_token');
+        $mockUser->token = 'test_access_token';
+        $mockUser->expiresIn = 3600;
+        $mockUser->refreshToken = 'test_refresh_token';
+
+        Socialite::shouldReceive('driver->stateless->user')->andReturn($mockUser);
+
+        $response = $this->get('/auth/google/callback');
+
+        // 既存ユーザーにgoogle_idが紐付けられたことを確認
+        $this->assertDatabaseHas('users', [
+            'id' => $existingUser->id,
+            'google_id' => 'google_new_123',
+            'email' => 'existing@example.com',
+        ]);
+
+        // 新規ユーザーが作成されていないことを確認
+        $this->assertEquals(1, User::count());
+
+        // ログインしていることを確認
+        $response->assertRedirect('/manage');
+        $this->assertAuthenticated();
+        $this->assertEquals($existingUser->id, auth()->id());
+    }
 }

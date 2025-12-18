@@ -43,17 +43,47 @@ class GoogleAuthController extends Controller
             // （プライバシー保護のため、Googleアカウントの氏名は収集しない）
             $displayName = explode('@', $googleUser->getEmail())[0];
 
-            $user = User::updateOrCreate(
-                ['google_id' => $googleUser->getId()],
-                [
+            // まずgoogle_idで検索
+            $user = User::where('google_id', $googleUser->getId())->first();
+
+            if ($user) {
+                // 同じGoogleアカウントでログイン：すべての情報を更新
+                $user->update([
                     'name' => $displayName,
                     'email' => $googleUser->getEmail(),
                     'avatar' => $googleUser->getAvatar(),
                     'google_token' => $tokenArray,
                     'google_refresh_token' => $googleUser->refreshToken,
-                    'email_verified_at' => now(), // Google認証済みならメール認証も済みとみなす
-                ]
-            );
+                    'email_verified_at' => $user->email_verified_at ?? now(),
+                ]);
+            } else {
+                // google_idで見つからない場合、emailで検索
+                // （通常登録済みユーザーがGoogle認証する場合に対応）
+                $user = User::where('email', $googleUser->getEmail())->first();
+
+                if ($user) {
+                    // 既存ユーザーにGoogleアカウントを紐付け
+                    $user->update([
+                        'google_id' => $googleUser->getId(),
+                        'name' => $displayName,
+                        'avatar' => $googleUser->getAvatar(),
+                        'google_token' => $tokenArray,
+                        'google_refresh_token' => $googleUser->refreshToken,
+                        'email_verified_at' => $user->email_verified_at ?? now(),
+                    ]);
+                } else {
+                    // 新規ユーザーを作成
+                    $user = User::create([
+                        'google_id' => $googleUser->getId(),
+                        'name' => $displayName,
+                        'email' => $googleUser->getEmail(),
+                        'avatar' => $googleUser->getAvatar(),
+                        'google_token' => $tokenArray,
+                        'google_refresh_token' => $googleUser->refreshToken,
+                        'email_verified_at' => now(),
+                    ]);
+                }
+            }
 
             Auth::login($user, true);  // Remember Me を有効化
 
