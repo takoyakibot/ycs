@@ -56,15 +56,22 @@
                             <x-dropdown-link :href="route('profile.edit')">
                                 {{ __('ユーザー情報') }}
                             </x-dropdown-link>
+                            @if(Auth::user()->canAccessManage())
                             <x-dropdown-link :href="route('songs.index')" :active="request()->routeIs('songs.index')">
                                 {{ __('タイムスタンプ正規化') }}
                             </x-dropdown-link>
+                            @endif
+                            @if(Auth::user()->canAccessSuperAdminFeatures())
                             <x-dropdown-link :href="route('logs.index')" :active="request()->routeIs('logs.*')">
                                 {{ __('ログ管理') }}
                             </x-dropdown-link>
                             <x-dropdown-link :href="route('reports.index')" :active="request()->routeIs('reports.*')">
                                 {{ __('報告管理') }}
                             </x-dropdown-link>
+                            <x-dropdown-link :href="route('admins.index')" :active="request()->routeIs('admins.*')">
+                                {{ __('管理者管理') }}
+                            </x-dropdown-link>
+                            @endif
 
                             <!-- Authentication -->
                             <form method="POST" action="{{ route('logout') }}">
@@ -132,15 +139,22 @@
                     <x-responsive-nav-link :href="route('profile.edit')">
                         {{ __('ユーザー情報') }}
                     </x-responsive-nav-link>
+                    @if(Auth::user()->canAccessManage())
                     <x-responsive-nav-link :href="route('songs.index')" :active="request()->routeIs('songs.index')">
                         {{ __('タイムスタンプ正規化') }}
                     </x-responsive-nav-link>
+                    @endif
+                    @if(Auth::user()->canAccessSuperAdminFeatures())
                     <x-responsive-nav-link :href="route('logs.index')" :active="request()->routeIs('logs.*')">
                         {{ __('ログ管理') }}
                     </x-responsive-nav-link>
                     <x-responsive-nav-link :href="route('reports.index')" :active="request()->routeIs('reports.*')">
                         {{ __('報告管理') }}
                     </x-responsive-nav-link>
+                    <x-responsive-nav-link :href="route('admins.index')" :active="request()->routeIs('admins.*')">
+                        {{ __('管理者管理') }}
+                    </x-responsive-nav-link>
+                    @endif
 
                     <!-- Authentication -->
                     <form method="POST" action="{{ route('logout') }}">
