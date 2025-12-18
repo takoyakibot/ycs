@@ -163,6 +163,9 @@ function registerArchiveListComponent() {
                 pipSize: 'medium',
                 pipSizes: PIP_SIZES,
 
+                // 音量設定
+                volume: 100,
+
                 // computed property
                 get maxPage() {
                     if (!this.archives.total || !this.archives.per_page) return 1;
@@ -481,6 +484,15 @@ function registerArchiveListComponent() {
                         this.pipSize = pipSizeSaved;
                     }
 
+                    // 音量設定を読み込み（sessionStorageから、デフォルト100）
+                    const volumeSaved = sessionStorage.getItem('videoVolume');
+                    if (volumeSaved !== null) {
+                        const vol = parseInt(volumeSaved, 10);
+                        if (!isNaN(vol) && vol >= 0 && vol <= 100) {
+                            this.volume = vol;
+                        }
+                    }
+
                     // YouTube IFrame APIの読み込み
                     this.loadYouTubeAPI();
 
@@ -735,6 +747,10 @@ function registerArchiveListComponent() {
                                 if (this.youtubePlayer.setPlaybackQuality) {
                                     this.youtubePlayer.setPlaybackQuality(YOUTUBE_PLAYER_CONFIG.suggestedQuality);
                                 }
+                                // 保存された音量を適用
+                                if (typeof this.youtubePlayer.setVolume === 'function') {
+                                    this.youtubePlayer.setVolume(this.volume);
+                                }
                                 // 待機中の動画があれば再生
                                 // isPlayingはonStateChangeで更新されるため、ここでは設定しない
                                 if (this.pendingVideo) {
@@ -905,6 +921,20 @@ function registerArchiveListComponent() {
                 // 自動再生設定の保存
                 saveAutoPlay() {
                     sessionStorage.setItem('videoAutoPlay', this.autoPlay.toString());
+                },
+
+                // 音量変更
+                changeVolume(value) {
+                    const vol = parseInt(value, 10);
+                    if (isNaN(vol) || vol < 0 || vol > 100) return;
+
+                    this.volume = vol;
+                    sessionStorage.setItem('videoVolume', vol.toString());
+
+                    // プレイヤーの音量を更新
+                    if (this.youtubePlayer && typeof this.youtubePlayer.setVolume === 'function') {
+                        this.youtubePlayer.setVolume(vol);
+                    }
                 },
 
                 // ワイプサイズの変更
