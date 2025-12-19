@@ -11,54 +11,41 @@ class AdminHierarchyTest extends TestCase
     use RefreshDatabase;
 
     /**
-     * 一般ユーザーは管理機能にアクセスできない
+     * 登録ユーザーは管理機能にアクセスできる
+     *
+     * Note: 登録ユーザーは全て管理者として扱う
      */
-    public function test_regular_user_cannot_access_admin_routes(): void
+    public function test_registered_user_can_access_manage_routes(): void
     {
         $user = User::factory()->create(['role' => User::ROLE_USER]);
 
         $response = $this->actingAs($user)->get('/channels/manage');
-        $response->assertStatus(403);
+        $response->assertStatus(200);
 
         $response = $this->actingAs($user)->get('/songs/normalize');
-        $response->assertStatus(403);
+        $response->assertStatus(200);
 
         $response = $this->actingAs($user)->getJson('/api/manage/channels');
-        $response->assertStatus(403);
-    }
-
-    /**
-     * Channel Admin（admin）は管理機能にアクセスできる
-     */
-    public function test_admin_can_access_manage_routes(): void
-    {
-        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
-
-        $response = $this->actingAs($admin)->get('/channels/manage');
-        $response->assertStatus(200);
-
-        $response = $this->actingAs($admin)->get('/songs/normalize');
-        $response->assertStatus(200);
-
-        $response = $this->actingAs($admin)->getJson('/api/manage/channels');
         $response->assertStatus(200);
     }
 
     /**
-     * Channel Adminはスーパー管理者専用機能にアクセスできない
+     * 登録ユーザーはスーパー管理者専用機能にアクセスできない（リダイレクトされる）
      */
-    public function test_admin_cannot_access_super_admin_routes(): void
+    public function test_registered_user_cannot_access_super_admin_routes(): void
     {
-        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $user = User::factory()->create(['role' => User::ROLE_USER]);
 
-        $response = $this->actingAs($admin)->get('/manage/logs');
-        $response->assertStatus(403);
+        // HTMLリクエストはトップページにリダイレクト
+        $response = $this->actingAs($user)->get('/manage/logs');
+        $response->assertRedirect(route('top'));
+        $response->assertSessionHas('error');
 
-        $response = $this->actingAs($admin)->get('/manage/reports');
-        $response->assertStatus(403);
+        $response = $this->actingAs($user)->get('/manage/reports');
+        $response->assertRedirect(route('top'));
 
-        $response = $this->actingAs($admin)->get('/manage/admins');
-        $response->assertStatus(403);
+        $response = $this->actingAs($user)->get('/manage/admins');
+        $response->assertRedirect(route('top'));
     }
 
     /**

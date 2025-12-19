@@ -54,13 +54,11 @@ class AutoLinkService
         $unlinkedTexts = $this->getUnlinkedTexts($limit);
 
         if (empty($unlinkedTexts)) {
-            $this->log('info', '未紐付けのタイムスタンプが見つかりませんでした。');
             $onProgress && $onProgress('未紐付けのタイムスタンプが見つかりませんでした。');
 
             return $result;
         }
 
-        $this->log('info', sprintf('自動紐付け開始: %d件の未紐付けテキストを処理します。', count($unlinkedTexts)));
         $onProgress && $onProgress(sprintf('%d件の未紐付けテキストを処理します。', count($unlinkedTexts)));
 
         foreach ($unlinkedTexts as $index => $item) {
@@ -100,14 +98,6 @@ class AutoLinkService
                 $onProgress && $onProgress(sprintf('[%d/%d] エラー: %s - %s', $index + 1, count($unlinkedTexts), $item['text'], $e->getMessage()));
             }
         }
-
-        $this->log('info', sprintf(
-            '自動紐付け完了: 処理=%d, 成功=%d, 失敗=%d, スキップ=%d',
-            $result['processed'],
-            $result['linked'],
-            $result['failed'],
-            $result['skipped']
-        ));
 
         return $result;
     }

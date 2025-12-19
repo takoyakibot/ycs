@@ -99,19 +99,21 @@ class User extends Authenticatable
     }
 
     /**
-     * 管理者（Channel Admin）かどうか判定
+     * 管理者かどうか判定
+     * 登録ユーザーは全て管理者として扱う
      */
     public function isAdmin(): bool
     {
-        return $this->isSuperAdmin() || $this->role === self::ROLE_ADMIN;
+        return true;
     }
 
     /**
      * 管理機能にアクセスできるかどうか判定
+     * 登録ユーザーは全て管理機能にアクセス可能
      */
     public function canAccessManage(): bool
     {
-        return $this->isAdmin();
+        return true;
     }
 
     /**

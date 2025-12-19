@@ -80,49 +80,44 @@ class AuthorizationTest extends TestCase
     }
 
     /**
-     * メール未認証でも管理者権限があれば管理画面にアクセスできる
+     * 登録ユーザーは管理画面にアクセスできる（メール認証不要）
      *
-     * Note: メール認証は不要としています（Issue #196でOption Bを選択）
-     * 管理者権限（admin以上）で管理画面にアクセス可能です。
+     * Note: 登録ユーザーは全て管理者として扱う
      */
-    public function test_unverified_admin_can_access_manage_pages(): void
+    public function test_registered_user_can_access_manage_pages(): void
     {
         $user = User::factory()->create([
             'email_verified_at' => null,
-            'role' => User::ROLE_SUPER_ADMIN,
         ]);
 
         $response = $this->actingAs($user)->get('/channels/manage');
         $response->assertStatus(200);
 
-        $response = $this->actingAs($user)->get('/manage/logs');
+        $response = $this->actingAs($user)->get('/songs/normalize');
         $response->assertStatus(200);
     }
 
     /**
-     * 一般ユーザーは管理画面にアクセスできない
+     * 登録ユーザーはスーパー管理者専用機能にはアクセスできない
      */
-    public function test_regular_user_cannot_access_manage_pages(): void
+    public function test_registered_user_cannot_access_super_admin_pages(): void
     {
         $user = User::factory()->create(['email_verified_at' => now()]);
 
-        $response = $this->actingAs($user)->get('/channels/manage');
-        $response->assertStatus(403);
-
         $response = $this->actingAs($user)->get('/manage/logs');
-        $response->assertStatus(403);
+        $response->assertRedirect(route('top'));
+        $response->assertSessionHas('error');
     }
 
     /**
-     * メール未認証でも管理者権限があれば管理APIにアクセスできる
+     * 登録ユーザーは管理APIにアクセスできる
      *
-     * Note: メール認証は不要としています（Issue #196でOption Bを選択）
+     * Note: 登録ユーザーは全て管理者として扱う
      */
-    public function test_unverified_admin_can_access_manage_api(): void
+    public function test_registered_user_can_access_manage_api(): void
     {
         $user = User::factory()->create([
             'email_verified_at' => null,
-            'role' => User::ROLE_SUPER_ADMIN,
         ]);
 
         $response = $this->actingAs($user)->getJson('/api/manage/channels');
@@ -130,37 +125,6 @@ class AuthorizationTest extends TestCase
 
         $response = $this->actingAs($user)->getJson('/api/songs/timestamps');
         $response->assertStatus(200);
-    }
-
-    /**
-     * 管理者権限を持つ認証済みユーザーは管理APIにアクセスできる
-     */
-    public function test_admin_can_access_manage_api(): void
-    {
-        $user = User::factory()->create([
-            'email_verified_at' => now(),
-            'role' => User::ROLE_ADMIN,
-        ]);
-
-        $response = $this->actingAs($user)->getJson('/api/manage/channels');
-        $response->assertStatus(200);
-
-        $response = $this->actingAs($user)->getJson('/api/songs/timestamps');
-        $response->assertStatus(200);
-    }
-
-    /**
-     * 一般ユーザーは管理APIにアクセスできない
-     */
-    public function test_regular_user_cannot_access_manage_api(): void
-    {
-        $user = User::factory()->create(['email_verified_at' => now()]);
-
-        $response = $this->actingAs($user)->getJson('/api/manage/channels');
-        $response->assertStatus(403);
-
-        $response = $this->actingAs($user)->getJson('/api/songs/timestamps');
-        $response->assertStatus(403);
     }
 
     /**

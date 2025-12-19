@@ -56,15 +56,14 @@
                             <x-dropdown-link :href="route('profile.edit')">
                                 {{ __('ユーザー情報') }}
                             </x-dropdown-link>
-                            <x-dropdown-link :href="route('songs.index')" :active="request()->routeIs('songs.index')">
-                                {{ __('タイムスタンプ正規化') }}
-                            </x-dropdown-link>
+                            @if(Auth::user()->canAccessSuperAdminFeatures())
                             <x-dropdown-link :href="route('logs.index')" :active="request()->routeIs('logs.*')">
                                 {{ __('ログ管理') }}
                             </x-dropdown-link>
                             <x-dropdown-link :href="route('reports.index')" :active="request()->routeIs('reports.*')">
                                 {{ __('報告管理') }}
                             </x-dropdown-link>
+                            @endif
 
                             <!-- Authentication -->
                             <form method="POST" action="{{ route('logout') }}">
@@ -80,10 +79,9 @@
                 </div>
             @else
                 @if (config('app.env') === 'local')
-                    <!-- Guest User: Login/Register Links -->
+                    <!-- Guest User: Login Link -->
                     <div class="hidden sm:flex sm:items-center sm:ms-6">
                         <a href="{{ route('login') }}" class="text-gray-500 hover:text-blue-500">ログイン</a>
-                        <a href="{{ route('register') }}" class="ml-4 text-gray-500 hover:text-blue-500">新規登録</a>
                     </div>
                 @endif
             @endif
@@ -104,14 +102,14 @@
     <div :class="{'block': open, 'hidden': ! open}" class="hidden sm:hidden">
         @if (Auth::check())
             <div class="pt-2 pb-3 space-y-1">
+                <x-responsive-nav-link :href="route('channels.index')" :active="request()->routeIs('channels.*')">
+                    {{ __('チャンネル一覧') }}
+                </x-responsive-nav-link>
                 <x-responsive-nav-link :href="route('manage.index')" :active="request()->routeIs('manage.index')">
                     {{ __('チャンネル管理') }}
                 </x-responsive-nav-link>
                 <x-responsive-nav-link :href="route('songs.index')" :active="request()->routeIs('songs.index')">
                     {{ __('タイムスタンプ正規化') }}
-                </x-responsive-nav-link>
-                <x-responsive-nav-link :href="route('channels.index')" :active="request()->routeIs('channels.*')">
-                    {{ __('チャンネル一覧') }}
                 </x-responsive-nav-link>
                 <x-responsive-nav-link :href="route('markdown.show')" :active="request()->routeIs('markdown.show')">
                     {{ __('利用規約・プライバシーポリシー') }}
@@ -132,15 +130,14 @@
                     <x-responsive-nav-link :href="route('profile.edit')">
                         {{ __('ユーザー情報') }}
                     </x-responsive-nav-link>
-                    <x-responsive-nav-link :href="route('songs.index')" :active="request()->routeIs('songs.index')">
-                        {{ __('タイムスタンプ正規化') }}
-                    </x-responsive-nav-link>
+                    @if(Auth::user()->canAccessSuperAdminFeatures())
                     <x-responsive-nav-link :href="route('logs.index')" :active="request()->routeIs('logs.*')">
                         {{ __('ログ管理') }}
                     </x-responsive-nav-link>
                     <x-responsive-nav-link :href="route('reports.index')" :active="request()->routeIs('reports.*')">
                         {{ __('報告管理') }}
                     </x-responsive-nav-link>
+                    @endif
 
                     <!-- Authentication -->
                     <form method="POST" action="{{ route('logout') }}">
@@ -159,9 +156,6 @@
                 <div class="pt-2 pb-3 space-y-1">
                     <x-responsive-nav-link :href="route('login')">
                         {{ __('ログイン') }}
-                    </x-responsive-nav-link>
-                    <x-responsive-nav-link :href="route('register')">
-                        {{ __('新規登録') }}
                     </x-responsive-nav-link>
                 </div>
                 <div class="pt-2 pb-3 space-y-1">
