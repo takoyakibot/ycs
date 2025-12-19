@@ -66,9 +66,6 @@
                             <x-dropdown-link :href="route('reports.index')" :active="request()->routeIs('reports.*')">
                                 {{ __('報告管理') }}
                             </x-dropdown-link>
-                            <x-dropdown-link :href="route('admins.index')" :active="request()->routeIs('admins.*')">
-                                {{ __('管理者管理') }}
-                            </x-dropdown-link>
                             @endif
 
                             <!-- Authentication -->
@@ -145,9 +142,6 @@
                     </x-responsive-nav-link>
                     <x-responsive-nav-link :href="route('reports.index')" :active="request()->routeIs('reports.*')">
                         {{ __('報告管理') }}
-                    </x-responsive-nav-link>
-                    <x-responsive-nav-link :href="route('admins.index')" :active="request()->routeIs('admins.*')">
-                        {{ __('管理者管理') }}
                     </x-responsive-nav-link>
                     @endif
 
