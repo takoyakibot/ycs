@@ -56,9 +56,6 @@
                             <x-dropdown-link :href="route('profile.edit')">
                                 {{ __('ユーザー情報') }}
                             </x-dropdown-link>
-                            <x-dropdown-link :href="route('songs.index')" :active="request()->routeIs('songs.index')">
-                                {{ __('タイムスタンプ正規化') }}
-                            </x-dropdown-link>
                             @if(Auth::user()->canAccessSuperAdminFeatures())
                             <x-dropdown-link :href="route('logs.index')" :active="request()->routeIs('logs.*')">
                                 {{ __('ログ管理') }}
@@ -105,14 +102,14 @@
     <div :class="{'block': open, 'hidden': ! open}" class="hidden sm:hidden">
         @if (Auth::check())
             <div class="pt-2 pb-3 space-y-1">
+                <x-responsive-nav-link :href="route('channels.index')" :active="request()->routeIs('channels.*')">
+                    {{ __('チャンネル一覧') }}
+                </x-responsive-nav-link>
                 <x-responsive-nav-link :href="route('manage.index')" :active="request()->routeIs('manage.index')">
                     {{ __('チャンネル管理') }}
                 </x-responsive-nav-link>
                 <x-responsive-nav-link :href="route('songs.index')" :active="request()->routeIs('songs.index')">
                     {{ __('タイムスタンプ正規化') }}
-                </x-responsive-nav-link>
-                <x-responsive-nav-link :href="route('channels.index')" :active="request()->routeIs('channels.*')">
-                    {{ __('チャンネル一覧') }}
                 </x-responsive-nav-link>
                 <x-responsive-nav-link :href="route('markdown.show')" :active="request()->routeIs('markdown.show')">
                     {{ __('利用規約・プライバシーポリシー') }}
@@ -132,9 +129,6 @@
                 <div class="mt-3 space-y-1">
                     <x-responsive-nav-link :href="route('profile.edit')">
                         {{ __('ユーザー情報') }}
-                    </x-responsive-nav-link>
-                    <x-responsive-nav-link :href="route('songs.index')" :active="request()->routeIs('songs.index')">
-                        {{ __('タイムスタンプ正規化') }}
                     </x-responsive-nav-link>
                     @if(Auth::user()->canAccessSuperAdminFeatures())
                     <x-responsive-nav-link :href="route('logs.index')" :active="request()->routeIs('logs.*')">
