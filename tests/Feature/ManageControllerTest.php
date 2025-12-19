@@ -29,24 +29,48 @@ class ManageControllerTest extends TestCase
     }
 
     /**
-     * チャンネル一覧を取得できる（自分のチャンネルのみ）
+     * スーパー管理者は全チャンネルを取得できる
      */
-    public function test_fetch_channel_returns_all_channels(): void
+    public function test_fetch_channel_returns_all_channels_for_super_admin(): void
     {
         // 自分のチャンネルを作成
-        $channels = Channel::factory()->count(3)->create(['user_id' => $this->user->id]);
+        $myChannels = Channel::factory()->count(3)->create(['user_id' => $this->user->id]);
 
-        // 他のユーザーのチャンネルも作成（これは表示されないはず）
-        Channel::factory()->count(2)->create();
+        // 他のユーザーのチャンネルも作成
+        $otherChannels = Channel::factory()->count(2)->create();
 
         $response = $this->actingAs($this->user)
             ->getJson('/api/manage/channels');
 
+        // スーパー管理者は全チャンネル（5件）を取得
+        $response->assertStatus(200)
+            ->assertJsonCount(5);
+    }
+
+    /**
+     * 一般ユーザーは自分のチャンネルのみ取得できる
+     */
+    public function test_fetch_channel_returns_only_own_channels_for_regular_user(): void
+    {
+        $regularUser = User::factory()->create([
+            'email_verified_at' => now(),
+            'role' => User::ROLE_USER,
+        ]);
+
+        // 自分のチャンネルを作成
+        $myChannels = Channel::factory()->count(3)->create(['user_id' => $regularUser->id]);
+
+        // 他のユーザーのチャンネルも作成（これは表示されないはず）
+        Channel::factory()->count(2)->create();
+
+        $response = $this->actingAs($regularUser)
+            ->getJson('/api/manage/channels');
+
         $response->assertStatus(200)
             ->assertJsonCount(3) // 自分のチャンネルのみ3件
-            ->assertJsonFragment(['handle' => $channels[0]->handle])
-            ->assertJsonFragment(['handle' => $channels[1]->handle])
-            ->assertJsonFragment(['handle' => $channels[2]->handle]);
+            ->assertJsonFragment(['handle' => $myChannels[0]->handle])
+            ->assertJsonFragment(['handle' => $myChannels[1]->handle])
+            ->assertJsonFragment(['handle' => $myChannels[2]->handle]);
     }
 
     /**
@@ -356,37 +380,79 @@ class ManageControllerTest extends TestCase
     }
 
     /**
-     * 他のユーザーのチャンネルへのアクセスは拒否される（show）
+     * 一般ユーザーは他のユーザーのチャンネルへのアクセスが拒否される（show）
      */
     public function test_show_denies_access_to_other_users_channel(): void
     {
+        $regularUser = User::factory()->create([
+            'email_verified_at' => now(),
+            'role' => User::ROLE_USER,
+            'api_key' => 'my-api-key',
+        ]);
         $otherUser = User::factory()->create(['email_verified_at' => now(), 'api_key' => 'test-api-key']);
         $otherChannel = Channel::factory()->create(['user_id' => $otherUser->id]);
 
-        // 自分のユーザーにもapi_keyを設定
-        $this->user->api_key = 'my-api-key';
-        $this->user->save();
-
-        $response = $this->actingAs($this->user)
+        $response = $this->actingAs($regularUser)
             ->get("/channels/manage/{$otherChannel->handle}");
 
         $response->assertStatus(403);
     }
 
     /**
-     * 他のユーザーのチャンネルのアーカイブ追加は拒否される
+     * スーパー管理者は他のユーザーのチャンネルにアクセスできる（show）
+     */
+    public function test_show_allows_super_admin_access_to_other_users_channel(): void
+    {
+        $otherUser = User::factory()->create(['email_verified_at' => now(), 'api_key' => 'test-api-key']);
+        $otherChannel = Channel::factory()->create(['user_id' => $otherUser->id]);
+
+        $response = $this->actingAs($this->user)
+            ->get("/channels/manage/{$otherChannel->handle}");
+
+        $response->assertStatus(200);
+    }
+
+    /**
+     * 一般ユーザーは他のユーザーのチャンネルのアーカイブ追加が拒否される
      */
     public function test_add_archives_denies_access_to_other_users_channel(): void
     {
+        $regularUser = User::factory()->create([
+            'email_verified_at' => now(),
+            'role' => User::ROLE_USER,
+        ]);
         $otherUser = User::factory()->create();
         $otherChannel = Channel::factory()->create(['user_id' => $otherUser->id]);
+
+        $response = $this->actingAs($regularUser)
+            ->postJson('/api/manage/archives', [
+                'handle' => \Illuminate\Support\Facades\Crypt::encryptString($otherChannel->handle),
+            ]);
+
+        $response->assertStatus(403);
+    }
+
+    /**
+     * スーパー管理者は他のユーザーのチャンネルのアーカイブを追加できる
+     */
+    public function test_add_archives_allows_super_admin_access_to_other_users_channel(): void
+    {
+        config(['queue.default' => 'sync']);
+
+        $otherUser = User::factory()->create();
+        $otherChannel = Channel::factory()->create(['user_id' => $otherUser->id]);
+
+        $mockService = $this->mock(RefreshArchiveService::class);
+        $mockService->shouldReceive('refreshArchives')
+            ->once()
+            ->andReturn(10);
 
         $response = $this->actingAs($this->user)
             ->postJson('/api/manage/archives', [
                 'handle' => \Illuminate\Support\Facades\Crypt::encryptString($otherChannel->handle),
             ]);
 
-        $response->assertStatus(403);
+        $response->assertStatus(200);
     }
 
     /**

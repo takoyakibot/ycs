@@ -45,6 +45,17 @@ class ManageController extends Controller
         $this->getArchiveService = $getArchiveService;
     }
 
+    /**
+     * ユーザーがチャンネルにアクセスできるか判定
+     * スーパー管理者は全チャンネルにアクセス可能
+     */
+    private function canAccessChannel(Channel $channel): bool
+    {
+        $user = Auth::user();
+
+        return $user->isSuperAdmin() || $channel->user_id === $user->id;
+    }
+
     public function index()
     {
         // APIキーが登録済みかチェック
@@ -56,17 +67,17 @@ class ManageController extends Controller
 
     public function show($id)
     {
-        // APIキー未登録の場合はチャンネル管理に戻す
+        // APIキー未登録の場合はチャンネル管理に戻す（スーパー管理者は除く）
         $user = Auth::user();
         $api_key_flg = $user->api_key ? '1' : '';
         // ハンドルが存在しない場合はチャンネル管理に戻す
         $channel = Channel::where('handle', $id)->first();
-        if (! $api_key_flg || ! $channel) {
+        if ((! $api_key_flg && ! $user->isSuperAdmin()) || ! $channel) {
             return redirect()->route('manage.index');
         }
 
-        // 所有権チェック
-        if ($channel->user_id !== $user->id) {
+        // アクセス権チェック（所有者またはスーパー管理者）
+        if (! $this->canAccessChannel($channel)) {
             abort(403, 'このチャンネルへのアクセス権限がありません');
         }
 
@@ -77,8 +88,14 @@ class ManageController extends Controller
 
     public function fetchChannel(Request $request)
     {
-        // 自分のチャンネルのみ取得
-        $channels = Auth::user()->channels()->get();
+        $user = Auth::user();
+
+        // スーパー管理者は全チャンネルを取得、それ以外は自分のチャンネルのみ
+        if ($user->isSuperAdmin()) {
+            $channels = Channel::with('user:id,name')->get();
+        } else {
+            $channels = $user->channels()->get();
+        }
 
         return response()->json($channels);
     }
@@ -127,10 +144,10 @@ class ManageController extends Controller
 
     public function fetchArchives(string $id, Request $request)
     {
-        // 所有権チェック
+        // アクセス権チェック（所有者またはスーパー管理者）
         $handle = Crypt::decryptString($id);
         $channel = Channel::where('handle', $handle)->firstOrFail();
-        if ($channel->user_id !== Auth::id()) {
+        if (! $this->canAccessChannel($channel)) {
             abort(403, 'このチャンネルへのアクセス権限がありません');
         }
 
@@ -232,8 +249,8 @@ class ManageController extends Controller
 
         $channel = Channel::where('handle', $handle)->firstOrFail();
 
-        // 所有権チェック
-        if ($channel->user_id !== Auth::id()) {
+        // アクセス権チェック（所有者またはスーパー管理者）
+        if (! $this->canAccessChannel($channel)) {
             abort(403, 'このチャンネルへのアクセス権限がありません');
         }
 
