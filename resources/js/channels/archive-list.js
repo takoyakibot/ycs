@@ -13,6 +13,7 @@ import { ChannelApiService } from './services/ChannelApiService.js';
 import { ReportService } from './services/ReportService.js';
 import { videoPlayerManager } from './managers/VideoPlayerManager.js';
 import { autoReshuffleManager } from './managers/AutoReshuffleManager.js';
+import { dragManager } from './managers/DragManager.js';
 
 /**
  * ユーザー操作ログをサーバーに送信
@@ -141,12 +142,9 @@ function registerArchiveListComponent() {
                 // 自動再抽選機能
                 autoReshuffle: false,
 
-                // ドラッグ機能用
+                // ドラッグ機能用（UIバインディング用）
                 isDragging: false,
                 playerPosition: { x: null, y: null },
-                dragOffset: { x: 0, y: 0 },
-                boundOnDrag: null,
-                boundStopDrag: null,
 
                 // ワイプサイズ設定
                 pipSize: 'medium',
@@ -466,6 +464,7 @@ function registerArchiveListComponent() {
                     // マネージャーの初期化
                     this._initVideoPlayerManager();
                     this._initAutoReshuffleManager();
+                    this._initDragManager();
 
                     // YouTube IFrame APIの読み込み
                     this.loadYouTubeAPI();
@@ -476,6 +475,7 @@ function registerArchiveListComponent() {
                     // ページ離脱時のクリーンアップ
                     window.addEventListener('beforeunload', () => {
                         autoReshuffleManager.cleanup();
+                        dragManager.cleanup();
                         this.destroyPlayer();
                     });
                 },
@@ -724,6 +724,15 @@ function registerArchiveListComponent() {
                     };
                 },
 
+                // DragManagerの初期化
+                _initDragManager() {
+                    // 位置変更時のコールバックを設定
+                    dragManager.onPositionChange = (position) => {
+                        this.playerPosition = position;
+                        this.isDragging = dragManager.getIsDragging();
+                    };
+                },
+
                 // YouTube IFrame APIの読み込み
                 loadYouTubeAPI() {
                     videoPlayerManager.loadAPI(() => {
@@ -896,86 +905,19 @@ function registerArchiveListComponent() {
 
                 // ドラッグ開始
                 startDrag(event) {
-                    const clientX = event.touches ? event.touches[0].clientX : event.clientX;
-                    const clientY = event.touches ? event.touches[0].clientY : event.clientY;
-
                     const playerEl = this.$refs.videoPlayer;
-                    if (!playerEl) return;
-
-                    const rect = playerEl.getBoundingClientRect();
+                    dragManager.startDrag(event, playerEl);
                     this.isDragging = true;
-                    this.dragOffset = {
-                        x: clientX - rect.left,
-                        y: clientY - rect.top
-                    };
-
-                    this.boundOnDrag = this.onDrag.bind(this);
-                    this.boundStopDrag = this.stopDrag.bind(this);
-
-                    document.addEventListener('mousemove', this.boundOnDrag);
-                    document.addEventListener('mouseup', this.boundStopDrag);
-                    document.addEventListener('touchmove', this.boundOnDrag, { passive: false });
-                    document.addEventListener('touchend', this.boundStopDrag);
-
-                    event.preventDefault();
-                },
-
-                // ドラッグ中
-                onDrag(event) {
-                    if (!this.isDragging) return;
-
-                    const clientX = event.touches ? event.touches[0].clientX : event.clientX;
-                    const clientY = event.touches ? event.touches[0].clientY : event.clientY;
-
-                    const playerEl = this.$refs.videoPlayer;
-                    if (!playerEl) return;
-
-                    const playerWidth = playerEl.offsetWidth;
-                    const playerHeight = playerEl.offsetHeight;
-
-                    let newX = clientX - this.dragOffset.x;
-                    let newY = clientY - this.dragOffset.y;
-
-                    newX = Math.max(0, Math.min(newX, window.innerWidth - playerWidth));
-                    newY = Math.max(0, Math.min(newY, window.innerHeight - playerHeight));
-
-                    this.playerPosition = { x: newX, y: newY };
-
-                    event.preventDefault();
-                },
-
-                // ドラッグ終了
-                stopDrag() {
-                    this.isDragging = false;
-
-                    if (this.boundOnDrag) {
-                        document.removeEventListener('mousemove', this.boundOnDrag);
-                        document.removeEventListener('touchmove', this.boundOnDrag);
-                    }
-                    if (this.boundStopDrag) {
-                        document.removeEventListener('mouseup', this.boundStopDrag);
-                        document.removeEventListener('touchend', this.boundStopDrag);
-                    }
-
-                    this.boundOnDrag = null;
-                    this.boundStopDrag = null;
                 },
 
                 // プレイヤーの位置スタイルを取得
                 getPlayerStyle() {
-                    if (this.playerPosition.x !== null && this.playerPosition.y !== null) {
-                        return {
-                            left: `${this.playerPosition.x}px`,
-                            top: `${this.playerPosition.y}px`,
-                            right: 'auto',
-                            bottom: 'auto'
-                        };
-                    }
-                    return {};
+                    return dragManager.getStyle();
                 },
 
                 // プレイヤー位置をリセット
                 resetPlayerPosition() {
+                    dragManager.resetPosition();
                     this.playerPosition = { x: null, y: null };
                 }
             };
