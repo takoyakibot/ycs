@@ -729,7 +729,11 @@ function registerArchiveListComponent() {
                     // 位置変更時のコールバックを設定
                     dragManager.onPositionChange = (position) => {
                         this.playerPosition = position;
-                        this.isDragging = dragManager.getIsDragging();
+                    };
+
+                    // ドラッグ終了時のコールバックを設定
+                    dragManager.onDragEnd = () => {
+                        this.isDragging = false;
                     };
                 },
 

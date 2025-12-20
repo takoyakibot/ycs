@@ -22,6 +22,7 @@ export class DragManager {
 
         // コールバック
         this.onPositionChange = null;
+        this.onDragEnd = null;
     }
 
     /**
@@ -103,6 +104,11 @@ export class DragManager {
 
         this.boundOnDrag = null;
         this.boundStopDrag = null;
+
+        // ドラッグ終了を通知
+        if (this.onDragEnd) {
+            this.onDragEnd();
+        }
     }
 
     /**
