@@ -12,6 +12,7 @@ import { REPORT_TYPES, MOBILE_REGEX, PIP_SIZES } from './utils/constants.js';
 import { ChannelApiService } from './services/ChannelApiService.js';
 import { ReportService } from './services/ReportService.js';
 import { videoPlayerManager } from './managers/VideoPlayerManager.js';
+import { autoReshuffleManager } from './managers/AutoReshuffleManager.js';
 
 /**
  * ユーザー操作ログをサーバーに送信
@@ -139,17 +140,6 @@ function registerArchiveListComponent() {
 
                 // 自動再抽選機能
                 autoReshuffle: false,
-                reshuffleMonitorId: null,
-                currentSongEndTime: null,
-                fadeOutIntervalId: null,
-                fadeInIntervalId: null,
-                originalVolume: 100,
-                needsFadeIn: false,
-
-                // 再生失敗検知機能
-                bufferingTimeoutId: null,
-                lastPlaybackTime: 0,
-                stallCount: 0,
 
                 // ドラッグ機能用
                 isDragging: false,
@@ -473,12 +463,9 @@ function registerArchiveListComponent() {
                         this.autoPlay = autoPlaySaved === 'true';
                     }
 
-                    // 自動再抽選設定を読み込み（sessionStorageから、デフォルトOFF）
-                    const autoReshuffleSaved = sessionStorage.getItem('autoReshuffle');
-                    this.autoReshuffle = autoReshuffleSaved === 'true';
-
-                    // VideoPlayerManagerの初期化
+                    // マネージャーの初期化
                     this._initVideoPlayerManager();
+                    this._initAutoReshuffleManager();
 
                     // YouTube IFrame APIの読み込み
                     this.loadYouTubeAPI();
@@ -488,8 +475,7 @@ function registerArchiveListComponent() {
 
                     // ページ離脱時のクリーンアップ
                     window.addEventListener('beforeunload', () => {
-                        this.stopReshuffleMonitor();
-                        this.clearBufferingTimeout();
+                        autoReshuffleManager.cleanup();
                         this.destroyPlayer();
                     });
                 },
@@ -689,39 +675,12 @@ function registerArchiveListComponent() {
                     };
 
                     videoPlayerManager.onStateChange = (event) => {
-                        // 再生開始時の処理
-                        if (event.data === YT.PlayerState.PLAYING) {
-                            // バッファリングタイムアウトをクリア
-                            this.clearBufferingTimeout();
-                            // スタック検知用の初期化
-                            this.lastPlaybackTime = videoPlayerManager.getCurrentTime();
-                            this.stallCount = 0;
-                            // フェードインが必要な場合は開始
-                            if (this.needsFadeIn) {
-                                this.startFadeIn();
-                            }
-                        }
-
-                        // バッファリング状態の監視（自動再抽選中のみ）
-                        if (event.data === YT.PlayerState.BUFFERING && this.autoReshuffle) {
-                            this.startBufferingTimeout();
-                        } else if (event.data !== YT.PlayerState.BUFFERING) {
-                            this.clearBufferingTimeout();
-                        }
-
-                        // 自動再抽選: 再生状態に応じて監視を開始/停止
-                        if (this.autoReshuffle && this.currentSongEndTime !== null) {
-                            if (event.data === YT.PlayerState.PLAYING) {
-                                this.startReshuffleMonitor();
-                            } else if (event.data === YT.PlayerState.PAUSED ||
-                                       event.data === YT.PlayerState.ENDED) {
-                                this.stopReshuffleMonitor();
-                            }
-                        }
+                        // AutoReshuffleManagerに状態変更を通知
+                        autoReshuffleManager.handlePlayerStateChange(event);
                     };
 
                     videoPlayerManager.onError = (event) => {
-                        this.clearBufferingTimeout();
+                        autoReshuffleManager.clearBufferingTimeout();
 
                         const errorMessages = {
                             2: '無効なパラメータです',
@@ -735,13 +694,33 @@ function registerArchiveListComponent() {
                         // 自動再抽選中ならエラーをスキップして次の曲へ
                         if (this.autoReshuffle) {
                             toast.warning(`${message} - 次の曲に進みます...`);
-                            this.stopReshuffleMonitor();
+                            autoReshuffleManager.stopMonitor();
                             setTimeout(() => {
                                 this.playRandomTimestamp();
                             }, 1000);
                         } else {
                             toast.error(message);
                         }
+                    };
+                },
+
+                // AutoReshuffleManagerの初期化
+                _initAutoReshuffleManager() {
+                    // 設定を復元
+                    autoReshuffleManager.restoreSettings();
+                    this.autoReshuffle = autoReshuffleManager.isEnabled();
+
+                    // コールバックを設定
+                    autoReshuffleManager.onSongEnd = () => {
+                        this.playRandomTimestamp();
+                    };
+
+                    autoReshuffleManager.onStallDetected = () => {
+                        this.playRandomTimestamp();
+                    };
+
+                    autoReshuffleManager.onBufferingTimeout = () => {
+                        this.playRandomTimestamp();
                     };
                 },
 
@@ -872,8 +851,9 @@ function registerArchiveListComponent() {
                             this.showDistributionPanel = true;
                         }
 
-                        // 自動再抽選用: 終了時刻を計算
-                        this.currentSongEndTime = this.calculateEndTime(timestamp);
+                        // 自動再抽選用: 終了時刻を計算・設定
+                        const endTime = autoReshuffleManager.calculateEndTime(timestamp);
+                        autoReshuffleManager.setEndTime(endTime);
 
                         // 動画を再生
                         if (timestamp.video_id) {
@@ -896,8 +876,8 @@ function registerArchiveListComponent() {
                         toast.success('ランダムで楽曲を選びました！');
 
                         // 自動再抽選: 有効な場合は監視を開始
-                        if (this.autoReshuffle && this.currentSongEndTime !== null) {
-                            this.startReshuffleMonitor();
+                        if (this.autoReshuffle && endTime !== null) {
+                            autoReshuffleManager.startMonitor();
                         }
                     } catch (error) {
                         console.error('ランダム再生に失敗しました:', error);
@@ -908,234 +888,10 @@ function registerArchiveListComponent() {
                 },
 
                 /**
-                 * 終了時刻を計算（自動再抽選用）
-                 *
-                 * 優先順位:
-                 * 1. 楽曲長さあり & 次のTSあり → min(開始 + 楽曲長さ + 10秒, 次のTS)
-                 * 2. 楽曲長さのみあり → 開始 + 楽曲長さ + 10秒
-                 * 3. 次のTSのみあり → 次のTS - 10秒
-                 * 4. どちらもなし → デフォルト5分
-                 */
-                calculateEndTime(timestamp) {
-                    const startTime = timestamp.ts_num || 0;
-                    const nextTsNum = timestamp.next_ts_num;
-                    const durationMs = timestamp.mapping?.song?.duration_ms;
-                    const durationSec = durationMs ? Math.ceil(durationMs / 1000) : null;
-                    const defaultDuration = 5 * 60; // 5分
-
-                    if (durationSec !== null && nextTsNum !== null) {
-                        // 楽曲長さあり & 次のTSあり
-                        return Math.min(startTime + durationSec + 10, nextTsNum);
-                    } else if (durationSec !== null) {
-                        // 楽曲長さのみあり
-                        return startTime + durationSec + 10;
-                    } else if (nextTsNum !== null) {
-                        // 次のTSのみあり
-                        return Math.max(startTime, nextTsNum - 10);
-                    } else {
-                        // どちらもなし（デフォルト5分）
-                        return startTime + defaultDuration;
-                    }
-                },
-
-                /**
-                 * 再生位置監視を開始（自動再抽選用）
-                 */
-                startReshuffleMonitor() {
-                    // 既存の監視を停止
-                    this.stopReshuffleMonitor();
-
-                    if (!videoPlayerManager.isInitialized() || this.currentSongEndTime === null) return;
-
-                    const FADE_OUT_DURATION = 3; // フェードアウト秒数
-                    const CHECK_INTERVAL = 500; // チェック間隔（ミリ秒）
-                    const MAX_STALL_COUNT = 6; // 3秒間（500ms × 6回）進まなければスタックと判定
-
-                    // スタック検知用の初期化
-                    this.lastPlaybackTime = videoPlayerManager.getCurrentTime();
-                    this.stallCount = 0;
-
-                    this.reshuffleMonitorId = setInterval(() => {
-                        if (!videoPlayerManager.isInitialized()) {
-                            this.stopReshuffleMonitor();
-                            return;
-                        }
-
-                        const currentTime = videoPlayerManager.getCurrentTime();
-                        const fadeOutStartTime = this.currentSongEndTime - FADE_OUT_DURATION;
-
-                        // スタック検知: 再生中なのに時間が進まない状態を検知
-                        if (this.isPlaying) {
-                            if (Math.abs(currentTime - this.lastPlaybackTime) < 0.1) {
-                                this.stallCount++;
-                                if (this.stallCount >= MAX_STALL_COUNT) {
-                                    console.warn('再生がスタックしています（再生位置が進まない）');
-                                    toast.warning('読み込みに問題があります。次の曲に進みます...');
-                                    this.stopReshuffleMonitor();
-                                    this.playRandomTimestamp();
-                                    return;
-                                }
-                            } else {
-                                this.stallCount = 0;
-                            }
-                        }
-                        this.lastPlaybackTime = currentTime;
-
-                        // フェードアウト開始時刻に到達
-                        if (currentTime >= fadeOutStartTime && !this.fadeOutIntervalId) {
-                            this.startFadeOut();
-                        }
-
-                        // 終了時刻に到達
-                        if (currentTime >= this.currentSongEndTime) {
-                            this.stopReshuffleMonitor();
-                            // 次の曲を抽選
-                            this.playRandomTimestamp();
-                        }
-                    }, CHECK_INTERVAL);
-                },
-
-                /**
-                 * 再生位置監視を停止
-                 */
-                stopReshuffleMonitor() {
-                    if (this.reshuffleMonitorId) {
-                        clearInterval(this.reshuffleMonitorId);
-                        this.reshuffleMonitorId = null;
-                    }
-                    this.stopFadeOut();
-                },
-
-                /**
-                 * バッファリングタイムアウトを開始
-                 * バッファリング状態が10秒続いたら次の曲にスキップ
-                 */
-                startBufferingTimeout() {
-                    // 既存のタイムアウトをクリア
-                    this.clearBufferingTimeout();
-
-                    const BUFFERING_TIMEOUT = 10000; // 10秒
-
-                    this.bufferingTimeoutId = setTimeout(() => {
-                        console.warn('バッファリングタイムアウト');
-                        toast.warning('読み込みに時間がかかっています。次の曲に進みます...');
-                        this.stopReshuffleMonitor();
-                        this.playRandomTimestamp();
-                    }, BUFFERING_TIMEOUT);
-                },
-
-                /**
-                 * バッファリングタイムアウトをクリア
-                 */
-                clearBufferingTimeout() {
-                    if (this.bufferingTimeoutId) {
-                        clearTimeout(this.bufferingTimeoutId);
-                        this.bufferingTimeoutId = null;
-                    }
-                },
-
-                /**
-                 * フェードアウトを開始
-                 */
-                startFadeOut() {
-                    if (this.fadeOutIntervalId || !videoPlayerManager.isInitialized()) return;
-
-                    // 現在の音量を保存
-                    this.originalVolume = videoPlayerManager.getVolume();
-
-                    const FADE_STEPS = 10;
-                    const FADE_INTERVAL = 300; // 3秒 / 10ステップ = 300ms
-                    let step = 0;
-
-                    this.fadeOutIntervalId = setInterval(() => {
-                        step++;
-                        const newVolume = Math.max(0, this.originalVolume * (1 - step / FADE_STEPS));
-
-                        videoPlayerManager.setVolume(newVolume);
-
-                        if (step >= FADE_STEPS) {
-                            this.stopFadeOut();
-                        }
-                    }, FADE_INTERVAL);
-                },
-
-                /**
-                 * フェードアウトを停止（音量は復元しない）
-                 */
-                stopFadeOut() {
-                    if (this.fadeOutIntervalId) {
-                        clearInterval(this.fadeOutIntervalId);
-                        this.fadeOutIntervalId = null;
-                        // フェードアウト中だった場合、次の曲でフェードインが必要
-                        this.needsFadeIn = true;
-                    }
-                },
-
-                /**
-                 * フェードインを開始
-                 */
-                startFadeIn() {
-                    if (this.fadeInIntervalId || !videoPlayerManager.isInitialized()) return;
-                    if (!this.needsFadeIn) return;
-
-                    this.needsFadeIn = false;
-
-                    // 音量0から開始
-                    videoPlayerManager.setVolume(0);
-
-                    const FADE_STEPS = 10;
-                    const FADE_INTERVAL = 200; // 2秒 / 10ステップ = 200ms（フェードアウトより短め）
-                    let step = 0;
-
-                    this.fadeInIntervalId = setInterval(() => {
-                        step++;
-                        const newVolume = Math.min(this.originalVolume, this.originalVolume * (step / FADE_STEPS));
-
-                        videoPlayerManager.setVolume(newVolume);
-
-                        if (step >= FADE_STEPS) {
-                            this.stopFadeIn();
-                        }
-                    }, FADE_INTERVAL);
-                },
-
-                /**
-                 * フェードインを停止
-                 */
-                stopFadeIn() {
-                    if (this.fadeInIntervalId) {
-                        clearInterval(this.fadeInIntervalId);
-                        this.fadeInIntervalId = null;
-                    }
-                    // 最終的に元の音量に設定
-                    videoPlayerManager.setVolume(this.originalVolume);
-                },
-
-                /**
                  * 自動再抽選のON/OFF切り替え
                  */
                 toggleAutoReshuffle() {
-                    this.autoReshuffle = !this.autoReshuffle;
-                    this.saveAutoReshuffle();
-
-                    if (this.autoReshuffle) {
-                        // ONにした場合、現在再生中で終了時刻が設定されていれば監視開始
-                        if (this.isPlaying && this.currentSongEndTime !== null) {
-                            this.startReshuffleMonitor();
-                        }
-                        toast.success('自動再抽選をONにしました');
-                    } else {
-                        // OFFにした場合、監視を停止
-                        this.stopReshuffleMonitor();
-                        toast.info('自動再抽選をOFFにしました');
-                    }
-                },
-
-                /**
-                 * 自動再抽選設定を保存
-                 */
-                saveAutoReshuffle() {
-                    sessionStorage.setItem('autoReshuffle', this.autoReshuffle.toString());
+                    this.autoReshuffle = autoReshuffleManager.toggle(this.isPlaying);
                 },
 
                 // ドラッグ開始
