@@ -8,9 +8,10 @@ import {
     getAmazonMusicUrl,
     getLineMusicUrl
 } from '../utils/music-services.js';
-import { REPORT_TYPES, MOBILE_REGEX, YOUTUBE_PLAYER_CONFIG, PIP_SIZES } from './utils/constants.js';
+import { REPORT_TYPES, MOBILE_REGEX, PIP_SIZES } from './utils/constants.js';
 import { ChannelApiService } from './services/ChannelApiService.js';
 import { ReportService } from './services/ReportService.js';
+import { videoPlayerManager } from './managers/VideoPlayerManager.js';
 
 /**
  * ユーザー操作ログをサーバーに送信
@@ -132,9 +133,7 @@ function registerArchiveListComponent() {
                 currentVideoTime: 0,
                 isPlaying: false,
                 playerReady: false,
-                youtubePlayer: null,
                 playerInitialized: false,
-                pendingVideo: null,
                 // ランダム再生機能
                 isRandomPlaying: false,
 
@@ -478,20 +477,8 @@ function registerArchiveListComponent() {
                     const autoReshuffleSaved = sessionStorage.getItem('autoReshuffle');
                     this.autoReshuffle = autoReshuffleSaved === 'true';
 
-                    // ワイプサイズ設定を読み込み（sessionStorageから、デフォルトmedium）
-                    const pipSizeSaved = sessionStorage.getItem('pipSize');
-                    if (pipSizeSaved && PIP_SIZES[pipSizeSaved]) {
-                        this.pipSize = pipSizeSaved;
-                    }
-
-                    // 音量設定を読み込み（sessionStorageから、デフォルト100）
-                    const volumeSaved = sessionStorage.getItem('videoVolume');
-                    if (volumeSaved !== null) {
-                        const vol = parseInt(volumeSaved, 10);
-                        if (!isNaN(vol) && vol >= 0 && vol <= 100) {
-                            this.volume = vol;
-                        }
-                    }
+                    // VideoPlayerManagerの初期化
+                    this._initVideoPlayerManager();
 
                     // YouTube IFrame APIの読み込み
                     this.loadYouTubeAPI();
@@ -675,246 +662,146 @@ function registerArchiveListComponent() {
                     });
                 },
 
+                // VideoPlayerManagerの初期化
+                _initVideoPlayerManager() {
+                    // 設定を復元
+                    videoPlayerManager.restoreVolume();
+                    videoPlayerManager.restorePipSize();
+
+                    // コンポーネントの状態と同期
+                    this.volume = videoPlayerManager.getVolume();
+                    this.pipSize = videoPlayerManager.getPipSize();
+
+                    // ログ関数を設定
+                    videoPlayerManager.logUserAction = logUserAction;
+
+                    // コールバックを設定
+                    videoPlayerManager.onPlayingChange = (isPlaying) => {
+                        this.isPlaying = isPlaying;
+                    };
+
+                    videoPlayerManager.onShowChange = (show) => {
+                        this.showVideoPlayer = show;
+                    };
+
+                    videoPlayerManager.onMinimizedChange = (minimized) => {
+                        this.playerMinimized = minimized;
+                    };
+
+                    videoPlayerManager.onStateChange = (event) => {
+                        // 再生開始時の処理
+                        if (event.data === YT.PlayerState.PLAYING) {
+                            // バッファリングタイムアウトをクリア
+                            this.clearBufferingTimeout();
+                            // スタック検知用の初期化
+                            this.lastPlaybackTime = videoPlayerManager.getCurrentTime();
+                            this.stallCount = 0;
+                            // フェードインが必要な場合は開始
+                            if (this.needsFadeIn) {
+                                this.startFadeIn();
+                            }
+                        }
+
+                        // バッファリング状態の監視（自動再抽選中のみ）
+                        if (event.data === YT.PlayerState.BUFFERING && this.autoReshuffle) {
+                            this.startBufferingTimeout();
+                        } else if (event.data !== YT.PlayerState.BUFFERING) {
+                            this.clearBufferingTimeout();
+                        }
+
+                        // 自動再抽選: 再生状態に応じて監視を開始/停止
+                        if (this.autoReshuffle && this.currentSongEndTime !== null) {
+                            if (event.data === YT.PlayerState.PLAYING) {
+                                this.startReshuffleMonitor();
+                            } else if (event.data === YT.PlayerState.PAUSED ||
+                                       event.data === YT.PlayerState.ENDED) {
+                                this.stopReshuffleMonitor();
+                            }
+                        }
+                    };
+
+                    videoPlayerManager.onError = (event) => {
+                        this.clearBufferingTimeout();
+
+                        const errorMessages = {
+                            2: '無効なパラメータです',
+                            5: 'HTML5プレイヤーエラーが発生しました',
+                            100: '動画が見つかりません',
+                            101: '動画の埋め込みが許可されていません',
+                            150: '動画の埋め込みが許可されていません'
+                        };
+                        const message = errorMessages[event.data] || '動画の読み込みに失敗しました';
+
+                        // 自動再抽選中ならエラーをスキップして次の曲へ
+                        if (this.autoReshuffle) {
+                            toast.warning(`${message} - 次の曲に進みます...`);
+                            this.stopReshuffleMonitor();
+                            setTimeout(() => {
+                                this.playRandomTimestamp();
+                            }, 1000);
+                        } else {
+                            toast.error(message);
+                        }
+                    };
+                },
+
                 // YouTube IFrame APIの読み込み
                 loadYouTubeAPI() {
-                    if (window.YT && window.YT.Player) {
+                    videoPlayerManager.loadAPI(() => {
                         this.playerReady = true;
-                        // 既にAPIが読み込まれている場合は即座に事前初期化
-                        this.$nextTick(() => this.preInitializePlayer());
-                        return;
-                    }
-
-                    if (!window.youtubeAPIReadyCallbacks) {
-                        window.youtubeAPIReadyCallbacks = [];
-                        window.onYouTubeIframeAPIReady = () => {
-                            window.youtubeAPIReadyCallbacks.forEach(cb => cb());
-                        };
-                    }
-
-                    window.youtubeAPIReadyCallbacks.push(() => {
-                        this.playerReady = true;
-                        // API準備完了時に事前初期化（モバイルの自動再生制限対策）
                         this.$nextTick(() => this.preInitializePlayer());
                     });
-
-                    if (!document.querySelector('script[src*="youtube.com/iframe_api"]')) {
-                        const tag = document.createElement('script');
-                        tag.src = 'https://www.youtube.com/iframe_api';
-                        tag.onerror = () => {
-                            console.error('YouTube APIの読み込みに失敗しました');
-                            toast.error('動画プレイヤーの読み込みに失敗しました');
-                        };
-                        const firstScriptTag = document.getElementsByTagName('script')[0];
-                        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
-                    }
                 },
 
                 // プレイヤーの事前初期化（モバイルの自動再生制限対策）
-                // ページロード時にプレイヤーを初期化しておくことで、
-                // ユーザーの最初のタップ時に即座に再生できるようにする
                 preInitializePlayer() {
-                    if (this.youtubePlayer) return; // 既に初期化済み
-
-                    const playerElement = document.getElementById('youtube-player');
-                    if (!playerElement) {
-                        // 要素がまだ存在しない場合は少し待ってリトライ
-                        setTimeout(() => this.preInitializePlayer(), 100);
-                        return;
-                    }
-
-                    this.initPlayer();
+                    videoPlayerManager.preInitialize('youtube-player');
                 },
 
                 // 動画プレイヤーの初期化
                 initPlayer() {
-                    if (!this.playerReady || this.youtubePlayer) return;
-
-                    const playerElement = document.getElementById('youtube-player');
-                    if (!playerElement) return;
-
-                    const currentSize = this.getCurrentPipSize();
-                    this.youtubePlayer = new YT.Player('youtube-player', {
-                        height: currentSize.height.toString(),
-                        width: currentSize.width.toString(),
-                        playerVars: {
-                            ...YOUTUBE_PLAYER_CONFIG.playerVars,
-                            origin: window.location.origin
-                        },
-                        events: {
-                            'onReady': () => {
-                                this.playerInitialized = true;
-                                // 画質を最低に設定（推奨のみ、強制は不可）
-                                if (this.youtubePlayer.setPlaybackQuality) {
-                                    this.youtubePlayer.setPlaybackQuality(YOUTUBE_PLAYER_CONFIG.suggestedQuality);
-                                }
-                                // 保存された音量を適用
-                                if (typeof this.youtubePlayer.setVolume === 'function') {
-                                    this.youtubePlayer.setVolume(this.volume);
-                                }
-                                // 待機中の動画があれば再生
-                                // isPlayingはonStateChangeで更新されるため、ここでは設定しない
-                                if (this.pendingVideo) {
-                                    this.youtubePlayer.loadVideoById({
-                                        videoId: this.pendingVideo.videoId,
-                                        startSeconds: this.pendingVideo.time,
-                                        suggestedQuality: YOUTUBE_PLAYER_CONFIG.suggestedQuality
-                                    });
-                                    this.pendingVideo = null;
-                                }
-                            },
-                            'onStateChange': (event) => {
-                                this.isPlaying = event.data === YT.PlayerState.PLAYING;
-
-                                // 再生開始時の処理
-                                if (event.data === YT.PlayerState.PLAYING) {
-                                    // バッファリングタイムアウトをクリア
-                                    this.clearBufferingTimeout();
-                                    // スタック検知用の初期化
-                                    this.lastPlaybackTime = this.youtubePlayer?.getCurrentTime() || 0;
-                                    this.stallCount = 0;
-                                    // フェードインが必要な場合は開始
-                                    if (this.needsFadeIn) {
-                                        this.startFadeIn();
-                                    }
-                                }
-
-                                // バッファリング状態の監視（自動再抽選中のみ）
-                                if (event.data === YT.PlayerState.BUFFERING && this.autoReshuffle) {
-                                    this.startBufferingTimeout();
-                                } else if (event.data !== YT.PlayerState.BUFFERING) {
-                                    this.clearBufferingTimeout();
-                                }
-
-                                // 自動再抽選: 再生状態に応じて監視を開始/停止
-                                if (this.autoReshuffle && this.currentSongEndTime !== null) {
-                                    if (event.data === YT.PlayerState.PLAYING) {
-                                        this.startReshuffleMonitor();
-                                    } else if (event.data === YT.PlayerState.PAUSED ||
-                                               event.data === YT.PlayerState.ENDED) {
-                                        this.stopReshuffleMonitor();
-                                    }
-                                }
-                            },
-                            'onError': (event) => {
-                                console.error('YouTube Player Error:', event.data);
-                                this.isPlaying = false;
-                                this.pendingVideo = null;
-                                this.clearBufferingTimeout();
-
-                                const errorMessages = {
-                                    2: '無効なパラメータです',
-                                    5: 'HTML5プレイヤーエラーが発生しました',
-                                    100: '動画が見つかりません',
-                                    101: '動画の埋め込みが許可されていません',
-                                    150: '動画の埋め込みが許可されていません'
-                                };
-                                const message = errorMessages[event.data] || '動画の読み込みに失敗しました';
-
-                                // 自動再抽選中ならエラーをスキップして次の曲へ
-                                if (this.autoReshuffle) {
-                                    toast.warning(`${message} - 次の曲に進みます...`);
-                                    this.stopReshuffleMonitor();
-                                    setTimeout(() => {
-                                        this.playRandomTimestamp();
-                                    }, 1000);
-                                } else {
-                                    toast.error(message);
-                                }
-                            }
-                        }
-                    });
+                    const result = videoPlayerManager.initPlayer('youtube-player');
+                    if (result) {
+                        this.playerInitialized = true;
+                    }
                 },
 
                 // 動画を読み込んで再生
                 loadAndPlayVideo(videoId, time = 0) {
-                    if (!isValidVideoId(videoId)) {
-                        console.error('Invalid video ID:', videoId);
-                        return;
-                    }
-
-                    logUserAction('playVideo', {
-                        videoId,
-                        startTime: time
-                    });
-
-                    this.currentVideoId = videoId;
-                    this.currentVideoTime = time;
-                    this.showVideoPlayer = true;
-
-                    // 既にプレイヤーが初期化完了している場合
-                    // isPlayingはonStateChangeで更新されるため、ここでは設定しない
-                    if (this.youtubePlayer && this.playerInitialized) {
-                        this.youtubePlayer.loadVideoById({
-                            videoId: videoId,
-                            startSeconds: time,
-                            suggestedQuality: YOUTUBE_PLAYER_CONFIG.suggestedQuality
-                        });
-                    } else {
-                        // 初期化が完了していない場合、待機動画として保存
-                        this.pendingVideo = { videoId, time };
-
-                        this.$nextTick(() => {
-                            if (!this.youtubePlayer && this.playerReady) {
-                                this.initPlayer();
-                            }
-                        });
+                    const result = videoPlayerManager.loadAndPlay(videoId, time);
+                    if (result) {
+                        this.currentVideoId = videoId;
+                        this.currentVideoTime = time;
                     }
                 },
 
                 // 再生/一時停止の切り替え
                 togglePlayPause() {
-                    if (this.isPlaying) {
-                        if (this.youtubePlayer) {
-                            this.youtubePlayer.pauseVideo();
-                        }
-                        this.isPlaying = false;
-                        return;
-                    }
-
                     if (this.selectedTimestamp && this.selectedTimestamp.video_id) {
                         const selectedVideoId = this.selectedTimestamp.video_id;
                         const selectedTime = this.selectedTimestamp.ts_num || 0;
-
-                        if (this.currentVideoId !== selectedVideoId || this.currentVideoTime !== selectedTime) {
-                            this.loadAndPlayVideo(selectedVideoId, selectedTime);
-                        } else {
-                            if (this.youtubePlayer) {
-                                this.youtubePlayer.playVideo();
-                                this.isPlaying = true;
-                            } else {
-                                this.loadAndPlayVideo(selectedVideoId, selectedTime);
-                            }
-                        }
+                        videoPlayerManager.togglePlayPause(selectedVideoId, selectedTime);
+                        this.currentVideoId = selectedVideoId;
+                        this.currentVideoTime = selectedTime;
+                    } else {
+                        videoPlayerManager.togglePlayPause();
                     }
                 },
 
                 // 動画プレイヤーを閉じる
                 closeVideoPlayer() {
-                    if (this.youtubePlayer) {
-                        this.youtubePlayer.stopVideo();
-                    }
-                    this.showVideoPlayer = false;
-                    this.isPlaying = false;
-                    this.currentVideoId = null;
-                    this.playerMinimized = false;
-                    this.resetPlayerPosition();
+                    videoPlayerManager.close(() => this.resetPlayerPosition());
                 },
 
                 // プレイヤーの最小化トグル
                 togglePlayerMinimize() {
-                    this.playerMinimized = !this.playerMinimized;
+                    videoPlayerManager.toggleMinimize();
                 },
 
                 // プレイヤーの破棄
                 destroyPlayer() {
-                    if (this.youtubePlayer) {
-                        this.youtubePlayer.destroy();
-                        this.youtubePlayer = null;
-                    }
+                    videoPlayerManager.destroy();
                     this.playerInitialized = false;
-                    this.pendingVideo = null;
-                    this.showVideoPlayer = false;
-                    this.isPlaying = false;
                     this.currentVideoId = null;
                 },
 
@@ -925,45 +812,29 @@ function registerArchiveListComponent() {
 
                 // 音量変更
                 changeVolume(value) {
-                    const vol = parseInt(value, 10);
-                    if (isNaN(vol) || vol < 0 || vol > 100) return;
-
-                    this.volume = vol;
-                    sessionStorage.setItem('videoVolume', vol.toString());
-
-                    // プレイヤーの音量を更新
-                    if (this.youtubePlayer && typeof this.youtubePlayer.setVolume === 'function') {
-                        this.youtubePlayer.setVolume(vol);
-                    }
+                    videoPlayerManager.setVolume(value);
+                    this.volume = videoPlayerManager.getVolume();
                 },
 
                 // ワイプサイズの変更
                 changePipSize(size) {
-                    if (PIP_SIZES[size]) {
-                        this.pipSize = size;
-                        sessionStorage.setItem('pipSize', size);
-                        // YouTube Playerのサイズも更新
-                        this.updatePlayerSize();
-                    }
+                    videoPlayerManager.setPipSize(size);
+                    this.pipSize = videoPlayerManager.getPipSize();
                 },
 
                 // YouTube Playerのサイズを更新
                 updatePlayerSize() {
-                    if (this.youtubePlayer && typeof this.youtubePlayer.setSize === 'function') {
-                        const currentSize = this.getCurrentPipSize();
-                        this.youtubePlayer.setSize(currentSize.width, currentSize.height);
-                    }
+                    videoPlayerManager.updatePlayerSize();
                 },
 
                 // 現在のワイプサイズ設定を取得
                 getCurrentPipSize() {
-                    return PIP_SIZES[this.pipSize] || PIP_SIZES.medium;
+                    return videoPlayerManager.getCurrentPipSize();
                 },
 
                 // ワイプの幅を取得（CSSで使用）
                 getPipWidth() {
-                    const size = this.getCurrentPipSize();
-                    return this.playerMinimized ? size.minimizedWidth : size.width;
+                    return videoPlayerManager.getPipWidth();
                 },
 
                 // ランダム再生
@@ -1074,23 +945,23 @@ function registerArchiveListComponent() {
                     // 既存の監視を停止
                     this.stopReshuffleMonitor();
 
-                    if (!this.youtubePlayer || this.currentSongEndTime === null) return;
+                    if (!videoPlayerManager.isInitialized() || this.currentSongEndTime === null) return;
 
                     const FADE_OUT_DURATION = 3; // フェードアウト秒数
                     const CHECK_INTERVAL = 500; // チェック間隔（ミリ秒）
                     const MAX_STALL_COUNT = 6; // 3秒間（500ms × 6回）進まなければスタックと判定
 
                     // スタック検知用の初期化
-                    this.lastPlaybackTime = this.youtubePlayer.getCurrentTime();
+                    this.lastPlaybackTime = videoPlayerManager.getCurrentTime();
                     this.stallCount = 0;
 
                     this.reshuffleMonitorId = setInterval(() => {
-                        if (!this.youtubePlayer || typeof this.youtubePlayer.getCurrentTime !== 'function') {
+                        if (!videoPlayerManager.isInitialized()) {
                             this.stopReshuffleMonitor();
                             return;
                         }
 
-                        const currentTime = this.youtubePlayer.getCurrentTime();
+                        const currentTime = videoPlayerManager.getCurrentTime();
                         const fadeOutStartTime = this.currentSongEndTime - FADE_OUT_DURATION;
 
                         // スタック検知: 再生中なのに時間が進まない状態を検知
@@ -1167,12 +1038,10 @@ function registerArchiveListComponent() {
                  * フェードアウトを開始
                  */
                 startFadeOut() {
-                    if (this.fadeOutIntervalId || !this.youtubePlayer) return;
+                    if (this.fadeOutIntervalId || !videoPlayerManager.isInitialized()) return;
 
                     // 現在の音量を保存
-                    if (typeof this.youtubePlayer.getVolume === 'function') {
-                        this.originalVolume = this.youtubePlayer.getVolume();
-                    }
+                    this.originalVolume = videoPlayerManager.getVolume();
 
                     const FADE_STEPS = 10;
                     const FADE_INTERVAL = 300; // 3秒 / 10ステップ = 300ms
@@ -1182,9 +1051,7 @@ function registerArchiveListComponent() {
                         step++;
                         const newVolume = Math.max(0, this.originalVolume * (1 - step / FADE_STEPS));
 
-                        if (this.youtubePlayer && typeof this.youtubePlayer.setVolume === 'function') {
-                            this.youtubePlayer.setVolume(newVolume);
-                        }
+                        videoPlayerManager.setVolume(newVolume);
 
                         if (step >= FADE_STEPS) {
                             this.stopFadeOut();
@@ -1208,15 +1075,13 @@ function registerArchiveListComponent() {
                  * フェードインを開始
                  */
                 startFadeIn() {
-                    if (this.fadeInIntervalId || !this.youtubePlayer) return;
+                    if (this.fadeInIntervalId || !videoPlayerManager.isInitialized()) return;
                     if (!this.needsFadeIn) return;
 
                     this.needsFadeIn = false;
 
                     // 音量0から開始
-                    if (typeof this.youtubePlayer.setVolume === 'function') {
-                        this.youtubePlayer.setVolume(0);
-                    }
+                    videoPlayerManager.setVolume(0);
 
                     const FADE_STEPS = 10;
                     const FADE_INTERVAL = 200; // 2秒 / 10ステップ = 200ms（フェードアウトより短め）
@@ -1226,9 +1091,7 @@ function registerArchiveListComponent() {
                         step++;
                         const newVolume = Math.min(this.originalVolume, this.originalVolume * (step / FADE_STEPS));
 
-                        if (this.youtubePlayer && typeof this.youtubePlayer.setVolume === 'function') {
-                            this.youtubePlayer.setVolume(newVolume);
-                        }
+                        videoPlayerManager.setVolume(newVolume);
 
                         if (step >= FADE_STEPS) {
                             this.stopFadeIn();
@@ -1245,9 +1108,7 @@ function registerArchiveListComponent() {
                         this.fadeInIntervalId = null;
                     }
                     // 最終的に元の音量に設定
-                    if (this.youtubePlayer && typeof this.youtubePlayer.setVolume === 'function') {
-                        this.youtubePlayer.setVolume(this.originalVolume);
-                    }
+                    videoPlayerManager.setVolume(this.originalVolume);
                 },
 
                 /**
