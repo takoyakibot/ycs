@@ -1250,4 +1250,169 @@ class SongControllerTest extends TestCase
         $this->assertEquals('youtube', $response->json('platform'));
         $this->assertNotNull($response->json('error'));
     }
+
+    // ==========================================
+    // updateSong のテスト
+    // ==========================================
+
+    /**
+     * 楽曲マスタの更新テスト（タイトルとアーティスト）
+     */
+    public function test_update_song_title_and_artist(): void
+    {
+        $song = Song::factory()->create([
+            'title' => 'Original Title',
+            'artist' => 'Original Artist',
+        ]);
+
+        $response = $this->actingAs($this->user)->putJson(route('songs.updateSong', $song->id), [
+            'title' => 'Updated Title',
+            'artist' => 'Updated Artist',
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'message' => '楽曲マスタを更新しました。',
+        ]);
+        $this->assertDatabaseHas('songs', [
+            'id' => $song->id,
+            'title' => 'Updated Title',
+            'artist' => 'Updated Artist',
+        ]);
+    }
+
+    /**
+     * 楽曲マスタの更新テスト（video_url付き）
+     */
+    public function test_update_song_with_video_url(): void
+    {
+        $song = Song::factory()->create();
+
+        $response = $this->actingAs($this->user)->putJson(route('songs.updateSong', $song->id), [
+            'video_url' => 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        ]);
+
+        $response->assertStatus(200);
+        $this->assertDatabaseHas('songs', [
+            'id' => $song->id,
+            'video_url' => 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        ]);
+    }
+
+    /**
+     * 楽曲マスタの更新テスト（duration_ms付き）
+     */
+    public function test_update_song_with_duration_ms(): void
+    {
+        $song = Song::factory()->create();
+
+        $response = $this->actingAs($this->user)->putJson(route('songs.updateSong', $song->id), [
+            'duration_ms' => 213000,
+        ]);
+
+        $response->assertStatus(200);
+        $this->assertDatabaseHas('songs', [
+            'id' => $song->id,
+            'duration_ms' => 213000,
+        ]);
+    }
+
+    /**
+     * 楽曲マスタの更新テスト（video_urlとduration_msを同時に更新）
+     */
+    public function test_update_song_with_video_url_and_duration(): void
+    {
+        $song = Song::factory()->create();
+
+        $response = $this->actingAs($this->user)->putJson(route('songs.updateSong', $song->id), [
+            'video_url' => 'https://www.nicovideo.jp/watch/sm12345678',
+            'duration_ms' => 240000,
+        ]);
+
+        $response->assertStatus(200);
+        $this->assertDatabaseHas('songs', [
+            'id' => $song->id,
+            'video_url' => 'https://www.nicovideo.jp/watch/sm12345678',
+            'duration_ms' => 240000,
+        ]);
+    }
+
+    /**
+     * 楽曲マスタの更新テスト（無効なURL）
+     */
+    public function test_update_song_with_invalid_url(): void
+    {
+        $song = Song::factory()->create();
+
+        $response = $this->actingAs($this->user)->putJson(route('songs.updateSong', $song->id), [
+            'video_url' => 'not-a-valid-url',
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['video_url']);
+    }
+
+    /**
+     * 楽曲マスタの更新テスト（duration_msが範囲外）
+     */
+    public function test_update_song_with_duration_out_of_range(): void
+    {
+        $song = Song::factory()->create();
+
+        // 負の値
+        $response = $this->actingAs($this->user)->putJson(route('songs.updateSong', $song->id), [
+            'duration_ms' => -1,
+        ]);
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['duration_ms']);
+
+        // 24時間を超える値
+        $response = $this->actingAs($this->user)->putJson(route('songs.updateSong', $song->id), [
+            'duration_ms' => 86400001, // 24時間 + 1ms
+        ]);
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['duration_ms']);
+    }
+
+    /**
+     * 楽曲マスタの更新テスト（存在しないID）
+     */
+    public function test_update_song_not_found(): void
+    {
+        $response = $this->actingAs($this->user)->putJson(route('songs.updateSong', 'non-existent-id'), [
+            'title' => 'Test',
+        ]);
+
+        $response->assertStatus(404);
+    }
+
+    /**
+     * 楽曲マスタの更新テスト（未認証）
+     */
+    public function test_update_song_unauthenticated(): void
+    {
+        $song = Song::factory()->create();
+
+        $this->putJson(route('songs.updateSong', $song->id), [
+            'title' => 'Test',
+        ])->assertStatus(401);
+    }
+
+    /**
+     * 楽曲マスタの更新テスト（video_urlをnullにクリア）
+     */
+    public function test_update_song_clear_video_url(): void
+    {
+        $song = Song::factory()->withYoutubeUrl()->create();
+
+        $response = $this->actingAs($this->user)->putJson(route('songs.updateSong', $song->id), [
+            'video_url' => null,
+        ]);
+
+        $response->assertStatus(200);
+        $this->assertDatabaseHas('songs', [
+            'id' => $song->id,
+            'video_url' => null,
+        ]);
+    }
 }
