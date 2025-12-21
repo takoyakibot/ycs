@@ -11,7 +11,7 @@
 
 | 項目 | 評価 | 説明 |
 |------|------|------|
-| JavaScript複雑度 | 3/10 | 1149行の巨大ファイル |
+| JavaScript複雑度 | 5/10 | 1001行（Phase 1実施後） |
 | Blade可読性 | 4/10 | 深いネストと条件分岐 |
 | コード重複 | 中程度 | 特にページネーション |
 
@@ -19,7 +19,7 @@
 
 | ファイル | 行数 | 問題点 |
 |---------|------|--------|
-| `resources/js/channels/archive-list.js` | 1149 | 11以上の責務が集中 |
+| `resources/js/channels/archive-list.js` | 1001 | 責務が集中（Phase 1で一部分離済み） |
 | `resources/views/channels/partials/timestamps-tab.blade.php` | 312 | 複雑な条件分岐 |
 | `resources/views/channels/partials/distribution-panel.blade.php` | 138 | 配信サービス個別定義 |
 
@@ -35,10 +35,10 @@
 - アーカイブデータ取得・表示
 - タイムスタンプデータ取得・表示
 - 検索・フィルター処理（サジェスト含む）
-- YouTube IFrame API管理
+- ~~YouTube IFrame API管理~~ → VideoPlayerManagerに分離済み
 - 動画プレイヤー制御（ドラッグ可能）
-- 自動再抽選ロジック
-- フェードイン・アウト制御
+- ~~自動再抽選ロジック~~ → AutoReshuffleManagerに分離済み
+- ~~フェードイン・アウト制御~~ → AutoReshuffleManagerに分離済み
 - 報告機能
 - 配信サービスリンク生成
 - URL状態管理・復元
@@ -72,36 +72,35 @@ Blade側も5つ個別に記述しており、配列でループ可能な構造�
 
 ## リファクタリング計画
 
-### Phase 1: JavaScript分割（優先度: 高）
+### Phase 1: JavaScript分割（優先度: 高）【一部完了】
 
-#### 1-1. 動画プレイヤーの分離
+#### 1-1. 動画プレイヤーの分離 ✅ 完了
 
-**新規ファイル**: `resources/js/channels/video-player.js`
-
-抽出対象:
-- `youtubePlayer` 関連プロパティ
-- `initPlayer()`, `loadAndPlayVideo()`, `playVideo()`, `pauseVideo()`
-- ドラッグ機能（`startDrag`, `onDrag`, `stopDrag`）
-- プレイヤー位置・サイズ管理
-
-#### 1-2. 自動再抽選ロジックの分離
-
-**新規ファイル**: `resources/js/channels/random-player.js`
+**実装ファイル**: `resources/js/channels/managers/VideoPlayerManager.js`
 
 抽出対象:
-- `playRandomTimestamp()`
-- `startReshuffleMonitor()`, `stopReshuffleMonitor()`
+- YouTube IFrame API管理
+- プレイヤー初期化・破棄
+- 動画読み込み・再生制御
+- 音量・PiPサイズ管理
+- プレイヤー表示状態管理
+
+**注記**: ドラッグ機能はAlpine.jsのリアクティブ状態との連携が複雑なため、インライン実装を維持。
+
+#### 1-2. 自動再抽選ロジックの分離 ✅ 完了
+
+**実装ファイル**: `resources/js/channels/managers/AutoReshuffleManager.js`
+
+抽出対象:
+- 再生位置監視
 - フェードイン・アウト制御
-- `autoReshuffle` 状態管理
+- バッファリングタイムアウト検知
+- スタック検知
+- 終了時刻計算
 
-#### 1-3. 検索・フィルター処理の整理
+#### 1-3. 検索・フィルター処理の整理 ⏭️ スキップ
 
-**新規ファイル**: `resources/js/channels/search-filter.js`
-
-抽出対象:
-- 検索サジェスト機能
-- 頭文字フィルター処理
-- 検索履歴管理
+**理由**: コード量が少なく（約25行）、Alpine.jsとの密結合によりリスクがメリットを上回るため。
 
 ### Phase 2: Bladeコンポーネント化（優先度: 中）
 
@@ -153,6 +152,40 @@ $services = [
 
 ---
 
+## Phase 1 実施結果
+
+### 実施日
+
+2025年12月
+
+### 成果
+
+| 項目 | Before | After | 削減率 |
+|------|--------|-------|--------|
+| archive-list.js | 1384行 | 1001行 | 約28% |
+
+### 作成されたファイル
+
+| ファイル | 行数 | 責務 |
+|---------|------|------|
+| `VideoPlayerManager.js` | 469行 | YouTube動画プレイヤー管理 |
+| `AutoReshuffleManager.js` | 377行 | 自動再抽選・フェード制御 |
+
+### スキップした項目
+
+| 項目 | 理由 |
+|------|------|
+| DragManager | Alpine.jsのリアクティブ状態との同期で問題発生 |
+| SearchSuggestionService | コード量が少なく（約25行）、コスト対効果が低い |
+
+### 学んだこと
+
+- Alpine.jsコンポーネントから状態を抽出する際は、リアクティブバインディングとの連携に注意が必要
+- シングルトンパターンのManagerクラスは、コールバックを通じてAlpine側に状態変更を通知する設計が有効
+- 小規模な機能（ドラッグ、サジェスト等）はインライン実装の方が保守性が高い場合がある
+
+---
+
 ## 実装時の注意点
 
 ### 後方互換性
@@ -176,9 +209,12 @@ $services = [
 
 ### JavaScript
 
-- `resources/js/channels/archive-list.js` (メイン、1149行)
-- `resources/js/services/ChannelApiService.js` (API通信)
-- `resources/js/utils/distribution-urls.js` (配信サービスURL生成)
+- `resources/js/channels/archive-list.js` (メイン、1001行)
+- `resources/js/channels/managers/VideoPlayerManager.js` (動画プレイヤー管理、469行)
+- `resources/js/channels/managers/AutoReshuffleManager.js` (自動再抽選管理、377行)
+- `resources/js/channels/services/ChannelApiService.js` (API通信)
+- `resources/js/channels/services/ReportService.js` (報告機能)
+- `resources/js/utils/music-services.js` (配信サービスURL生成)
 
 ### Bladeテンプレート
 
@@ -201,6 +237,10 @@ $services = [
 
 2024年12月 (調査実施日に基づく)
 
+## 更新日
+
+2025年12月 (Phase 1一部実施)
+
 ## ステータス
 
-**未着手** - 他の修正完了後に着手予定
+**Phase 1一部完了** - Phase 2以降は必要に応じて実施
