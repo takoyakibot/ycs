@@ -151,8 +151,8 @@
                                     <input type="text" id="songArtist" name="artist" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium mb-2">YouTube URL（任意）</label>
-                                    <input type="text" id="songYoutubeUrl" name="youtube_url" placeholder="https://www.youtube.com/watch?v=..." class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    <label class="block text-sm font-medium mb-2">動画URL（任意）</label>
+                                    <input type="text" id="songVideoUrl" name="video_url" placeholder="YouTube または ニコニコ動画のURL" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
                                 </div>
                                 <div class="flex gap-2">
                                     <button type="submit" class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
@@ -231,21 +231,25 @@
                     <input type="text" id="editSongArtist" name="artist" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">YouTube URL（任意）</label>
+                    <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">動画URL（任意）</label>
                     <div class="flex gap-2">
-                        <input type="text" id="editSongYoutubeUrl" name="youtube_url" placeholder="https://www.youtube.com/watch?v=..." class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <button type="button" id="fetchDurationBtn" class="px-3 py-2 bg-red-600 text-white text-sm rounded-md hover:bg-red-700 whitespace-nowrap">
+                        <input type="text" id="editSongVideoUrl" name="video_url" placeholder="YouTube または ニコニコ動画のURL" class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <button type="button" id="fetchDurationBtn" class="px-3 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 whitespace-nowrap">
                             秒数取得
                         </button>
                     </div>
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">※ 秒数取得ボタンでYouTube APIを使用します（クォータ消費）</p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">※ YouTubeはAPI使用（クォータ消費）、ニコニコ動画は無料API使用</p>
                 </div>
                 <div>
                     <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">楽曲の長さ</label>
                     <div class="flex items-center gap-2">
-                        <input type="number" id="editSongDurationMs" name="duration_ms" placeholder="ミリ秒" class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <input type="number" id="editSongDurationSeconds" name="duration_seconds" placeholder="秒" min="0" class="w-24 px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <span class="text-gray-500 dark:text-gray-400">秒</span>
+                        <span class="text-gray-400">=</span>
+                        <input type="number" id="editSongDurationMs" name="duration_ms" placeholder="ミリ秒" min="0" class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
                         <span id="editSongDurationFormatted" class="text-sm text-gray-500 dark:text-gray-400 min-w-[80px]"></span>
                     </div>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">※ 秒またはミリ秒で入力可能（片方を入力すると自動変換）</p>
                 </div>
                 <div class="flex gap-2 pt-2">
                     <button type="submit" class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
