@@ -91,10 +91,13 @@ class SongController extends Controller
             });
         }
 
-        // 検索条件
+        // 検索条件（スペース区切りでAND検索）
         if ($search) {
-            $escapedSearch = QueryHelper::escapeLikeString($search);
-            $query->where('ts_items.text', 'like', "%{$escapedSearch}%");
+            $keywords = QueryHelper::splitSearchKeywords($search);
+            foreach ($keywords as $keyword) {
+                $escaped = QueryHelper::escapeLikeString($keyword);
+                $query->where('ts_items.text', 'like', "%{$escaped}%");
+            }
         }
 
         // フィルター条件
@@ -219,12 +222,17 @@ class SongController extends Controller
 
         $query = Song::query();
 
+        // 検索条件（スペース区切りでAND検索）
+        // 各キーワードがtitleまたはartistのいずれかに含まれる
         if ($search) {
-            $escapedSearch = QueryHelper::escapeLikeString($search);
-            $query->where(function ($q) use ($escapedSearch) {
-                $q->where('title', 'like', "%{$escapedSearch}%")
-                    ->orWhere('artist', 'like', "%{$escapedSearch}%");
-            });
+            $keywords = QueryHelper::splitSearchKeywords($search);
+            foreach ($keywords as $keyword) {
+                $escaped = QueryHelper::escapeLikeString($keyword);
+                $query->where(function ($q) use ($escaped) {
+                    $q->where('title', 'like', "%{$escaped}%")
+                        ->orWhere('artist', 'like', "%{$escaped}%");
+                });
+            }
         }
 
         $total = $query->count();

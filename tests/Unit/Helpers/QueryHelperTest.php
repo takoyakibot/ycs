@@ -42,4 +42,44 @@ class QueryHelperTest extends TestCase
     {
         $this->assertEquals('', QueryHelper::escapeLikeString(''));
     }
+
+    /**
+     * スペース区切りでキーワード分割のテスト
+     */
+    public function test_split_search_keywords(): void
+    {
+        // 半角スペース区切り
+        $this->assertEquals(['hello', 'world'], QueryHelper::splitSearchKeywords('hello world'));
+
+        // 全角スペース区切り
+        $this->assertEquals(['hello', 'world'], QueryHelper::splitSearchKeywords('hello　world'));
+
+        // 複数スペース
+        $this->assertEquals(['a', 'b', 'c'], QueryHelper::splitSearchKeywords('a  b   c'));
+
+        // 前後のスペースは無視
+        $this->assertEquals(['test'], QueryHelper::splitSearchKeywords('  test  '));
+
+        // 混合スペース
+        $this->assertEquals(['日本語', 'テスト'], QueryHelper::splitSearchKeywords('日本語　テスト'));
+    }
+
+    /**
+     * 空文字・スペースのみの場合は空配列を返す
+     */
+    public function test_split_search_keywords_empty(): void
+    {
+        $this->assertEquals([], QueryHelper::splitSearchKeywords(''));
+        $this->assertEquals([], QueryHelper::splitSearchKeywords('   '));
+        $this->assertEquals([], QueryHelper::splitSearchKeywords('　　'));
+    }
+
+    /**
+     * 単一キーワードの場合
+     */
+    public function test_split_search_keywords_single(): void
+    {
+        $this->assertEquals(['keyword'], QueryHelper::splitSearchKeywords('keyword'));
+        $this->assertEquals(['キーワード'], QueryHelper::splitSearchKeywords('キーワード'));
+    }
 }

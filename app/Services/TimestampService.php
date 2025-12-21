@@ -67,11 +67,14 @@ class TimestampService
                 ->orWhere('timestamp_song_mappings.is_not_song', false);
         });
 
-        // 検索条件（正規化して検索することで類似文字を吸収）
+        // 検索条件（スペース区切りでAND検索、正規化して類似文字を吸収）
         if ($search) {
-            $normalizedSearch = TextNormalizer::normalize($search);
-            $escapedSearch = QueryHelper::escapeLikeString($normalizedSearch);
-            $query->where('ts_items.normalized_text', 'like', "%{$escapedSearch}%");
+            $keywords = QueryHelper::splitSearchKeywords($search);
+            foreach ($keywords as $keyword) {
+                $normalizedKeyword = TextNormalizer::normalize($keyword);
+                $escaped = QueryHelper::escapeLikeString($normalizedKeyword);
+                $query->where('ts_items.normalized_text', 'like', "%{$escaped}%");
+            }
         }
 
         // 頭文字インデックスでフィルタリング
@@ -231,11 +234,14 @@ class TimestampService
                     ->orWhere('timestamp_song_mappings.is_not_song', false);
             });
 
-        // 検索条件（正規化して検索することで類似文字を吸収）
+        // 検索条件（スペース区切りでAND検索、正規化して類似文字を吸収）
         if ($search) {
-            $normalizedSearch = TextNormalizer::normalize($search);
-            $escapedSearch = QueryHelper::escapeLikeString($normalizedSearch);
-            $query->where('ts_items.normalized_text', 'like', "%{$escapedSearch}%");
+            $keywords = QueryHelper::splitSearchKeywords($search);
+            foreach ($keywords as $keyword) {
+                $normalizedKeyword = TextNormalizer::normalize($keyword);
+                $escaped = QueryHelper::escapeLikeString($normalizedKeyword);
+                $query->where('ts_items.normalized_text', 'like', "%{$escaped}%");
+            }
         }
 
         // 頭文字を取得（楽曲名優先、なければタイムスタンプテキスト）
