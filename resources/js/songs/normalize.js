@@ -117,10 +117,9 @@ class TimestampNormalization {
             e.preventDefault();
             this.updateSong();
         });
-        document.getElementById('fetchDurationBtn').addEventListener('click', () => this.fetchYoutubeDuration());
-        document.getElementById('editSongDurationMs').addEventListener('input', (e) => {
-            this.updateDurationDisplay(e.target.value);
-        });
+        document.getElementById('fetchDurationBtn').addEventListener('click', () => this.fetchVideoDuration());
+        document.getElementById('editSongDurationMs').addEventListener('input', (e) => this.onDurationMsInput(e));
+        document.getElementById('editSongDurationSeconds').addEventListener('input', (e) => this.onDurationSecondsInput(e));
 
         // モーダル外クリックで閉じる
         document.getElementById('editSongModal').addEventListener('click', (e) => {
@@ -605,7 +604,7 @@ class TimestampNormalization {
     async createSong() {
         const title = document.getElementById('songTitle').value.trim();
         const artist = document.getElementById('songArtist').value.trim();
-        const youtubeUrl = document.getElementById('songYoutubeUrl')?.value.trim() || '';
+        const videoUrl = document.getElementById('songVideoUrl')?.value.trim() || '';
 
         if (!title || !artist) {
             toast.warning('楽曲名とアーティスト名を入力してください。');
@@ -613,8 +612,8 @@ class TimestampNormalization {
         }
 
         const songData = { title, artist };
-        if (youtubeUrl) {
-            songData.youtube_url = youtubeUrl;
+        if (videoUrl) {
+            songData.video_url = videoUrl;
         }
 
         await this.registerSong(songData);
@@ -1306,8 +1305,9 @@ class TimestampNormalization {
         document.getElementById('editSongId').value = song.id;
         document.getElementById('editSongTitle').value = song.title;
         document.getElementById('editSongArtist').value = song.artist;
-        document.getElementById('editSongYoutubeUrl').value = song.youtube_url || '';
+        document.getElementById('editSongVideoUrl').value = song.video_url || '';
         document.getElementById('editSongDurationMs').value = song.duration_ms || '';
+        document.getElementById('editSongDurationSeconds').value = song.duration_ms ? Math.round(song.duration_ms / 1000) : '';
         this.updateDurationDisplay(song.duration_ms);
         document.getElementById('editSongModal').classList.remove('hidden');
     }
@@ -1329,7 +1329,7 @@ class TimestampNormalization {
         const songId = document.getElementById('editSongId').value;
         const title = document.getElementById('editSongTitle').value.trim();
         const artist = document.getElementById('editSongArtist').value.trim();
-        const youtubeUrl = document.getElementById('editSongYoutubeUrl').value.trim();
+        const videoUrl = document.getElementById('editSongVideoUrl').value.trim();
         const durationMs = document.getElementById('editSongDurationMs').value;
 
         if (!title || !artist) {
@@ -1338,10 +1338,10 @@ class TimestampNormalization {
         }
 
         const updateData = { title, artist };
-        if (youtubeUrl) {
-            updateData.youtube_url = youtubeUrl;
+        if (videoUrl) {
+            updateData.video_url = videoUrl;
         } else {
-            updateData.youtube_url = null;
+            updateData.video_url = null;
         }
         if (durationMs) {
             updateData.duration_ms = parseInt(durationMs, 10);
@@ -1370,28 +1370,56 @@ class TimestampNormalization {
     }
 
     /**
-     * YouTube URLから秒数を取得
+     * 動画URLから秒数を取得
+     * YouTube および ニコニコ動画に対応
      */
-    async fetchYoutubeDuration() {
-        const youtubeUrl = document.getElementById('editSongYoutubeUrl').value.trim();
+    async fetchVideoDuration() {
+        const videoUrl = document.getElementById('editSongVideoUrl').value.trim();
 
-        if (!youtubeUrl) {
-            toast.warning('YouTube URLを入力してください。');
+        if (!videoUrl) {
+            toast.warning('動画URLを入力してください。');
             return;
         }
 
         try {
             this.showLoading();
-            const response = await songApiService.fetchYoutubeDuration(youtubeUrl);
+            const response = await songApiService.fetchVideoDuration(videoUrl);
             document.getElementById('editSongDurationMs').value = response.duration_ms;
+            document.getElementById('editSongDurationSeconds').value = Math.round(response.duration_ms / 1000);
             this.updateDurationDisplay(response.duration_ms);
-            toast.success('秒数を取得しました。');
+
+            const platformName = response.platform === 'youtube' ? 'YouTube' : 'ニコニコ動画';
+            toast.success(`${platformName}から秒数を取得しました。`);
         } catch (error) {
             console.error('秒数取得に失敗しました:', error);
             const errorMessage = error.response?.data?.error || '秒数の取得に失敗しました。';
             toast.error(errorMessage);
         } finally {
             this.hideLoading();
+        }
+    }
+
+    /**
+     * 秒数入力時の自動変換（秒→ミリ秒）
+     */
+    onDurationSecondsInput(e) {
+        const seconds = parseInt(e.target.value, 10);
+        if (!isNaN(seconds) && seconds >= 0) {
+            const ms = seconds * 1000;
+            document.getElementById('editSongDurationMs').value = ms;
+            this.updateDurationDisplay(ms);
+        }
+    }
+
+    /**
+     * ミリ秒入力時の自動変換（ミリ秒→秒）
+     */
+    onDurationMsInput(e) {
+        const ms = parseInt(e.target.value, 10);
+        if (!isNaN(ms) && ms >= 0) {
+            const seconds = Math.round(ms / 1000);
+            document.getElementById('editSongDurationSeconds').value = seconds;
+            this.updateDurationDisplay(ms);
         }
     }
 

@@ -52,7 +52,7 @@ export class SongApiService {
      * @param {Object} songData - 更新データ
      * @param {string} songData.title - 楽曲名
      * @param {string} songData.artist - アーティスト名
-     * @param {string} songData.youtube_url - YouTube URL
+     * @param {string} songData.video_url - 動画URL（YouTube/ニコニコ動画）
      * @param {number} songData.duration_ms - 動画の長さ（ミリ秒）
      * @returns {Promise<Object>} 更新結果
      */
@@ -62,13 +62,13 @@ export class SongApiService {
     }
 
     /**
-     * YouTube URLから動画の長さを取得
-     * @param {string} youtubeUrl - YouTube URL
-     * @returns {Promise<Object>} duration_ms と video_id を含むオブジェクト
+     * 動画URLから動画の長さを取得
+     * @param {string} videoUrl - 動画URL（YouTube または ニコニコ動画）
+     * @returns {Promise<Object>} duration_ms, video_id, platform を含むオブジェクト
      */
-    async fetchYoutubeDuration(youtubeUrl) {
-        const response = await axios.post('/api/songs/youtube-duration', {
-            youtube_url: youtubeUrl
+    async fetchVideoDuration(videoUrl) {
+        const response = await axios.post('/api/songs/video-duration', {
+            video_url: videoUrl
         });
         return response.data;
     }

@@ -78,12 +78,10 @@
                     </x-dropdown>
                 </div>
             @else
-                @if (config('app.env') === 'local')
-                    <!-- Guest User: Login Link -->
-                    <div class="hidden sm:flex sm:items-center sm:ms-6">
-                        <a href="{{ route('login') }}" class="text-gray-500 hover:text-blue-500">ログイン</a>
-                    </div>
-                @endif
+                <!-- Guest User: Login Link -->
+                <div class="hidden sm:flex sm:items-center sm:ms-6">
+                    <a href="{{ route('login') }}" class="text-gray-500 hover:text-blue-500">ログイン</a>
+                </div>
             @endif
 
             <!-- Hamburger -->
@@ -151,25 +149,23 @@
                 </div>
             </div>
         @else
-            @if (config('app.env') === 'local')
-                <!-- Guest Links -->
-                <div class="pt-2 pb-3 space-y-1">
-                    <x-responsive-nav-link :href="route('login')">
-                        {{ __('ログイン') }}
-                    </x-responsive-nav-link>
-                </div>
-                <div class="pt-2 pb-3 space-y-1">
-                    <x-responsive-nav-link :href="route('channels.index')" :active="request()->routeIs('channels.*')">
-                        {{ __('チャンネル一覧') }}
-                    </x-responsive-nav-link>
-                    <x-responsive-nav-link :href="route('markdown.show')" :active="request()->routeIs('markdown.show')">
-                        {{ __('利用規約・プライバシーポリシー') }}
-                    </x-responsive-nav-link>
-                    <x-responsive-nav-link :href="route('contact.show')" :active="request()->routeIs('contact.*')">
-                        {{ __('お問い合わせ') }}
-                    </x-responsive-nav-link>
-                </div>
-            @endif
+            <!-- Guest Links -->
+            <div class="pt-2 pb-3 space-y-1">
+                <x-responsive-nav-link :href="route('login')">
+                    {{ __('ログイン') }}
+                </x-responsive-nav-link>
+            </div>
+            <div class="pt-2 pb-3 space-y-1">
+                <x-responsive-nav-link :href="route('channels.index')" :active="request()->routeIs('channels.*')">
+                    {{ __('チャンネル一覧') }}
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('markdown.show')" :active="request()->routeIs('markdown.show')">
+                    {{ __('利用規約・プライバシーポリシー') }}
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('contact.show')" :active="request()->routeIs('contact.*')">
+                    {{ __('お問い合わせ') }}
+                </x-responsive-nav-link>
+            </div>
         @endif
     </div>
 </nav>

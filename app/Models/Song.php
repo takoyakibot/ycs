@@ -20,7 +20,7 @@ class Song extends Model
         'artist',
         'spotify_track_id',
         'spotify_data',
-        'youtube_url',
+        'video_url',
         'duration_ms',
         'normalized_title',
         'normalized_artist',
