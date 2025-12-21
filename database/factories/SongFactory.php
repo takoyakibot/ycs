@@ -37,6 +37,8 @@ class SongFactory extends Factory
                     'spotify' => 'https://open.spotify.com/track/'.$spotifyTrackId,
                 ],
             ]),
+            'video_url' => null,
+            'duration_ms' => null,
         ];
     }
 
@@ -72,6 +74,39 @@ class SongFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'spotify_track_id' => null,
             'spotify_data' => null,
+        ]);
+    }
+
+    /**
+     * Indicate that the song has a YouTube URL.
+     */
+    public function withYoutubeUrl(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'video_url' => 'https://www.youtube.com/watch?v='.fake()->regexify('[a-zA-Z0-9_-]{11}'),
+            'duration_ms' => fake()->numberBetween(120000, 360000),
+        ]);
+    }
+
+    /**
+     * Indicate that the song has a Niconico URL.
+     */
+    public function withNiconicoUrl(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'video_url' => 'https://www.nicovideo.jp/watch/sm'.fake()->numerify('########'),
+            'duration_ms' => fake()->numberBetween(120000, 360000),
+        ]);
+    }
+
+    /**
+     * Indicate that the song has a video URL with specific duration.
+     */
+    public function withVideoUrl(string $url, ?int $durationMs = null): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'video_url' => $url,
+            'duration_ms' => $durationMs ?? fake()->numberBetween(120000, 360000),
         ]);
     }
 }

@@ -1127,4 +1127,127 @@ class SongControllerTest extends TestCase
             'normalized_text' => 'test',
         ])->assertStatus(401);
     }
+
+    /**
+     * 動画秒数取得のテスト（YouTube URL成功）
+     */
+    public function test_fetch_video_duration_with_youtube_url_success(): void
+    {
+        // YouTubeApiServiceをモック
+        $mockYoutubeService = \Mockery::mock(\App\Services\YouTubeApiService::class);
+        $mockYoutubeService
+            ->shouldReceive('extractVideoId')
+            ->with('https://www.youtube.com/watch?v=dQw4w9WgXcQ')
+            ->andReturn('dQw4w9WgXcQ');
+        $mockYoutubeService
+            ->shouldReceive('getVideoDuration')
+            ->with('dQw4w9WgXcQ')
+            ->andReturn(213000);
+
+        $this->app->instance(\App\Services\YouTubeApiService::class, $mockYoutubeService);
+
+        $response = $this->actingAs($this->user)->postJson(route('songs.fetchVideoDuration'), [
+            'video_url' => 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'duration_ms' => 213000,
+            'video_id' => 'dQw4w9WgXcQ',
+            'platform' => 'youtube',
+        ]);
+        $this->assertNull($response->json('error'));
+    }
+
+    /**
+     * 動画秒数取得のテスト（ニコニコ動画URL成功）
+     */
+    public function test_fetch_video_duration_with_niconico_url_success(): void
+    {
+        Http::fake([
+            'api.search.nicovideo.jp/*' => Http::response([
+                'data' => [
+                    [
+                        'contentId' => 'sm12345678',
+                        'lengthSeconds' => 240,
+                    ],
+                ],
+            ], 200),
+        ]);
+
+        $response = $this->actingAs($this->user)->postJson(route('songs.fetchVideoDuration'), [
+            'video_url' => 'https://www.nicovideo.jp/watch/sm12345678',
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'duration_ms' => 240000,
+            'video_id' => 'sm12345678',
+            'platform' => 'niconico',
+        ]);
+        $this->assertNull($response->json('error'));
+    }
+
+    /**
+     * 動画秒数取得のテスト（バリデーションエラー - URL未指定）
+     */
+    public function test_fetch_video_duration_validation_error(): void
+    {
+        $response = $this->actingAs($this->user)->postJson(route('songs.fetchVideoDuration'), [
+            'video_url' => '',
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['video_url']);
+    }
+
+    /**
+     * 動画秒数取得のテスト（未対応プラットフォーム）
+     */
+    public function test_fetch_video_duration_with_unsupported_platform(): void
+    {
+        $response = $this->actingAs($this->user)->postJson(route('songs.fetchVideoDuration'), [
+            'video_url' => 'https://vimeo.com/12345678',
+        ]);
+
+        $response->assertStatus(422);
+        $this->assertNull($response->json('platform'));
+        $this->assertStringContainsString('対応していないURL', $response->json('error'));
+    }
+
+    /**
+     * 動画秒数取得のテスト（未認証アクセス）
+     */
+    public function test_fetch_video_duration_unauthenticated(): void
+    {
+        $this->postJson(route('songs.fetchVideoDuration'), [
+            'video_url' => 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        ])->assertStatus(401);
+    }
+
+    /**
+     * 動画秒数取得のテスト（YouTube動画が見つからない場合）
+     */
+    public function test_fetch_video_duration_youtube_video_not_found(): void
+    {
+        $mockYoutubeService = \Mockery::mock(\App\Services\YouTubeApiService::class);
+        $mockYoutubeService
+            ->shouldReceive('extractVideoId')
+            ->with('https://www.youtube.com/watch?v=nonexistent1')
+            ->andReturn('nonexistent1');
+        $mockYoutubeService
+            ->shouldReceive('getVideoDuration')
+            ->with('nonexistent1')
+            ->andReturn(null);
+
+        $this->app->instance(\App\Services\YouTubeApiService::class, $mockYoutubeService);
+
+        $response = $this->actingAs($this->user)->postJson(route('songs.fetchVideoDuration'), [
+            'video_url' => 'https://www.youtube.com/watch?v=nonexistent1',
+        ]);
+
+        $response->assertStatus(422);
+        $this->assertEquals('youtube', $response->json('platform'));
+        $this->assertNotNull($response->json('error'));
+    }
 }
