@@ -25,7 +25,7 @@ class FetchTimestampsRequest extends FormRequest
             'per_page' => 'integer|min:1|max:100',
             'page' => 'integer|min:1',
             'search' => 'nullable|string|max:255',
-            'filter' => 'nullable|in:all,unlinked,linked,not_song,auto_linked',
+            'filter' => 'nullable|in:all,unlinked,linked,not_song,auto_linked,pending',
         ];
     }
 }

@@ -30,7 +30,7 @@ class TimestampSongMappingFactory extends Factory
             'is_not_song' => false,
             'status' => TimestampSongMapping::STATUS_LINKED,
             'is_manual' => false,
-            'confidence' => null,
+            'confidence' => 1.0,
         ];
     }
 
@@ -109,7 +109,7 @@ class TimestampSongMappingFactory extends Factory
             'is_not_song' => false,
             'status' => TimestampSongMapping::STATUS_PENDING,
             'is_manual' => true,
-            'confidence' => null,
+            'confidence' => 1.0,
         ]);
     }
 }

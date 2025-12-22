@@ -278,7 +278,7 @@ class SongMappingService
                     'is_not_song' => false,
                     'status' => TimestampSongMapping::STATUS_PENDING,
                     'is_manual' => true, // 手動操作として扱う
-                    'confidence' => null,
+                    'confidence' => 1.0,
                     'updated_by' => $userId,
                 ]);
             } else {
@@ -290,7 +290,7 @@ class SongMappingService
                     'is_not_song' => false,
                     'status' => TimestampSongMapping::STATUS_PENDING,
                     'is_manual' => true,
-                    'confidence' => null,
+                    'confidence' => 1.0,
                     'created_by' => $userId,
                     'updated_by' => $userId,
                 ]);
