@@ -17,26 +17,23 @@
         @endif
 
         <div class="p-2">
-            <h2 class="text-gray-500 sm:flex items-center justify-center gap-4 hidden">
-                <a href="{{ url('https://youtube.com/@' . $channel->handle) }}" target="_blank" rel="noopener noreferrer" class="flex items-center gap-4 hover:opacity-80">
-                    <img src="{{ $channel->thumbnail ?? '' }}" alt="アイコン" class="w-20 h-20 rounded-full">
-                    <span class="text-lg font-bold text-black dark:text-gray-200">{{ $channel->title ?? '' }}</span>
+            <!-- チャンネル情報 + ナビゲーション（1行表示） -->
+            <div class="flex items-center justify-center gap-4 flex-wrap">
+                <a href="{{ url('https://youtube.com/@' . $channel->handle) }}" target="_blank" rel="noopener noreferrer" class="flex items-center gap-2 hover:opacity-80 text-gray-600 dark:text-gray-400">
+                    <img src="{{ $channel->thumbnail ?? '' }}" alt="アイコン" class="w-8 h-8 sm:w-10 sm:h-10 rounded-full">
+                    <span class="font-bold text-sm sm:text-base">{{ $channel->title ?? '' }}</span>
                 </a>
-            </h2>
-            <h2 class="text-gray-500 justify-self-center sm:hidden">
-                <a href="{{ url('https://youtube.com/@' . $channel->handle) }}" target="_blank" rel="noopener noreferrer" class="flex items-center gap-4">
-                    <img src="{{ $channel->thumbnail }}" alt="アイコン" class="w-20 h-20 rounded-full">
-                    <span class="text-lg font-bold text-black">{{ $channel->title }}</span>
-                </a>
-            </h2>
 
-            <!-- ナビゲーション -->
-            <div class="flex items-center justify-center gap-4 mt-4">
-                <a href="{{ route('manage.show', $channel->handle) }}" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
-                    アーカイブ管理
-                </a>
-                <span class="text-gray-400">|</span>
-                <span class="font-bold text-gray-800 dark:text-gray-200">チャンネル設定</span>
+                <div class="h-6 w-px bg-gray-300 dark:bg-gray-600"></div>
+
+                <div class="flex gap-2">
+                    <a href="{{ route('manage.show', $channel->handle) }}" class="px-3 sm:px-4 py-1.5 sm:py-2 bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 rounded-lg font-medium text-sm hover:opacity-80 transition-colors">
+                        アーカイブ管理
+                    </a>
+                    <span class="px-3 sm:px-4 py-1.5 sm:py-2 bg-blue-500 text-white rounded-lg font-medium text-sm">
+                        チャンネル設定
+                    </span>
+                </div>
             </div>
         </div>
 

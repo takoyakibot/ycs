@@ -537,8 +537,10 @@ class ManageController extends Controller
 
         // 各動画について、抽出結果をプレビュー
         $previews = $archives->map(function ($archive) use ($channel) {
-            $originalTitle = $archive->title;
+            // 不正なUTF-8文字を除去
+            $originalTitle = mb_convert_encoding($archive->title ?? '', 'UTF-8', 'UTF-8');
             $extractedText = $this->coverSongTitleExtractorService->extract($originalTitle, $channel->channel_id);
+            $extractedText = mb_convert_encoding($extractedText, 'UTF-8', 'UTF-8');
             $normalizedText = TextNormalizer::normalize($extractedText);
 
             // 現在のマッピング状態を取得
