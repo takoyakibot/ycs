@@ -45,6 +45,13 @@ class VideoAnalyzerServiceTest extends TestCase
         $this->assertTrue($this->service->isCoverSong('YOASOBI cover'));
     }
 
+    public function test_is_cover_song_detects_music_video(): void
+    {
+        $this->assertTrue($this->service->isCoverSong('夜に駆ける - Music Video'));
+        $this->assertTrue($this->service->isCoverSong('【Music Video】Lemon'));
+        $this->assertTrue($this->service->isCoverSong('YOASOBI music video'));
+    }
+
     public function test_is_cover_song_detects_katakana_cover(): void
     {
         $this->assertTrue($this->service->isCoverSong('夜に駆ける カバー'));

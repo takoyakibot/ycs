@@ -35,7 +35,7 @@ class VideoAnalyzerService
     {
         $lowerTitle = mb_strtolower($title);
 
-        $keywords = ['歌ってみた', 'cover', 'カバー'];
+        $keywords = ['歌ってみた', 'cover', 'カバー', 'music video'];
 
         foreach ($keywords as $keyword) {
             if (mb_strpos($lowerTitle, mb_strtolower($keyword)) !== false) {
