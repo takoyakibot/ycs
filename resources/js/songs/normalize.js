@@ -22,6 +22,7 @@ class TimestampNormalization {
         this.currentSearchQuery = ''; // 検索条件を保持
         this.searchTimeout = null;
         this.currentFilter = 'all'; // all, unlinked, linked, not_song
+        this.currentSongFilter = null; // 楽曲による絞り込み（楽曲オブジェクト）
         this.operationHistory = []; // 操作履歴
         this.maxHistoryItems = 20; // 最大履歴保持数
 
@@ -128,6 +129,12 @@ class TimestampNormalization {
                 this.closeEditModal();
             }
         });
+
+        // 楽曲フィルター解除ボタン
+        const clearSongFilterBtn = document.getElementById('clearSongFilterBtn');
+        if (clearSongFilterBtn) {
+            clearSongFilterBtn.addEventListener('click', () => this.clearSongFilter());
+        }
     }
 
     setFilter(filter) {
@@ -156,7 +163,8 @@ class TimestampNormalization {
                 page,
                 per_page: 50,
                 search,
-                filter: this.currentFilter
+                filter: this.currentFilter,
+                song_id: this.currentSongFilter?.id || null
             });
 
             const parsedPage = parseInt(data.current_page, 10);
@@ -851,6 +859,14 @@ class TimestampNormalization {
         const buttonContainer = document.createElement('div');
         buttonContainer.className = 'flex items-center gap-1 flex-shrink-0 ml-2';
 
+        // コピーボタン
+        const copyBtn = this.createSongCopyButton(song);
+        buttonContainer.appendChild(copyBtn);
+
+        // 絞り込みボタン
+        const filterBtn = this.createSongFilterButton(song);
+        buttonContainer.appendChild(filterBtn);
+
         // 編集ボタン
         const editBtn = document.createElement('button');
         editBtn.className = 'px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700';
@@ -890,6 +906,106 @@ class TimestampNormalization {
         const countDiv = document.getElementById('songsCount');
         if (countDiv) {
             countDiv.textContent = `${count}件`;
+        }
+    }
+
+    /**
+     * 楽曲マスタ用のコピーボタンを作成
+     * @param {Object} song - 楽曲オブジェクト
+     * @returns {HTMLElement} コピーボタン要素
+     */
+    createSongCopyButton(song) {
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'p-1.5 text-gray-600 dark:text-gray-400 bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors';
+        copyBtn.title = '楽曲名 / アーティスト名をコピー';
+        copyBtn.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+        `;
+
+        const originalIcon = copyBtn.innerHTML;
+        const checkIcon = `
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+        `;
+
+        copyBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const textToCopy = `${song.title} / ${song.artist}`;
+            navigator.clipboard.writeText(textToCopy);
+            copyBtn.innerHTML = checkIcon;
+            copyBtn.title = 'コピー済';
+            toast.success('コピーしました');
+            setTimeout(() => {
+                copyBtn.innerHTML = originalIcon;
+                copyBtn.title = '楽曲名 / アーティスト名をコピー';
+            }, 1000);
+        });
+
+        return copyBtn;
+    }
+
+    /**
+     * 楽曲マスタ用の絞り込みボタンを作成
+     * @param {Object} song - 楽曲オブジェクト
+     * @returns {HTMLElement} 絞り込みボタン要素
+     */
+    createSongFilterButton(song) {
+        const filterBtn = document.createElement('button');
+        filterBtn.className = 'p-1.5 text-gray-600 dark:text-gray-400 bg-gray-200 dark:bg-gray-700 rounded hover:bg-purple-300 dark:hover:bg-purple-600 transition-colors';
+        filterBtn.title = '紐づくTSを表示';
+        filterBtn.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+            </svg>
+        `;
+
+        filterBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.setSongFilter(song);
+        });
+
+        return filterBtn;
+    }
+
+    /**
+     * 楽曲による絞り込みを設定
+     * @param {Object} song - 絞り込み対象の楽曲
+     */
+    setSongFilter(song) {
+        this.currentSongFilter = song;
+        this.updateSongFilterDisplay();
+        this.loadTimestamps(1, this.currentSearchQuery);
+        toast.info(`「${song.title}」に紐づくTSを表示中`);
+    }
+
+    /**
+     * 楽曲による絞り込みを解除
+     */
+    clearSongFilter() {
+        this.currentSongFilter = null;
+        this.updateSongFilterDisplay();
+        this.loadTimestamps(1, this.currentSearchQuery);
+    }
+
+    /**
+     * 楽曲フィルター表示を更新
+     */
+    updateSongFilterDisplay() {
+        const filterArea = document.getElementById('songFilterArea');
+        if (!filterArea) return;
+
+        if (this.currentSongFilter) {
+            filterArea.classList.remove('hidden');
+            const filterText = document.getElementById('songFilterText');
+            if (filterText) {
+                filterText.textContent = `${this.currentSongFilter.title} / ${this.currentSongFilter.artist}`;
+                filterText.title = `${this.currentSongFilter.title} / ${this.currentSongFilter.artist}`;
+            }
+        } else {
+            filterArea.classList.add('hidden');
         }
     }
 

@@ -26,6 +26,7 @@ class FetchTimestampsRequest extends FormRequest
             'page' => 'integer|min:1',
             'search' => 'nullable|string|max:255',
             'filter' => 'nullable|in:all,unlinked,linked,not_song,auto_linked,pending',
+            'song_id' => 'nullable|string|max:26', // 楽曲フィルター用
         ];
     }
 }
