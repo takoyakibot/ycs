@@ -18,20 +18,26 @@
         @endif
 
         <div class="p-2">
-            <h2 class="text-gray-500 sm:flex items-center justify-center gap-4 hidden">
-                <a href="{{ url('https://youtube.com/@' . $channel->handle) }}" target="_blank" rel="noopener noreferrer" class="flex items-center gap-4 hover:opacity-80">
-                    <img src="{{ $channel->thumbnail ?? '' }}" alt="アイコン" class="w-20 h-20 rounded-full">
-                    <span class="text-lg font-bold text-black dark:text-gray-200">{{ $channel->title ?? '' }}</span>
+            <!-- チャンネル情報 + ナビゲーション（1行表示） -->
+            <div class="flex items-center justify-center gap-4 flex-wrap">
+                <a href="{{ url('https://youtube.com/@' . $channel->handle) }}" target="_blank" rel="noopener noreferrer" class="flex items-center gap-2 hover:opacity-80 text-gray-600 dark:text-gray-400">
+                    <img src="{{ $channel->thumbnail ?? '' }}" alt="アイコン" class="w-8 h-8 sm:w-10 sm:h-10 rounded-full">
+                    <span class="font-bold text-sm sm:text-base">{{ $channel->title ?? '' }}</span>
                 </a>
-            </h2>
-            <h2 class="text-gray-500 justify-self-center sm:hidden">
-                <a href="{{ url('https://youtube.com/@' . $channel->handle) }}" target="_blank" rel="noopener noreferrer" class="flex items-center gap-4">
-                    <img src="{{ $channel->thumbnail }}" alt="アイコン" class="w-20 h-20 rounded-full">
-                    <span class="text-lg font-bold text-black">{{ $channel->title }}</span>
-                </a>
-            </h2>
 
-            <form id="archiveRegisterForm">
+                <div class="h-6 w-px bg-gray-300 dark:bg-gray-600"></div>
+
+                <div class="flex gap-2">
+                    <span class="px-3 sm:px-4 py-1.5 sm:py-2 bg-blue-500 text-white rounded-lg font-medium text-sm">
+                        アーカイブ管理
+                    </span>
+                    <a href="{{ route('manage.settings', $channel->handle) }}" class="px-3 sm:px-4 py-1.5 sm:py-2 bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 rounded-lg font-medium text-sm hover:opacity-80 transition-colors">
+                        チャンネル設定
+                    </a>
+                </div>
+            </div>
+
+            <form id="archiveRegisterForm" class="mt-4">
                 <div class="flex items-center gap-2 justify-center">
                     <x-text-input type="hidden" id="handle" name="handle" value="{{ $crypt_handle }}" />
                     <x-primary-button id="registerButton" type="button" class="mt-1">アーカイブ取得</x-primary-button>
