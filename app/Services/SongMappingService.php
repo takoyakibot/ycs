@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\NormalizationLog;
 use App\Models\Song;
 use App\Models\TimestampSongMapping;
+use App\Models\TsItem;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -318,5 +319,107 @@ class SongMappingService
 
             return true;
         });
+    }
+
+    /**
+     * 特定のタイムスタンプに個別で楽曲を紐づける
+     *
+     * @param  string  $tsItemId  タイムスタンプID
+     * @param  string  $songId  楽曲ID
+     * @param  int|null  $userId  操作者ID（nullの場合は現在のユーザー）
+     */
+    public function linkTsItemToSong(string $tsItemId, string $songId, ?int $userId = null): void
+    {
+        $userId = $userId ?? Auth::id();
+
+        DB::transaction(function () use ($tsItemId, $songId, $userId) {
+            $tsItem = TsItem::findOrFail($tsItemId);
+            $tsItem->update(['song_id' => $songId]);
+
+            // 操作ログを記録
+            if ($userId) {
+                NormalizationLog::log(
+                    $userId,
+                    NormalizationLog::ACTION_LINK,
+                    NormalizationLog::TARGET_TS_ITEM,
+                    $tsItemId,
+                    [
+                        'normalized_text' => $tsItem->normalized_text,
+                        'song_id' => $songId,
+                        'individual' => true,
+                    ]
+                );
+            }
+        });
+    }
+
+    /**
+     * 特定のタイムスタンプの個別マッピングを解除
+     *
+     * @param  string  $tsItemId  タイムスタンプID
+     * @param  int|null  $userId  操作者ID（nullの場合は現在のユーザー）
+     */
+    public function unlinkTsItem(string $tsItemId, ?int $userId = null): void
+    {
+        $userId = $userId ?? Auth::id();
+
+        $tsItem = TsItem::findOrFail($tsItemId);
+
+        if ($tsItem->song_id) {
+            $oldSongId = $tsItem->song_id;
+            $tsItem->update(['song_id' => null]);
+
+            // 操作ログを記録
+            if ($userId) {
+                NormalizationLog::log(
+                    $userId,
+                    NormalizationLog::ACTION_UNLINK,
+                    NormalizationLog::TARGET_TS_ITEM,
+                    $tsItemId,
+                    [
+                        'normalized_text' => $tsItem->normalized_text,
+                        'song_id' => $oldSongId,
+                        'individual' => true,
+                    ]
+                );
+            }
+        }
+    }
+
+    /**
+     * 同じnormalized_textを持つタイムスタンプの数を取得
+     *
+     * @param  string  $normalizedText  正規化済みテキスト
+     * @return int タイムスタンプの数
+     */
+    public function countTsItemsByNormalizedText(string $normalizedText): int
+    {
+        return TsItem::where('normalized_text', $normalizedText)->count();
+    }
+
+    /**
+     * 同じnormalized_textを持つタイムスタンプの情報を取得
+     *
+     * @param  string  $normalizedText  正規化済みテキスト
+     * @return array タイムスタンプ情報の配列
+     */
+    public function getTsItemsByNormalizedText(string $normalizedText): array
+    {
+        return TsItem::where('normalized_text', $normalizedText)
+            ->with(['archive', 'song'])
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'id' => $item->id,
+                    'text' => $item->text,
+                    'normalized_text' => $item->normalized_text,
+                    'video_id' => $item->video_id,
+                    'ts_text' => $item->ts_text,
+                    'song_id' => $item->song_id,
+                    'song' => $item->song,
+                    'archive_title' => $item->archive?->title,
+                ];
+            })
+            ->toArray();
     }
 }

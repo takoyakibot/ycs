@@ -50,6 +50,8 @@ class NormalizationLog extends Model
 
     public const TARGET_SONG = 'song';
 
+    public const TARGET_TS_ITEM = 'ts_item';
+
     public function user()
     {
         return $this->belongsTo(User::class);

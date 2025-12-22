@@ -22,6 +22,7 @@ class TsItem extends Model
         'ts_num',
         'text',
         'normalized_text',
+        'song_id',
         'comment_id',
         'is_display',
     ];
@@ -55,6 +56,11 @@ class TsItem extends Model
     public function archive()
     {
         return $this->belongsTo(Archive::class, 'video_id', 'video_id');
+    }
+
+    public function song()
+    {
+        return $this->belongsTo(Song::class, 'song_id', 'id');
     }
 
     public function changeList()
