@@ -49,6 +49,7 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::post('api/songs/mark-not-song', [SongController::class, 'markAsNotSong'])->name('songs.markAsNotSong');
     Route::post('api/songs/unmark-not-song', [SongController::class, 'unmarkAsNotSong'])->name('songs.unmarkAsNotSong');
     Route::post('api/songs/confirm-auto-link', [SongController::class, 'confirmAutoLink'])->name('songs.confirmAutoLink');
+    Route::post('api/songs/mark-pending', [SongController::class, 'markAsPending'])->name('songs.markAsPending');
     // Specific routes must come before parameterized routes to avoid parameter capture
     Route::delete('api/songs/unlink', [SongController::class, 'unlinkTimestamp'])->name('songs.unlinkTimestamp');
     Route::get('api/songs/fuzzy-search', [SongController::class, 'fuzzySearch'])->name('songs.fuzzySearch');

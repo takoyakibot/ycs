@@ -1415,4 +1415,212 @@ class SongControllerTest extends TestCase
             'video_url' => null,
         ]);
     }
+
+    // ==========================================
+    // markAsPending のテスト
+    // ==========================================
+
+    /**
+     * 保留状態にするテスト（既存の紐付けを保留に変更）
+     */
+    public function test_mark_as_pending_with_existing_mapping(): void
+    {
+        $song = Song::factory()->create();
+        $mapping = TimestampSongMapping::factory()
+            ->withSong($song)
+            ->withText('Test Song')
+            ->autoLinked()
+            ->create();
+
+        $response = $this->actingAs($this->user)->postJson(route('songs.markAsPending'), [
+            'normalized_text' => $mapping->normalized_text,
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'message' => '保留状態にしました。',
+        ]);
+
+        $mapping->refresh();
+        $this->assertEquals(TimestampSongMapping::STATUS_PENDING, $mapping->status);
+        $this->assertNull($mapping->song_id);
+        $this->assertFalse($mapping->is_not_song);
+        $this->assertTrue($mapping->is_manual);
+    }
+
+    /**
+     * 保留状態にするテスト（新規作成）
+     */
+    public function test_mark_as_pending_creates_new_mapping(): void
+    {
+        $normalizedText = 'new pending song';
+
+        $response = $this->actingAs($this->user)->postJson(route('songs.markAsPending'), [
+            'normalized_text' => $normalizedText,
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'message' => '保留状態にしました。',
+        ]);
+
+        $this->assertDatabaseHas('timestamp_song_mappings', [
+            'normalized_text' => $normalizedText,
+            'status' => TimestampSongMapping::STATUS_PENDING,
+            'song_id' => null,
+            'is_not_song' => false,
+            'is_manual' => true,
+        ]);
+    }
+
+    /**
+     * 保留状態にするテスト（未認証アクセス）
+     */
+    public function test_mark_as_pending_unauthenticated(): void
+    {
+        $this->postJson(route('songs.markAsPending'), [
+            'normalized_text' => 'test',
+        ])->assertStatus(401);
+    }
+
+    /**
+     * タイムスタンプ一覧取得のテスト（フィルター: pending）
+     */
+    public function test_fetch_timestamps_with_pending_filter(): void
+    {
+        $channel = Channel::factory()->create();
+        $archive = Archive::factory()->create(['channel_id' => $channel->channel_id]);
+
+        // 保留状態のタイムスタンプ
+        $pendingTs = TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'text' => 'Pending Song',
+            'is_display' => 1,
+        ]);
+
+        TimestampSongMapping::factory()
+            ->withText($pendingTs->text)
+            ->pending()
+            ->create();
+
+        // 通常の紐付け済みタイムスタンプ
+        $linkedTs = TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'text' => 'Linked Song',
+            'is_display' => 1,
+        ]);
+
+        $song = Song::factory()->create();
+        TimestampSongMapping::factory()
+            ->withSong($song)
+            ->withText($linkedTs->text)
+            ->create();
+
+        // 未紐付けタイムスタンプ
+        TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'text' => 'Unlinked Song',
+            'is_display' => 1,
+        ]);
+
+        $response = $this->actingAs($this->user)->getJson(route('songs.fetchTimestamps', [
+            'filter' => 'pending',
+        ]));
+
+        $response->assertStatus(200);
+        $this->assertEquals(1, $response->json('total'));
+        $this->assertEquals('Pending Song', $response->json('data.0.text'));
+    }
+
+    /**
+     * 保留状態から紐付けするとlinked状態に戻るテスト
+     */
+    public function test_link_timestamp_from_pending_restores_linked_status(): void
+    {
+        $song = Song::factory()->create();
+        $mapping = TimestampSongMapping::factory()
+            ->withText('Pending Song')
+            ->pending()
+            ->create();
+
+        $response = $this->actingAs($this->user)->postJson(route('songs.linkTimestamp'), [
+            'normalized_text' => $mapping->normalized_text,
+            'song_id' => $song->id,
+        ]);
+
+        $response->assertStatus(200);
+
+        $mapping->refresh();
+        $this->assertEquals(TimestampSongMapping::STATUS_LINKED, $mapping->status);
+        $this->assertEquals($song->id, $mapping->song_id);
+        $this->assertTrue($mapping->is_manual);
+    }
+
+    /**
+     * linked フィルターは pending 状態を除外するテスト
+     */
+    public function test_fetch_timestamps_linked_filter_excludes_pending(): void
+    {
+        $channel = Channel::factory()->create();
+        $archive = Archive::factory()->create(['channel_id' => $channel->channel_id]);
+
+        // 保留状態のタイムスタンプ（linkedフィルターでは表示されない）
+        $pendingTs = TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'text' => 'Pending Song',
+            'is_display' => 1,
+        ]);
+
+        TimestampSongMapping::factory()
+            ->withText($pendingTs->text)
+            ->pending()
+            ->create();
+
+        // 通常の紐付け済みタイムスタンプ（linkedフィルターで表示される）
+        $linkedTs = TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'text' => 'Linked Song',
+            'is_display' => 1,
+        ]);
+
+        $song = Song::factory()->create();
+        TimestampSongMapping::factory()
+            ->withSong($song)
+            ->withText($linkedTs->text)
+            ->create();
+
+        $response = $this->actingAs($this->user)->getJson(route('songs.fetchTimestamps', [
+            'filter' => 'linked',
+        ]));
+
+        $response->assertStatus(200);
+        $this->assertEquals(1, $response->json('total'));
+        $this->assertEquals('Linked Song', $response->json('data.0.text'));
+    }
+
+    /**
+     * タイムスタンプ一覧にstatus情報が含まれるテスト
+     */
+    public function test_fetch_timestamps_includes_status_info(): void
+    {
+        $channel = Channel::factory()->create();
+        $archive = Archive::factory()->create(['channel_id' => $channel->channel_id]);
+
+        $tsItem = TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'text' => 'Pending Song',
+            'is_display' => 1,
+        ]);
+
+        TimestampSongMapping::factory()
+            ->withText($tsItem->text)
+            ->pending()
+            ->create();
+
+        $response = $this->actingAs($this->user)->getJson(route('songs.fetchTimestamps'));
+
+        $response->assertStatus(200);
+        $data = $response->json('data');
+        $this->assertEquals(TimestampSongMapping::STATUS_PENDING, $data[0]['status']);
+    }
 }
