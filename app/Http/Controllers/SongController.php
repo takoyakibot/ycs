@@ -74,7 +74,7 @@ class SongController extends Controller
         // ベースクエリ: ts_itemsとtimestamp_song_mappingsをLEFT JOIN
         $query = TsItem::with(['archive'])
             ->leftJoin('timestamp_song_mappings', 'ts_items.normalized_text', '=', 'timestamp_song_mappings.normalized_text')
-            ->select('ts_items.*', 'timestamp_song_mappings.id as mapping_id', 'timestamp_song_mappings.song_id', 'timestamp_song_mappings.is_not_song', 'timestamp_song_mappings.is_manual')
+            ->select('ts_items.*', 'timestamp_song_mappings.id as mapping_id', 'timestamp_song_mappings.song_id', 'timestamp_song_mappings.is_not_song', 'timestamp_song_mappings.is_manual', 'timestamp_song_mappings.status as mapping_status')
             ->whereNotNull('ts_items.text')
             ->where('ts_items.text', '!=', '')
             ->whereNotNull('ts_items.normalized_text') // マイグレーション後の未更新レコードを除外
@@ -104,9 +104,10 @@ class SongController extends Controller
                 $query->whereNull('timestamp_song_mappings.id');
                 break;
             case 'linked':
-                // マッピングあり かつ is_not_song=false
+                // マッピングあり かつ is_not_song=false かつ status=linked
                 $query->whereNotNull('timestamp_song_mappings.id')
-                    ->where('timestamp_song_mappings.is_not_song', false);
+                    ->where('timestamp_song_mappings.is_not_song', false)
+                    ->where('timestamp_song_mappings.status', TimestampSongMapping::STATUS_LINKED);
                 break;
             case 'not_song':
                 // マッピングあり かつ is_not_song=true
@@ -114,10 +115,16 @@ class SongController extends Controller
                     ->where('timestamp_song_mappings.is_not_song', true);
                 break;
             case 'auto_linked':
-                // 自動紐付け: マッピングあり かつ is_manual=false かつ is_not_song=false
+                // 自動紐付け: マッピングあり かつ is_manual=false かつ is_not_song=false かつ status=linked
                 $query->whereNotNull('timestamp_song_mappings.id')
                     ->where('timestamp_song_mappings.is_manual', false)
-                    ->where('timestamp_song_mappings.is_not_song', false);
+                    ->where('timestamp_song_mappings.is_not_song', false)
+                    ->where('timestamp_song_mappings.status', TimestampSongMapping::STATUS_LINKED);
+                break;
+            case 'pending':
+                // 保留: マッピングあり かつ status=pending
+                $query->whereNotNull('timestamp_song_mappings.id')
+                    ->where('timestamp_song_mappings.status', TimestampSongMapping::STATUS_PENDING);
                 break;
                 // 'all' は条件なし
         }
@@ -145,14 +152,16 @@ class SongController extends Controller
             $data['mapping'] = $mapping ? $mapping->toArray() : null;
             $data['song'] = $mapping && $mapping->song ? $mapping->song->toArray() : null;
             $data['is_not_song'] = $mapping ? $mapping->is_not_song : false;
-            // is_manual は mapping から取得（JOINのカラムは後で削除）
+            // is_manual, status は mapping から取得（JOINのカラムは後で削除）
             $isManual = $mapping ? $mapping->is_manual : null;
+            $status = $mapping ? $mapping->status : null;
 
             // JOINで追加されたカラムを削除
-            unset($data['mapping_id'], $data['song_id'], $data['is_manual']);
+            unset($data['mapping_id'], $data['song_id'], $data['is_manual'], $data['mapping_status']);
 
-            // mapping から取得した is_manual を設定
+            // mapping から取得した is_manual, status を設定
             $data['is_manual'] = $isManual;
+            $data['status'] = $status;
 
             return $data;
         });
@@ -445,6 +454,19 @@ class SongController extends Controller
         }
 
         return response()->json(['message' => '自動紐付けを確定しました。']);
+    }
+
+    /**
+     * タイムスタンプを「保留」状態にする
+     * 自動紐付けを解除し、再び自動紐付けの対象にならないようにする
+     */
+    public function markAsPending(NormalizedTextRequest $request)
+    {
+        $validated = $request->validated();
+
+        $this->songMappingService->markAsPending($validated['normalized_text']);
+
+        return response()->json(['message' => '保留状態にしました。']);
     }
 
     /**

@@ -28,8 +28,9 @@ class TimestampSongMappingFactory extends Factory
             'normalized_text' => \App\Helpers\TextNormalizer::normalize($text),
             'song_id' => null,
             'is_not_song' => false,
+            'status' => TimestampSongMapping::STATUS_LINKED,
             'is_manual' => false,
-            'confidence' => null,
+            'confidence' => 1.0,
         ];
     }
 
@@ -95,6 +96,20 @@ class TimestampSongMappingFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'normalized_text' => \App\Helpers\TextNormalizer::normalize($text),
+        ]);
+    }
+
+    /**
+     * Indicate that the mapping is in pending status.
+     */
+    public function pending(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'song_id' => null,
+            'is_not_song' => false,
+            'status' => TimestampSongMapping::STATUS_PENDING,
+            'is_manual' => true,
+            'confidence' => 1.0,
         ]);
     }
 }

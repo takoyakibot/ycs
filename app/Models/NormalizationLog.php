@@ -41,6 +41,8 @@ class NormalizationLog extends Model
 
     public const ACTION_CONFIRM_AUTO_LINK = 'confirm_auto_link';
 
+    public const ACTION_MARK_PENDING = 'mark_pending';
+
     /**
      * ターゲット種別
      */

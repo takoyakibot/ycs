@@ -75,6 +75,18 @@ export class TimestampApiService {
         });
         return response.data;
     }
+
+    /**
+     * タイムスタンプを「保留」状態にする
+     * @param {string} normalizedText - 正規化されたテキスト
+     * @returns {Promise<Object>} レスポンスデータ
+     */
+    async markAsPending(normalizedText) {
+        const response = await axios.post('/api/songs/mark-pending', {
+            normalized_text: normalizedText
+        });
+        return response.data;
+    }
 }
 
 // シングルトンインスタンスをエクスポート

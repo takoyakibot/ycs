@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\NormalizationLog;
+use App\Models\Song;
 use App\Models\TimestampSongMapping;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -26,9 +27,11 @@ class SongMappingService
 
             if ($mapping) {
                 // 既存レコードを更新（IDは変更しない）
+                // 保留状態からの紐付けの場合もstatus=linkedに戻す
                 $mapping->update([
                     'song_id' => $songId,
                     'is_not_song' => false,
+                    'status' => TimestampSongMapping::STATUS_LINKED,
                     'is_manual' => true,
                     'confidence' => 1.0,
                     'updated_by' => $userId,
@@ -40,6 +43,7 @@ class SongMappingService
                     'normalized_text' => $normalizedText,
                     'song_id' => $songId,
                     'is_not_song' => false,
+                    'status' => TimestampSongMapping::STATUS_LINKED,
                     'is_manual' => true,
                     'confidence' => 1.0,
                     'created_by' => $userId,
@@ -242,5 +246,77 @@ class SongMappingService
         }
 
         return true;
+    }
+
+    /**
+     * タイムスタンプを「保留」状態にする
+     * 自動紐付けを解除し、再び自動紐付けの対象にならないようにする
+     *
+     * @param  string  $normalizedText  正規化済みテキスト
+     * @param  int|null  $userId  操作者ID（nullの場合は現在のユーザー）
+     * @return bool 保留成功した場合true
+     */
+    public function markAsPending(string $normalizedText, ?int $userId = null): bool
+    {
+        $userId = $userId ?? Auth::id();
+
+        return DB::transaction(function () use ($normalizedText, $userId) {
+            $mapping = TimestampSongMapping::where('normalized_text', $normalizedText)->first();
+
+            $previousSongId = null;
+            $previousSong = null;
+
+            if ($mapping) {
+                // 既存レコードの場合は保留状態に更新
+                $previousSongId = $mapping->song_id;
+                if ($previousSongId) {
+                    $previousSong = Song::find($previousSongId);
+                }
+
+                $mapping->update([
+                    'song_id' => null,
+                    'is_not_song' => false,
+                    'status' => TimestampSongMapping::STATUS_PENDING,
+                    'is_manual' => true, // 手動操作として扱う
+                    'confidence' => 1.0,
+                    'updated_by' => $userId,
+                ]);
+            } else {
+                // 新規レコードを作成（保留状態で）
+                $mapping = TimestampSongMapping::create([
+                    'id' => Str::ulid(),
+                    'normalized_text' => $normalizedText,
+                    'song_id' => null,
+                    'is_not_song' => false,
+                    'status' => TimestampSongMapping::STATUS_PENDING,
+                    'is_manual' => true,
+                    'confidence' => 1.0,
+                    'created_by' => $userId,
+                    'updated_by' => $userId,
+                ]);
+            }
+
+            // 操作ログを記録
+            if ($userId) {
+                $details = ['normalized_text' => $normalizedText];
+                if ($previousSongId) {
+                    $details['previous_song_id'] = $previousSongId;
+                }
+                if ($previousSong) {
+                    $details['previous_song_title'] = $previousSong->title;
+                    $details['previous_song_artist'] = $previousSong->artist;
+                }
+
+                NormalizationLog::log(
+                    $userId,
+                    NormalizationLog::ACTION_MARK_PENDING,
+                    NormalizationLog::TARGET_MAPPING,
+                    $mapping->id,
+                    $details
+                );
+            }
+
+            return true;
+        });
     }
 }

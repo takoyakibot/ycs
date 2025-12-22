@@ -41,6 +41,9 @@
                                     <button data-filter="auto_linked" class="filter-btn px-3 py-1 text-sm rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">
                                         自動
                                     </button>
+                                    <button data-filter="pending" class="filter-btn px-3 py-1 text-sm rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">
+                                        保留
+                                    </button>
                                     <button data-filter="not_song" class="filter-btn px-3 py-1 text-sm rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">
                                         非楽曲
                                     </button>
@@ -182,6 +185,9 @@
                         <div class="mt-6 space-y-2">
                             <button id="linkSongBtn" class="w-full px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>
                                 選択した楽曲と紐づける
+                            </button>
+                            <button id="markAsPendingBtn" class="w-full px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>
+                                保留にする
                             </button>
                             <button id="markAsNotSongBtn" class="w-full px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>
                                 楽曲ではないとマークする

@@ -105,6 +105,7 @@ class TimestampNormalization {
 
         // アクション
         document.getElementById('linkSongBtn').addEventListener('click', () => this.linkTimestamps());
+        document.getElementById('markAsPendingBtn').addEventListener('click', () => this.markAsPending());
         document.getElementById('markAsNotSongBtn').addEventListener('click', () => this.markAsNotSong());
         document.getElementById('unmarkAsNotSongBtn').addEventListener('click', () => this.unmarkAsNotSong());
         document.getElementById('unlinkBtn').addEventListener('click', () => this.unlinkTimestamps());
@@ -255,6 +256,10 @@ class TimestampNormalization {
         if (ts.is_not_song) {
             statusDiv.className += ' text-red-600 dark:text-red-400';
             statusDiv.textContent = '楽曲ではない';
+        } else if (ts.status === 'pending') {
+            // 保留状態
+            statusDiv.className += ' text-orange-600 dark:text-orange-400';
+            statusDiv.textContent = '保留';
         } else if (ts.song) {
             // 自動紐付けの場合は黄色、手動紐付けの場合は緑
             const isAutoLinked = ts.is_manual === false;
@@ -421,6 +426,7 @@ class TimestampNormalization {
         confirmBtn.classList.add('hidden');
         confirmBtn.onclick = null;
         document.getElementById('linkSongBtn').disabled = true;
+        document.getElementById('markAsPendingBtn').disabled = true;
         document.getElementById('markAsNotSongBtn').disabled = true;
         document.getElementById('unmarkAsNotSongBtn').disabled = true;
         document.getElementById('unlinkBtn').disabled = true;
@@ -438,6 +444,12 @@ class TimestampNormalization {
         if (ts.is_not_song) {
             linkedSongSpan.textContent = '楽曲ではない';
             linkedSongSpan.className = 'text-xs break-words text-red-600 dark:text-red-400';
+            linkedSongSpan.classList.remove('hidden');
+            confirmBtn.classList.add('hidden');
+            confirmBtn.onclick = null;
+        } else if (ts.status === 'pending') {
+            linkedSongSpan.textContent = '保留';
+            linkedSongSpan.className = 'text-xs break-words text-orange-600 dark:text-orange-400';
             linkedSongSpan.classList.remove('hidden');
             confirmBtn.classList.add('hidden');
             confirmBtn.onclick = null;
@@ -465,6 +477,9 @@ class TimestampNormalization {
             confirmBtn.onclick = null;
         }
 
+        // 保留ボタンは紐付け済みまたは自動紐付け済みの場合のみ有効
+        const canMarkAsPending = ts.mapping && !ts.is_not_song && ts.status !== 'pending';
+        document.getElementById('markAsPendingBtn').disabled = !canMarkAsPending;
         document.getElementById('markAsNotSongBtn').disabled = false;
         document.getElementById('unmarkAsNotSongBtn').disabled = !ts.is_not_song;
         document.getElementById('unlinkBtn').disabled = !ts.mapping;
@@ -491,6 +506,10 @@ class TimestampNormalization {
         linkedSongSpan.classList.add('hidden');
         confirmBtn.classList.add('hidden');
         confirmBtn.onclick = null;
+
+        // 保留ボタンは紐付け済みの項目がある場合のみ有効
+        const hasMappedItems = this.selectedTimestamps.some(ts => ts.mapping && !ts.is_not_song && ts.status !== 'pending');
+        document.getElementById('markAsPendingBtn').disabled = !hasMappedItems;
         document.getElementById('markAsNotSongBtn').disabled = false;
 
         const hasNotSong = this.selectedTimestamps.some(ts => ts.is_not_song);
@@ -990,6 +1009,51 @@ class TimestampNormalization {
         }
     }
 
+    async markAsPending() {
+        if (this.selectedTimestamps.length === 0) {
+            toast.warning('タイムスタンプを選択してください。');
+            return;
+        }
+
+        // 保留可能なタイムスタンプのみをフィルタリング
+        const pendableTimestamps = this.selectedTimestamps.filter(ts => ts.mapping && !ts.is_not_song && ts.status !== 'pending');
+
+        if (pendableTimestamps.length === 0) {
+            toast.warning('保留可能なタイムスタンプがありません。');
+            return;
+        }
+
+        if (!confirm(`${pendableTimestamps.length}件のタイムスタンプを保留にしますか?\n紐付けが解除され、再び自動紐付けの対象にならなくなります。`)) {
+            return;
+        }
+
+        try {
+            this.showLoading();
+
+            // 履歴用にコピーを保持
+            const markedTimestamps = [...pendableTimestamps];
+
+            for (const ts of pendableTimestamps) {
+                await timestampApiService.markAsPending(ts.normalized_text);
+            }
+
+            toast.success('保留にしました。');
+
+            // 履歴に追加
+            this.addToHistory('pending', markedTimestamps);
+
+            this.selectedTimestamps = [];
+
+            await this.loadTimestamps(this.currentPage, this.currentSearchQuery);
+            this.updateSelectionDisplay();
+        } catch (error) {
+            console.error('保留に失敗しました:', error);
+            toast.error('保留に失敗しました。');
+        } finally {
+            this.hideLoading();
+        }
+    }
+
     showTab(tabId) {
         document.querySelectorAll('.tab-button').forEach(btn => {
             btn.classList.remove('border-green-500', 'text-green-600', 'border-blue-500', 'text-blue-600', 'border-purple-500', 'text-purple-600');
@@ -1150,7 +1214,8 @@ class TimestampNormalization {
             'not_song': '非楽曲',
             'unlink': '解除',
             'unmark_not_song': '非楽曲解除',
-            'confirm_auto_link': '自動確定'
+            'confirm_auto_link': '自動確定',
+            'pending': '保留'
         };
 
         const typeColors = {
@@ -1158,7 +1223,8 @@ class TimestampNormalization {
             'not_song': 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200',
             'unlink': 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200',
             'unmark_not_song': 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200',
-            'confirm_auto_link': 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200'
+            'confirm_auto_link': 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200',
+            'pending': 'bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200'
         };
 
         const entry = {
