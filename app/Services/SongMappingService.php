@@ -418,6 +418,7 @@ class SongMappingService
                     'song_id' => $item->song_id,
                     'song' => $item->song,
                     'archive_title' => $item->archive?->title,
+                    'archive_channel_id' => $item->archive?->channel_id,
                 ];
             })
             ->toArray();
