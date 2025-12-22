@@ -73,6 +73,8 @@ php artisan test tests/Feature/SongControllerTest.php::test_specific_method  # R
 - `resources/js/manage/archives.js`: 管理画面のアーカイブ管理
 - `resources/js/songs/normalize.js`: 楽曲正規化画面
 
+**重要**: 新しいJSファイルを追加する際は、必ず `vite.config.js` の `input` 配列にも追加すること。追加しないとビルド時にマニフェストに含まれず、本番環境で500エラーが発生する。
+
 ### Data Flow: タイムスタンプ → 楽曲マスタ
 
 1. **タイムスタンプ取得**
