@@ -290,6 +290,64 @@ class AutoLinkServiceTest extends TestCase
     }
 
     /**
+     * 類似曲がある場合、その曲に紐付けるテスト
+     */
+    public function test_auto_link_uses_existing_song_by_similarity(): void
+    {
+        // 既存楽曲を作成（Spotify Track IDは異なるが、タイトル・アーティストが類似）
+        $existingSong = Song::factory()->create([
+            'title' => 'Test Song',
+            'artist' => 'Test Artist',
+            'spotify_track_id' => 'different_spotify_id',
+        ]);
+
+        // テストデータ作成
+        $channel = Channel::factory()->create();
+        $archive = Archive::factory()->create(['channel_id' => $channel->channel_id]);
+        TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'text' => 'Some Search Text',
+            'is_display' => 1,
+        ]);
+
+        // Spotify APIをモック（既存楽曲と類似した結果を返す）
+        Http::fake([
+            'https://accounts.spotify.com/api/token' => Http::response([
+                'access_token' => 'test_token',
+            ], 200),
+            'https://api.spotify.com/v1/search*' => Http::response([
+                'tracks' => [
+                    'items' => [
+                        [
+                            'id' => 'new_spotify_id',
+                            'name' => 'Test Song',
+                            'artists' => [['name' => 'Test Artist']],
+                        ],
+                    ],
+                ],
+            ], 200),
+        ]);
+
+        config(['services.spotify.client_id' => 'test_id']);
+        config(['services.spotify.client_secret' => 'test_secret']);
+
+        $result = $this->service->autoLinkUnlinkedTimestamps(10);
+
+        $this->assertEquals(1, $result['processed']);
+        $this->assertEquals(1, $result['linked']);
+        $this->assertEquals(0, $result['skipped']);
+
+        // 新しい楽曲マスタが作成されていないことを確認
+        $this->assertDatabaseCount('songs', 1);
+
+        // 既存の類似曲にマッピングされたことを確認
+        $this->assertDatabaseHas('timestamp_song_mappings', [
+            'song_id' => $existingSong->id,
+            'is_manual' => false,
+        ]);
+    }
+
+    /**
      * 進捗コールバックが呼び出されるテスト
      */
     public function test_auto_link_calls_progress_callback(): void

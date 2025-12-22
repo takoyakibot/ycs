@@ -177,8 +177,11 @@ class AutoLinkService
         $similarSongs = $this->songSearchService->findSimilarSongs($normalizedTitle, $normalizedArtist, $threshold);
 
         if (count($similarSongs) > 0) {
-            // 類似曲が見つかった場合はスキップ（手動確認が必要）
-            return 'skipped';
+            // 類似曲が見つかった場合、最も類似度の高い楽曲に紐付ける
+            $bestMatch = $similarSongs[0]['song'];
+            $this->createAutoLinkMapping($normalizedText, $bestMatch->id);
+
+            return 'linked';
         }
 
         // 新規楽曲マスタを作成
