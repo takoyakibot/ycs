@@ -98,28 +98,36 @@ class SongController extends Controller
         }
 
         // フィルター条件
+        // 個別マッピング（ts_items.song_id）も考慮
         switch ($filter) {
             case 'unlinked':
-                // マッピングなし
-                $query->whereNull('timestamp_song_mappings.id');
+                // マッピングなし かつ 個別マッピングもなし
+                $query->whereNull('timestamp_song_mappings.id')
+                    ->whereNull('ts_items.song_id');
                 break;
             case 'linked':
-                // マッピングあり かつ is_not_song=false かつ status=linked
-                $query->whereNotNull('timestamp_song_mappings.id')
-                    ->where('timestamp_song_mappings.is_not_song', false)
-                    ->where('timestamp_song_mappings.status', TimestampSongMapping::STATUS_LINKED);
+                // マッピングあり（通常または個別）かつ is_not_song=false かつ status=linked
+                $query->where(function ($q) {
+                    $q->where(function ($q2) {
+                        // 通常マッピング
+                        $q2->whereNotNull('timestamp_song_mappings.id')
+                            ->where('timestamp_song_mappings.is_not_song', false)
+                            ->where('timestamp_song_mappings.status', TimestampSongMapping::STATUS_LINKED);
+                    })->orWhereNotNull('ts_items.song_id'); // 個別マッピング
+                });
                 break;
             case 'not_song':
-                // マッピングあり かつ is_not_song=true
+                // マッピングあり かつ is_not_song=true（個別マッピングは含まない）
                 $query->whereNotNull('timestamp_song_mappings.id')
                     ->where('timestamp_song_mappings.is_not_song', true);
                 break;
             case 'auto_linked':
-                // 自動紐付け: マッピングあり かつ is_manual=false かつ is_not_song=false かつ status=linked
+                // 自動紐付け: マッピングあり かつ is_manual=false かつ is_not_song=false かつ status=linked かつ 個別マッピングなし
                 $query->whereNotNull('timestamp_song_mappings.id')
                     ->where('timestamp_song_mappings.is_manual', false)
                     ->where('timestamp_song_mappings.is_not_song', false)
-                    ->where('timestamp_song_mappings.status', TimestampSongMapping::STATUS_LINKED);
+                    ->where('timestamp_song_mappings.status', TimestampSongMapping::STATUS_LINKED)
+                    ->whereNull('ts_items.song_id');
                 break;
             case 'pending':
                 // 保留: マッピングあり かつ status=pending
@@ -143,14 +151,34 @@ class SongController extends Controller
             ->get()
             ->keyBy('normalized_text');
 
+        // 個別マッピングがあるタイムスタンプの楽曲情報を取得
+        $tsItemIds = $paginated->getCollection()->pluck('id')->toArray();
+        $individualSongs = TsItem::whereIn('id', $tsItemIds)
+            ->whereNotNull('song_id')
+            ->with('song')
+            ->get()
+            ->keyBy('id');
+
         // 各タイムスタンプにマッピング情報を追加
-        $items = $paginated->getCollection()->map(function ($item) use ($mappings) {
+        $items = $paginated->getCollection()->map(function ($item) use ($mappings, $individualSongs) {
             $mapping = $mappings->get($item->normalized_text);
+            $individualItem = $individualSongs->get($item->id);
 
             $data = $item->toArray();
             $data['normalized_text'] = $item->normalized_text;
             $data['mapping'] = $mapping ? $mapping->toArray() : null;
-            $data['song'] = $mapping && $mapping->song ? $mapping->song->toArray() : null;
+
+            // 個別マッピング（ts_items.song_id）があればそれを優先
+            if ($individualItem && $individualItem->song) {
+                $data['song'] = $individualItem->song->toArray();
+                $data['is_individual_mapping'] = true;
+                $data['individual_song_id'] = $individualItem->song_id;
+            } else {
+                $data['song'] = $mapping && $mapping->song ? $mapping->song->toArray() : null;
+                $data['is_individual_mapping'] = false;
+                $data['individual_song_id'] = null;
+            }
+
             $data['is_not_song'] = $mapping ? $mapping->is_not_song : false;
             // is_manual, status は mapping から取得（JOINのカラムは後で削除）
             $isManual = $mapping ? $mapping->is_manual : null;
@@ -592,6 +620,114 @@ class SongController extends Controller
             'video_id' => $result['video_id'],
             'platform' => $result['platform'],
             'error' => $result['error'],
+        ]);
+    }
+
+    /**
+     * 特定のタイムスタンプに個別で楽曲を紐づける
+     */
+    public function linkTsItemToSong(Request $request)
+    {
+        $validated = $request->validate([
+            'ts_item_id' => 'required|string|max:26',
+            'song_id' => 'required|string|max:26',
+        ]);
+
+        $user = Auth::user();
+        $tsItem = TsItem::with('archive')->find($validated['ts_item_id']);
+
+        if (! $tsItem) {
+            return response()->json(['message' => 'タイムスタンプが見つかりません。'], 404);
+        }
+
+        // Channel Admin権限チェック
+        if (! $user->isSuperAdmin()) {
+            $userChannelIds = $user->channels()->pluck('channel_id')->toArray();
+            if (! in_array($tsItem->archive?->channel_id, $userChannelIds)) {
+                return response()->json(['message' => '権限がありません。'], 403);
+            }
+        }
+
+        // 楽曲の存在チェック
+        $song = Song::find($validated['song_id']);
+        if (! $song) {
+            return response()->json(['message' => '指定された楽曲が見つかりません。'], 404);
+        }
+
+        $this->songMappingService->linkTsItemToSong($validated['ts_item_id'], $validated['song_id']);
+
+        return response()->json(['message' => 'タイムスタンプに個別で楽曲を紐づけました。']);
+    }
+
+    /**
+     * 特定のタイムスタンプの個別マッピングを解除
+     */
+    public function unlinkTsItem(Request $request)
+    {
+        $validated = $request->validate([
+            'ts_item_id' => 'required|string|max:26',
+        ]);
+
+        $user = Auth::user();
+        $tsItem = TsItem::with('archive')->find($validated['ts_item_id']);
+
+        if (! $tsItem) {
+            return response()->json(['message' => 'タイムスタンプが見つかりません。'], 404);
+        }
+
+        // Channel Admin権限チェック
+        if (! $user->isSuperAdmin()) {
+            $userChannelIds = $user->channels()->pluck('channel_id')->toArray();
+            if (! in_array($tsItem->archive?->channel_id, $userChannelIds)) {
+                return response()->json(['message' => '権限がありません。'], 403);
+            }
+        }
+
+        $this->songMappingService->unlinkTsItem($validated['ts_item_id']);
+
+        return response()->json(['message' => 'タイムスタンプの個別マッピングを解除しました。']);
+    }
+
+    /**
+     * 同じnormalized_textを持つタイムスタンプの情報を取得
+     * Channel Adminの場合は自チャンネルのタイムスタンプのみ返す
+     */
+    public function getTsItemsByNormalizedText(Request $request)
+    {
+        $validated = $request->validate([
+            'normalized_text' => 'required|string',
+        ]);
+
+        $user = Auth::user();
+        $items = $this->songMappingService->getTsItemsByNormalizedText($validated['normalized_text']);
+
+        // Channel Adminの場合は自チャンネルのみフィルタリング
+        if (! $user->isSuperAdmin()) {
+            $userChannelIds = $user->channels()->pluck('channel_id')->toArray();
+            $items = array_filter($items, function ($item) use ($userChannelIds) {
+                $channelId = $item['archive_channel_id'] ?? null;
+
+                return in_array($channelId, $userChannelIds);
+            });
+            $items = array_values($items); // インデックスを振り直す
+        }
+
+        $count = count($items);
+
+        // 現在のマッピング情報も取得
+        $mapping = TimestampSongMapping::where('normalized_text', $validated['normalized_text'])
+            ->with('song')
+            ->first();
+
+        return response()->json([
+            'count' => $count,
+            'items' => $items,
+            'current_mapping' => $mapping ? [
+                'song_id' => $mapping->song_id,
+                'song' => $mapping->song,
+                'is_not_song' => $mapping->is_not_song,
+                'is_manual' => $mapping->is_manual,
+            ] : null,
         ]);
     }
 }

@@ -87,6 +87,44 @@ export class TimestampApiService {
         });
         return response.data;
     }
+
+    /**
+     * 特定のタイムスタンプに個別で楽曲を紐づける
+     * @param {string} tsItemId - タイムスタンプID
+     * @param {string} songId - 楽曲ID
+     * @returns {Promise<Object>} レスポンスデータ
+     */
+    async linkTsItemToSong(tsItemId, songId) {
+        const response = await axios.post('/api/songs/link-ts-item', {
+            ts_item_id: tsItemId,
+            song_id: songId
+        });
+        return response.data;
+    }
+
+    /**
+     * 特定のタイムスタンプの個別マッピングを解除
+     * @param {string} tsItemId - タイムスタンプID
+     * @returns {Promise<Object>} レスポンスデータ
+     */
+    async unlinkTsItem(tsItemId) {
+        const response = await axios.delete('/api/songs/unlink-ts-item', {
+            data: { ts_item_id: tsItemId }
+        });
+        return response.data;
+    }
+
+    /**
+     * 同じnormalized_textを持つタイムスタンプの情報を取得
+     * @param {string} normalizedText - 正規化されたテキスト
+     * @returns {Promise<Object>} タイムスタンプ情報
+     */
+    async getTsItemsByNormalizedText(normalizedText) {
+        const response = await axios.get('/api/songs/ts-items-by-normalized-text', {
+            params: { normalized_text: normalizedText }
+        });
+        return response.data;
+    }
 }
 
 // シングルトンインスタンスをエクスポート

@@ -261,14 +261,17 @@ class TimestampNormalization {
             statusDiv.className += ' text-orange-600 dark:text-orange-400';
             statusDiv.textContent = '保留';
         } else if (ts.song) {
-            // 自動紐付けの場合は黄色、手動紐付けの場合は緑
-            const isAutoLinked = ts.is_manual === false;
-            if (isAutoLinked) {
+            // 個別マッピングの場合は青、自動紐付けの場合は黄色、手動紐付けの場合は緑
+            const isAutoLinked = ts.is_manual === false && !ts.is_individual_mapping;
+            const isIndividual = ts.is_individual_mapping === true;
+            if (isIndividual) {
+                statusDiv.className += ' text-blue-600 dark:text-blue-400';
+            } else if (isAutoLinked) {
                 statusDiv.className += ' text-yellow-600 dark:text-yellow-400';
             } else {
                 statusDiv.className += ' text-green-600 dark:text-green-400';
             }
-            const prefix = isAutoLinked ? '[自動] ' : '';
+            const prefix = isIndividual ? '[個別] ' : (isAutoLinked ? '[自動] ' : '');
             const statusText = `${prefix}${ts.song.title} / ${ts.song.artist}`;
             statusDiv.textContent = statusText.length > CONSTANTS.MAX_STATUS_LENGTH
                 ? statusText.substring(0, CONSTANTS.MAX_STATUS_LENGTH) + '...'
@@ -440,6 +443,17 @@ class TimestampNormalization {
         textSpan.title = ts.text;
         normalizedSpan.textContent = `正規化: ${ts.normalized_text}`;
 
+        // 個別マッピング解除ボタンの参照を取得（なければ作成）
+        let unlinkIndividualBtn = document.getElementById('unlinkIndividualBtn');
+        if (!unlinkIndividualBtn) {
+            unlinkIndividualBtn = document.createElement('button');
+            unlinkIndividualBtn.id = 'unlinkIndividualBtn';
+            unlinkIndividualBtn.className = 'px-2 py-1 text-xs bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors';
+            unlinkIndividualBtn.textContent = '個別解除';
+            unlinkIndividualBtn.title = '個別マッピングを解除';
+            confirmBtn.parentNode.insertBefore(unlinkIndividualBtn, confirmBtn.nextSibling);
+        }
+
         // 紐づいている楽曲情報を表示
         if (ts.is_not_song) {
             linkedSongSpan.textContent = '楽曲ではない';
@@ -447,19 +461,30 @@ class TimestampNormalization {
             linkedSongSpan.classList.remove('hidden');
             confirmBtn.classList.add('hidden');
             confirmBtn.onclick = null;
+            unlinkIndividualBtn.classList.add('hidden');
+            unlinkIndividualBtn.onclick = null;
         } else if (ts.status === 'pending') {
             linkedSongSpan.textContent = '保留';
             linkedSongSpan.className = 'text-xs break-words text-orange-600 dark:text-orange-400';
             linkedSongSpan.classList.remove('hidden');
             confirmBtn.classList.add('hidden');
             confirmBtn.onclick = null;
+            unlinkIndividualBtn.classList.add('hidden');
+            unlinkIndividualBtn.onclick = null;
         } else if (ts.song) {
-            const isAutoLinked = ts.is_manual === false;
-            const prefix = isAutoLinked ? '[自動] ' : '';
+            const isAutoLinked = ts.is_manual === false && !ts.is_individual_mapping;
+            const isIndividual = ts.is_individual_mapping === true;
+            let prefix = '';
+            if (isIndividual) {
+                prefix = '[個別] ';
+                linkedSongSpan.className = 'text-xs break-words text-blue-600 dark:text-blue-400';
+            } else if (isAutoLinked) {
+                prefix = '[自動] ';
+                linkedSongSpan.className = 'text-xs break-words text-yellow-600 dark:text-yellow-400';
+            } else {
+                linkedSongSpan.className = 'text-xs break-words text-green-600 dark:text-green-400';
+            }
             linkedSongSpan.textContent = `紐づき: ${prefix}${ts.song.title} / ${ts.song.artist}`;
-            linkedSongSpan.className = isAutoLinked
-                ? 'text-xs break-words text-yellow-600 dark:text-yellow-400'
-                : 'text-xs break-words text-green-600 dark:text-green-400';
             linkedSongSpan.classList.remove('hidden');
 
             // 自動紐付けの場合は確定ボタンを表示
@@ -470,11 +495,22 @@ class TimestampNormalization {
                 confirmBtn.classList.add('hidden');
                 confirmBtn.onclick = null;
             }
+
+            // 個別マッピングの場合は解除ボタンを表示
+            if (isIndividual) {
+                unlinkIndividualBtn.classList.remove('hidden');
+                unlinkIndividualBtn.onclick = () => this.unlinkIndividualMapping(ts);
+            } else {
+                unlinkIndividualBtn.classList.add('hidden');
+                unlinkIndividualBtn.onclick = null;
+            }
         } else {
             linkedSongSpan.textContent = '';
             linkedSongSpan.classList.add('hidden');
             confirmBtn.classList.add('hidden');
             confirmBtn.onclick = null;
+            unlinkIndividualBtn.classList.add('hidden');
+            unlinkIndividualBtn.onclick = null;
         }
 
         // 保留ボタンは紐付け済みまたは自動紐付け済みの場合のみ有効
@@ -482,12 +518,36 @@ class TimestampNormalization {
         document.getElementById('markAsPendingBtn').disabled = !canMarkAsPending;
         document.getElementById('markAsNotSongBtn').disabled = false;
         document.getElementById('unmarkAsNotSongBtn').disabled = !ts.is_not_song;
-        document.getElementById('unlinkBtn').disabled = !ts.mapping;
+        document.getElementById('unlinkBtn').disabled = !ts.mapping && !ts.is_individual_mapping;
 
         if (ts.archive?.video_id) {
             this.updateVideoButton(true, ts.archive.video_id, ts.ts_num, ts.archive.title || '');
         } else {
             this.updateVideoButton(false, null, null, '動画情報なし');
+        }
+    }
+
+    /**
+     * 個別マッピングを解除
+     */
+    async unlinkIndividualMapping(ts) {
+        if (!confirm('個別マッピングを解除しますか？\n解除すると、通常のマッピングに戻ります。')) {
+            return;
+        }
+
+        try {
+            this.showLoading();
+            await timestampApiService.unlinkTsItem(ts.id);
+            toast.success('個別マッピングを解除しました。');
+
+            this.selectedTimestamps = [];
+            await this.loadTimestamps(this.currentPage, this.currentSearchQuery);
+            this.updateSelectionDisplay();
+        } catch (error) {
+            console.error('個別マッピングの解除に失敗しました:', error);
+            toast.error('解除に失敗しました。');
+        } finally {
+            this.hideLoading();
         }
     }
 
@@ -866,8 +926,37 @@ class TimestampNormalization {
             const linkedTimestamps = [...this.selectedTimestamps];
             const linkedSong = { ...this.selectedSong };
 
+            // 各タイムスタンプについて、同じnormalized_textを持つ他のタイムスタンプがあるか確認
             for (const ts of this.selectedTimestamps) {
-                await timestampApiService.linkTimestamp(ts.normalized_text, this.selectedSong.id);
+                // 既存のマッピングと異なる楽曲にマッピングしようとしている場合のみダイアログ
+                const currentSongId = ts.mapping?.song_id || null;
+                const isChangingMapping = currentSongId && currentSongId !== this.selectedSong.id;
+
+                if (isChangingMapping) {
+                    const info = await timestampApiService.getTsItemsByNormalizedText(ts.normalized_text);
+
+                    if (info.count > 1) {
+                        this.hideLoading();
+                        const choice = await this.showMappingChoiceDialog(ts, info, linkedSong);
+                        this.showLoading();
+
+                        if (choice === 'cancel') {
+                            continue;
+                        } else if (choice === 'individual') {
+                            // 個別マッピング
+                            await timestampApiService.linkTsItemToSong(ts.id, this.selectedSong.id);
+                        } else {
+                            // 一括更新
+                            await timestampApiService.linkTimestamp(ts.normalized_text, this.selectedSong.id);
+                        }
+                    } else {
+                        // 他に同じnormalized_textのタイムスタンプがない場合は通常通り
+                        await timestampApiService.linkTimestamp(ts.normalized_text, this.selectedSong.id);
+                    }
+                } else {
+                    // 新規マッピングまたは同じ楽曲への再マッピングの場合は通常通り
+                    await timestampApiService.linkTimestamp(ts.normalized_text, this.selectedSong.id);
+                }
             }
 
             toast.success(`${this.selectedTimestamps.length}件のタイムスタンプを紐づけました。`);
@@ -886,6 +975,97 @@ class TimestampNormalization {
         } finally {
             this.hideLoading();
         }
+    }
+
+    /**
+     * マッピング方法の選択ダイアログを表示
+     * @param {Object} ts - 対象のタイムスタンプ
+     * @param {Object} info - 同じnormalized_textを持つタイムスタンプの情報
+     * @param {Object} newSong - 新しい楽曲
+     * @returns {Promise<string>} 'all' | 'individual' | 'cancel'
+     */
+    showMappingChoiceDialog(ts, info, newSong) {
+        return new Promise((resolve) => {
+            const existingDialog = document.getElementById('mappingChoiceDialog');
+            if (existingDialog) {
+                existingDialog.remove();
+            }
+
+            const currentSong = info.current_mapping?.song;
+            const currentSongText = currentSong
+                ? `${currentSong.title} / ${currentSong.artist}`
+                : '未紐付け';
+
+            const dialog = document.createElement('div');
+            dialog.id = 'mappingChoiceDialog';
+            dialog.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            dialog.innerHTML = `
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-lg w-full mx-4 p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+                        マッピング方法の選択
+                    </h3>
+                    <div class="space-y-3 mb-6">
+                        <p class="text-sm text-gray-600 dark:text-gray-400">
+                            同じ正規化テキストのタイムスタンプが <strong class="text-blue-600">${info.count}件</strong> あります。
+                        </p>
+                        <div class="bg-gray-50 dark:bg-gray-700 p-3 rounded text-sm">
+                            <div class="mb-2">
+                                <span class="text-gray-500 dark:text-gray-400">正規化テキスト:</span>
+                                <span class="font-medium text-gray-900 dark:text-gray-100 ml-2">${ts.normalized_text}</span>
+                            </div>
+                            <div class="mb-2">
+                                <span class="text-gray-500 dark:text-gray-400">現在のマッピング:</span>
+                                <span class="font-medium text-green-600 dark:text-green-400 ml-2">${currentSongText}</span>
+                            </div>
+                            <div>
+                                <span class="text-gray-500 dark:text-gray-400">新しいマッピング:</span>
+                                <span class="font-medium text-blue-600 dark:text-blue-400 ml-2">${newSong.title} / ${newSong.artist}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex flex-col gap-3">
+                        <button id="mappingChoiceAll" class="w-full px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors">
+                            すべて更新 (${info.count}件)
+                            <span class="block text-xs font-normal opacity-80 mt-1">同じ正規化テキストの全タイムスタンプを更新</span>
+                        </button>
+                        <button id="mappingChoiceIndividual" class="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors">
+                            この項目のみ
+                            <span class="block text-xs font-normal opacity-80 mt-1">このタイムスタンプだけ個別にマッピング</span>
+                        </button>
+                        <button id="mappingChoiceCancel" class="w-full px-4 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 rounded-lg font-medium transition-colors">
+                            キャンセル
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(dialog);
+
+            document.getElementById('mappingChoiceAll').addEventListener('click', () => {
+                dialog.remove();
+                resolve('all');
+            });
+
+            document.getElementById('mappingChoiceIndividual').addEventListener('click', () => {
+                dialog.remove();
+                resolve('individual');
+            });
+
+            document.getElementById('mappingChoiceCancel').addEventListener('click', () => {
+                dialog.remove();
+                resolve('cancel');
+            });
+
+            // ESCキーでキャンセル
+            const handleEsc = (e) => {
+                if (e.key === 'Escape') {
+                    dialog.remove();
+                    document.removeEventListener('keydown', handleEsc);
+                    resolve('cancel');
+                }
+            };
+            document.addEventListener('keydown', handleEsc);
+        });
     }
 
     async markAsNotSong() {

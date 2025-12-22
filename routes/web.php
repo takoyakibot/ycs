@@ -55,6 +55,10 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::get('api/songs/fuzzy-search', [SongController::class, 'fuzzySearch'])->name('songs.fuzzySearch');
     Route::get('api/songs/search-spotify', [SongController::class, 'searchSpotify'])->name('songs.searchSpotify');
     Route::post('api/songs/video-duration', [SongController::class, 'fetchVideoDuration'])->name('songs.fetchVideoDuration');
+    // 個別マッピング用API
+    Route::post('api/songs/link-ts-item', [SongController::class, 'linkTsItemToSong'])->name('songs.linkTsItemToSong');
+    Route::delete('api/songs/unlink-ts-item', [SongController::class, 'unlinkTsItem'])->name('songs.unlinkTsItem');
+    Route::get('api/songs/ts-items-by-normalized-text', [SongController::class, 'getTsItemsByNormalizedText'])->name('songs.getTsItemsByNormalizedText');
     // Parameterized route - must be last to avoid capturing specific route names
     Route::put('api/songs/{id}', [SongController::class, 'updateSong'])->name('songs.updateSong');
     Route::delete('api/songs/{id}', [SongController::class, 'deleteSong'])->name('songs.deleteSong');
