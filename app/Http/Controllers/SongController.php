@@ -70,6 +70,7 @@ class SongController extends Controller
         $search = $validated['search'] ?? '';
         $filter = $validated['filter'] ?? 'all';
         $currentPage = $validated['page'] ?? 1;
+        $songId = $validated['song_id'] ?? null;
 
         // ベースクエリ: ts_itemsとtimestamp_song_mappingsをLEFT JOIN
         $query = TsItem::with(['archive'])
@@ -138,6 +139,11 @@ class SongController extends Controller
                     ->where('timestamp_song_mappings.status', TimestampSongMapping::STATUS_PENDING);
                 break;
                 // 'all' は条件なし
+        }
+
+        // 楽曲IDによる絞り込み（既存フィルターと併用可能）
+        if ($songId) {
+            $query->where('timestamp_song_mappings.song_id', $songId);
         }
 
         // text昇順でソート

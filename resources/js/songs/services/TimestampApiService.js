@@ -11,12 +11,15 @@ export class TimestampApiService {
      * @param {number} params.per_page - 1ページあたりの件数
      * @param {string} params.search - 検索クエリ
      * @param {string} params.filter - フィルター (all, unlinked, linked, not_song)
+     * @param {string} params.song_id - 楽曲IDフィルター（特定の楽曲に紐づくTSのみ取得）
      * @returns {Promise<Object>} タイムスタンプ一覧データ
      */
-    async fetchTimestamps({ page = 1, per_page = 50, search = '', filter = 'all' }) {
-        const response = await axios.get('/api/songs/timestamps', {
-            params: { page, per_page, search, filter }
-        });
+    async fetchTimestamps({ page = 1, per_page = 50, search = '', filter = 'all', song_id = null }) {
+        const params = { page, per_page, search, filter };
+        if (song_id) {
+            params.song_id = song_id;
+        }
+        const response = await axios.get('/api/songs/timestamps', { params });
         return response.data;
     }
 

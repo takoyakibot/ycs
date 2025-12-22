@@ -50,6 +50,18 @@
                                 </div>
                             </div>
 
+                            <!-- 楽曲フィルター表示エリア -->
+                            <div id="songFilterArea" class="hidden flex items-center gap-2 p-2 bg-purple-100 dark:bg-purple-900 rounded border border-purple-300 dark:border-purple-700">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-purple-600 dark:text-purple-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                                </svg>
+                                <span class="text-xs text-purple-700 dark:text-purple-300 flex-shrink-0">楽曲絞り込み:</span>
+                                <span id="songFilterText" class="text-xs font-medium text-purple-800 dark:text-purple-200 truncate flex-1" title=""></span>
+                                <button id="clearSongFilterBtn" class="px-2 py-1 text-xs bg-purple-500 hover:bg-purple-600 text-white rounded flex-shrink-0 transition-colors">
+                                    解除
+                                </button>
+                            </div>
+
                             <!-- 動画情報表示エリア -->
                             <div id="videoInfoArea" class="flex items-center gap-2">
                                 <div class="text-xs text-gray-600 dark:text-gray-400 cursor-pointer hover:text-blue-600 transition-colors transition-all duration-200 ease-in-out flex-1"
