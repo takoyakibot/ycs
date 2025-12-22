@@ -350,4 +350,122 @@ class SpotifyServiceTest extends TestCase
                 && $request['market'] === 'JP';
         });
     }
+
+    /**
+     * 除外リストが空の場合はそのまま返す
+     */
+    public function test_filter_excluded_artists_returns_all_when_empty_config(): void
+    {
+        config(['songs.spotify_excluded_artists' => []]);
+
+        $tracks = [
+            ['id' => 'track1', 'name' => 'Song A', 'artists' => [['name' => 'Artist A']]],
+            ['id' => 'track2', 'name' => 'Song B', 'artists' => [['name' => 'Artist B']]],
+        ];
+
+        $result = $this->service->filterExcludedArtists($tracks);
+
+        $this->assertCount(2, $result);
+    }
+
+    /**
+     * 除外アーティストを正しくフィルタリングする
+     */
+    public function test_filter_excluded_artists_removes_matching_artists(): void
+    {
+        config(['songs.spotify_excluded_artists' => ['Mobile Melody Series']]);
+
+        $tracks = [
+            ['id' => 'track1', 'name' => 'Good Song', 'artists' => [['name' => 'Good Artist']]],
+            ['id' => 'track2', 'name' => 'Ringtone Song', 'artists' => [['name' => 'Mobile Melody Series']]],
+            ['id' => 'track3', 'name' => 'Another Song', 'artists' => [['name' => 'Another Artist']]],
+        ];
+
+        $result = $this->service->filterExcludedArtists($tracks);
+
+        $this->assertCount(2, $result);
+        $this->assertEquals('track1', $result[0]['id']);
+        $this->assertEquals('track3', $result[1]['id']);
+    }
+
+    /**
+     * 部分一致でフィルタリングする
+     */
+    public function test_filter_excluded_artists_matches_partial(): void
+    {
+        config(['songs.spotify_excluded_artists' => ['Mobile Melody']]);
+
+        $tracks = [
+            ['id' => 'track1', 'name' => 'Song', 'artists' => [['name' => 'Mobile Melody Series feat. Someone']]],
+            ['id' => 'track2', 'name' => 'Good Song', 'artists' => [['name' => 'Good Artist']]],
+        ];
+
+        $result = $this->service->filterExcludedArtists($tracks);
+
+        $this->assertCount(1, $result);
+        $this->assertEquals('track2', $result[0]['id']);
+    }
+
+    /**
+     * 大文字小文字を区別しない
+     */
+    public function test_filter_excluded_artists_case_insensitive(): void
+    {
+        config(['songs.spotify_excluded_artists' => ['mobile melody series']]);
+
+        $tracks = [
+            ['id' => 'track1', 'name' => 'Song', 'artists' => [['name' => 'MOBILE MELODY SERIES']]],
+            ['id' => 'track2', 'name' => 'Song', 'artists' => [['name' => 'Mobile Melody Series']]],
+            ['id' => 'track3', 'name' => 'Good Song', 'artists' => [['name' => 'Good Artist']]],
+        ];
+
+        $result = $this->service->filterExcludedArtists($tracks);
+
+        $this->assertCount(1, $result);
+        $this->assertEquals('track3', $result[0]['id']);
+    }
+
+    /**
+     * 複数のアーティストがいるトラックでいずれかが除外対象の場合フィルタリングする
+     */
+    public function test_filter_excluded_artists_with_multiple_artists(): void
+    {
+        config(['songs.spotify_excluded_artists' => ['Mobile Melody Series']]);
+
+        $tracks = [
+            [
+                'id' => 'track1',
+                'name' => 'Collab Song',
+                'artists' => [
+                    ['name' => 'Good Artist'],
+                    ['name' => 'Mobile Melody Series'],
+                ],
+            ],
+            ['id' => 'track2', 'name' => 'Good Song', 'artists' => [['name' => 'Good Artist']]],
+        ];
+
+        $result = $this->service->filterExcludedArtists($tracks);
+
+        $this->assertCount(1, $result);
+        $this->assertEquals('track2', $result[0]['id']);
+    }
+
+    /**
+     * 複数の除外キーワードが設定されている場合
+     */
+    public function test_filter_excluded_artists_with_multiple_excluded_keywords(): void
+    {
+        config(['songs.spotify_excluded_artists' => ['Mobile Melody Series', 'Ringtone Artist']]);
+
+        $tracks = [
+            ['id' => 'track1', 'name' => 'Song A', 'artists' => [['name' => 'Mobile Melody Series']]],
+            ['id' => 'track2', 'name' => 'Song B', 'artists' => [['name' => 'Ringtone Artist']]],
+            ['id' => 'track3', 'name' => 'Good Song', 'artists' => [['name' => 'Good Artist']]],
+        ];
+
+        $result = $this->service->filterExcludedArtists($tracks);
+
+        $this->assertCount(1, $result);
+        $this->assertEquals('track3', $result[0]['id']);
+    }
 }
