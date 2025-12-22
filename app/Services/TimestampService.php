@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Helpers\CharacterCategorizer;
 use App\Helpers\QueryHelper;
+use App\Helpers\TextNormalizer;
 use App\Helpers\ValidationHelper;
 use App\Models\Channel;
 use App\Models\TsItem;
@@ -66,10 +67,11 @@ class TimestampService
                 ->orWhere('timestamp_song_mappings.is_not_song', false);
         });
 
-        // 検索条件
+        // 検索条件（正規化して検索することで類似文字を吸収）
         if ($search) {
-            $escapedSearch = QueryHelper::escapeLikeString($search);
-            $query->where('ts_items.text', 'like', "%{$escapedSearch}%");
+            $normalizedSearch = TextNormalizer::normalize($search);
+            $escapedSearch = QueryHelper::escapeLikeString($normalizedSearch);
+            $query->where('ts_items.normalized_text', 'like', "%{$escapedSearch}%");
         }
 
         // 頭文字インデックスでフィルタリング
@@ -229,10 +231,11 @@ class TimestampService
                     ->orWhere('timestamp_song_mappings.is_not_song', false);
             });
 
-        // 検索条件
+        // 検索条件（正規化して検索することで類似文字を吸収）
         if ($search) {
-            $escapedSearch = QueryHelper::escapeLikeString($search);
-            $query->where('ts_items.text', 'like', "%{$escapedSearch}%");
+            $normalizedSearch = TextNormalizer::normalize($search);
+            $escapedSearch = QueryHelper::escapeLikeString($normalizedSearch);
+            $query->where('ts_items.normalized_text', 'like', "%{$escapedSearch}%");
         }
 
         // 頭文字を取得（楽曲名優先、なければタイムスタンプテキスト）

@@ -158,6 +158,85 @@ class TextNormalizerTest extends TestCase
     }
 
     /**
+     * 追加のチルダ系文字が統一されることをテスト
+     */
+    public function test_additional_tilde_normalization(): void
+    {
+        // U+223C (TILDE OPERATOR)
+        $this->assertEquals('a~b', TextNormalizer::normalize('a∼b'));
+
+        // U+02DC (SMALL TILDE)
+        $this->assertEquals('a~b', TextNormalizer::normalize('a˜b'));
+
+        // 混在ケース
+        $this->assertEquals('完璧ぐ~のね', TextNormalizer::normalize('完璧ぐ〜のね'));
+        $this->assertEquals('完璧ぐ~のね', TextNormalizer::normalize('完璧ぐ~のね'));
+        $this->assertEquals('完璧ぐ~のね', TextNormalizer::normalize('完璧ぐ～のね'));
+
+        // equalsでの比較
+        $this->assertTrue(TextNormalizer::equals('完璧ぐ〜のね', '完璧ぐ～のね'));
+        $this->assertTrue(TextNormalizer::equals('完璧ぐ~のね', '完璧ぐ〜のね'));
+    }
+
+    /**
+     * 引用符の統一テスト
+     */
+    public function test_quote_normalization(): void
+    {
+        // ダブルクォート系
+        $this->assertEquals('"test"', TextNormalizer::normalize('"test"'));
+        $this->assertEquals('"test"', TextNormalizer::normalize('″test″'));
+        $this->assertEquals('"test"', TextNormalizer::normalize('〝test〞'));
+        $this->assertEquals('"test"', TextNormalizer::normalize('＂test＂'));
+
+        // シングルクォート系
+        $this->assertEquals("'test'", TextNormalizer::normalize("'test'"));
+        $this->assertEquals("'test'", TextNormalizer::normalize('′test′'));
+        $this->assertEquals("'test'", TextNormalizer::normalize('`test´'));
+        $this->assertEquals("'test'", TextNormalizer::normalize('＇test＇'));
+
+        // 鉤括弧は変換されない（日本語独自の括弧として保持）
+        $this->assertEquals('「test」', TextNormalizer::normalize('「test」'));
+    }
+
+    /**
+     * 括弧の統一テスト
+     */
+    public function test_bracket_normalization(): void
+    {
+        // 全角丸括弧
+        $this->assertEquals('(test)', TextNormalizer::normalize('（test）'));
+
+        // 角括弧系
+        $this->assertEquals('[test]', TextNormalizer::normalize('［test］'));
+        $this->assertEquals('[test]', TextNormalizer::normalize('【test】'));
+        $this->assertEquals('[test]', TextNormalizer::normalize('〔test〕'));
+        $this->assertEquals('[test]', TextNormalizer::normalize('〈test〉'));
+        $this->assertEquals('[test]', TextNormalizer::normalize('《test》'));
+    }
+
+    /**
+     * 中点の統一テスト
+     */
+    public function test_middle_dot_normalization(): void
+    {
+        $this->assertEquals('a・b', TextNormalizer::normalize('a•b'));
+        $this->assertEquals('a・b', TextNormalizer::normalize('a·b'));
+        $this->assertEquals('a・b', TextNormalizer::normalize('a‧b'));
+        $this->assertEquals('a・b', TextNormalizer::normalize('a･b'));
+    }
+
+    /**
+     * 乗算記号の統一テスト
+     */
+    public function test_multiplication_sign_normalization(): void
+    {
+        $this->assertEquals('axb', TextNormalizer::normalize('a×b'));
+        $this->assertEquals('axb', TextNormalizer::normalize('a✕b'));
+        $this->assertEquals('axb', TextNormalizer::normalize('aＸb'));
+    }
+
+    /**
      * エッジケースのテスト
      */
     public function test_edge_cases(): void
