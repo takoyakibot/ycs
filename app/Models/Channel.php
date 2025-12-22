@@ -23,4 +23,9 @@ class Channel extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    public function excludedWords()
+    {
+        return $this->hasMany(ChannelExcludedWord::class, 'channel_id', 'channel_id');
+    }
 }

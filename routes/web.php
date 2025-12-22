@@ -29,6 +29,7 @@ Route::middleware(['auth', 'admin'])->group(function () {
 
     Route::get('/channels/manage', [ManageController::class, 'index'])->name('manage.index');
     Route::get('/channels/manage/{id}', [ManageController::class, 'show'])->name('manage.show');
+    Route::get('/channels/manage/{id}/settings', [ManageController::class, 'settings'])->name('manage.settings');
 
     // 楽曲マスタ管理
     Route::get('/songs/normalize', [SongController::class, 'index'])->name('songs.index');
@@ -40,6 +41,13 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::patch('api/manage/archives/toggle-display', [ManageController::class, 'toggleDisplay'])->name('manage.toggleDisplay');
     Route::patch('api/manage/archives/fetch-comments', [ManageController::class, 'fetchComments'])->name('manage.fetchComments');
     Route::patch('api/manage/archives/edit-timestamps', [ManageController::class, 'editTimestamps'])->name('manage.editTimestamps');
+
+    // チャンネル設定API（除外ワード管理）
+    Route::get('api/manage/channels/{id}/excluded-words', [ManageController::class, 'fetchExcludedWords'])->name('manage.fetchExcludedWords');
+    Route::post('api/manage/channels/{id}/excluded-words', [ManageController::class, 'addExcludedWord'])->name('manage.addExcludedWord');
+    Route::delete('api/manage/channels/{id}/excluded-words/{wordId}', [ManageController::class, 'deleteExcludedWord'])->name('manage.deleteExcludedWord');
+    Route::get('api/manage/channels/{id}/cover-songs/preview', [ManageController::class, 'previewCoverSongs'])->name('manage.previewCoverSongs');
+    Route::post('api/manage/channels/{id}/cover-songs/reprocess', [ManageController::class, 'reprocessCoverSongs'])->name('manage.reprocessCoverSongs');
 
     // 楽曲マスタAPI
     Route::get('api/songs/timestamps', [SongController::class, 'fetchTimestamps'])->name('songs.fetchTimestamps');

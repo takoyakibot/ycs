@@ -24,16 +24,20 @@ class RefreshArchiveService
 
     protected VideoAnalyzerService $videoAnalyzerService;
 
+    protected CoverSongTitleExtractorService $coverSongTitleExtractorService;
+
     public function __construct(
         YouTubeService $youtubeService,
         ChangeListService $changeListService,
         ChannelQueryService $channelQueryService,
-        VideoAnalyzerService $videoAnalyzerService
+        VideoAnalyzerService $videoAnalyzerService,
+        CoverSongTitleExtractorService $coverSongTitleExtractorService
     ) {
         $this->youtubeService = $youtubeService;
         $this->changeListService = $changeListService;
         $this->channelQueryService = $channelQueryService;
         $this->videoAnalyzerService = $videoAnalyzerService;
+        $this->coverSongTitleExtractorService = $coverSongTitleExtractorService;
     }
 
     public function cliLogin(string $userId): void
@@ -137,7 +141,7 @@ class RefreshArchiveService
         unset($ts_items);
 
         // カバー曲（歌ってみた）のts_itemsを生成
-        $cover_ts_items = $this->extractCoverSongTsItems($rtn_archives);
+        $cover_ts_items = $this->extractCoverSongTsItems($rtn_archives, $channel->channel_id);
 
         // 全てのDB操作を1つのトランザクションで実行（原子性を保証）
         DB::transaction(function () use ($channel, $rtn_archives, $rtn_ts_items, $comment_ts_items_map, $cover_ts_items) {
@@ -321,11 +325,15 @@ class RefreshArchiveService
      * カバー曲用のts_itemを作成
      *
      * @param  array  $archive  アーカイブ情報（video_id, title が必要）
+     * @param  string  $channelId  チャンネルID（除外ワード取得用）
      * @return array ts_item配列
      */
-    public function createCoverSongTsItem(array $archive): array
+    public function createCoverSongTsItem(array $archive, string $channelId): array
     {
         $title = $archive['title'];
+
+        // タイトルから楽曲名部分を抽出
+        $extractedText = $this->coverSongTitleExtractorService->extract($title, $channelId);
 
         return [
             'id' => Str::ulid(),
@@ -334,8 +342,8 @@ class RefreshArchiveService
             'type' => '3', // カバー曲
             'ts_text' => '0:00',
             'ts_num' => 0,
-            'text' => $title,
-            'normalized_text' => TextNormalizer::normalize($title),
+            'text' => $extractedText,
+            'normalized_text' => TextNormalizer::normalize($extractedText),
             'is_display' => true,
         ];
     }
@@ -344,16 +352,17 @@ class RefreshArchiveService
      * アーカイブ配列からカバー曲のts_itemsを生成
      *
      * @param  array  $archives  アーカイブ配列
+     * @param  string  $channelId  チャンネルID（除外ワード取得用）
      * @return array カバー曲のts_items配列
      */
-    public function extractCoverSongTsItems(array $archives): array
+    public function extractCoverSongTsItems(array $archives, string $channelId): array
     {
         $coverTsItems = [];
         $now = now();
 
         foreach ($archives as $archive) {
             if ($this->isCoverSong($archive['title'])) {
-                $tsItem = $this->createCoverSongTsItem($archive);
+                $tsItem = $this->createCoverSongTsItem($archive, $channelId);
                 $tsItem['created_at'] = $now;
                 $tsItem['updated_at'] = $now;
                 $coverTsItems[] = $tsItem;

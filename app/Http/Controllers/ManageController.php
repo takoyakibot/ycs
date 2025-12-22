@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Exceptions\NotFoundException;
+use App\Helpers\TextNormalizer;
 use App\Http\Requests\EditTimestampsRequest;
 use App\Http\Requests\FetchCommentsRequest;
 use App\Http\Requests\ToggleDisplayRequest;
@@ -10,11 +11,14 @@ use App\Jobs\RefreshChannelArchivesJob;
 use App\Models\Archive;
 use App\Models\ChangeList;
 use App\Models\Channel;
+use App\Models\ChannelExcludedWord;
 use App\Models\TimestampSongMapping;
 use App\Models\TsItem;
+use App\Services\CoverSongTitleExtractorService;
 use App\Services\GetArchiveService;
 use App\Services\ImageService;
 use App\Services\RefreshArchiveService;
+use App\Services\VideoAnalyzerService;
 use App\Services\YouTubeService;
 use Exception;
 use Illuminate\Http\Request;
@@ -33,16 +37,24 @@ class ManageController extends Controller
 
     protected $getArchiveService;
 
+    protected $coverSongTitleExtractorService;
+
+    protected $videoAnalyzerService;
+
     public function __construct(
         YouTubeService $youtubeService,
         ImageService $imageService,
         RefreshArchiveService $refreshArchiveService,
-        GetArchiveService $getArchiveService
+        GetArchiveService $getArchiveService,
+        CoverSongTitleExtractorService $coverSongTitleExtractorService,
+        VideoAnalyzerService $videoAnalyzerService
     ) {
         $this->youtubeService = $youtubeService;
         $this->imageService = $imageService;
         $this->refreshArchiveService = $refreshArchiveService;
         $this->getArchiveService = $getArchiveService;
+        $this->coverSongTitleExtractorService = $coverSongTitleExtractorService;
+        $this->videoAnalyzerService = $videoAnalyzerService;
     }
 
     /**
@@ -410,5 +422,203 @@ class ManageController extends Controller
         });
 
         return response()->json(['message' => 'タイムスタンプの編集が完了しました']);
+    }
+
+    /**
+     * チャンネル設定画面を表示
+     */
+    public function settings(string $id)
+    {
+        $user = Auth::user();
+        $api_key_flg = $user->api_key ? '1' : '';
+
+        $channel = Channel::where('handle', $id)->first();
+        if ((! $api_key_flg && ! $user->isSuperAdmin()) || ! $channel) {
+            return redirect()->route('manage.index');
+        }
+
+        if (! $this->canAccessChannel($channel)) {
+            abort(403, 'このチャンネルへのアクセス権限がありません');
+        }
+
+        $crypt_handle = Crypt::encryptString($channel->handle);
+
+        return view('manage.settings', compact('channel', 'crypt_handle'));
+    }
+
+    /**
+     * 除外ワード一覧を取得
+     */
+    public function fetchExcludedWords(string $id)
+    {
+        $handle = Crypt::decryptString($id);
+        $channel = Channel::where('handle', $handle)->firstOrFail();
+
+        if (! $this->canAccessChannel($channel)) {
+            abort(403, 'このチャンネルへのアクセス権限がありません');
+        }
+
+        $excludedWords = $channel->excludedWords()->orderBy('word')->get();
+
+        return response()->json($excludedWords);
+    }
+
+    /**
+     * 除外ワードを追加
+     */
+    public function addExcludedWord(Request $request, string $id)
+    {
+        $handle = Crypt::decryptString($id);
+        $channel = Channel::where('handle', $handle)->firstOrFail();
+
+        if (! $this->canAccessChannel($channel)) {
+            abort(403, 'このチャンネルへのアクセス権限がありません');
+        }
+
+        $validated = $request->validate([
+            'word' => 'required|string|max:255',
+        ]);
+
+        // 重複チェック
+        $exists = ChannelExcludedWord::where('channel_id', $channel->channel_id)
+            ->where('word', $validated['word'])
+            ->exists();
+
+        if ($exists) {
+            return response()->json(['message' => '既に登録されています'], 422);
+        }
+
+        $excludedWord = ChannelExcludedWord::create([
+            'channel_id' => $channel->channel_id,
+            'word' => $validated['word'],
+        ]);
+
+        return response()->json($excludedWord, 201);
+    }
+
+    /**
+     * 除外ワードを削除
+     */
+    public function deleteExcludedWord(string $id, string $wordId)
+    {
+        $handle = Crypt::decryptString($id);
+        $channel = Channel::where('handle', $handle)->firstOrFail();
+
+        if (! $this->canAccessChannel($channel)) {
+            abort(403, 'このチャンネルへのアクセス権限がありません');
+        }
+
+        $excludedWord = ChannelExcludedWord::where('id', $wordId)
+            ->where('channel_id', $channel->channel_id)
+            ->firstOrFail();
+
+        $excludedWord->delete();
+
+        return response()->json(['message' => '削除しました']);
+    }
+
+    /**
+     * カバー曲抽出プレビュー
+     * 現在の除外ワード設定で、カバー曲がどのように抽出されるかをプレビュー
+     */
+    public function previewCoverSongs(string $id)
+    {
+        $handle = Crypt::decryptString($id);
+        $channel = Channel::where('handle', $handle)->firstOrFail();
+
+        if (! $this->canAccessChannel($channel)) {
+            abort(403, 'このチャンネルへのアクセス権限がありません');
+        }
+
+        // カバー曲動画を取得
+        $archives = Archive::where('channel_id', $channel->channel_id)
+            ->get()
+            ->filter(fn ($archive) => $this->videoAnalyzerService->isCoverSong($archive->title));
+
+        // 各動画について、抽出結果をプレビュー
+        $previews = $archives->map(function ($archive) use ($channel) {
+            $originalTitle = $archive->title;
+            $extractedText = $this->coverSongTitleExtractorService->extract($originalTitle, $channel->channel_id);
+            $normalizedText = TextNormalizer::normalize($extractedText);
+
+            // 現在のマッピング状態を取得
+            $mapping = TimestampSongMapping::where('normalized_text', $normalizedText)
+                ->with('song')
+                ->first();
+
+            return [
+                'video_id' => $archive->video_id,
+                'original_title' => $originalTitle,
+                'extracted_text' => $extractedText,
+                'normalized_text' => $normalizedText,
+                'mapping' => $mapping ? $this->getMappingStatus($mapping) : [
+                    'status' => 'unlinked',
+                    'label' => '未紐付',
+                    'song_info' => null,
+                ],
+            ];
+        })->values();
+
+        return response()->json($previews);
+    }
+
+    /**
+     * カバー曲紐付け再処理
+     * チャンネルのカバー曲ts_itemsを再生成し、自動紐付けをリセット
+     */
+    public function reprocessCoverSongs(string $id)
+    {
+        $handle = Crypt::decryptString($id);
+        $channel = Channel::where('handle', $handle)->firstOrFail();
+
+        if (! $this->canAccessChannel($channel)) {
+            abort(403, 'このチャンネルへのアクセス権限がありません');
+        }
+
+        $processedCount = 0;
+
+        DB::transaction(function () use ($channel, &$processedCount) {
+            // 1. チャンネルのカバー曲ts_items（type='3'）を取得
+            $coverTsItems = TsItem::whereHas('archive', function ($q) use ($channel) {
+                $q->where('channel_id', $channel->channel_id);
+            })
+                ->where('type', '3')
+                ->with('archive')
+                ->get();
+
+            // 2. 古い normalized_text を収集（自動紐付けリセット用）
+            $oldNormalizedTexts = $coverTsItems->pluck('normalized_text')->unique()->toArray();
+
+            // 3. 各ts_itemのtextを再抽出
+            foreach ($coverTsItems as $tsItem) {
+                $archive = $tsItem->archive;
+                if (! $archive) {
+                    continue;
+                }
+
+                $newText = $this->coverSongTitleExtractorService->extract($archive->title, $channel->channel_id);
+                $newNormalizedText = TextNormalizer::normalize($newText);
+
+                // 変更がある場合のみ更新
+                if ($tsItem->text !== $newText || $tsItem->normalized_text !== $newNormalizedText) {
+                    $tsItem->text = $newText;
+                    $tsItem->normalized_text = $newNormalizedText;
+                    $tsItem->save();
+                    $processedCount++;
+                }
+            }
+
+            // 4. 自動紐付け（is_manual=false）をリセット
+            // 新しい normalized_text に対応するマッピングがなければ、自動紐付けが再実行される
+            // ここでは明示的に自動紐付けを削除（手動紐付けは保持）
+            TimestampSongMapping::whereIn('normalized_text', $oldNormalizedTexts)
+                ->where('is_manual', false)
+                ->delete();
+        });
+
+        return response()->json([
+            'message' => "カバー曲紐付けを再処理しました（{$processedCount}件更新）",
+            'processed_count' => $processedCount,
+        ]);
     }
 }
