@@ -533,7 +533,9 @@ class ManageController extends Controller
         // カバー曲動画を取得
         $archives = Archive::where('channel_id', $channel->channel_id)
             ->get()
-            ->filter(fn ($archive) => $this->videoAnalyzerService->isCoverSong($archive->title));
+            ->filter(fn ($archive) => $this->videoAnalyzerService->isCoverSong(
+                mb_convert_encoding($archive->title ?? '', 'UTF-8', 'UTF-8')
+            ));
 
         // 各動画について、抽出結果をプレビュー
         $previews = $archives->map(function ($archive) use ($channel) {
@@ -598,7 +600,9 @@ class ManageController extends Controller
                     continue;
                 }
 
-                $newText = $this->coverSongTitleExtractorService->extract($archive->title, $channel->channel_id);
+                // 不正なUTF-8文字を除去してからタイトルを処理
+                $sanitizedTitle = mb_convert_encoding($archive->title ?? '', 'UTF-8', 'UTF-8');
+                $newText = $this->coverSongTitleExtractorService->extract($sanitizedTitle, $channel->channel_id);
                 $newNormalizedText = TextNormalizer::normalize($newText);
 
                 // 変更がある場合のみ更新
