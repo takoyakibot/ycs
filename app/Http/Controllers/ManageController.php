@@ -580,51 +580,81 @@ class ManageController extends Controller
         }
 
         $processedCount = 0;
+        $currentVideoId = null;
 
-        DB::transaction(function () use ($channel, &$processedCount) {
-            // 1. チャンネルのカバー曲ts_items（type='3'）を取得
-            $coverTsItems = TsItem::whereHas('archive', function ($q) use ($channel) {
-                $q->where('channel_id', $channel->channel_id);
-            })
-                ->where('type', '3')
-                ->with('archive')
-                ->get();
+        try {
+            DB::transaction(function () use ($channel, &$processedCount, &$currentVideoId) {
+                // 1. チャンネルのカバー曲ts_items（type='3'）を取得
+                $coverTsItems = TsItem::whereHas('archive', function ($q) use ($channel) {
+                    $q->where('channel_id', $channel->channel_id);
+                })
+                    ->where('type', '3')
+                    ->with('archive')
+                    ->get();
 
-            // 2. 古い normalized_text を収集（自動紐付けリセット用）
-            $oldNormalizedTexts = $coverTsItems->pluck('normalized_text')->unique()->toArray();
+                \Log::info('reprocessCoverSongs: 処理開始', [
+                    'channel_id' => $channel->channel_id,
+                    'cover_count' => $coverTsItems->count(),
+                ]);
 
-            // 3. 各ts_itemのtextを再抽出
-            foreach ($coverTsItems as $tsItem) {
-                $archive = $tsItem->archive;
-                if (! $archive) {
-                    continue;
+                // 2. 古い normalized_text を収集（自動紐付けリセット用）
+                $oldNormalizedTexts = $coverTsItems->pluck('normalized_text')->unique()->toArray();
+
+                // 3. 各ts_itemのtextを再抽出
+                foreach ($coverTsItems as $tsItem) {
+                    $archive = $tsItem->archive;
+                    if (! $archive) {
+                        continue;
+                    }
+
+                    $currentVideoId = $archive->video_id;
+
+                    // 不正なUTF-8文字を除去してからタイトルを処理
+                    $sanitizedTitle = mb_convert_encoding($archive->title ?? '', 'UTF-8', 'UTF-8');
+                    $newText = $this->coverSongTitleExtractorService->extract($sanitizedTitle, $channel->channel_id);
+                    // 抽出結果もサニタイズ
+                    $newText = mb_convert_encoding($newText, 'UTF-8', 'UTF-8');
+                    $newNormalizedText = TextNormalizer::normalize($newText);
+
+                    // 変更がある場合のみ更新
+                    if ($tsItem->text !== $newText || $tsItem->normalized_text !== $newNormalizedText) {
+                        $tsItem->text = $newText;
+                        $tsItem->normalized_text = $newNormalizedText;
+                        $tsItem->save();
+                        $processedCount++;
+                    }
                 }
 
-                // 不正なUTF-8文字を除去してからタイトルを処理
-                $sanitizedTitle = mb_convert_encoding($archive->title ?? '', 'UTF-8', 'UTF-8');
-                $newText = $this->coverSongTitleExtractorService->extract($sanitizedTitle, $channel->channel_id);
-                $newNormalizedText = TextNormalizer::normalize($newText);
+                // 4. 自動紐付け（is_manual=false）をリセット
+                // 新しい normalized_text に対応するマッピングがなければ、自動紐付けが再実行される
+                // ここでは明示的に自動紐付けを削除（手動紐付けは保持）
+                TimestampSongMapping::whereIn('normalized_text', $oldNormalizedTexts)
+                    ->where('is_manual', false)
+                    ->delete();
 
-                // 変更がある場合のみ更新
-                if ($tsItem->text !== $newText || $tsItem->normalized_text !== $newNormalizedText) {
-                    $tsItem->text = $newText;
-                    $tsItem->normalized_text = $newNormalizedText;
-                    $tsItem->save();
-                    $processedCount++;
-                }
-            }
+                \Log::info('reprocessCoverSongs: 処理完了', [
+                    'processed_count' => $processedCount,
+                ]);
+            });
 
-            // 4. 自動紐付け（is_manual=false）をリセット
-            // 新しい normalized_text に対応するマッピングがなければ、自動紐付けが再実行される
-            // ここでは明示的に自動紐付けを削除（手動紐付けは保持）
-            TimestampSongMapping::whereIn('normalized_text', $oldNormalizedTexts)
-                ->where('is_manual', false)
-                ->delete();
-        });
+            return response()->json([
+                'message' => "カバー曲紐付けを再処理しました（{$processedCount}件更新）",
+                'processed_count' => $processedCount,
+            ], 200, [], JSON_INVALID_UTF8_SUBSTITUTE);
+        } catch (\Exception $e) {
+            \Log::error('reprocessCoverSongs: エラー発生', [
+                'channel_id' => $channel->channel_id,
+                'current_video_id' => $currentVideoId,
+                'error_class' => get_class($e),
+                'error_message' => mb_convert_encoding($e->getMessage(), 'UTF-8', 'UTF-8'),
+                'error_file' => $e->getFile(),
+                'error_line' => $e->getLine(),
+            ]);
 
-        return response()->json([
-            'message' => "カバー曲紐付けを再処理しました（{$processedCount}件更新）",
-            'processed_count' => $processedCount,
-        ], 200, [], JSON_INVALID_UTF8_SUBSTITUTE);
+            return response()->json([
+                'message' => '処理中にエラーが発生しました。ログを確認してください。',
+                'error' => true,
+            ], 500, [], JSON_INVALID_UTF8_SUBSTITUTE);
+        }
     }
 }
