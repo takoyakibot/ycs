@@ -77,9 +77,14 @@
                            title="音量">
                 </div>
             </div>
-            {{-- 楽曲タイトル --}}
-            <div class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate flex-1"
-                 x-text="selectedSong ? `${selectedSong.title}${selectedSong.artist ? ' / ' + selectedSong.artist : ''}` : ''"></div>
+            {{-- 楽曲タイトル & アーカイブタイトル --}}
+            <div class="flex-1 min-w-0">
+                <div class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate"
+                     x-text="selectedSong ? `${selectedSong.title}${selectedSong.artist ? ' / ' + selectedSong.artist : ''}` : ''"></div>
+                <div x-show="selectedTimestamp?.archive?.title"
+                     class="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5"
+                     x-text="selectedTimestamp?.archive?.title"></div>
+            </div>
             <button @click="closePanel()"
                     class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 p-1 flex-shrink-0"
                     aria-label="閉じる">

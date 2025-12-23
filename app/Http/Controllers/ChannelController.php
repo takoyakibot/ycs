@@ -195,6 +195,33 @@ class ChannelController extends Controller
     }
 
     /**
+     * 同じアーカイブ内の次の楽曲タイムスタンプを取得
+     */
+    public function fetchNextTimestampInArchive(string $id, Request $request)
+    {
+        // チャンネルの存在確認
+        Channel::where('handle', $id)->firstOrFail();
+
+        $validated = $request->validate([
+            'video_id' => 'required|string|max:11',
+            'current_ts_num' => 'required|integer|min:0',
+        ]);
+
+        $result = $this->timestampService->getNextTimestampInArchive(
+            $validated['video_id'],
+            $validated['current_ts_num']
+        );
+
+        if (! $result) {
+            return response()->json([
+                'error' => 'アーカイブ内に次の楽曲がありません',
+            ], 404);
+        }
+
+        return response()->json($result);
+    }
+
+    /**
      * タイムスタンプの検索候補用テキスト一覧を取得
      */
     public function fetchTimestampTexts(string $id)

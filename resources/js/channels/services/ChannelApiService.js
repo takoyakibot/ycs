@@ -79,4 +79,32 @@ export class ChannelApiService {
         }
         return response.json();
     }
+
+    /**
+     * 同じアーカイブ内の次の楽曲タイムスタンプを取得
+     * @param {string} channelHandle - チャンネルハンドル
+     * @param {string} videoId - 動画ID
+     * @param {number} currentTsNum - 現在のタイムスタンプ秒数
+     * @returns {Promise<Object|null>} 次のタイムスタンプデータ（見つからない場合はnull）
+     */
+    static async fetchNextTimestampInArchive(channelHandle, videoId, currentTsNum) {
+        const response = await fetch(`/api/channels/${channelHandle}/timestamps/next-in-archive`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+            },
+            body: JSON.stringify({
+                video_id: videoId,
+                current_ts_num: currentTsNum,
+            }),
+        });
+        if (!response.ok) {
+            if (response.status === 404) {
+                return null; // アーカイブ内に次の楽曲がない
+            }
+            throw new Error('次の楽曲の取得に失敗しました');
+        }
+        return response.json();
+    }
 }

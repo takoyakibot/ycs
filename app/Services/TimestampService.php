@@ -371,6 +371,89 @@ class TimestampService
     }
 
     /**
+     * 同じ動画内の次の楽曲タイムスタンプを取得（フル情報）
+     *
+     * @param  string  $videoId  動画ID
+     * @param  int  $currentTsNum  現在のタイムスタンプ秒数
+     * @param  int  $perPage  1ページあたりの件数（ページ番号計算用）
+     * @return array|null タイムスタンプデータ（見つからない場合はnull）
+     */
+    public function getNextTimestampInArchive(string $videoId, int $currentTsNum, int $perPage = 50): ?array
+    {
+        // 同じ動画内で、現在のタイムスタンプより後のものを取得
+        $item = TsItem::with(['archive'])
+            ->leftJoin('timestamp_song_mappings', 'ts_items.normalized_text', '=', 'timestamp_song_mappings.normalized_text')
+            ->leftJoin('songs', 'timestamp_song_mappings.song_id', '=', 'songs.id')
+            ->select(
+                'ts_items.*',
+                'timestamp_song_mappings.id as mapping_id',
+                'timestamp_song_mappings.song_id',
+                'timestamp_song_mappings.is_not_song',
+                'timestamp_song_mappings.is_manual',
+                'songs.title as song_title',
+                'songs.artist as song_artist',
+                'songs.spotify_track_id',
+                'songs.spotify_data'
+            )
+            ->where('ts_items.video_id', $videoId)
+            ->where('ts_items.ts_num', '>', $currentTsNum)
+            ->whereNotNull('ts_items.text')
+            ->where('ts_items.text', '!=', '')
+            ->whereNotNull('ts_items.normalized_text')
+            ->where('ts_items.is_display', 1)
+            // 「楽曲ではない」を除外
+            ->where(function ($q) {
+                $q->whereNull('timestamp_song_mappings.id')
+                    ->orWhere('timestamp_song_mappings.is_not_song', false);
+            })
+            ->orderBy('ts_items.ts_num', 'asc')
+            ->first();
+
+        if (! $item) {
+            return null;
+        }
+
+        // 同じ動画内の次のタイムスタンプを取得
+        $nextTsNum = $this->getNextTimestampInVideo($videoId, $item->ts_num);
+
+        // spotify_dataから楽曲の長さを取得（ミリ秒）
+        $songDurationMs = null;
+        if ($item->spotify_data) {
+            $spotifyData = is_string($item->spotify_data)
+                ? json_decode($item->spotify_data, true)
+                : $item->spotify_data;
+            $songDurationMs = $spotifyData['duration_ms'] ?? null;
+        }
+
+        // アーカイブ内の最後の楽曲かどうかを判定
+        $isLastInArchive = $nextTsNum === null;
+
+        return [
+            'id' => $item->id,
+            'ts_text' => $item->ts_text,
+            'ts_num' => $item->ts_num,
+            'text' => $item->text,
+            'video_id' => $item->video_id,
+            'archive' => [
+                'title' => $item->archive->title,
+                'published_at' => $item->archive->published_at,
+            ],
+            'mapping' => $item->mapping_id ? [
+                'song' => $item->song_id ? [
+                    'title' => $item->song_title,
+                    'artist' => $item->song_artist,
+                    'spotify_track_id' => ValidationHelper::validateSpotifyTrackId($item->spotify_track_id),
+                    'duration_ms' => $songDurationMs,
+                ] : null,
+                'is_not_song' => (bool) $item->is_not_song,
+                'is_manual' => (bool) $item->is_manual,
+            ] : null,
+            'next_ts_num' => $nextTsNum,
+            'is_last_in_archive' => $isLastInArchive,
+        ];
+    }
+
+    /**
      * アイテムのソート順での位置を計算
      */
     private function calculateItemPosition(Channel $channel, string $sortKey, string $itemId): int
