@@ -563,7 +563,7 @@ class ManageController extends Controller
             ];
         })->values();
 
-        return response()->json($previews);
+        return response()->json($previews, 200, [], JSON_INVALID_UTF8_SUBSTITUTE);
     }
 
     /**
@@ -625,6 +625,6 @@ class ManageController extends Controller
         return response()->json([
             'message' => "カバー曲紐付けを再処理しました（{$processedCount}件更新）",
             'processed_count' => $processedCount,
-        ]);
+        ], 200, [], JSON_INVALID_UTF8_SUBSTITUTE);
     }
 }
