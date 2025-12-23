@@ -17,6 +17,7 @@ export default defineConfig(() => {
                     'resources/js/channels/archive-list.js',
                     'resources/js/channels/play-history.js',
                     'resources/js/songs/normalize.js',
+                    'resources/js/songs/decompose.js',
                 ],
                 refresh: true,
             }),
