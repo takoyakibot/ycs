@@ -8,6 +8,7 @@ use App\Http\Controllers\ManageController;
 use App\Http\Controllers\MarkdownController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SongController;
+use App\Http\Controllers\TimestampDecompositionController;
 use App\Http\Controllers\TimestampReportController;
 use Illuminate\Support\Facades\Route;
 
@@ -33,6 +34,15 @@ Route::middleware(['auth', 'admin'])->group(function () {
 
     // 楽曲マスタ管理
     Route::get('/songs/normalize', [SongController::class, 'index'])->name('songs.index');
+
+    // タイムスタンプ分解・選別
+    Route::get('/songs/decompose', [TimestampDecompositionController::class, 'index'])->name('songs.decompose');
+    Route::get('api/songs/decompose/next', [TimestampDecompositionController::class, 'next'])->name('songs.decompose.next');
+    Route::post('api/songs/decompose/select', [TimestampDecompositionController::class, 'select'])->name('songs.decompose.select');
+    Route::post('api/songs/decompose/{id}/skip', [TimestampDecompositionController::class, 'skip'])->name('songs.decompose.skip');
+    Route::get('api/songs/decompose/statistics', [TimestampDecompositionController::class, 'statistics'])->name('songs.decompose.statistics');
+    Route::post('api/songs/decompose/scan', [TimestampDecompositionController::class, 'scan'])->name('songs.decompose.scan');
+    Route::post('api/songs/decompose/bulk-link', [TimestampDecompositionController::class, 'bulkLink'])->name('songs.decompose.bulkLink');
 
     Route::get('api/manage/channels', [ManageController::class, 'fetchChannel'])->name('manage.fetchChannel');
     Route::post('api/manage/channels', [ManageController::class, 'addChannel'])->name('manage.addChannel');

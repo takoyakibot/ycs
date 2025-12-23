@@ -128,4 +128,212 @@ class TextNormalizer
             'artist' => null,
         ];
     }
+
+    /**
+     * 区切り文字パターン（正規化前のテキスト用）
+     * 類似の区切り文字を含む
+     */
+    private const SEPARATOR_PATTERN = '/[\/／\-−－ー:：|｜]/u';
+
+    /**
+     * 無視すべきキーワード（カバー関連など）
+     */
+    private const IGNORE_KEYWORDS = [
+        'cover',
+        'カバー',
+        'mv',
+        'music video',
+        'オリジナル',
+        'original',
+        'full',
+        'short',
+        'shorts',
+        'official',
+        '公式',
+        '歌ってみた',
+        'utawaku',
+        'vtuber',
+        'vsinger',
+    ];
+
+    /**
+     * テキストを区切り文字で分解（正規化前のテキスト用）
+     *
+     * @return array{
+     *     parts: string[],
+     *     separator_count: int,
+     *     has_separators: bool,
+     *     original: string
+     * }
+     */
+    public static function splitBySeparators(?string $text): array
+    {
+        if (empty($text)) {
+            return [
+                'parts' => [],
+                'separator_count' => 0,
+                'has_separators' => false,
+                'original' => '',
+            ];
+        }
+
+        // 区切り文字で分割
+        $parts = preg_split(self::SEPARATOR_PATTERN, $text, -1, PREG_SPLIT_NO_EMPTY);
+        $parts = array_map('trim', $parts);
+        $parts = array_filter($parts, fn ($part) => $part !== '');
+        $parts = array_values($parts);
+
+        $separatorCount = count($parts) > 0 ? count($parts) - 1 : 0;
+
+        return [
+            'parts' => $parts,
+            'separator_count' => $separatorCount,
+            'has_separators' => $separatorCount > 0,
+            'original' => $text,
+        ];
+    }
+
+    /**
+     * 区切り文字を含むかどうかを判定
+     */
+    public static function hasSeparators(?string $text): bool
+    {
+        if (empty($text)) {
+            return false;
+        }
+
+        return preg_match(self::SEPARATOR_PATTERN, $text) === 1;
+    }
+
+    /**
+     * パーツが無視すべきキーワードを含むかどうかを判定
+     */
+    public static function isIgnorablePart(string $part): bool
+    {
+        $lowerPart = mb_strtolower($part, 'UTF-8');
+
+        foreach (self::IGNORE_KEYWORDS as $keyword) {
+            if (mb_strpos($lowerPart, mb_strtolower($keyword, 'UTF-8')) !== false) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * パターンマッチで楽曲名/アーティスト名を推定
+     *
+     * @param  string[]  $parts  分解されたパーツ配列
+     * @return array{
+     *     title_index: int|null,
+     *     artist_index: int|null,
+     *     confidence: float,
+     *     ignore_indices: int[]
+     * }
+     */
+    public static function detectTitleArtistPattern(array $parts): array
+    {
+        if (count($parts) < 2) {
+            return [
+                'title_index' => count($parts) === 1 ? 0 : null,
+                'artist_index' => null,
+                'confidence' => count($parts) === 1 ? 1.0 : 0.0,
+                'ignore_indices' => [],
+            ];
+        }
+
+        $ignoreIndices = [];
+        $candidateIndices = [];
+
+        // 無視すべきパーツを特定
+        foreach ($parts as $index => $part) {
+            if (self::isIgnorablePart($part)) {
+                $ignoreIndices[] = $index;
+            } else {
+                $candidateIndices[] = $index;
+            }
+        }
+
+        // 候補が2つ以上ある場合
+        if (count($candidateIndices) >= 2) {
+            // 日本語文字（ひらがな・カタカナ・漢字）の割合を計算
+            $firstIndex = $candidateIndices[0];
+            $secondIndex = $candidateIndices[1];
+
+            $firstJapaneseRatio = self::calculateJapaneseRatio($parts[$firstIndex]);
+            $secondJapaneseRatio = self::calculateJapaneseRatio($parts[$secondIndex]);
+
+            // 日本のVTuberカバー曲の傾向：「アーティスト名 / 楽曲名」が多い
+            // 日本語名っぽい方をアーティスト、英語/カタカナ楽曲名っぽい方をタイトルと推定
+            // ただし確信度は低めに設定
+
+            $confidence = 0.5; // 基本確信度
+
+            // 両方日本語が多い場合、または両方英語が多い場合は判定困難
+            if (abs($firstJapaneseRatio - $secondJapaneseRatio) > 0.3) {
+                $confidence = 0.7;
+            }
+
+            // パーツが2つだけの場合で、一方が明らかに人名っぽい場合
+            if (count($candidateIndices) === 2) {
+                // 最初のパーツがアーティスト、2番目が楽曲名と仮定（よくあるパターン）
+                return [
+                    'title_index' => $secondIndex,
+                    'artist_index' => $firstIndex,
+                    'confidence' => $confidence,
+                    'ignore_indices' => $ignoreIndices,
+                ];
+            }
+
+            // 3つ以上の候補がある場合は確信度を下げる
+            return [
+                'title_index' => null,
+                'artist_index' => null,
+                'confidence' => 0.3,
+                'ignore_indices' => $ignoreIndices,
+            ];
+        }
+
+        // 候補が1つだけの場合
+        if (count($candidateIndices) === 1) {
+            return [
+                'title_index' => $candidateIndices[0],
+                'artist_index' => null,
+                'confidence' => 0.8,
+                'ignore_indices' => $ignoreIndices,
+            ];
+        }
+
+        // 候補がない場合（全て無視対象）
+        return [
+            'title_index' => null,
+            'artist_index' => null,
+            'confidence' => 0.0,
+            'ignore_indices' => $ignoreIndices,
+        ];
+    }
+
+    /**
+     * テキスト内の日本語文字（ひらがな・カタカナ・漢字）の割合を計算
+     */
+    private static function calculateJapaneseRatio(string $text): float
+    {
+        if (empty($text)) {
+            return 0.0;
+        }
+
+        // 日本語文字をカウント（ひらがな、カタカナ、漢字）
+        preg_match_all('/[\x{3040}-\x{309F}\x{30A0}-\x{30FF}\x{4E00}-\x{9FAF}]/u', $text, $matches);
+        $japaneseCount = count($matches[0]);
+
+        // 全文字数
+        $totalCount = mb_strlen($text, 'UTF-8');
+
+        if ($totalCount === 0) {
+            return 0.0;
+        }
+
+        return $japaneseCount / $totalCount;
+    }
 }

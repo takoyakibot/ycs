@@ -1,0 +1,145 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Services\TimestampDecompositionService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\View\View;
+
+class TimestampDecompositionController extends Controller
+{
+    public function __construct(
+        private TimestampDecompositionService $service
+    ) {}
+
+    /**
+     * 分解・選別画面を表示
+     */
+    public function index(): View
+    {
+        return view('songs.decompose');
+    }
+
+    /**
+     * 次の未処理タイムスタンプを取得
+     */
+    public function next(): JsonResponse
+    {
+        $item = $this->service->getNextPending();
+
+        if (! $item) {
+            return response()->json([
+                'item' => null,
+                'message' => '処理待ちのアイテムがありません',
+            ]);
+        }
+
+        return response()->json([
+            'item' => [
+                'id' => $item->id,
+                'original_text' => $item->original_text,
+                'parts' => $item->parts,
+                'separator_count' => $item->separator_count,
+                'title_part_index' => $item->title_part_index,
+                'artist_part_index' => $item->artist_part_index,
+                'confidence' => $item->confidence,
+            ],
+        ]);
+    }
+
+    /**
+     * 選別結果を保存
+     */
+    public function select(Request $request): JsonResponse
+    {
+        $request->validate([
+            'id' => 'required|string',
+        ]);
+
+        $decomposition = \App\Models\TimestampDecomposition::findOrFail($request->input('id'));
+        $maxIndex = count($decomposition->parts) - 1;
+
+        $validated = $request->validate([
+            'id' => 'required|string',
+            'title_index' => ['nullable', 'integer', 'min:0', 'max:' . $maxIndex],
+            'artist_index' => ['nullable', 'integer', 'min:0', 'max:' . $maxIndex],
+            'link_to_song' => 'boolean',
+        ]);
+
+        $decomposition = $this->service->saveSelection(
+            $validated['id'],
+            $validated['title_index'] ?? null,
+            $validated['artist_index'] ?? null
+        );
+
+        // 楽曲マスタへの紐付けも同時に行う場合
+        $song = null;
+        if ($request->boolean('link_to_song', true) && $decomposition->derived_title) {
+            $song = $this->service->linkToSong($decomposition);
+        }
+
+        return response()->json([
+            'success' => true,
+            'decomposition' => [
+                'id' => $decomposition->id,
+                'derived_title' => $decomposition->derived_title,
+                'derived_artist' => $decomposition->derived_artist,
+                'status' => $decomposition->status,
+            ],
+            'song' => $song ? [
+                'id' => $song->id,
+                'title' => $song->title,
+                'artist' => $song->artist,
+            ] : null,
+        ]);
+    }
+
+    /**
+     * スキップ
+     */
+    public function skip(string $id): JsonResponse
+    {
+        $this->service->markAsSkipped($id);
+
+        return response()->json([
+            'success' => true,
+        ]);
+    }
+
+    /**
+     * 統計情報取得
+     */
+    public function statistics(): JsonResponse
+    {
+        return response()->json($this->service->getStatistics());
+    }
+
+    /**
+     * 初回スキャン実行
+     */
+    public function scan(): JsonResponse
+    {
+        $count = $this->service->scanAndDecompose();
+
+        return response()->json([
+            'success' => true,
+            'scanned_count' => $count,
+            'statistics' => $this->service->getStatistics(),
+        ]);
+    }
+
+    /**
+     * 自動判定済みアイテムを一括で楽曲マスタに紐付け
+     */
+    public function bulkLink(): JsonResponse
+    {
+        $count = $this->service->bulkLinkAutoMatched();
+
+        return response()->json([
+            'success' => true,
+            'linked_count' => $count,
+            'statistics' => $this->service->getStatistics(),
+        ]);
+    }
+}
