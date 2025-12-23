@@ -39,6 +39,8 @@ return new class extends Migration
             $table->index('status');
             $table->index('separator_count');
             $table->index('normalized_text');
+            // getNextPending()クエリ用の複合インデックス
+            $table->index(['status', 'separator_count', 'created_at']);
         });
     }
 

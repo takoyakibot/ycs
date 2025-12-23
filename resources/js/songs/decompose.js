@@ -5,6 +5,12 @@ import toast from '../utils/toast.js';
 axios.defaults.withCredentials = true;
 axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
 
+// CSRFトークンの設定
+const token = document.head.querySelector('meta[name="csrf-token"]');
+if (token) {
+    axios.defaults.headers.common['X-CSRF-TOKEN'] = token.content;
+}
+
 /**
  * タイムスタンプ分解・選別機能
  */

@@ -53,10 +53,17 @@ class TimestampDecompositionController extends Controller
      */
     public function select(Request $request): JsonResponse
     {
+        $request->validate([
+            'id' => 'required|string',
+        ]);
+
+        $decomposition = \App\Models\TimestampDecomposition::findOrFail($request->input('id'));
+        $maxIndex = count($decomposition->parts) - 1;
+
         $validated = $request->validate([
             'id' => 'required|string',
-            'title_index' => 'nullable|integer|min:0',
-            'artist_index' => 'nullable|integer|min:0',
+            'title_index' => ['nullable', 'integer', 'min:0', 'max:' . $maxIndex],
+            'artist_index' => ['nullable', 'integer', 'min:0', 'max:' . $maxIndex],
             'link_to_song' => 'boolean',
         ]);
 

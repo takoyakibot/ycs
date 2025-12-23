@@ -283,8 +283,18 @@ class TimestampDecompositionService
             ->whereNotNull('derived_title')
             ->chunk(100, function ($decompositions) use (&$count) {
                 foreach ($decompositions as $decomposition) {
-                    if ($this->linkToSong($decomposition)) {
-                        $count++;
+                    try {
+                        if ($this->linkToSong($decomposition)) {
+                            $count++;
+                        }
+                    } catch (\Exception $e) {
+                        \Illuminate\Support\Facades\Log::error('Failed to link decomposition: '.$decomposition->id, [
+                            'error' => $e->getMessage(),
+                            'decomposition_id' => $decomposition->id,
+                            'derived_title' => $decomposition->derived_title,
+                        ]);
+                        // エラーをスキップして続行
+                        continue;
                     }
                 }
             });
