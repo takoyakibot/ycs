@@ -373,14 +373,15 @@ class TimestampService
     /**
      * 同じ動画内の次の楽曲タイムスタンプを取得（フル情報）
      *
+     * @param  Channel  $channel  チャンネル
      * @param  string  $videoId  動画ID
      * @param  int  $currentTsNum  現在のタイムスタンプ秒数
-     * @param  int  $perPage  1ページあたりの件数（ページ番号計算用）
      * @return array|null タイムスタンプデータ（見つからない場合はnull）
      */
-    public function getNextTimestampInArchive(string $videoId, int $currentTsNum, int $perPage = 50): ?array
+    public function getNextTimestampInArchive(Channel $channel, string $videoId, int $currentTsNum): ?array
     {
         // 同じ動画内で、現在のタイムスタンプより後のものを取得
+        // チャンネルに属する動画のみを対象とする
         $item = TsItem::with(['archive'])
             ->leftJoin('timestamp_song_mappings', 'ts_items.normalized_text', '=', 'timestamp_song_mappings.normalized_text')
             ->leftJoin('songs', 'timestamp_song_mappings.song_id', '=', 'songs.id')
@@ -395,6 +396,10 @@ class TimestampService
                 'songs.spotify_track_id',
                 'songs.spotify_data'
             )
+            ->whereHas('archive', function ($q) use ($channel) {
+                $q->where('channel_id', $channel->channel_id)
+                    ->where('is_display', 1);
+            })
             ->where('ts_items.video_id', $videoId)
             ->where('ts_items.ts_num', '>', $currentTsNum)
             ->whereNotNull('ts_items.text')
@@ -434,10 +439,10 @@ class TimestampService
             'ts_num' => $item->ts_num,
             'text' => $item->text,
             'video_id' => $item->video_id,
-            'archive' => [
+            'archive' => $item->archive ? [
                 'title' => $item->archive->title,
                 'published_at' => $item->archive->published_at,
-            ],
+            ] : null,
             'mapping' => $item->mapping_id ? [
                 'song' => $item->song_id ? [
                     'title' => $item->song_title,
