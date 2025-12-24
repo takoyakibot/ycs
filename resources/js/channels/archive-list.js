@@ -710,17 +710,17 @@ function registerArchiveListComponent() {
                     autoReshuffleManager.restoreSettings();
                     this.autoReshuffle = autoReshuffleManager.isEnabled();
 
-                    // コールバックを設定
+                    // コールバックを設定: 曲終了時は同じアーカイブ内の次の曲を優先
                     autoReshuffleManager.onSongEnd = () => {
-                        this.playRandomTimestamp();
+                        this.playNextOrRandom();
                     };
 
                     autoReshuffleManager.onStallDetected = () => {
-                        this.playRandomTimestamp();
+                        this.playNextOrRandom();
                     };
 
                     autoReshuffleManager.onBufferingTimeout = () => {
-                        this.playRandomTimestamp();
+                        this.playNextOrRandom();
                     };
                 },
 
@@ -882,6 +882,98 @@ function registerArchiveListComponent() {
                     } catch (error) {
                         console.error('ランダム再生に失敗しました:', error);
                         toast.error(error.message || 'ランダム再生に失敗しました');
+                    } finally {
+                        this.isRandomPlaying = false;
+                    }
+                },
+
+                /**
+                 * 同じアーカイブ内の次の曲を再生、なければランダム再生
+                 */
+                async playNextOrRandom() {
+                    // 現在再生中のタイムスタンプ情報がなければランダム再生
+                    if (!this.selectedTimestamp?.video_id || this.selectedTimestamp?.ts_num === undefined) {
+                        this.playRandomTimestamp();
+                        return;
+                    }
+
+                    try {
+                        // 同じアーカイブ内の次の楽曲を取得
+                        const nextTimestamp = await ChannelApiService.fetchNextTimestampInArchive(
+                            this.channel.handle,
+                            this.selectedTimestamp.video_id,
+                            this.selectedTimestamp.ts_num
+                        );
+
+                        if (nextTimestamp) {
+                            // 同じアーカイブ内の次の曲を再生
+                            await this.playTimestamp(nextTimestamp, false);
+                        } else {
+                            // アーカイブ内に次の曲がない場合、別のアーカイブからランダム選択
+                            toast.info('このアーカイブの再生が終わりました');
+                            this.playRandomTimestamp();
+                        }
+                    } catch (error) {
+                        console.error('次の楽曲の取得に失敗しました:', error);
+                        // エラー時はランダム再生にフォールバック
+                        this.playRandomTimestamp();
+                    }
+                },
+
+                /**
+                 * 指定したタイムスタンプを再生（内部用）
+                 * @param {Object} timestamp - タイムスタンプデータ
+                 * @param {boolean} showToast - トースト表示するか
+                 */
+                async playTimestamp(timestamp, showToast = true) {
+                    if (this.isRandomPlaying) return;
+
+                    try {
+                        this.isRandomPlaying = true;
+
+                        logUserAction('playNextInArchive', {
+                            timestampId: timestamp.id,
+                            videoId: timestamp.video_id,
+                            tsNum: timestamp.ts_num,
+                            songTitle: timestamp.mapping?.song?.title,
+                            text: timestamp.text,
+                            isLastInArchive: timestamp.is_last_in_archive
+                        });
+
+                        // 楽曲情報または疑似楽曲オブジェクトを設定
+                        if (timestamp.mapping?.song) {
+                            this.selectedSong = timestamp.mapping.song;
+                        } else {
+                            this.selectedSong = {
+                                title: timestamp.text || '-',
+                                artist: '',
+                                spotify_track_id: null
+                            };
+                        }
+                        this.selectedTimestamp = timestamp;
+
+                        // 配信パネルを表示
+                        if (!this.panelDismissed) {
+                            this.showDistributionPanel = true;
+                        }
+
+                        // 自動再抽選用: 終了時刻を計算・設定
+                        const endTime = autoReshuffleManager.calculateEndTime(timestamp);
+                        autoReshuffleManager.setEndTime(endTime);
+
+                        // 動画を再生（同じアーカイブ内なのでシーク）
+                        if (timestamp.video_id) {
+                            this.loadAndPlayVideo(timestamp.video_id, timestamp.ts_num || 0);
+                        }
+
+                        if (showToast) {
+                            toast.success('次の曲を再生します');
+                        }
+
+                        // 自動再抽選: 有効な場合は監視を開始
+                        if (this.autoReshuffle && endTime !== null) {
+                            autoReshuffleManager.startMonitor();
+                        }
                     } finally {
                         this.isRandomPlaying = false;
                     }
