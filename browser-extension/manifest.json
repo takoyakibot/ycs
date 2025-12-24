@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "歌枠タイムスタンプ検出",
+  "version": "0.1.0",
+  "description": "YouTube動画の音量変化を検出し、楽曲開始のタイムスタンプ候補を生成します",
+  "permissions": [
+    "tabCapture",
+    "activeTab",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://www.youtube.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.youtube.com/watch*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
