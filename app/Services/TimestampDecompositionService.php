@@ -53,8 +53,13 @@ class TimestampDecompositionService
 
                 // パーツが2つ以上ある場合のみ保存
                 if ($decomposition['separator_count'] > 0) {
-                    $this->createDecomposition($item->text, $item->normalized_text, $decomposition);
-                    $count++;
+                    try {
+                        $this->createDecomposition($item->text, $item->normalized_text, $decomposition);
+                        $count++;
+                    } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+                        // 正規化テキストが重複している場合はスキップ（異なる元テキストが同じ正規化結果になる場合）
+                        continue;
+                    }
                 }
             }
         });
