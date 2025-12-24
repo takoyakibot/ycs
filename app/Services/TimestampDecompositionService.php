@@ -111,7 +111,7 @@ class TimestampDecompositionService
         }
 
         return TimestampDecomposition::create([
-            'id' => Str::ulid()->toString(),
+            'id' => (string) Str::ulid(),
             'normalized_text' => $normalizedText,
             'original_text' => $originalText,
             'parts' => $decomposition['parts'],
@@ -205,7 +205,7 @@ class TimestampDecompositionService
         // 見つからなければ新規作成
         if (! $song) {
             $song = Song::create([
-                'id' => Str::ulid()->toString(),
+                'id' => (string) Str::ulid(),
                 'title' => $decomposition->derived_title,
                 'artist' => $decomposition->derived_artist ?? '',
                 'created_by' => Auth::id(),
