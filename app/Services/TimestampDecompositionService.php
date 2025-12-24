@@ -38,7 +38,8 @@ class TimestampDecompositionService
                     ->from('timestamp_decompositions')
                     ->whereColumn('timestamp_decompositions.normalized_text', 'ts_items.normalized_text');
             })
-            ->groupBy('text', 'normalized_text');
+            ->groupBy('text', 'normalized_text')
+            ->orderByRaw('MIN(ts_items.id)'); // GROUP BYとの互換性のためMIN()を使用
 
         // チャンク処理で大量データに対応
         $query->chunk(500, function ($items) use (&$count) {
@@ -263,7 +264,7 @@ class TimestampDecompositionService
                     ->from('timestamp_decompositions')
                     ->whereColumn('timestamp_decompositions.normalized_text', 'ts_items.normalized_text');
             })
-            ->whereRaw("text REGEXP '[\/／\-−－ー:：|｜]'")
+            ->whereRaw("text REGEXP '[/／−－ー:：|｜-]'") // ハイフンは末尾に配置して範囲指定を回避
             ->groupBy('normalized_text')
             ->get()
             ->count();
