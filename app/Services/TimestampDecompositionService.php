@@ -224,17 +224,24 @@ class TimestampDecompositionService
         ]);
 
         // timestamp_song_mappingsにマッピングを作成
-        TimestampSongMapping::updateOrCreate(
-            ['normalized_text' => $decomposition->normalized_text],
-            [
-                'song_id' => $song->id,
-                'is_not_song' => false,
-                'is_manual' => true,
-                'status' => 'linked',
-                'confidence' => 1.0,
-                'updated_by' => Auth::id(),
-            ]
+        $mapping = TimestampSongMapping::firstOrNew(
+            ['normalized_text' => $decomposition->normalized_text]
         );
+
+        if (! $mapping->exists) {
+            $mapping->id = (string) Str::ulid();
+            $mapping->created_by = Auth::id();
+        }
+
+        $mapping->fill([
+            'song_id' => $song->id,
+            'is_not_song' => false,
+            'is_manual' => true,
+            'status' => 'linked',
+            'confidence' => 1.0,
+            'updated_by' => Auth::id(),
+        ]);
+        $mapping->save();
 
         return $song;
     }
