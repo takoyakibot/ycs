@@ -38,7 +38,8 @@ class TimestampDecompositionService
                     ->from('timestamp_decompositions')
                     ->whereColumn('timestamp_decompositions.normalized_text', 'ts_items.normalized_text');
             })
-            ->groupBy('text', 'normalized_text');
+            ->groupBy('text', 'normalized_text')
+            ->orderByRaw('MIN(ts_items.id)'); // GROUP BYとの互換性のためMIN()を使用
 
         // チャンク処理で大量データに対応
         $query->chunk(500, function ($items) use (&$count) {
@@ -52,8 +53,13 @@ class TimestampDecompositionService
 
                 // パーツが2つ以上ある場合のみ保存
                 if ($decomposition['separator_count'] > 0) {
-                    $this->createDecomposition($item->text, $item->normalized_text, $decomposition);
-                    $count++;
+                    try {
+                        $this->createDecomposition($item->text, $item->normalized_text, $decomposition);
+                        $count++;
+                    } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+                        // 正規化テキストが重複している場合はスキップ（異なる元テキストが同じ正規化結果になる場合）
+                        continue;
+                    }
                 }
             }
         });
@@ -110,7 +116,7 @@ class TimestampDecompositionService
         }
 
         return TimestampDecomposition::create([
-            'id' => Str::ulid()->toString(),
+            'id' => (string) Str::ulid(),
             'normalized_text' => $normalizedText,
             'original_text' => $originalText,
             'parts' => $decomposition['parts'],
@@ -204,7 +210,7 @@ class TimestampDecompositionService
         // 見つからなければ新規作成
         if (! $song) {
             $song = Song::create([
-                'id' => Str::ulid()->toString(),
+                'id' => (string) Str::ulid(),
                 'title' => $decomposition->derived_title,
                 'artist' => $decomposition->derived_artist ?? '',
                 'created_by' => Auth::id(),
@@ -218,17 +224,24 @@ class TimestampDecompositionService
         ]);
 
         // timestamp_song_mappingsにマッピングを作成
-        TimestampSongMapping::updateOrCreate(
-            ['normalized_text' => $decomposition->normalized_text],
-            [
-                'song_id' => $song->id,
-                'is_not_song' => false,
-                'is_manual' => true,
-                'status' => 'linked',
-                'confidence' => 1.0,
-                'updated_by' => Auth::id(),
-            ]
+        $mapping = TimestampSongMapping::firstOrNew(
+            ['normalized_text' => $decomposition->normalized_text]
         );
+
+        if (! $mapping->exists) {
+            $mapping->id = (string) Str::ulid();
+            $mapping->created_by = Auth::id();
+        }
+
+        $mapping->fill([
+            'song_id' => $song->id,
+            'is_not_song' => false,
+            'is_manual' => true,
+            'status' => 'linked',
+            'confidence' => 1.0,
+            'updated_by' => Auth::id(),
+        ]);
+        $mapping->save();
 
         return $song;
     }
@@ -263,7 +276,7 @@ class TimestampDecompositionService
                     ->from('timestamp_decompositions')
                     ->whereColumn('timestamp_decompositions.normalized_text', 'ts_items.normalized_text');
             })
-            ->whereRaw("text REGEXP '[\/／\-−－ー:：|｜]'")
+            ->whereRaw("text REGEXP '[/／−－ー:：|｜-]'") // ハイフンは末尾に配置して範囲指定を回避
             ->groupBy('normalized_text')
             ->get()
             ->count();
