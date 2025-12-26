@@ -330,10 +330,14 @@ class RefreshArchiveService
      */
     public function createCoverSongTsItem(array $archive, string $channelId): array
     {
-        $title = $archive['title'];
+        // YouTubeから取得したタイトルをサニタイズ
+        $title = TextNormalizer::sanitizeUtf8($archive['title']);
 
         // タイトルから楽曲名部分を抽出
         $extractedText = $this->coverSongTitleExtractorService->extract($title, $channelId);
+
+        // 抽出後のテキストも念のためサニタイズ
+        $extractedText = TextNormalizer::sanitizeUtf8($extractedText);
 
         return [
             'id' => Str::ulid(),

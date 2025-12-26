@@ -5,6 +5,32 @@ namespace App\Helpers;
 class TextNormalizer
 {
     /**
+     * 不正なUTF-8文字をサニタイズ
+     *
+     * YouTubeから取得したテキストに不正なUTF-8バイト列が含まれている場合、
+     * MySQLへの挿入時にエラーが発生するため、事前に除去する。
+     *
+     * @param  string|null  $text  サニタイズ対象のテキスト
+     * @return string サニタイズ後のテキスト
+     */
+    public static function sanitizeUtf8(?string $text): string
+    {
+        if ($text === null || $text === '') {
+            return '';
+        }
+
+        // mb_convert_encodingで不正なバイト列を除去
+        $sanitized = mb_convert_encoding($text, 'UTF-8', 'UTF-8');
+
+        // それでも不正な場合はiconvで再処理
+        if (! mb_check_encoding($sanitized, 'UTF-8')) {
+            $sanitized = @iconv('UTF-8', 'UTF-8//IGNORE', $sanitized);
+        }
+
+        return $sanitized !== false ? $sanitized : '';
+    }
+
+    /**
      * タイムスタンプテキストを正規化
      *
      * 以下の処理を行います：

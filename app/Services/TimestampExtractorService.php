@@ -45,6 +45,9 @@ class TimestampExtractorService
                 // 先頭の全角スペースを除外
                 $comment = TextNormalizer::trimFullwidthSpace($comment);
 
+                // 不正なUTF-8をサニタイズしてから保存
+                $sanitizedComment = TextNormalizer::sanitizeUtf8($comment);
+
                 // 結果に追加
                 $results[] = [
                     'id' => Str::ulid(),
@@ -53,8 +56,8 @@ class TimestampExtractorService
                     'type' => $type,
                     'ts_text' => $timestamp,
                     'ts_num' => $this->timestampToSeconds($timestamp),
-                    'text' => $comment,
-                    'normalized_text' => TextNormalizer::normalize($comment),
+                    'text' => $sanitizedComment,
+                    'normalized_text' => TextNormalizer::normalize($sanitizedComment),
                 ];
             }
         }
