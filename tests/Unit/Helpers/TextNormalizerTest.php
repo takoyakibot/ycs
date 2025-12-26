@@ -258,4 +258,49 @@ class TextNormalizerTest extends TestCase
         $this->assertEquals('', TextNormalizer::normalize('ー'));
         $this->assertEquals('', TextNormalizer::normalize('－'));
     }
+
+    /**
+     * sanitizeUtf8メソッドのテスト
+     */
+    public function test_sanitize_utf8(): void
+    {
+        // 正常なUTF-8は変更されない
+        $this->assertEquals('こんにちは', TextNormalizer::sanitizeUtf8('こんにちは'));
+        $this->assertEquals('Hello World', TextNormalizer::sanitizeUtf8('Hello World'));
+        $this->assertEquals('テスト123', TextNormalizer::sanitizeUtf8('テスト123'));
+
+        // 絵文字も正常に保持
+        $this->assertEquals('Hello 👋', TextNormalizer::sanitizeUtf8('Hello 👋'));
+
+        // null入力
+        $this->assertEquals('', TextNormalizer::sanitizeUtf8(null));
+
+        // 空文字列
+        $this->assertEquals('', TextNormalizer::sanitizeUtf8(''));
+
+        // 不正なUTF-8バイト列を含む文字列（途中で切れたマルチバイト）
+        // 「切り抜き」の「き」(\xE3\x81\x8D)の最初の2バイトだけ
+        $invalidUtf8 = "切り抜\xE3\x81";
+        $sanitized = TextNormalizer::sanitizeUtf8($invalidUtf8);
+        // 不正なバイトが除去されて正常なUTF-8になる
+        $this->assertTrue(mb_check_encoding($sanitized, 'UTF-8'));
+    }
+
+    /**
+     * sanitizeUtf8が不正なバイト列を適切に処理することをテスト
+     */
+    public function test_sanitize_utf8_removes_invalid_bytes(): void
+    {
+        // 不正なシングルバイト
+        $this->assertTrue(mb_check_encoding(TextNormalizer::sanitizeUtf8("test\x80value"), 'UTF-8'));
+
+        // 途中で切れた2バイト文字
+        $this->assertTrue(mb_check_encoding(TextNormalizer::sanitizeUtf8("test\xC2value"), 'UTF-8'));
+
+        // 途中で切れた3バイト文字
+        $this->assertTrue(mb_check_encoding(TextNormalizer::sanitizeUtf8("test\xE3\x81value"), 'UTF-8'));
+
+        // 途中で切れた4バイト文字
+        $this->assertTrue(mb_check_encoding(TextNormalizer::sanitizeUtf8("test\xF0\x9Fvalue"), 'UTF-8'));
+    }
 }
