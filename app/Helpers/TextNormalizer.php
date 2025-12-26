@@ -248,6 +248,16 @@ class TextNormalizer
     }
 
     /**
+     * 無視キーワードを正規化された形式で取得
+     *
+     * @return string[]
+     */
+    public static function getIgnoreKeywords(): array
+    {
+        return array_map(fn ($keyword) => self::normalize($keyword), self::IGNORE_KEYWORDS);
+    }
+
+    /**
      * パターンマッチで楽曲名/アーティスト名を推定
      *
      * @param  string[]  $parts  分解されたパーツ配列

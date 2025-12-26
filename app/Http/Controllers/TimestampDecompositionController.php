@@ -57,21 +57,24 @@ class TimestampDecompositionController extends Controller
             'id' => 'required|string',
         ]);
 
-        $decomposition = \App\Models\TimestampDecomposition::findOrFail($request->input('id'));
-        $maxIndex = count($decomposition->parts) - 1;
+        $decompositionModel = \App\Models\TimestampDecomposition::findOrFail($request->input('id'));
+        $maxIndex = count($decompositionModel->parts) - 1;
 
         $validated = $request->validate([
             'id' => 'required|string',
-            'title_index' => ['nullable', 'integer', 'min:0', 'max:' . $maxIndex],
-            'artist_index' => ['nullable', 'integer', 'min:0', 'max:' . $maxIndex],
+            'title_index' => ['nullable', 'integer', 'min:0', 'max:'.$maxIndex],
+            'artist_index' => ['nullable', 'integer', 'min:0', 'max:'.$maxIndex],
             'link_to_song' => 'boolean',
         ]);
 
-        $decomposition = $this->service->saveSelection(
+        $result = $this->service->saveSelection(
             $validated['id'],
             $validated['title_index'] ?? null,
             $validated['artist_index'] ?? null
         );
+
+        $decomposition = $result['decomposition'];
+        $cascadedCount = $result['cascaded_count'];
 
         // 楽曲マスタへの紐付けも同時に行う場合
         $song = null;
@@ -92,6 +95,7 @@ class TimestampDecompositionController extends Controller
                 'title' => $song->title,
                 'artist' => $song->artist,
             ] : null,
+            'cascaded_count' => $cascadedCount,
         ]);
     }
 

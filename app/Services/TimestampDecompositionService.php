@@ -146,8 +146,10 @@ class TimestampDecompositionService
      *
      * @param  int|null  $titleIndex  楽曲名パーツのインデックス
      * @param  int|null  $artistIndex  アーティスト名パーツのインデックス
+     * @param  bool  $enableCascade  カスケード処理を有効にするか
+     * @return array{decomposition: TimestampDecomposition, cascaded_count: int}
      */
-    public function saveSelection(string $id, ?int $titleIndex, ?int $artistIndex): TimestampDecomposition
+    public function saveSelection(string $id, ?int $titleIndex, ?int $artistIndex, bool $enableCascade = true): array
     {
         $decomposition = TimestampDecomposition::findOrFail($id);
 
@@ -170,7 +172,147 @@ class TimestampDecompositionService
             'updated_by' => Auth::id(),
         ]);
 
-        return $decomposition->fresh();
+        $cascadedCount = 0;
+
+        // アーティストが設定された場合、同じアーティストを持つ他のタイムスタンプにカスケード処理
+        if ($enableCascade && $derivedArtist) {
+            $cascadedCount = $this->cascadeArtistSelection($derivedArtist, $decomposition->id);
+        }
+
+        return [
+            'decomposition' => $decomposition->fresh(),
+            'cascaded_count' => $cascadedCount,
+        ];
+    }
+
+    /**
+     * アーティスト選別のカスケード処理
+     * 同じアーティスト名を持つpendingなタイムスタンプを自動的に処理
+     *
+     * @param  string  $artistName  確定したアーティスト名
+     * @param  string  $excludeId  カスケード元のID（除外）
+     * @return int 処理された件数
+     */
+    public function cascadeArtistSelection(string $artistName, string $excludeId): int
+    {
+        $normalizedArtist = TextNormalizer::normalize($artistName);
+        $count = 0;
+
+        // pendingなタイムスタンプを検索
+        TimestampDecomposition::pending()
+            ->where('id', '!=', $excludeId)
+            ->chunk(100, function ($decompositions) use ($normalizedArtist, $artistName, &$count) {
+                foreach ($decompositions as $decomposition) {
+                    $matchResult = $this->findArtistInParts($decomposition->parts, $normalizedArtist);
+
+                    if ($matchResult === null) {
+                        continue;
+                    }
+
+                    $artistIndex = $matchResult['artist_index'];
+                    $titleIndex = $matchResult['title_index'];
+                    $derivedTitle = $titleIndex !== null ? $decomposition->parts[$titleIndex] : null;
+
+                    // カスケード処理で更新
+                    $decomposition->update([
+                        'artist_part_index' => $artistIndex,
+                        'title_part_index' => $titleIndex,
+                        'derived_artist' => $artistName,
+                        'derived_title' => $derivedTitle,
+                        'status' => TimestampDecomposition::STATUS_AUTO_MATCHED,
+                        'confidence' => 0.9,
+                        'updated_by' => Auth::id(),
+                    ]);
+
+                    // 楽曲マスタに紐付け
+                    if ($derivedTitle) {
+                        try {
+                            $this->linkToSong($decomposition->fresh());
+                        } catch (\Exception $e) {
+                            \Illuminate\Support\Facades\Log::warning('Cascade link failed: '.$decomposition->id, [
+                                'error' => $e->getMessage(),
+                            ]);
+                        }
+                    }
+
+                    $count++;
+                }
+            });
+
+        return $count;
+    }
+
+    /**
+     * パーツ配列からアーティスト名を検索
+     *
+     * @param  array  $parts  パーツ配列
+     * @param  string  $normalizedArtist  正規化されたアーティスト名
+     * @return array{artist_index: int, title_index: int|null}|null マッチした場合はインデックス情報、なければnull
+     */
+    private function findArtistInParts(array $parts, string $normalizedArtist): ?array
+    {
+        $ignoreKeywords = TextNormalizer::getIgnoreKeywords();
+
+        foreach ($parts as $index => $part) {
+            $normalizedPart = TextNormalizer::normalize($part);
+
+            // 無視キーワードはスキップ
+            if (in_array($normalizedPart, $ignoreKeywords, true)) {
+                continue;
+            }
+
+            if ($normalizedPart === $normalizedArtist) {
+                // アーティストが見つかった場合、楽曲名を推定
+                $titleIndex = $this->guessTitleIndex($parts, $index, $ignoreKeywords);
+
+                return [
+                    'artist_index' => $index,
+                    'title_index' => $titleIndex,
+                ];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * アーティストインデックス以外のパーツから楽曲名インデックスを推定
+     *
+     * @param  array  $parts  パーツ配列
+     * @param  int  $artistIndex  アーティストのインデックス
+     * @param  array  $ignoreKeywords  無視キーワード
+     * @return int|null 楽曲名のインデックス
+     */
+    private function guessTitleIndex(array $parts, int $artistIndex, array $ignoreKeywords): ?int
+    {
+        $candidateIndices = [];
+
+        foreach ($parts as $index => $part) {
+            if ($index === $artistIndex) {
+                continue;
+            }
+
+            $normalizedPart = TextNormalizer::normalize($part);
+
+            // 無視キーワードはスキップ
+            if (in_array($normalizedPart, $ignoreKeywords, true)) {
+                continue;
+            }
+
+            $candidateIndices[] = $index;
+        }
+
+        // 候補が1つだけならそれを楽曲名とする
+        if (count($candidateIndices) === 1) {
+            return $candidateIndices[0];
+        }
+
+        // 候補が複数ある場合は最初の候補を返す（通常は楽曲名が先に来ることが多い）
+        if (count($candidateIndices) > 1) {
+            return $candidateIndices[0];
+        }
+
+        return null;
     }
 
     /**
@@ -306,6 +448,7 @@ class TimestampDecompositionService
                             'decomposition_id' => $decomposition->id,
                             'derived_title' => $decomposition->derived_title,
                         ]);
+
                         // エラーをスキップして続行
                         continue;
                     }

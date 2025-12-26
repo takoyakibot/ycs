@@ -371,14 +371,19 @@ class TimestampDecomposition {
 
         try {
             this.showLoading();
-            await axios.post('/api/songs/decompose/select', {
+            const response = await axios.post('/api/songs/decompose/select', {
                 id: this.currentItem.id,
                 title_index: this.selectedTitleIndex,
                 artist_index: this.selectedArtistIndex,
                 link_to_song: true
             });
 
-            toast.success('保存しました');
+            const cascadedCount = response.data.cascaded_count || 0;
+            if (cascadedCount > 0) {
+                toast.success(`保存しました（同じアーティストの ${cascadedCount} 件も自動処理）`);
+            } else {
+                toast.success('保存しました');
+            }
             await this.loadStatistics();
             await this.loadNext();
         } catch (error) {

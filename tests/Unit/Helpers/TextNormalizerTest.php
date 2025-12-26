@@ -237,6 +237,26 @@ class TextNormalizerTest extends TestCase
     }
 
     /**
+     * getIgnoreKeywords メソッドのテスト
+     */
+    public function test_get_ignore_keywords(): void
+    {
+        $keywords = TextNormalizer::getIgnoreKeywords();
+
+        // 配列が返されることを確認
+        $this->assertIsArray($keywords);
+
+        // 正規化されたキーワードが含まれていることを確認
+        $this->assertContains('cover', $keywords);
+        $this->assertContains('mv', $keywords);
+        $this->assertContains('vtuber', $keywords);
+        $this->assertContains('オリジナル', $keywords);
+
+        // 複数のキーワードが含まれていることを確認
+        $this->assertGreaterThanOrEqual(10, count($keywords));
+    }
+
+    /**
      * エッジケースのテスト
      */
     public function test_edge_cases(): void
