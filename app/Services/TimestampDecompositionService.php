@@ -418,7 +418,7 @@ class TimestampDecompositionService
                     ->from('timestamp_decompositions')
                     ->whereColumn('timestamp_decompositions.normalized_text', 'ts_items.normalized_text');
             })
-            ->whereRaw("text REGEXP '[/／−－ー:：|｜-]'") // ハイフンは末尾に配置して範囲指定を回避
+            ->whereRaw("text REGEXP '[/／−－:：|｜-]'") // ハイフンは末尾に、長音記号（ー）は含まない（誤検出防止）
             ->groupBy('normalized_text')
             ->get()
             ->count();

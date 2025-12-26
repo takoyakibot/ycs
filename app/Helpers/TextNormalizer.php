@@ -158,8 +158,9 @@ class TextNormalizer
     /**
      * 区切り文字パターン（正規化前のテキスト用）
      * 類似の区切り文字を含む
+     * 注意: 長音記号（ー U+30FC）は含まない（コーヒー等の誤分割を防ぐため）
      */
-    private const SEPARATOR_PATTERN = '/[\/／\-−－ー:：|｜]/u';
+    private const SEPARATOR_PATTERN = '/[\/／\-−－:：|｜]/u';
 
     /**
      * 無視すべきキーワード（カバー関連など）
