@@ -33,6 +33,13 @@ class TimestampDecompositionService
             ->where('text', '!=', '')
             ->where('is_display', true)
             ->whereHas('archive', fn ($q) => $q->where('is_display', true))
+            // 「楽曲でない」とマークされたタイムスタンプを除外
+            ->whereNotExists(function ($query) {
+                $query->select(DB::raw(1))
+                    ->from('timestamp_song_mappings')
+                    ->whereColumn('timestamp_song_mappings.normalized_text', 'ts_items.normalized_text')
+                    ->where('timestamp_song_mappings.is_not_song', true);
+            })
             ->whereNotExists(function ($query) {
                 $query->select(DB::raw(1))
                     ->from('timestamp_decompositions')
@@ -413,6 +420,13 @@ class TimestampDecompositionService
             ->where('text', '!=', '')
             ->where('is_display', true)
             ->whereHas('archive', fn ($q) => $q->where('is_display', true))
+            // 「楽曲でない」とマークされたタイムスタンプを除外
+            ->whereNotExists(function ($query) {
+                $query->select(DB::raw(1))
+                    ->from('timestamp_song_mappings')
+                    ->whereColumn('timestamp_song_mappings.normalized_text', 'ts_items.normalized_text')
+                    ->where('timestamp_song_mappings.is_not_song', true);
+            })
             ->whereNotExists(function ($query) {
                 $query->select(DB::raw(1))
                     ->from('timestamp_decompositions')
