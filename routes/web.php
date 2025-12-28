@@ -39,6 +39,7 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::get('/songs/decompose', [TimestampDecompositionController::class, 'index'])->name('songs.decompose');
     Route::get('api/songs/decompose/next', [TimestampDecompositionController::class, 'next'])->name('songs.decompose.next');
     Route::post('api/songs/decompose/select', [TimestampDecompositionController::class, 'select'])->name('songs.decompose.select');
+    Route::post('api/songs/decompose/whole-title', [TimestampDecompositionController::class, 'saveAsWholeTitle'])->name('songs.decompose.wholeTitle');
     Route::post('api/songs/decompose/{id}/skip', [TimestampDecompositionController::class, 'skip'])->name('songs.decompose.skip');
     Route::get('api/songs/decompose/statistics', [TimestampDecompositionController::class, 'statistics'])->name('songs.decompose.statistics');
     Route::post('api/songs/decompose/scan', [TimestampDecompositionController::class, 'scan'])->name('songs.decompose.scan');

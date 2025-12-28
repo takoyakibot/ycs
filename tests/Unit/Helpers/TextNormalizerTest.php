@@ -323,4 +323,39 @@ class TextNormalizerTest extends TestCase
         // 途中で切れた4バイト文字
         $this->assertTrue(mb_check_encoding(TextNormalizer::sanitizeUtf8("test\xF0\x9Fvalue"), 'UTF-8'));
     }
+
+    /**
+     * 長音記号（ー）が区切り文字として誤検出されないことをテスト
+     */
+    public function test_prolonged_sound_mark_not_treated_as_separator(): void
+    {
+        // 長音記号を含む単語は区切り文字ありと判定されない
+        $this->assertFalse(TextNormalizer::hasSeparators('コーヒー'));
+        $this->assertFalse(TextNormalizer::hasSeparators('ゲーム'));
+        $this->assertFalse(TextNormalizer::hasSeparators('アーティスト'));
+        $this->assertFalse(TextNormalizer::hasSeparators('ラーメン'));
+
+        // 長音記号を含む単語は分割されない
+        $result = TextNormalizer::splitBySeparators('コーヒー');
+        $this->assertEquals(['コーヒー'], $result['parts']);
+        $this->assertEquals(0, $result['separator_count']);
+        $this->assertFalse($result['has_separators']);
+
+        // 実際の区切り文字（/）がある場合は検出される
+        $this->assertTrue(TextNormalizer::hasSeparators('アーティスト / 曲名'));
+        $result = TextNormalizer::splitBySeparators('アーティスト / 曲名');
+        $this->assertEquals(['アーティスト', '曲名'], $result['parts']);
+        $this->assertEquals(1, $result['separator_count']);
+        $this->assertTrue($result['has_separators']);
+
+        // ハイフン（-）は区切り文字として検出される
+        $this->assertTrue(TextNormalizer::hasSeparators('アーティスト - 曲名'));
+        $result = TextNormalizer::splitBySeparators('アーティスト - 曲名');
+        $this->assertEquals(['アーティスト', '曲名'], $result['parts']);
+
+        // 長音記号と実際の区切り文字が混在するケース
+        $this->assertTrue(TextNormalizer::hasSeparators('コーヒー / カフェラテ'));
+        $result = TextNormalizer::splitBySeparators('コーヒー / カフェラテ');
+        $this->assertEquals(['コーヒー', 'カフェラテ'], $result['parts']);
+    }
 }

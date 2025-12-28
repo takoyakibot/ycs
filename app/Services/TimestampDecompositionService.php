@@ -33,6 +33,13 @@ class TimestampDecompositionService
             ->where('text', '!=', '')
             ->where('is_display', true)
             ->whereHas('archive', fn ($q) => $q->where('is_display', true))
+            // 「楽曲でない」とマークされたタイムスタンプを除外
+            ->whereNotExists(function ($query) {
+                $query->select(DB::raw(1))
+                    ->from('timestamp_song_mappings')
+                    ->whereColumn('timestamp_song_mappings.normalized_text', 'ts_items.normalized_text')
+                    ->where('timestamp_song_mappings.is_not_song', true);
+            })
             ->whereNotExists(function ($query) {
                 $query->select(DB::raw(1))
                     ->from('timestamp_decompositions')
@@ -136,6 +143,13 @@ class TimestampDecompositionService
     public function getNextPending(): ?TimestampDecomposition
     {
         return TimestampDecomposition::pending()
+            // 「楽曲でない」とマークされたタイムスタンプを除外
+            ->whereNotExists(function ($query) {
+                $query->select(DB::raw(1))
+                    ->from('timestamp_song_mappings')
+                    ->whereColumn('timestamp_song_mappings.normalized_text', 'timestamp_decompositions.normalized_text')
+                    ->where('timestamp_song_mappings.is_not_song', true);
+            })
             ->orderBy('separator_count', 'asc') // パーツが少ないものから処理（簡単なものから）
             ->orderBy('created_at', 'asc')
             ->first();
@@ -182,6 +196,30 @@ class TimestampDecompositionService
         return [
             'decomposition' => $decomposition->fresh(),
             'cascaded_count' => $cascadedCount,
+        ];
+    }
+
+    /**
+     * 全体を楽曲名として保存（分割しない）
+     *
+     * @return array{decomposition: TimestampDecomposition}
+     */
+    public function saveAsWholeTitle(string $id): array
+    {
+        $decomposition = TimestampDecomposition::findOrFail($id);
+
+        // 元テキスト全体を楽曲名として設定
+        $decomposition->update([
+            'title_part_index' => null, // パーツ選択ではないのでnull
+            'artist_part_index' => null,
+            'derived_title' => $decomposition->original_text,
+            'derived_artist' => null,
+            'status' => TimestampDecomposition::STATUS_SELECTED,
+            'updated_by' => Auth::id(),
+        ]);
+
+        return [
+            'decomposition' => $decomposition->fresh(),
         ];
     }
 
@@ -393,9 +431,19 @@ class TimestampDecompositionService
      */
     public function getStatistics(): array
     {
+        // 「楽曲でない」を除外したpending件数
+        $pendingCount = TimestampDecomposition::where('status', TimestampDecomposition::STATUS_PENDING)
+            ->whereNotExists(function ($query) {
+                $query->select(DB::raw(1))
+                    ->from('timestamp_song_mappings')
+                    ->whereColumn('timestamp_song_mappings.normalized_text', 'timestamp_decompositions.normalized_text')
+                    ->where('timestamp_song_mappings.is_not_song', true);
+            })
+            ->count();
+
         return [
             'total' => TimestampDecomposition::count(),
-            'pending' => TimestampDecomposition::where('status', TimestampDecomposition::STATUS_PENDING)->count(),
+            'pending' => $pendingCount,
             'selected' => TimestampDecomposition::where('status', TimestampDecomposition::STATUS_SELECTED)->count(),
             'skipped' => TimestampDecomposition::where('status', TimestampDecomposition::STATUS_SKIPPED)->count(),
             'auto_matched' => TimestampDecomposition::where('status', TimestampDecomposition::STATUS_AUTO_MATCHED)->count(),
@@ -413,12 +461,19 @@ class TimestampDecompositionService
             ->where('text', '!=', '')
             ->where('is_display', true)
             ->whereHas('archive', fn ($q) => $q->where('is_display', true))
+            // 「楽曲でない」とマークされたタイムスタンプを除外
+            ->whereNotExists(function ($query) {
+                $query->select(DB::raw(1))
+                    ->from('timestamp_song_mappings')
+                    ->whereColumn('timestamp_song_mappings.normalized_text', 'ts_items.normalized_text')
+                    ->where('timestamp_song_mappings.is_not_song', true);
+            })
             ->whereNotExists(function ($query) {
                 $query->select(DB::raw(1))
                     ->from('timestamp_decompositions')
                     ->whereColumn('timestamp_decompositions.normalized_text', 'ts_items.normalized_text');
             })
-            ->whereRaw("text REGEXP '[/／−－ー:：|｜-]'") // ハイフンは末尾に配置して範囲指定を回避
+            ->whereRaw("text REGEXP '[/／−－:：|｜-]'") // ハイフンは末尾に、長音記号（ー）は含まない（誤検出防止）
             ->groupBy('normalized_text')
             ->get()
             ->count();

@@ -3,7 +3,11 @@
 namespace Tests\Unit\Services;
 
 use App\Helpers\TextNormalizer;
+use App\Models\Archive;
+use App\Models\Channel;
 use App\Models\TimestampDecomposition;
+use App\Models\TimestampSongMapping;
+use App\Models\TsItem;
 use App\Models\User;
 use App\Services\TimestampDecompositionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -300,5 +304,166 @@ class TimestampDecompositionServiceTest extends TestCase
 
         $target = $targetDecomposition->fresh();
         $this->assertEquals(TimestampDecomposition::STATUS_PENDING, $target->status);
+    }
+
+    /**
+     * 「楽曲でない」とマークされたタイムスタンプがスキャン対象から除外されることをテスト
+     */
+    public function test_scan_excludes_not_song_timestamps(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        // チャンネルとアーカイブを作成
+        $channel = Channel::create([
+            'channel_id' => 'UC_test_channel',
+            'handle' => '@test',
+            'title' => 'Test Channel',
+            'user_id' => $user->id,
+        ]);
+
+        $archive = Archive::create([
+            'id' => (string) Str::ulid(),
+            'video_id' => 'test_video_1',
+            'channel_id' => 'UC_test_channel',
+            'title' => 'Test Video',
+            'is_display' => true,
+            'published_at' => now(),
+            'comments_updated_at' => now(),
+        ]);
+
+        // 通常のタイムスタンプ（スキャン対象）
+        $normalTs = TsItem::create([
+            'id' => (string) Str::ulid(),
+            'video_id' => 'test_video_1',
+            'comment_id' => 'test_video_1',
+            'type' => '1',
+            'ts_text' => '0:00',
+            'ts_num' => 0,
+            'text' => 'アーティスト / 曲名',
+            'normalized_text' => TextNormalizer::normalize('アーティスト / 曲名'),
+            'is_display' => true,
+        ]);
+
+        // 「楽曲でない」とマークされたタイムスタンプ（スキャン対象外）
+        $notSongTs = TsItem::create([
+            'id' => (string) Str::ulid(),
+            'video_id' => 'test_video_1',
+            'comment_id' => 'test_video_1',
+            'type' => '1',
+            'ts_text' => '1:00',
+            'ts_num' => 60,
+            'text' => 'MC / トーク',
+            'normalized_text' => TextNormalizer::normalize('MC / トーク'),
+            'is_display' => true,
+        ]);
+
+        // 「楽曲でない」としてマッピングを作成
+        TimestampSongMapping::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize('MC / トーク'),
+            'is_not_song' => true,
+            'status' => 'not_song',
+        ]);
+
+        // スキャン実行
+        $count = $this->service->scanAndDecompose();
+
+        // 1件のみスキャンされることを確認（not_songは除外）
+        $this->assertEquals(1, $count);
+
+        // 通常のタイムスタンプは分解されている
+        $this->assertDatabaseHas('timestamp_decompositions', [
+            'normalized_text' => TextNormalizer::normalize('アーティスト / 曲名'),
+        ]);
+
+        // 「楽曲でない」タイムスタンプは分解されていない
+        $this->assertDatabaseMissing('timestamp_decompositions', [
+            'normalized_text' => TextNormalizer::normalize('MC / トーク'),
+        ]);
+    }
+
+    /**
+     * 既にスキャン済みの「楽曲でない」タイムスタンプがgetNextPendingから除外されることをテスト
+     */
+    public function test_get_next_pending_excludes_not_song_timestamps(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        // 通常のタイムスタンプ（表示対象）
+        $normalDecomposition = TimestampDecomposition::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize('アーティスト / 曲名'),
+            'original_text' => 'アーティスト / 曲名',
+            'parts' => ['アーティスト', '曲名'],
+            'separator_count' => 1,
+            'status' => TimestampDecomposition::STATUS_PENDING,
+            'confidence' => 0.5,
+        ]);
+
+        // スキャン済みだが「楽曲でない」とマークされたタイムスタンプ
+        $notSongDecomposition = TimestampDecomposition::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize('MC / トーク'),
+            'original_text' => 'MC / トーク',
+            'parts' => ['MC', 'トーク'],
+            'separator_count' => 1,
+            'status' => TimestampDecomposition::STATUS_PENDING,
+            'confidence' => 0.5,
+        ]);
+
+        // 「楽曲でない」としてマッピングを作成
+        TimestampSongMapping::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize('MC / トーク'),
+            'is_not_song' => true,
+            'status' => 'not_song',
+        ]);
+
+        // getNextPendingを実行
+        $next = $this->service->getNextPending();
+
+        // 通常のタイムスタンプのみが返される
+        $this->assertNotNull($next);
+        $this->assertEquals($normalDecomposition->id, $next->id);
+
+        // 通常のタイムスタンプを処理済みにする
+        $normalDecomposition->update(['status' => TimestampDecomposition::STATUS_SELECTED]);
+
+        // 再度getNextPendingを実行すると、「楽曲でない」はスキップされてnullになる
+        $next = $this->service->getNextPending();
+        $this->assertNull($next);
+    }
+
+    /**
+     * saveAsWholeTitleで全体を楽曲名として保存できることをテスト
+     */
+    public function test_save_as_whole_title(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        // 分解済みのタイムスタンプを作成
+        $decomposition = TimestampDecomposition::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize('Night of Fire'),
+            'original_text' => 'Night of Fire',
+            'parts' => ['Night', 'of', 'Fire'],
+            'separator_count' => 2,
+            'status' => TimestampDecomposition::STATUS_PENDING,
+            'confidence' => 0.3,
+        ]);
+
+        // 全体を楽曲名として保存
+        $result = $this->service->saveAsWholeTitle($decomposition->id);
+
+        // 結果を確認
+        $saved = $result['decomposition'];
+        $this->assertEquals(TimestampDecomposition::STATUS_SELECTED, $saved->status);
+        $this->assertEquals('Night of Fire', $saved->derived_title);
+        $this->assertNull($saved->derived_artist);
+        $this->assertNull($saved->title_part_index);
+        $this->assertNull($saved->artist_part_index);
     }
 }

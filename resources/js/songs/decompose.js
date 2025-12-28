@@ -41,6 +41,9 @@ class TimestampDecomposition {
         // スキップボタン
         document.getElementById('skipBtn').addEventListener('click', () => this.skip());
 
+        // 全体を楽曲名ボタン
+        document.getElementById('wholeTitleBtn').addEventListener('click', () => this.saveAsWholeTitle());
+
         // リセットボタン
         document.getElementById('resetBtn').addEventListener('click', () => this.reset());
 
@@ -109,6 +112,13 @@ class TimestampDecomposition {
             if (e.key.toLowerCase() === 's') {
                 e.preventDefault();
                 this.skip();
+                return;
+            }
+
+            // A: 全体を楽曲名として登録
+            if (e.key.toLowerCase() === 'a') {
+                e.preventDefault();
+                this.saveAsWholeTitle();
                 return;
             }
 
@@ -410,6 +420,30 @@ class TimestampDecomposition {
         } catch (error) {
             console.error('スキップに失敗しました:', error);
             toast.error('スキップに失敗しました');
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    /**
+     * 全体を楽曲名として登録（分割しない）
+     */
+    async saveAsWholeTitle() {
+        if (!this.currentItem) return;
+
+        try {
+            this.showLoading();
+            await axios.post('/api/songs/decompose/whole-title', {
+                id: this.currentItem.id,
+                link_to_song: true
+            });
+
+            toast.success('全体を楽曲名として登録しました');
+            await this.loadStatistics();
+            await this.loadNext();
+        } catch (error) {
+            console.error('登録に失敗しました:', error);
+            toast.error('登録に失敗しました');
         } finally {
             this.hideLoading();
         }
