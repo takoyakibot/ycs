@@ -435,4 +435,35 @@ class TimestampDecompositionServiceTest extends TestCase
         $next = $this->service->getNextPending();
         $this->assertNull($next);
     }
+
+    /**
+     * saveAsWholeTitleで全体を楽曲名として保存できることをテスト
+     */
+    public function test_save_as_whole_title(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        // 分解済みのタイムスタンプを作成
+        $decomposition = TimestampDecomposition::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize('Night of Fire'),
+            'original_text' => 'Night of Fire',
+            'parts' => ['Night', 'of', 'Fire'],
+            'separator_count' => 2,
+            'status' => TimestampDecomposition::STATUS_PENDING,
+            'confidence' => 0.3,
+        ]);
+
+        // 全体を楽曲名として保存
+        $result = $this->service->saveAsWholeTitle($decomposition->id);
+
+        // 結果を確認
+        $saved = $result['decomposition'];
+        $this->assertEquals(TimestampDecomposition::STATUS_SELECTED, $saved->status);
+        $this->assertEquals('Night of Fire', $saved->derived_title);
+        $this->assertNull($saved->derived_artist);
+        $this->assertNull($saved->title_part_index);
+        $this->assertNull($saved->artist_part_index);
+    }
 }

@@ -200,6 +200,30 @@ class TimestampDecompositionService
     }
 
     /**
+     * 全体を楽曲名として保存（分割しない）
+     *
+     * @return array{decomposition: TimestampDecomposition}
+     */
+    public function saveAsWholeTitle(string $id): array
+    {
+        $decomposition = TimestampDecomposition::findOrFail($id);
+
+        // 元テキスト全体を楽曲名として設定
+        $decomposition->update([
+            'title_part_index' => null, // パーツ選択ではないのでnull
+            'artist_part_index' => null,
+            'derived_title' => $decomposition->original_text,
+            'derived_artist' => null,
+            'status' => TimestampDecomposition::STATUS_SELECTED,
+            'updated_by' => Auth::id(),
+        ]);
+
+        return [
+            'decomposition' => $decomposition->fresh(),
+        ];
+    }
+
+    /**
      * アーティスト選別のカスケード処理
      * 同じアーティスト名を持つpendingなタイムスタンプを自動的に処理
      *

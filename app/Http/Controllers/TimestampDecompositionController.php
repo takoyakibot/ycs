@@ -100,6 +100,41 @@ class TimestampDecompositionController extends Controller
     }
 
     /**
+     * 全体を楽曲名として保存（分割しない）
+     */
+    public function saveAsWholeTitle(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'id' => 'required|string',
+            'link_to_song' => 'boolean',
+        ]);
+
+        $result = $this->service->saveAsWholeTitle($validated['id']);
+        $decomposition = $result['decomposition'];
+
+        // 楽曲マスタへの紐付けも同時に行う場合
+        $song = null;
+        if ($request->boolean('link_to_song', true) && $decomposition->derived_title) {
+            $song = $this->service->linkToSong($decomposition);
+        }
+
+        return response()->json([
+            'success' => true,
+            'decomposition' => [
+                'id' => $decomposition->id,
+                'derived_title' => $decomposition->derived_title,
+                'derived_artist' => $decomposition->derived_artist,
+                'status' => $decomposition->status,
+            ],
+            'song' => $song ? [
+                'id' => $song->id,
+                'title' => $song->title,
+                'artist' => $song->artist,
+            ] : null,
+        ]);
+    }
+
+    /**
      * スキップ
      */
     public function skip(string $id): JsonResponse
