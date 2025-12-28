@@ -382,4 +382,57 @@ class TimestampDecompositionServiceTest extends TestCase
             'normalized_text' => TextNormalizer::normalize('MC / トーク'),
         ]);
     }
+
+    /**
+     * 既にスキャン済みの「楽曲でない」タイムスタンプがgetNextPendingから除外されることをテスト
+     */
+    public function test_get_next_pending_excludes_not_song_timestamps(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        // 通常のタイムスタンプ（表示対象）
+        $normalDecomposition = TimestampDecomposition::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize('アーティスト / 曲名'),
+            'original_text' => 'アーティスト / 曲名',
+            'parts' => ['アーティスト', '曲名'],
+            'separator_count' => 1,
+            'status' => TimestampDecomposition::STATUS_PENDING,
+            'confidence' => 0.5,
+        ]);
+
+        // スキャン済みだが「楽曲でない」とマークされたタイムスタンプ
+        $notSongDecomposition = TimestampDecomposition::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize('MC / トーク'),
+            'original_text' => 'MC / トーク',
+            'parts' => ['MC', 'トーク'],
+            'separator_count' => 1,
+            'status' => TimestampDecomposition::STATUS_PENDING,
+            'confidence' => 0.5,
+        ]);
+
+        // 「楽曲でない」としてマッピングを作成
+        TimestampSongMapping::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize('MC / トーク'),
+            'is_not_song' => true,
+            'status' => 'not_song',
+        ]);
+
+        // getNextPendingを実行
+        $next = $this->service->getNextPending();
+
+        // 通常のタイムスタンプのみが返される
+        $this->assertNotNull($next);
+        $this->assertEquals($normalDecomposition->id, $next->id);
+
+        // 通常のタイムスタンプを処理済みにする
+        $normalDecomposition->update(['status' => TimestampDecomposition::STATUS_SELECTED]);
+
+        // 再度getNextPendingを実行すると、「楽曲でない」はスキップされてnullになる
+        $next = $this->service->getNextPending();
+        $this->assertNull($next);
+    }
 }

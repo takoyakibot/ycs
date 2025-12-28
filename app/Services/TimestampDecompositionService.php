@@ -143,6 +143,13 @@ class TimestampDecompositionService
     public function getNextPending(): ?TimestampDecomposition
     {
         return TimestampDecomposition::pending()
+            // 「楽曲でない」とマークされたタイムスタンプを除外
+            ->whereNotExists(function ($query) {
+                $query->select(DB::raw(1))
+                    ->from('timestamp_song_mappings')
+                    ->whereColumn('timestamp_song_mappings.normalized_text', 'timestamp_decompositions.normalized_text')
+                    ->where('timestamp_song_mappings.is_not_song', true);
+            })
             ->orderBy('separator_count', 'asc') // パーツが少ないものから処理（簡単なものから）
             ->orderBy('created_at', 'asc')
             ->first();
@@ -400,9 +407,19 @@ class TimestampDecompositionService
      */
     public function getStatistics(): array
     {
+        // 「楽曲でない」を除外したpending件数
+        $pendingCount = TimestampDecomposition::where('status', TimestampDecomposition::STATUS_PENDING)
+            ->whereNotExists(function ($query) {
+                $query->select(DB::raw(1))
+                    ->from('timestamp_song_mappings')
+                    ->whereColumn('timestamp_song_mappings.normalized_text', 'timestamp_decompositions.normalized_text')
+                    ->where('timestamp_song_mappings.is_not_song', true);
+            })
+            ->count();
+
         return [
             'total' => TimestampDecomposition::count(),
-            'pending' => TimestampDecomposition::where('status', TimestampDecomposition::STATUS_PENDING)->count(),
+            'pending' => $pendingCount,
             'selected' => TimestampDecomposition::where('status', TimestampDecomposition::STATUS_SELECTED)->count(),
             'skipped' => TimestampDecomposition::where('status', TimestampDecomposition::STATUS_SKIPPED)->count(),
             'auto_matched' => TimestampDecomposition::where('status', TimestampDecomposition::STATUS_AUTO_MATCHED)->count(),
