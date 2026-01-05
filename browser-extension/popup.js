@@ -3,6 +3,7 @@
  */
 
 let isCapturing = false;
+let isScanning = false;
 let currentTabId = null;
 
 // DOM要素
@@ -17,6 +18,8 @@ const elements = {
   copyBtn: document.getElementById('copy-btn'),
   clearBtn: document.getElementById('clear-btn'),
   toggleOverlayBtn: document.getElementById('toggle-overlay-btn'),
+  toggleGraphBtn: document.getElementById('toggle-graph-btn'),
+  scanBtn: document.getElementById('scan-btn'),
   errorContainer: document.getElementById('error-container'),
   infoContainer: document.getElementById('info-container'),
   volumeThreshold: document.getElementById('volume-threshold'),
@@ -40,11 +43,29 @@ async function init() {
     return;
   }
 
+  // コンテンツスクリプトが読み込まれているか確認
+  const contentScriptReady = await checkContentScript();
+  if (!contentScriptReady) {
+    showInfo('ページを再読み込みしてください（拡張機能の更新後に必要です）');
+  }
+
   // 現在の状態を取得
   await refreshStatus();
 
   // イベントリスナーを設定
   setupEventListeners();
+}
+
+/**
+ * コンテンツスクリプトが読み込まれているか確認
+ */
+async function checkContentScript() {
+  try {
+    const response = await chrome.tabs.sendMessage(currentTabId, { type: 'PING' });
+    return response === 'PONG';
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -55,6 +76,8 @@ function setupEventListeners() {
   elements.copyBtn.addEventListener('click', copyTimestamps);
   elements.clearBtn.addEventListener('click', clearTimestamps);
   elements.toggleOverlayBtn.addEventListener('click', toggleOverlay);
+  elements.toggleGraphBtn.addEventListener('click', toggleVolumeGraph);
+  elements.scanBtn.addEventListener('click', toggleScan);
 
   // 設定変更
   elements.volumeThreshold.addEventListener('change', updateConfig);
@@ -71,6 +94,7 @@ async function refreshStatus() {
     const response = await chrome.runtime.sendMessage({ type: 'GET_STATUS' });
 
     isCapturing = response.isCapturing;
+    isScanning = response.isScanning;
     updateUI(response);
 
     // 設定値を反映
@@ -106,6 +130,15 @@ function updateUI(data) {
     elements.toggleBtn.classList.add('btn-start');
   }
 
+  // スキャンボタンの状態
+  if (isScanning) {
+    elements.scanBtn.classList.add('btn-scanning');
+    elements.scanBtn.textContent = 'スキャン停止';
+  } else {
+    elements.scanBtn.classList.remove('btn-scanning');
+    elements.scanBtn.textContent = '高速スキャン';
+  }
+
   // タイムスタンプ一覧
   renderTimestamps(data.timestamps || []);
 }
@@ -138,13 +171,26 @@ function renderTimestamps(timestamps) {
 }
 
 /**
+ * コンテンツスクリプトにメッセージを送信（エラーを無視）
+ */
+async function sendToContentScript(message) {
+  try {
+    return await chrome.tabs.sendMessage(currentTabId, message);
+  } catch (error) {
+    // コンテンツスクリプトが読み込まれていない場合は無視
+    console.log('Content script not ready:', error.message);
+    return null;
+  }
+}
+
+/**
  * キャプチャ開始/停止を切り替え
  */
 async function toggleCapture() {
   try {
     if (isCapturing) {
       await chrome.runtime.sendMessage({ type: 'STOP_CAPTURE' });
-      await chrome.tabs.sendMessage(currentTabId, { type: 'CAPTURE_STOPPED' });
+      await sendToContentScript({ type: 'CAPTURE_STOPPED' });
     } else {
       const response = await chrome.runtime.sendMessage({
         type: 'START_CAPTURE',
@@ -156,7 +202,7 @@ async function toggleCapture() {
         return;
       }
 
-      await chrome.tabs.sendMessage(currentTabId, { type: 'CAPTURE_STARTED' });
+      await sendToContentScript({ type: 'CAPTURE_STARTED' });
     }
 
     await refreshStatus();
@@ -170,14 +216,7 @@ async function toggleCapture() {
  * 指定時刻にシーク
  */
 async function seekToTime(time) {
-  try {
-    await chrome.tabs.sendMessage(currentTabId, {
-      type: 'SEEK_TO_TIME',
-      time
-    });
-  } catch (error) {
-    console.error('シークエラー:', error);
-  }
+  await sendToContentScript({ type: 'SEEK_TO_TIME', time });
 }
 
 /**
@@ -216,11 +255,7 @@ async function clearTimestamps() {
  * オーバーレイ表示を切り替え
  */
 async function toggleOverlay() {
-  try {
-    await chrome.tabs.sendMessage(currentTabId, { type: 'TOGGLE_OVERLAY' });
-  } catch (error) {
-    console.error('オーバーレイ切り替えエラー:', error);
-  }
+  await sendToContentScript({ type: 'TOGGLE_OVERLAY' });
 }
 
 /**
@@ -252,6 +287,30 @@ function showError(message) {
  */
 function showInfo(message) {
   elements.infoContainer.innerHTML = `<div class="info-message">${message}</div>`;
+}
+
+/**
+ * 音量グラフ表示を切り替え
+ */
+async function toggleVolumeGraph() {
+  try {
+    await chrome.runtime.sendMessage({ type: 'TOGGLE_VOLUME_GRAPH' });
+  } catch (error) {
+    console.error('グラフ切り替えエラー:', error);
+  }
+}
+
+/**
+ * 高速スキャンを切り替え
+ */
+async function toggleScan() {
+  try {
+    await chrome.runtime.sendMessage({ type: 'START_SCAN' });
+    await refreshStatus();
+  } catch (error) {
+    console.error('スキャン切り替えエラー:', error);
+    showError('スキャンに失敗しました: ' + error.message);
+  }
 }
 
 // 初期化実行
