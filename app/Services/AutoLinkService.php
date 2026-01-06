@@ -39,13 +39,14 @@ class AutoLinkService
      *
      * @param  int  $limit  処理件数上限
      * @param  callable|null  $onProgress  進捗コールバック function(string $message): void
-     * @return array{processed: int, linked: int, failed: int, skipped: int}
+     * @return array{processed: int, linked: int, pending: int, failed: int, skipped: int}
      */
     public function autoLinkUnlinkedTimestamps(int $limit = 100, ?callable $onProgress = null): array
     {
         $result = [
             'processed' => 0,
             'linked' => 0,
+            'pending' => 0,
             'failed' => 0,
             'skipped' => 0,
         ];
@@ -70,6 +71,9 @@ class AutoLinkService
                 if ($linkResult === 'linked') {
                     $result['linked']++;
                     $onProgress && $onProgress(sprintf('[%d/%d] 紐付け成功: %s', $index + 1, count($unlinkedTexts), $item['text']));
+                } elseif ($linkResult === 'pending') {
+                    $result['pending']++;
+                    $onProgress && $onProgress(sprintf('[%d/%d] 保留: %s', $index + 1, count($unlinkedTexts), $item['text']));
                 } elseif ($linkResult === 'skipped') {
                     $result['skipped']++;
                     $onProgress && $onProgress(sprintf('[%d/%d] スキップ: %s', $index + 1, count($unlinkedTexts), $item['text']));
@@ -134,7 +138,7 @@ class AutoLinkService
     /**
      * 単一テキストの自動紐付け処理
      *
-     * @return string 'linked'|'skipped'|'not_found'
+     * @return string 'linked'|'pending'|'skipped'|'not_found'
      */
     protected function processAutoLink(string $text, string $normalizedText): string
     {
@@ -172,16 +176,29 @@ class AutoLinkService
             return 'linked';
         }
 
-        // 類似度チェック（閾値0.9で厳しめ）
-        $threshold = config('songs.auto_link.similarity_threshold', 0.9);
-        $similarSongs = $this->songSearchService->findSimilarSongs($normalizedTitle, $normalizedArtist, $threshold);
+        // 閾値を取得（0.0〜1.0の値）
+        $similarityThreshold = config('songs.auto_link.similarity_threshold', 0.95);
+        $pendingThreshold = config('songs.auto_link.pending_threshold', 0.85);
+
+        // 類似度チェック（保留閾値以上の楽曲を検索）
+        $similarSongs = $this->songSearchService->findSimilarSongs($normalizedTitle, $normalizedArtist, $pendingThreshold);
 
         if (count($similarSongs) > 0) {
-            // 類似曲が見つかった場合、最も類似度の高い楽曲に紐付ける
-            $bestMatch = $similarSongs[0]['song'];
-            $this->createAutoLinkMapping($normalizedText, $bestMatch->id);
+            $bestMatch = $similarSongs[0];
+            // findSimilarSongsはパーセント値（0〜100）を返すので、0〜1に変換して比較
+            $bestSimilarity = $bestMatch['similarity'] / 100;
 
-            return 'linked';
+            if ($bestSimilarity >= $similarityThreshold) {
+                // 自動紐付け閾値以上 → 紐付け
+                $this->createAutoLinkMapping($normalizedText, $bestMatch['song']->id);
+
+                return 'linked';
+            } else {
+                // 保留閾値以上、自動紐付け閾値未満 → 保留
+                $this->createPendingMapping($normalizedText, $bestMatch['song']->id, $bestSimilarity);
+
+                return 'pending';
+            }
         }
 
         // 新規楽曲マスタを作成
@@ -217,6 +234,7 @@ class AutoLinkService
                 $mapping->update([
                     'song_id' => $songId,
                     'is_not_song' => false,
+                    'status' => TimestampSongMapping::STATUS_LINKED,
                     'is_manual' => false,
                     'confidence' => 0.8, // 自動紐付けは0.8
                 ]);
@@ -226,8 +244,39 @@ class AutoLinkService
                     'normalized_text' => $normalizedText,
                     'song_id' => $songId,
                     'is_not_song' => false,
+                    'status' => TimestampSongMapping::STATUS_LINKED,
                     'is_manual' => false,
                     'confidence' => 0.8,
+                ]);
+            }
+        });
+    }
+
+    /**
+     * 保留マッピングを作成
+     */
+    protected function createPendingMapping(string $normalizedText, string $songId, float $similarity): void
+    {
+        DB::transaction(function () use ($normalizedText, $songId, $similarity) {
+            $mapping = TimestampSongMapping::where('normalized_text', $normalizedText)->first();
+
+            if ($mapping) {
+                $mapping->update([
+                    'song_id' => $songId,
+                    'is_not_song' => false,
+                    'status' => TimestampSongMapping::STATUS_PENDING,
+                    'is_manual' => false,
+                    'confidence' => $similarity,
+                ]);
+            } else {
+                TimestampSongMapping::create([
+                    'id' => Str::ulid(),
+                    'normalized_text' => $normalizedText,
+                    'song_id' => $songId,
+                    'is_not_song' => false,
+                    'status' => TimestampSongMapping::STATUS_PENDING,
+                    'is_manual' => false,
+                    'confidence' => $similarity,
                 ]);
             }
         });
