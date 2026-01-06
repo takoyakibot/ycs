@@ -391,4 +391,138 @@ class AutoLinkServiceTest extends TestCase
         $this->assertNotEmpty($messages);
         $this->assertStringContainsString('処理します', $messages[0]);
     }
+
+    /**
+     * 類似度が保留閾値以上かつ自動紐付け閾値未満の場合、保留になるテスト
+     */
+    public function test_auto_link_creates_pending_mapping_for_medium_similarity(): void
+    {
+        // 設定: 自動紐付け閾値0.95、保留閾値0.85
+        config(['songs.auto_link.similarity_threshold' => 0.95]);
+        config(['songs.auto_link.pending_threshold' => 0.85]);
+
+        // 既存楽曲を作成（類似だが完全一致ではない - 約91%の類似度になるように調整）
+        // "Test Song" vs "Test Song X" → タイトル類似度約82%
+        // "Test Artist" vs "Test Artist" → アーティスト類似度100%
+        // 平均: 約91% → 保留範囲（85%以上95%未満）
+        $existingSong = Song::factory()->create([
+            'title' => 'Test Song',
+            'artist' => 'Test Artist',
+            'spotify_track_id' => 'different_spotify_id',
+        ]);
+
+        // テストデータ作成
+        $channel = Channel::factory()->create();
+        $archive = Archive::factory()->create(['channel_id' => $channel->channel_id]);
+        TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'text' => 'Some Search Text',
+            'is_display' => 1,
+        ]);
+
+        // Spotify APIをモック（類似した結果を返す：約91%程度の類似度を狙う）
+        Http::fake([
+            'https://accounts.spotify.com/api/token' => Http::response([
+                'access_token' => 'test_token',
+            ], 200),
+            'https://api.spotify.com/v1/search*' => Http::response([
+                'tracks' => [
+                    'items' => [
+                        [
+                            'id' => 'new_spotify_id',
+                            'name' => 'Test Song X',
+                            'artists' => [['name' => 'Test Artist']],
+                        ],
+                    ],
+                ],
+            ], 200),
+        ]);
+
+        config(['services.spotify.client_id' => 'test_id']);
+        config(['services.spotify.client_secret' => 'test_secret']);
+
+        $result = $this->service->autoLinkUnlinkedTimestamps(10);
+
+        $this->assertEquals(1, $result['processed']);
+        $this->assertEquals(1, $result['pending']);
+        $this->assertEquals(0, $result['linked']);
+
+        // 保留状態でマッピングが作成されたことを確認
+        $this->assertDatabaseHas('timestamp_song_mappings', [
+            'song_id' => $existingSong->id,
+            'status' => TimestampSongMapping::STATUS_PENDING,
+            'is_manual' => false,
+        ]);
+    }
+
+    /**
+     * 類似度が自動紐付け閾値以上の場合、linkedになるテスト
+     */
+    public function test_auto_link_creates_linked_mapping_for_high_similarity(): void
+    {
+        // 設定: 自動紐付け閾値0.95、保留閾値0.85
+        config(['songs.auto_link.similarity_threshold' => 0.95]);
+        config(['songs.auto_link.pending_threshold' => 0.85]);
+
+        // 既存楽曲を作成（完全に同じタイトル・アーティスト）
+        $existingSong = Song::factory()->create([
+            'title' => 'Test Song',
+            'artist' => 'Test Artist',
+            'spotify_track_id' => 'different_spotify_id',
+        ]);
+
+        // テストデータ作成
+        $channel = Channel::factory()->create();
+        $archive = Archive::factory()->create(['channel_id' => $channel->channel_id]);
+        TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'text' => 'Some Search Text',
+            'is_display' => 1,
+        ]);
+
+        // Spotify APIをモック（完全一致の結果を返す）
+        Http::fake([
+            'https://accounts.spotify.com/api/token' => Http::response([
+                'access_token' => 'test_token',
+            ], 200),
+            'https://api.spotify.com/v1/search*' => Http::response([
+                'tracks' => [
+                    'items' => [
+                        [
+                            'id' => 'new_spotify_id',
+                            'name' => 'Test Song',
+                            'artists' => [['name' => 'Test Artist']],
+                        ],
+                    ],
+                ],
+            ], 200),
+        ]);
+
+        config(['services.spotify.client_id' => 'test_id']);
+        config(['services.spotify.client_secret' => 'test_secret']);
+
+        $result = $this->service->autoLinkUnlinkedTimestamps(10);
+
+        $this->assertEquals(1, $result['processed']);
+        $this->assertEquals(1, $result['linked']);
+        $this->assertEquals(0, $result['pending']);
+
+        // linked状態でマッピングが作成されたことを確認
+        $this->assertDatabaseHas('timestamp_song_mappings', [
+            'song_id' => $existingSong->id,
+            'status' => TimestampSongMapping::STATUS_LINKED,
+            'is_manual' => false,
+        ]);
+    }
+
+    /**
+     * 結果配列にpendingが含まれることを確認するテスト
+     */
+    public function test_auto_link_result_includes_pending_count(): void
+    {
+        $result = $this->service->autoLinkUnlinkedTimestamps(10);
+
+        $this->assertArrayHasKey('pending', $result);
+        $this->assertEquals(0, $result['pending']);
+    }
 }
