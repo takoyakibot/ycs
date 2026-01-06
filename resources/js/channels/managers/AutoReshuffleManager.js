@@ -94,35 +94,14 @@ export class AutoReshuffleManager {
     /**
      * 終了時刻を計算
      *
-     * 優先順位:
-     * 1. 楽曲長さあり & 次のTSあり → min(開始 + 楽曲長さ + 10秒, 次のTS)
-     * 2. 楽曲長さのみあり → 開始 + 楽曲長さ + 10秒
-     * 3. 次のTSのみあり → 次のTS - 10秒
-     * 4. どちらもなし → デフォルト5分
+     * 動画終了まで再生するため、終了時刻は設定しない。
+     * YT.PlayerState.ENDED で遷移を処理する。
      *
-     * @param {Object} timestamp - タイムスタンプオブジェクト
-     * @returns {number} 終了時刻（秒）
+     * @param {Object} timestamp - タイムスタンプオブジェクト（未使用）
+     * @returns {null} 常にnullを返す
      */
     calculateEndTime(timestamp) {
-        const startTime = timestamp.ts_num || 0;
-        const nextTsNum = timestamp.next_ts_num;
-        const durationMs = timestamp.mapping?.song?.duration_ms;
-        const durationSec = durationMs ? Math.ceil(durationMs / 1000) : null;
-        const defaultDuration = 5 * 60; // 5分
-
-        if (durationSec !== null && nextTsNum !== null) {
-            // 楽曲長さあり & 次のTSあり
-            return Math.min(startTime + durationSec + 10, nextTsNum);
-        } else if (durationSec !== null) {
-            // 楽曲長さのみあり
-            return startTime + durationSec + 10;
-        } else if (nextTsNum !== null) {
-            // 次のTSのみあり
-            return Math.max(startTime, nextTsNum - 10);
-        } else {
-            // どちらもなし（デフォルト5分）
-            return startTime + defaultDuration;
-        }
+        return null;
     }
 
     /**
@@ -352,14 +331,14 @@ export class AutoReshuffleManager {
             this.clearBufferingTimeout();
         }
 
-        // 自動再抽選: 再生状態に応じて監視を開始/停止
-        if (this.enabled && this.currentSongEndTime !== null) {
-            if (event.data === YT.PlayerState.PLAYING) {
-                this.startMonitor();
-            } else if (event.data === YT.PlayerState.PAUSED ||
-                       event.data === YT.PlayerState.ENDED) {
-                this.stopMonitor();
+        // 動画終了時に次のタイムスタンプに遷移（自動再抽選が有効な場合）
+        if (event.data === YT.PlayerState.ENDED && this.enabled) {
+            this.stopMonitor();
+            if (this.onSongEnd) {
+                this.onSongEnd();
             }
+        } else if (event.data === YT.PlayerState.PAUSED) {
+            this.stopMonitor();
         }
     }
 
