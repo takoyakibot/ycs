@@ -41,9 +41,8 @@ let originalPlaybackRate = 1;
 let audioInitialized = false; // 音声解析が初期化済みか
 
 // ズーム関連
-let zoomLevel = 1; // 1x, 2x, 4x, 8x など
-const MIN_ZOOM = 1;
-const MAX_ZOOM = 8;
+const ZOOM_LEVELS = [1, 1.5, 2, 3, 4, 5, 6, 7, 8];
+let zoomIndex = 0; // ZOOM_LEVELSのインデックス
 let lastSaveTime = 0; // 最後に音量データを保存した時刻
 const SAVE_INTERVAL = 3000; // 保存間隔（ミリ秒）
 
@@ -1081,7 +1080,7 @@ function resizeCanvas() {
 
   const containerRect = canvasContainer.getBoundingClientRect();
   const baseWidth = containerRect.width;
-  const zoomedWidth = baseWidth * zoomLevel;
+  const zoomedWidth = baseWidth * getZoomLevel();
 
   // ラッパーとCanvasの幅を設定
   canvasWrapper.style.width = `${zoomedWidth}px`;
@@ -1099,28 +1098,40 @@ function resizeCanvas() {
 }
 
 /**
- * ズームレベルを設定
+ * 現在のズームレベルを取得
  */
-function setZoomLevel(newZoom) {
-  const oldZoom = zoomLevel;
-  zoomLevel = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newZoom));
+function getZoomLevel() {
+  return ZOOM_LEVELS[zoomIndex];
+}
+
+/**
+ * ズームレベルを設定（delta: 1でズームイン、-1でズームアウト）
+ */
+function changeZoomLevel(delta) {
+  const oldZoom = getZoomLevel();
+  const newIndex = Math.max(0, Math.min(ZOOM_LEVELS.length - 1, zoomIndex + delta));
+
+  if (newIndex === zoomIndex) return;
+  zoomIndex = newIndex;
+
+  const newZoom = getZoomLevel();
 
   // ズーム情報を更新
   const zoomInfo = volumeGraphContainer?.querySelector('#vdg-zoom-info');
   if (zoomInfo) {
-    zoomInfo.textContent = `${zoomLevel}x`;
+    zoomInfo.textContent = `${newZoom}x`;
   }
 
   // スクロール位置を維持するための計算
   const canvasContainer = volumeGraphContainer?.querySelector('#vdg-canvas-container');
-  if (canvasContainer && oldZoom !== zoomLevel) {
+  if (canvasContainer) {
     const containerRect = canvasContainer.getBoundingClientRect();
     const scrollRatio = (canvasContainer.scrollLeft + containerRect.width / 2) / (containerRect.width * oldZoom);
 
     resizeCanvas();
 
     // スクロール位置を調整（中心を維持）
-    const newScrollLeft = scrollRatio * containerRect.width * zoomLevel - containerRect.width / 2;
+    const newScrollLeft = scrollRatio * containerRect.width * newZoom - containerRect.width / 2;
     canvasContainer.scrollLeft = Math.max(0, newScrollLeft);
   } else {
     resizeCanvas();
@@ -1160,7 +1171,7 @@ function setupVolumeGraphEvents() {
       const containerRect = container.getBoundingClientRect();
       const scrollLeft = container.scrollLeft;
       const x = e.clientX - containerRect.left + scrollLeft;
-      const totalWidth = containerRect.width * zoomLevel;
+      const totalWidth = containerRect.width * getZoomLevel();
       const ratio = x / totalWidth;
       const seekTime = ratio * videoDuration;
       videoElement.currentTime = seekTime;
@@ -1173,7 +1184,7 @@ function setupVolumeGraphEvents() {
       const containerRect = container.getBoundingClientRect();
       const scrollLeft = container.scrollLeft;
       const x = e.clientX - containerRect.left + scrollLeft;
-      const totalWidth = containerRect.width * zoomLevel;
+      const totalWidth = containerRect.width * getZoomLevel();
       const ratio = Math.max(0, Math.min(1, x / totalWidth));
       const time = ratio * videoDuration;
 
@@ -1190,8 +1201,7 @@ function setupVolumeGraphEvents() {
         // Ctrl + ホイール: ズーム
         e.preventDefault();
         const zoomDelta = e.deltaY > 0 ? -1 : 1;
-        const newZoom = zoomLevel + zoomDelta;
-        setZoomLevel(newZoom);
+        changeZoomLevel(zoomDelta);
       } else {
         // ホイールのみ: 横スクロール
         e.preventDefault();
@@ -2058,7 +2068,7 @@ function observePageChanges() {
         volumeData = [];
         videoDuration = 0;
         detectedTimestamps = []; // タイムスタンプもクリア
-        zoomLevel = 1; // ズームレベルをリセット
+        zoomIndex = 0; // ズームレベルをリセット
 
         // 文字起こし状態をリセット
         if (isTranscribing) {
