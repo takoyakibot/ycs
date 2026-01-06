@@ -363,6 +363,9 @@ function init() {
   // メッセージリスナーを最初に設定（他の処理でエラーが出ても通信可能にする）
   chrome.runtime.onMessage.addListener(handleMessage);
 
+  // ストレージ変更リスナー（2窓リアルタイム同期用）
+  chrome.storage.onChanged.addListener(handleStorageChange);
+
   try {
     // 動画要素を取得
     findVideoElement();
@@ -377,6 +380,58 @@ function init() {
     observePageChanges();
   } catch (error) {
     console.error('Content script初期化エラー:', error);
+  }
+}
+
+/**
+ * ストレージ変更を監視（別タブでのスキャン結果をリアルタイム反映）
+ */
+function handleStorageChange(changes, areaName) {
+  if (areaName !== 'local') return;
+
+  const videoId = getVideoId();
+  if (!videoId) return;
+
+  const storageKey = `volumeData_${videoId}`;
+
+  // 現在の動画のデータが更新された場合
+  if (changes[storageKey]) {
+    const newData = changes[storageKey].newValue;
+    if (newData && newData.data && newData.data.length > 0) {
+      // 自分自身のスキャン中は無視（自分の保存による更新）
+      if (isScanning) return;
+
+      console.log(`他タブからの音量データを受信: ${videoId}`);
+
+      // データを更新
+      volumeData = newData.data;
+      if (newData.duration) {
+        videoDuration = newData.duration;
+      }
+
+      // タイムスタンプも更新
+      if (newData.timestamps) {
+        const oldCount = detectedTimestamps.length;
+        detectedTimestamps = newData.timestamps;
+
+        // 新しいタイムスタンプをオーバーレイに追加
+        if (detectedTimestamps.length > oldCount) {
+          for (let i = oldCount; i < detectedTimestamps.length; i++) {
+            addTimestamp(detectedTimestamps[i]);
+          }
+        }
+      }
+
+      // グラフを再描画
+      drawVolumeGraph();
+
+      // 進捗表示を更新
+      const progress = volumeGraphContainer?.querySelector('#vdg-progress');
+      if (progress && videoDuration > 0) {
+        const coverage = (volumeData.length / GRAPH_RESOLUTION) * 100;
+        progress.textContent = `${Math.round(coverage)}%`;
+      }
+    }
   }
 }
 
