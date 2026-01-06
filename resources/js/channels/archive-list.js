@@ -336,6 +336,32 @@ function registerArchiveListComponent() {
                     }
                 },
 
+                async copyVideoIdList() {
+                    try {
+                        const videoIds = (this.archives.data || [])
+                            .map(archive => archive.video_id)
+                            .filter(id => id);
+
+                        if (videoIds.length === 0) {
+                            toast.error('コピーするvideoIdがありません');
+                            return;
+                        }
+
+                        const text = videoIds.join('\n');
+                        await navigator.clipboard.writeText(text);
+
+                        toast.success(`${videoIds.length}件のvideoIdをコピーしました`);
+
+                        logUserAction('copyVideoIdList', {
+                            count: videoIds.length,
+                            tsFilter: this.tsFlg
+                        });
+                    } catch (error) {
+                        console.error('コピーに失敗しました:', error);
+                        toast.error('コピーに失敗しました');
+                    }
+                },
+
                 updateURL() {
                     const params = new URLSearchParams();
 

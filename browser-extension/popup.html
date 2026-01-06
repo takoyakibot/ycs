@@ -306,6 +306,25 @@
       </div>
     </div>
 
+    <details class="settings-section" id="list-scan-section">
+      <summary class="section-title" style="cursor: pointer;">リストスキャン</summary>
+      <div style="padding-top: 12px;">
+        <div class="graph-info" style="margin-bottom: 8px;">
+          videoIdリストを貼り付けて、複数動画を連続でスキャンします。夜間の自動処理などに便利です。
+        </div>
+        <textarea id="video-id-list" placeholder="videoIdを1行に1つずつ入力（改行区切り）"
+          style="width: 100%; height: 80px; border: 1px solid #ddd; border-radius: 4px; padding: 8px; font-size: 12px; font-family: monospace; resize: vertical;"></textarea>
+        <div class="status-row" style="margin-top: 8px;">
+          <span class="status-label">進捗</span>
+          <span class="status-value" id="list-scan-progress">0 / 0</span>
+        </div>
+        <div class="actions" style="margin-top: 8px;">
+          <button class="btn btn-secondary" id="start-list-scan-btn">開始</button>
+          <button class="btn btn-secondary" id="stop-list-scan-btn" style="display: none;">停止</button>
+        </div>
+      </div>
+    </details>
+
     <details class="settings-section">
       <summary class="section-title" style="cursor: pointer;">設定</summary>
       <div style="padding-top: 12px;">
