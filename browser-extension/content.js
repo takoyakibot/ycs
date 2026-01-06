@@ -39,6 +39,10 @@ let scanInterval = null;
 const GRAPH_RESOLUTION = 500; // グラフのデータポイント数
 let originalPlaybackRate = 1;
 let audioInitialized = false; // 音声解析が初期化済みか
+
+// ズーム関連
+const ZOOM_LEVELS = [1, 1.5, 2, 3, 4, 5, 6, 7, 8];
+let zoomIndex = 0; // ZOOM_LEVELSのインデックス
 let lastSaveTime = 0; // 最後に音量データを保存した時刻
 const SAVE_INTERVAL = 3000; // 保存間隔（ミリ秒）
 
@@ -805,10 +809,35 @@ function createVolumeGraph() {
         flex: 1;
         position: relative;
         min-height: 40px;
+        overflow-x: auto;
+        overflow-y: hidden;
+      }
+
+      .vdg-canvas-container::-webkit-scrollbar {
+        height: 6px;
+      }
+
+      .vdg-canvas-container::-webkit-scrollbar-track {
+        background: #1a1a1a;
+        border-radius: 3px;
+      }
+
+      .vdg-canvas-container::-webkit-scrollbar-thumb {
+        background: #444;
+        border-radius: 3px;
+      }
+
+      .vdg-canvas-container::-webkit-scrollbar-thumb:hover {
+        background: #555;
+      }
+
+      .vdg-canvas-wrapper {
+        position: relative;
+        height: 100%;
+        min-width: 100%;
       }
 
       #volume-canvas {
-        width: 100%;
         height: 100%;
         display: block;
       }
@@ -857,6 +886,12 @@ function createVolumeGraph() {
       .vdg-progress {
         font-size: 10px;
         color: #4fc3f7;
+      }
+
+      .vdg-zoom-info {
+        font-size: 10px;
+        color: #888;
+        margin-left: 4px;
       }
 
       .vdg-params-panel {
@@ -940,14 +975,17 @@ function createVolumeGraph() {
       <div class="vdg-controls">
         <span class="vdg-playlist-info" id="vdg-playlist-info"></span>
         <span class="vdg-progress" id="vdg-progress">0%</span>
+        <span class="vdg-zoom-info" id="vdg-zoom-info">1x</span>
         <button class="vdg-btn" id="vdg-scan-btn" title="動画全体をスキャンしてグラフを生成">スキャン</button>
         <button class="vdg-btn" id="vdg-transcribe-btn" title="検出された候補を順番に文字起こし">文字起こし</button>
         <button class="vdg-btn" id="vdg-auto-scan-btn" title="再生リスト内の動画を順番にスキャン">自動</button>
       </div>
     </div>
-    <div class="vdg-canvas-container">
-      <canvas id="volume-canvas"></canvas>
-      <div class="vdg-time-marker" id="vdg-time-marker"></div>
+    <div class="vdg-canvas-container" id="vdg-canvas-container">
+      <div class="vdg-canvas-wrapper" id="vdg-canvas-wrapper">
+        <canvas id="volume-canvas"></canvas>
+        <div class="vdg-time-marker" id="vdg-time-marker"></div>
+      </div>
       <div class="vdg-hover-time" id="vdg-hover-time">0:00</div>
     </div>
     <div class="vdg-time-labels">
@@ -1034,15 +1072,70 @@ function insertVolumeGraph() {
  * Canvasをリサイズ
  */
 function resizeCanvas() {
-  if (!volumeCanvas) return;
-  const container = volumeCanvas.parentElement;
-  if (!container) return;
+  if (!volumeCanvas || !volumeGraphContainer) return;
 
-  const rect = container.getBoundingClientRect();
-  volumeCanvas.width = rect.width * window.devicePixelRatio;
-  volumeCanvas.height = rect.height * window.devicePixelRatio;
+  const canvasContainer = volumeGraphContainer.querySelector('#vdg-canvas-container');
+  const canvasWrapper = volumeGraphContainer.querySelector('#vdg-canvas-wrapper');
+  if (!canvasContainer || !canvasWrapper) return;
+
+  const containerRect = canvasContainer.getBoundingClientRect();
+  const baseWidth = containerRect.width;
+  const zoomedWidth = baseWidth * getZoomLevel();
+
+  // ラッパーとCanvasの幅を設定
+  canvasWrapper.style.width = `${zoomedWidth}px`;
+  volumeCanvas.style.width = `${zoomedWidth}px`;
+
+  // Canvas解像度を設定
+  volumeCanvas.width = zoomedWidth * window.devicePixelRatio;
+  volumeCanvas.height = containerRect.height * window.devicePixelRatio;
+
+  // コンテキストをリセット
+  volumeCtx = volumeCanvas.getContext('2d');
   volumeCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
+
   drawVolumeGraph();
+}
+
+/**
+ * 現在のズームレベルを取得
+ */
+function getZoomLevel() {
+  return ZOOM_LEVELS[zoomIndex];
+}
+
+/**
+ * ズームレベルを設定（delta: 1でズームイン、-1でズームアウト）
+ */
+function changeZoomLevel(delta) {
+  const oldZoom = getZoomLevel();
+  const newIndex = Math.max(0, Math.min(ZOOM_LEVELS.length - 1, zoomIndex + delta));
+
+  if (newIndex === zoomIndex) return;
+  zoomIndex = newIndex;
+
+  const newZoom = getZoomLevel();
+
+  // ズーム情報を更新
+  const zoomInfo = volumeGraphContainer?.querySelector('#vdg-zoom-info');
+  if (zoomInfo) {
+    zoomInfo.textContent = `${newZoom}x`;
+  }
+
+  // スクロール位置を維持するための計算
+  const canvasContainer = volumeGraphContainer?.querySelector('#vdg-canvas-container');
+  if (canvasContainer) {
+    const containerRect = canvasContainer.getBoundingClientRect();
+    const scrollRatio = (canvasContainer.scrollLeft + containerRect.width / 2) / (containerRect.width * oldZoom);
+
+    resizeCanvas();
+
+    // スクロール位置を調整（中心を維持）
+    const newScrollLeft = scrollRatio * containerRect.width * newZoom - containerRect.width / 2;
+    canvasContainer.scrollLeft = Math.max(0, newScrollLeft);
+  } else {
+    resizeCanvas();
+  }
 }
 
 /**
@@ -1067,29 +1160,54 @@ function setupVolumeGraphEvents() {
   // 再生リスト情報を更新
   updatePlaylistUI();
 
-  // クリックでシーク
+  // クリックでシーク（ズーム対応）
   if (container) {
+    const canvasWrapper = container.querySelector('#vdg-canvas-wrapper');
+
     container.addEventListener('click', (e) => {
       if (!videoElement || !videoDuration) return;
-      const rect = container.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const ratio = x / rect.width;
+
+      // スクロール位置とズームを考慮した座標計算
+      const containerRect = container.getBoundingClientRect();
+      const scrollLeft = container.scrollLeft;
+      const x = e.clientX - containerRect.left + scrollLeft;
+      const totalWidth = containerRect.width * getZoomLevel();
+      const ratio = x / totalWidth;
       const seekTime = ratio * videoDuration;
       videoElement.currentTime = seekTime;
     });
 
-    // ホバーで時間表示
+    // ホバーで時間表示（ズーム対応）
     container.addEventListener('mousemove', (e) => {
       if (!videoDuration) return;
-      const rect = container.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const ratio = Math.max(0, Math.min(1, x / rect.width));
+
+      const containerRect = container.getBoundingClientRect();
+      const scrollLeft = container.scrollLeft;
+      const x = e.clientX - containerRect.left + scrollLeft;
+      const totalWidth = containerRect.width * getZoomLevel();
+      const ratio = Math.max(0, Math.min(1, x / totalWidth));
       const time = ratio * videoDuration;
+
       if (hoverTime) {
         hoverTime.textContent = formatTimeDisplay(time);
-        hoverTime.style.left = `${x}px`;
+        // ホバー位置はスクロール位置を引いた画面上の位置
+        hoverTime.style.left = `${e.clientX - containerRect.left}px`;
       }
     });
+
+    // マウスホイールイベント
+    container.addEventListener('wheel', (e) => {
+      if (e.ctrlKey) {
+        // Ctrl + ホイール: ズーム
+        e.preventDefault();
+        const zoomDelta = e.deltaY > 0 ? -1 : 1;
+        changeZoomLevel(zoomDelta);
+      } else {
+        // ホイールのみ: 横スクロール
+        e.preventDefault();
+        container.scrollLeft += e.deltaY;
+      }
+    }, { passive: false });
   }
 
   // スキャンボタン（tabCapture方式、常にミュート）
@@ -1950,6 +2068,7 @@ function observePageChanges() {
         volumeData = [];
         videoDuration = 0;
         detectedTimestamps = []; // タイムスタンプもクリア
+        zoomIndex = 0; // ズームレベルをリセット
 
         // 文字起こし状態をリセット
         if (isTranscribing) {
