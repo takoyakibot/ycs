@@ -401,10 +401,13 @@ class AutoLinkServiceTest extends TestCase
         config(['songs.auto_link.similarity_threshold' => 0.95]);
         config(['songs.auto_link.pending_threshold' => 0.85]);
 
-        // 既存楽曲を作成（類似だが完全一致ではない）
+        // 既存楽曲を作成（類似だが完全一致ではない - 約91%の類似度になるように調整）
+        // "Test Song" vs "Test Song X" → タイトル類似度約82%
+        // "Test Artist" vs "Test Artist" → アーティスト類似度100%
+        // 平均: 約91% → 保留範囲（85%以上95%未満）
         $existingSong = Song::factory()->create([
-            'title' => 'Test Song Original',
-            'artist' => 'Test Artist Original',
+            'title' => 'Test Song',
+            'artist' => 'Test Artist',
             'spotify_track_id' => 'different_spotify_id',
         ]);
 
@@ -417,7 +420,7 @@ class AutoLinkServiceTest extends TestCase
             'is_display' => 1,
         ]);
 
-        // Spotify APIをモック（類似した結果を返す：類似度約90%程度）
+        // Spotify APIをモック（類似した結果を返す：約91%程度の類似度を狙う）
         Http::fake([
             'https://accounts.spotify.com/api/token' => Http::response([
                 'access_token' => 'test_token',
@@ -427,8 +430,8 @@ class AutoLinkServiceTest extends TestCase
                     'items' => [
                         [
                             'id' => 'new_spotify_id',
-                            'name' => 'Test Song Remix',
-                            'artists' => [['name' => 'Test Artist Remix']],
+                            'name' => 'Test Song X',
+                            'artists' => [['name' => 'Test Artist']],
                         ],
                     ],
                 ],
