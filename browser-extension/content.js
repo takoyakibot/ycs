@@ -20,6 +20,9 @@ let isGraphVisible = false;
 let isAutoScanMode = false;
 let autoScanStopRequested = false;
 
+// リストスキャン用（videoIdリストからの連続スキャン）
+let isListScanMode = false;
+
 // 検出されたタイムスタンプ候補
 let detectedTimestamps = [];
 
@@ -378,6 +381,9 @@ function init() {
 
     // YouTube SPAナビゲーション対応
     observePageChanges();
+
+    // リストスキャンモードをチェック
+    checkAndStartListScan();
   } catch (error) {
     console.error('Content script初期化エラー:', error);
   }
@@ -432,6 +438,115 @@ function handleStorageChange(changes, areaName) {
         progress.textContent = `${Math.round(coverage)}%`;
       }
     }
+  }
+}
+
+/**
+ * リストスキャンモードをチェックして自動スキャンを開始
+ */
+async function checkAndStartListScan() {
+  try {
+    const result = await chrome.storage.local.get([
+      'listScanVideoIds',
+      'listScanCurrentIndex',
+      'listScanActive'
+    ]);
+
+    if (!result.listScanActive || !result.listScanVideoIds) {
+      return;
+    }
+
+    const videoIds = result.listScanVideoIds;
+    const currentIndex = result.listScanCurrentIndex || 0;
+    const currentVideoId = getVideoId();
+
+    // 現在の動画がリストに含まれているか確認
+    const expectedVideoId = videoIds[currentIndex];
+    if (currentVideoId !== expectedVideoId) {
+      console.log('リストスキャン: 想定外のvideoIdです', { expected: expectedVideoId, actual: currentVideoId });
+      return;
+    }
+
+    console.log(`リストスキャン: 動画 ${currentIndex + 1}/${videoIds.length} のスキャンを開始`);
+    isListScanMode = true;
+
+    // 動画の読み込みを待ってからスキャンを開始
+    waitForVideoAndStartScan();
+  } catch (error) {
+    console.error('リストスキャンチェックエラー:', error);
+  }
+}
+
+/**
+ * 動画の読み込みを待ってスキャンを開始
+ */
+function waitForVideoAndStartScan() {
+  const checkVideo = () => {
+    if (videoElement && videoElement.readyState >= 2 && videoDuration > 0) {
+      // 既にスキャン済みかチェック
+      isCurrentVideoScanned().then(scanned => {
+        if (scanned) {
+          console.log('リストスキャン: 既にスキャン済み、次の動画へ');
+          proceedToNextListScanVideo();
+        } else {
+          console.log('リストスキャン: スキャンを開始');
+          // tabCapture方式でスキャン開始
+          chrome.runtime.sendMessage({ type: 'START_SCAN' });
+        }
+      });
+    } else {
+      setTimeout(checkVideo, 1000);
+    }
+  };
+
+  // 少し待ってからチェック開始（ページ読み込み完了を待つ）
+  setTimeout(checkVideo, 2000);
+}
+
+/**
+ * リストスキャンの次の動画へ移動
+ */
+async function proceedToNextListScanVideo() {
+  if (!isListScanMode) {
+    return;
+  }
+
+  try {
+    const result = await chrome.storage.local.get([
+      'listScanVideoIds',
+      'listScanCurrentIndex'
+    ]);
+
+    const videoIds = result.listScanVideoIds || [];
+    const currentIndex = result.listScanCurrentIndex || 0;
+    const nextIndex = currentIndex + 1;
+
+    if (nextIndex >= videoIds.length) {
+      // 全て完了
+      console.log('リストスキャン完了: すべての動画をスキャンしました');
+      isListScanMode = false;
+      await chrome.storage.local.set({
+        listScanActive: false
+      });
+      return;
+    }
+
+    // インデックスを更新
+    await chrome.storage.local.set({
+      listScanCurrentIndex: nextIndex
+    });
+
+    // 次の動画へ移動
+    const nextVideoId = videoIds[nextIndex];
+    console.log(`リストスキャン: 次の動画へ移動 (${nextIndex + 1}/${videoIds.length}): ${nextVideoId}`);
+
+    // 少し待ってから移動（安定性向上のため）
+    setTimeout(() => {
+      window.location.href = `https://www.youtube.com/watch?v=${nextVideoId}`;
+    }, 1500);
+  } catch (error) {
+    console.error('リストスキャン次の動画移動エラー:', error);
+    isListScanMode = false;
   }
 }
 
@@ -2323,9 +2438,13 @@ function handleMessage(message, sender, sendResponse) {
       getScanStatus().then(status => {
         updateScanButtonState(status);
       });
-      // 自動スキャンモードの場合は次の動画へ
+      // 自動スキャンモード（再生リスト）の場合は次の動画へ
       if (isAutoScanMode && !autoScanStopRequested) {
         proceedToNextVideoOrFinish();
+      }
+      // リストスキャンモードの場合は次の動画へ
+      if (isListScanMode) {
+        proceedToNextListScanVideo();
       }
       break;
 

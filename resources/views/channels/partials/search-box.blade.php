@@ -64,6 +64,15 @@
                 {{-- 件数表示 --}}
                 <span class="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap"
                       x-text="archives.total !== undefined ? `${archives.total}件` : ''"></span>
+                {{-- videoIdリストコピーボタン（タイムスタンプ無フィルタ時のみ表示） --}}
+                <button
+                    x-show="tsFlg === '2' && archives.total > 0"
+                    type="button"
+                    @click="copyVideoIdList()"
+                    class="hidden sm:flex bg-purple-600 text-white px-3 py-2 rounded hover:bg-purple-700 items-center gap-1 whitespace-nowrap text-sm"
+                    title="表示中のアーカイブのvideoIdリストをコピー（拡張機能での一括スキャン用）">
+                    📋 IDコピー
+                </button>
             </div>
         </template>
         <template x-if="activeTab === 'timestamps'">
