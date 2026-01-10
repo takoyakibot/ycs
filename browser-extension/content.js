@@ -22,6 +22,10 @@ let autoScanStopRequested = false;
 
 // リストスキャン用（videoIdリストからの連続スキャン）
 let isListScanMode = false;
+let listScanButtonContainer = null;
+let listScanAutoClickTimer = null;
+let listScanCountdownInterval = null;
+const LIST_SCAN_AUTO_CLICK_DELAY = 3000; // 3秒後に自動クリック
 
 // 検出されたタイムスタンプ候補
 let detectedTimestamps = [];
@@ -442,7 +446,221 @@ function handleStorageChange(changes, areaName) {
 }
 
 /**
- * リストスキャンモードをチェックして自動スキャンを開始
+ * リストスキャン続行ボタンを表示
+ */
+function showListScanButton(currentIndex, totalCount) {
+  // 既存のボタンがあれば更新のみ
+  if (listScanButtonContainer) {
+    const info = listScanButtonContainer.querySelector('.list-scan-info');
+    if (info) {
+      info.textContent = `動画 ${currentIndex + 1} / ${totalCount}`;
+    }
+    listScanButtonContainer.style.display = 'flex';
+    return;
+  }
+
+  // コンテナを作成
+  listScanButtonContainer = document.createElement('div');
+  listScanButtonContainer.id = 'list-scan-button-container';
+  listScanButtonContainer.innerHTML = `
+    <style>
+      #list-scan-button-container {
+        position: fixed;
+        top: 80px;
+        right: 20px;
+        z-index: 9999;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 12px;
+        padding: 16px 20px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        font-family: 'Roboto', sans-serif;
+        animation: slideIn 0.3s ease-out;
+      }
+      @keyframes slideIn {
+        from { transform: translateX(100px); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+      }
+      #list-scan-button-container .list-scan-title {
+        color: white;
+        font-size: 14px;
+        font-weight: bold;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      #list-scan-button-container .list-scan-info {
+        color: rgba(255,255,255,0.9);
+        font-size: 13px;
+      }
+      #list-scan-button-container .list-scan-btn {
+        background: white;
+        color: #667eea;
+        border: none;
+        border-radius: 8px;
+        padding: 12px 24px;
+        font-size: 14px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      #list-scan-button-container .list-scan-btn:hover {
+        transform: scale(1.05);
+        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+      }
+      #list-scan-button-container .list-scan-btn:active {
+        transform: scale(0.98);
+      }
+      #list-scan-button-container .list-scan-btn.scanning {
+        background: #ff5722;
+        color: white;
+      }
+      #list-scan-button-container .list-scan-cancel {
+        background: transparent;
+        color: rgba(255,255,255,0.8);
+        border: 1px solid rgba(255,255,255,0.3);
+        border-radius: 6px;
+        padding: 8px 16px;
+        font-size: 12px;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      #list-scan-button-container .list-scan-cancel:hover {
+        background: rgba(255,255,255,0.1);
+        color: white;
+      }
+      #list-scan-button-container .list-scan-countdown {
+        color: #ffeb3b;
+        font-size: 12px;
+        text-align: center;
+        animation: pulse 1s infinite;
+      }
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+      }
+    </style>
+    <div class="list-scan-title">
+      📋 リストスキャン
+    </div>
+    <div class="list-scan-info">動画 ${currentIndex + 1} / ${totalCount}</div>
+    <div class="list-scan-countdown" id="list-scan-countdown">3秒後に自動開始...</div>
+    <button class="list-scan-btn" id="list-scan-start-btn">▶ スキャン開始</button>
+    <button class="list-scan-cancel" id="list-scan-cancel-btn">キャンセル</button>
+  `;
+
+  document.body.appendChild(listScanButtonContainer);
+
+  // イベントリスナー
+  const startBtn = listScanButtonContainer.querySelector('#list-scan-start-btn');
+  const cancelBtn = listScanButtonContainer.querySelector('#list-scan-cancel-btn');
+  const countdown = listScanButtonContainer.querySelector('#list-scan-countdown');
+
+  const startScan = () => {
+    // タイマーをクリア
+    clearAutoClickTimer();
+    if (countdown) countdown.style.display = 'none';
+    startBtn.classList.add('scanning');
+    startBtn.textContent = '⏳ スキャン中...';
+    chrome.runtime.sendMessage({ type: 'START_SCAN' });
+  };
+
+  startBtn.addEventListener('click', startScan);
+
+  cancelBtn.addEventListener('click', async () => {
+    clearAutoClickTimer();
+    isListScanMode = false;
+    await chrome.storage.local.set({ listScanActive: false });
+    hideListScanButton();
+    console.log('リストスキャン: キャンセルされました');
+  });
+
+  // 自動クリックタイマーを開始
+  startAutoClickTimer(startScan, countdown);
+}
+
+/**
+ * リストスキャン続行ボタンを非表示
+ */
+function hideListScanButton() {
+  clearAutoClickTimer();
+  if (listScanButtonContainer) {
+    listScanButtonContainer.style.display = 'none';
+  }
+}
+
+/**
+ * 自動クリックタイマーを開始
+ */
+function startAutoClickTimer(callback, countdownElement) {
+  clearAutoClickTimer();
+
+  let remaining = LIST_SCAN_AUTO_CLICK_DELAY / 1000;
+
+  // カウントダウン表示を更新
+  const updateCountdown = () => {
+    if (countdownElement) {
+      countdownElement.textContent = `${remaining}秒後に自動開始...`;
+    }
+  };
+
+  updateCountdown();
+
+  // 1秒ごとにカウントダウン
+  listScanCountdownInterval = setInterval(() => {
+    remaining--;
+    if (remaining > 0) {
+      updateCountdown();
+    } else {
+      clearInterval(listScanCountdownInterval);
+      listScanCountdownInterval = null;
+    }
+  }, 1000);
+
+  // 指定時間後に自動クリック
+  listScanAutoClickTimer = setTimeout(() => {
+    clearInterval(listScanCountdownInterval);
+    listScanCountdownInterval = null;
+    console.log('リストスキャン: 自動クリック実行');
+    callback();
+  }, LIST_SCAN_AUTO_CLICK_DELAY);
+}
+
+/**
+ * 自動クリックタイマーをクリア
+ */
+function clearAutoClickTimer() {
+  if (listScanAutoClickTimer) {
+    clearTimeout(listScanAutoClickTimer);
+    listScanAutoClickTimer = null;
+  }
+  if (listScanCountdownInterval) {
+    clearInterval(listScanCountdownInterval);
+    listScanCountdownInterval = null;
+  }
+}
+
+/**
+ * リストスキャンボタンの状態を更新
+ */
+function updateListScanButtonState(scanning) {
+  if (!listScanButtonContainer) return;
+  const btn = listScanButtonContainer.querySelector('#list-scan-start-btn');
+  if (!btn) return;
+
+  if (scanning) {
+    btn.classList.add('scanning');
+    btn.textContent = '⏳ スキャン中...';
+  } else {
+    btn.classList.remove('scanning');
+    btn.textContent = '▶ スキャン開始';
+  }
+}
+
+/**
+ * リストスキャンモードをチェックしてボタンを表示
  */
 async function checkAndStartListScan() {
   try {
@@ -467,20 +685,20 @@ async function checkAndStartListScan() {
       return;
     }
 
-    console.log(`リストスキャン: 動画 ${currentIndex + 1}/${videoIds.length} のスキャンを開始`);
+    console.log(`リストスキャン: 動画 ${currentIndex + 1}/${videoIds.length} の準備中`);
     isListScanMode = true;
 
-    // 動画の読み込みを待ってからスキャンを開始
-    waitForVideoAndStartScan();
+    // 動画の読み込みを待ってからボタンを表示
+    waitForVideoAndShowButton(currentIndex, videoIds.length);
   } catch (error) {
     console.error('リストスキャンチェックエラー:', error);
   }
 }
 
 /**
- * 動画の読み込みを待ってスキャンを開始
+ * 動画の読み込みを待ってリストスキャンボタンを表示
  */
-function waitForVideoAndStartScan() {
+function waitForVideoAndShowButton(currentIndex, totalCount) {
   const checkVideo = () => {
     if (videoElement && videoElement.readyState >= 2 && videoDuration > 0) {
       // 既にスキャン済みかチェック
@@ -489,9 +707,9 @@ function waitForVideoAndStartScan() {
           console.log('リストスキャン: 既にスキャン済み、次の動画へ');
           proceedToNextListScanVideo();
         } else {
-          console.log('リストスキャン: スキャンを開始');
-          // tabCapture方式でスキャン開始
-          chrome.runtime.sendMessage({ type: 'START_SCAN' });
+          console.log('リストスキャン: ボタンを表示');
+          // ボタンを表示（ユーザーのクリックでスキャン開始）
+          showListScanButton(currentIndex, totalCount);
         }
       });
     } else {
@@ -525,9 +743,12 @@ async function proceedToNextListScanVideo() {
       // 全て完了
       console.log('リストスキャン完了: すべての動画をスキャンしました');
       isListScanMode = false;
+      hideListScanButton();
       await chrome.storage.local.set({
         listScanActive: false
       });
+      // 完了メッセージをポップアップに通知
+      chrome.runtime.sendMessage({ type: 'LIST_SCAN_COMPLETE' });
       return;
     }
 
@@ -2421,6 +2642,8 @@ function handleMessage(message, sender, sendResponse) {
           scanBtn.textContent = '停止';
         }
       }
+      // リストスキャンボタンの状態更新
+      updateListScanButtonState(true);
       break;
 
     case 'SCAN_STOPPED':
@@ -2444,6 +2667,7 @@ function handleMessage(message, sender, sendResponse) {
       }
       // リストスキャンモードの場合は次の動画へ
       if (isListScanMode) {
+        hideListScanButton();
         proceedToNextListScanVideo();
       }
       break;

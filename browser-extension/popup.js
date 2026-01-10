@@ -414,6 +414,11 @@ async function restoreListScanState() {
       'listScanActive'
     ]);
 
+    if (result.listScanVideoIds && result.listScanVideoIds.length > 0) {
+      // IDリストをテキストエリアに復元
+      elements.videoIdList.value = result.listScanVideoIds.join('\n');
+    }
+
     if (result.listScanActive && result.listScanVideoIds) {
       const total = result.listScanVideoIds.length;
       const current = result.listScanCurrentIndex || 0;
