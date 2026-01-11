@@ -67,9 +67,15 @@ class TextNormalizerTest extends TestCase
     public function test_combined_normalization(): void
     {
         // 実際のタイムスタンプを想定した複合テスト
+        // 長音記号は前後にスペースがない場合は区切り文字として扱わない
         $input = 'ＹＯＡＳＯＢＩー夜に駆ける～Live Ver.～';
-        $expected = 'yoasobi/夜に駆ける~live ver.~';
+        $expected = 'yoasobiー夜に駆ける~live ver.~';
         $this->assertEquals($expected, TextNormalizer::normalize($input));
+
+        // 前後にスペースがある長音記号は区切り文字として扱う
+        $input2 = 'ＹＯＡＳＯＢＩ ー 夜に駆ける～Live Ver.～';
+        $expected2 = 'yoasobi / 夜に駆ける~live ver.~';
+        $this->assertEquals($expected2, TextNormalizer::normalize($input2));
     }
 
     /**
@@ -275,7 +281,8 @@ class TextNormalizerTest extends TestCase
 
         // ハイフンのみ（区切り文字として認識され、trimで除去されるため空文字になる）
         $this->assertEquals('', TextNormalizer::normalize('-'));
-        $this->assertEquals('', TextNormalizer::normalize('ー'));
+        // 長音記号は前後にスペースがない場合は区切り文字として扱わない
+        $this->assertEquals('ー', TextNormalizer::normalize('ー'));
         $this->assertEquals('', TextNormalizer::normalize('－'));
     }
 
