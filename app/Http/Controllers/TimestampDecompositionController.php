@@ -62,15 +62,18 @@ class TimestampDecompositionController extends Controller
 
         $validated = $request->validate([
             'id' => 'required|string',
-            'title_index' => ['nullable', 'integer', 'min:0', 'max:'.$maxIndex],
-            'artist_index' => ['nullable', 'integer', 'min:0', 'max:'.$maxIndex],
+            // 複数選択対応：配列で受け取る
+            'title_indices' => ['nullable', 'array'],
+            'title_indices.*' => ['integer', 'min:0', 'max:'.$maxIndex],
+            'artist_indices' => ['nullable', 'array'],
+            'artist_indices.*' => ['integer', 'min:0', 'max:'.$maxIndex],
             'link_to_song' => 'boolean',
         ]);
 
         $result = $this->service->saveSelection(
             $validated['id'],
-            $validated['title_index'] ?? null,
-            $validated['artist_index'] ?? null
+            $validated['title_indices'] ?? [],
+            $validated['artist_indices'] ?? []
         );
 
         $decomposition = $result['decomposition'];

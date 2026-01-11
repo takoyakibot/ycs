@@ -158,30 +158,33 @@ class TimestampDecompositionService
     /**
      * 選別結果を保存
      *
-     * @param  int|null  $titleIndex  楽曲名パーツのインデックス
-     * @param  int|null  $artistIndex  アーティスト名パーツのインデックス
+     * @param  array  $titleIndices  楽曲名パーツのインデックス配列
+     * @param  array  $artistIndices  アーティスト名パーツのインデックス配列
      * @param  bool  $enableCascade  カスケード処理を有効にするか
      * @return array{decomposition: TimestampDecomposition, cascaded_count: int}
      */
-    public function saveSelection(string $id, ?int $titleIndex, ?int $artistIndex, bool $enableCascade = true): array
+    public function saveSelection(string $id, array $titleIndices, array $artistIndices, bool $enableCascade = true): array
     {
         $decomposition = TimestampDecomposition::findOrFail($id);
 
-        $derivedTitle = null;
-        $derivedArtist = null;
+        // 複数パーツを元の区切り文字を維持して連結
+        $derivedTitle = $this->joinPartsWithOriginalSeparators(
+            $decomposition->original_text,
+            $decomposition->parts,
+            $titleIndices
+        );
+        $derivedArtist = $this->joinPartsWithOriginalSeparators(
+            $decomposition->original_text,
+            $decomposition->parts,
+            $artistIndices
+        );
 
-        if ($titleIndex !== null && isset($decomposition->parts[$titleIndex])) {
-            $derivedTitle = $decomposition->parts[$titleIndex];
-        }
-        if ($artistIndex !== null && isset($decomposition->parts[$artistIndex])) {
-            $derivedArtist = $decomposition->parts[$artistIndex];
-        }
-
+        // DBには最初のインデックスのみ保存（後方互換性のため）
         $decomposition->update([
-            'title_part_index' => $titleIndex,
-            'artist_part_index' => $artistIndex,
-            'derived_title' => $derivedTitle,
-            'derived_artist' => $derivedArtist,
+            'title_part_index' => ! empty($titleIndices) ? $titleIndices[0] : null,
+            'artist_part_index' => ! empty($artistIndices) ? $artistIndices[0] : null,
+            'derived_title' => $derivedTitle ?: null,
+            'derived_artist' => $derivedArtist ?: null,
             'status' => TimestampDecomposition::STATUS_SELECTED,
             'updated_by' => Auth::id(),
         ]);
@@ -197,6 +200,84 @@ class TimestampDecompositionService
             'decomposition' => $decomposition->fresh(),
             'cascaded_count' => $cascadedCount,
         ];
+    }
+
+    /**
+     * 選択されたパーツを元の区切り文字を維持して連結
+     */
+    private function joinPartsWithOriginalSeparators(string $originalText, array $parts, array $indices): string
+    {
+        if (empty($indices)) {
+            return '';
+        }
+
+        if (count($indices) === 1) {
+            return $parts[$indices[0]] ?? '';
+        }
+
+        sort($indices);
+
+        // 連続するインデックスのグループを作成
+        $groups = [];
+        $currentGroup = [$indices[0]];
+
+        for ($i = 1; $i < count($indices); $i++) {
+            if ($indices[$i] === $indices[$i - 1] + 1) {
+                $currentGroup[] = $indices[$i];
+            } else {
+                $groups[] = $currentGroup;
+                $currentGroup = [$indices[$i]];
+            }
+        }
+        $groups[] = $currentGroup;
+
+        // 各グループを元テキストから抽出して連結
+        $result = [];
+        foreach ($groups as $group) {
+            $start = $group[0];
+            $end = $group[count($group) - 1];
+            $result[] = $this->extractRangeFromOriginal($originalText, $parts, $start, $end);
+        }
+
+        return implode(' / ', $result);
+    }
+
+    /**
+     * 元テキストから指定範囲のパーツを抽出（区切り文字を維持）
+     */
+    private function extractRangeFromOriginal(string $originalText, array $parts, int $startIndex, int $endIndex): string
+    {
+        if ($startIndex === $endIndex) {
+            return $parts[$startIndex] ?? '';
+        }
+
+        // 各パーツの位置を特定
+        $currentPos = 0;
+        $startPos = -1;
+        $endPos = -1;
+
+        for ($i = 0; $i < count($parts); $i++) {
+            $partPos = mb_strpos($originalText, $parts[$i], $currentPos);
+            if ($partPos === false) {
+                continue;
+            }
+
+            if ($i === $startIndex) {
+                $startPos = $partPos;
+            }
+            if ($i === $endIndex) {
+                $endPos = $partPos + mb_strlen($parts[$i]);
+                break;
+            }
+            $currentPos = $partPos + mb_strlen($parts[$i]);
+        }
+
+        if ($startPos !== -1 && $endPos !== -1) {
+            return trim(mb_substr($originalText, $startPos, $endPos - $startPos));
+        }
+
+        // フォールバック: 単純に連結
+        return implode(' / ', array_slice($parts, $startIndex, $endIndex - $startIndex + 1));
     }
 
     /**

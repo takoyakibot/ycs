@@ -138,8 +138,8 @@ class TimestampDecompositionServiceTest extends TestCase
             'confidence' => 0.5,
         ]);
 
-        // saveSelectionを実行（artistIndex=0, titleIndex=1）
-        $result = $this->service->saveSelection($sourceDecomposition->id, 1, 0);
+        // saveSelectionを実行（artistIndices=[0], titleIndices=[1]）
+        $result = $this->service->saveSelection($sourceDecomposition->id, [1], [0]);
 
         // カスケード件数を確認
         $this->assertEquals(1, $result['cascaded_count']);
@@ -188,7 +188,7 @@ class TimestampDecompositionServiceTest extends TestCase
         ]);
 
         // saveSelectionを実行（カスケード無効）
-        $result = $this->service->saveSelection($sourceDecomposition->id, 1, 0, enableCascade: false);
+        $result = $this->service->saveSelection($sourceDecomposition->id, [1], [0], enableCascade: false);
 
         // カスケード件数が0であることを確認
         $this->assertEquals(0, $result['cascaded_count']);
@@ -219,7 +219,7 @@ class TimestampDecompositionServiceTest extends TestCase
         ]);
 
         // saveSelectionを実行（アーティストなし）
-        $result = $this->service->saveSelection($sourceDecomposition->id, 0, null);
+        $result = $this->service->saveSelection($sourceDecomposition->id, [0], []);
 
         // カスケード件数が0であることを確認
         $this->assertEquals(0, $result['cascaded_count']);
