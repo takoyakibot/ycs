@@ -52,10 +52,16 @@ class TextNormalizer
         $text = mb_convert_kana($text, 'as', 'UTF-8');
 
         // 区切り文字を統一（スラッシュに統一）
-        $separators = ['/', '／', '-', '−', '－', 'ー', ':', '：', '|', '｜'];
+        // 注意: 長音記号（ー）は前後にスペースがある場合のみ区切り文字として扱う
+        $separators = ['/', '／', '-', '−', '－', ':', '：', '|', '｜'];
         foreach ($separators as $sep) {
             $text = str_replace($sep, '/', $text);
         }
+
+        // 前後にスペースがある長音記号のみスラッシュに変換
+        // 例: "アーティスト ー 楽曲名" → "アーティスト / 楽曲名"
+        // 例: "ファーストテイク" → "ファーストテイク" (変換しない)
+        $text = preg_replace('/\s+ー\s+/u', ' / ', $text);
 
         // チルダ系文字を半角チルダに統一
         // U+301C (WAVE DASH), U+FF5E (FULLWIDTH TILDE), U+223C (TILDE OPERATOR), U+02DC (SMALL TILDE)
