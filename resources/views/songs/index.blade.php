@@ -182,9 +182,12 @@
 
                         <!-- 楽曲マスタ一覧 -->
                         <div id="songsList" class="tab-content hidden">
-                            <div class="flex justify-between items-center mb-3">
+                            <div class="flex gap-2 mb-3">
                                 <input type="text" id="songsSearch" placeholder="楽曲名やアーティスト名で検索..." class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                <div id="songsCount" class="text-sm text-gray-600 dark:text-gray-400 ml-4">
+                                <button id="clearSongsSearchBtn" class="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600">
+                                    クリア
+                                </button>
+                                <div id="songsCount" class="text-sm text-gray-600 dark:text-gray-400 flex items-center">
                                     <!-- JavaScriptで動的に更新 -->
                                 </div>
                             </div>
