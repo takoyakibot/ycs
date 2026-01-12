@@ -437,6 +437,154 @@ class TimestampDecompositionServiceTest extends TestCase
     }
 
     /**
+     * すでに楽曲マスタに紐付け済みのタイムスタンプがスキャン対象から除外されることをテスト
+     */
+    public function test_scan_excludes_linked_timestamps(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        // チャンネルとアーカイブを作成
+        $channel = Channel::create([
+            'channel_id' => 'UC_test_channel_2',
+            'handle' => '@test2',
+            'title' => 'Test Channel 2',
+            'user_id' => $user->id,
+        ]);
+
+        $archive = Archive::create([
+            'id' => (string) Str::ulid(),
+            'video_id' => 'test_video_2',
+            'channel_id' => 'UC_test_channel_2',
+            'title' => 'Test Video 2',
+            'is_display' => true,
+            'published_at' => now(),
+            'comments_updated_at' => now(),
+        ]);
+
+        // 通常のタイムスタンプ（スキャン対象）
+        $normalTs = TsItem::create([
+            'id' => (string) Str::ulid(),
+            'video_id' => 'test_video_2',
+            'comment_id' => 'test_video_2',
+            'type' => '1',
+            'ts_text' => '0:00',
+            'ts_num' => 0,
+            'text' => '新規アーティスト / 新曲',
+            'normalized_text' => TextNormalizer::normalize('新規アーティスト / 新曲'),
+            'is_display' => true,
+        ]);
+
+        // すでに楽曲マスタに紐付け済みのタイムスタンプ（スキャン対象外）
+        $linkedTs = TsItem::create([
+            'id' => (string) Str::ulid(),
+            'video_id' => 'test_video_2',
+            'comment_id' => 'test_video_2',
+            'type' => '1',
+            'ts_text' => '1:00',
+            'ts_num' => 60,
+            'text' => '既存アーティスト / 既存曲',
+            'normalized_text' => TextNormalizer::normalize('既存アーティスト / 既存曲'),
+            'is_display' => true,
+        ]);
+
+        // 楽曲マスタを作成
+        $song = \App\Models\Song::create([
+            'id' => (string) Str::ulid(),
+            'title' => '既存曲',
+            'artist' => '既存アーティスト',
+        ]);
+
+        // マッピングを作成（楽曲マスタに紐付け済み）
+        TimestampSongMapping::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize('既存アーティスト / 既存曲'),
+            'song_id' => $song->id,
+            'is_not_song' => false,
+            'is_manual' => true,
+            'status' => 'linked',
+        ]);
+
+        // スキャン実行
+        $count = $this->service->scanAndDecompose();
+
+        // 1件のみスキャンされることを確認（紐付け済みは除外）
+        $this->assertEquals(1, $count);
+
+        // 通常のタイムスタンプは分解されている
+        $this->assertDatabaseHas('timestamp_decompositions', [
+            'normalized_text' => TextNormalizer::normalize('新規アーティスト / 新曲'),
+        ]);
+
+        // 紐付け済みのタイムスタンプは分解されていない
+        $this->assertDatabaseMissing('timestamp_decompositions', [
+            'normalized_text' => TextNormalizer::normalize('既存アーティスト / 既存曲'),
+        ]);
+    }
+
+    /**
+     * すでに楽曲マスタに紐付け済みのタイムスタンプがgetNextPendingから除外されることをテスト
+     */
+    public function test_get_next_pending_excludes_linked_timestamps(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        // 通常のタイムスタンプ（表示対象）
+        $normalDecomposition = TimestampDecomposition::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize('未紐付けアーティスト / 未紐付け曲'),
+            'original_text' => '未紐付けアーティスト / 未紐付け曲',
+            'parts' => ['未紐付けアーティスト', '未紐付け曲'],
+            'separator_count' => 1,
+            'status' => TimestampDecomposition::STATUS_PENDING,
+            'confidence' => 0.5,
+        ]);
+
+        // スキャン済みだがすでに楽曲マスタに紐付け済みのタイムスタンプ
+        $linkedDecomposition = TimestampDecomposition::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize('紐付済アーティスト / 紐付済曲'),
+            'original_text' => '紐付済アーティスト / 紐付済曲',
+            'parts' => ['紐付済アーティスト', '紐付済曲'],
+            'separator_count' => 1,
+            'status' => TimestampDecomposition::STATUS_PENDING,
+            'confidence' => 0.5,
+        ]);
+
+        // 楽曲マスタを作成
+        $song = \App\Models\Song::create([
+            'id' => (string) Str::ulid(),
+            'title' => '紐付済曲',
+            'artist' => '紐付済アーティスト',
+        ]);
+
+        // マッピングを作成（楽曲マスタに紐付け済み）
+        TimestampSongMapping::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize('紐付済アーティスト / 紐付済曲'),
+            'song_id' => $song->id,
+            'is_not_song' => false,
+            'is_manual' => true,
+            'status' => 'linked',
+        ]);
+
+        // getNextPendingを実行
+        $next = $this->service->getNextPending();
+
+        // 紐付け済みでないタイムスタンプのみが返される
+        $this->assertNotNull($next);
+        $this->assertEquals($normalDecomposition->id, $next->id);
+
+        // 通常のタイムスタンプを処理済みにする
+        $normalDecomposition->update(['status' => TimestampDecomposition::STATUS_SELECTED]);
+
+        // 再度getNextPendingを実行すると、紐付け済みはスキップされてnullになる
+        $next = $this->service->getNextPending();
+        $this->assertNull($next);
+    }
+
+    /**
      * saveAsWholeTitleで全体を楽曲名として保存できることをテスト
      */
     public function test_save_as_whole_title(): void
