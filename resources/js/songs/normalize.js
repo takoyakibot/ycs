@@ -99,6 +99,12 @@ class TimestampNormalization {
             }, 500);
         });
 
+        // 楽曲マスタ検索クリアボタン
+        document.getElementById('clearSongsSearchBtn').addEventListener('click', () => {
+            document.getElementById('songsSearch').value = '';
+            this.loadSongs('');
+        });
+
         // タブ切り替え
         document.querySelectorAll('.tab-button').forEach(button => {
             button.addEventListener('click', (e) => this.showTab(e.target.id));
@@ -1014,7 +1020,7 @@ class TimestampNormalization {
             this.showLoading();
             await songApiService.deleteSong(songId);
             toast.success('楽曲マスタを削除しました。');
-            await this.loadSongs();
+            await this.loadSongs(document.getElementById('songsSearch').value);
             await this.loadTimestamps(this.currentPage, this.currentSearchQuery);
 
             if (this.selectedSong?.id === songId) {
