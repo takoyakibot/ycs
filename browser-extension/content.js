@@ -1624,6 +1624,32 @@ function getNextContinuation(response) {
 }
 
 /**
+ * 指定したvideoIdのチャットをIndexedDBから削除
+ */
+async function deleteChatsByVideoId(videoId) {
+  await initChatDB();
+
+  const transaction = chatSearchDB.transaction([CHAT_STORE_NAME], 'readwrite');
+  const store = transaction.objectStore(CHAT_STORE_NAME);
+  const index = store.index('videoId');
+
+  return new Promise((resolve, reject) => {
+    const request = index.openCursor(IDBKeyRange.only(videoId));
+
+    request.onsuccess = (event) => {
+      const cursor = event.target.result;
+      if (cursor) {
+        cursor.delete();
+        cursor.continue();
+      }
+    };
+
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+  });
+}
+
+/**
  * チャットをIndexedDBに保存
  */
 async function saveChatsToDB(videoId, chats) {
@@ -1631,14 +1657,18 @@ async function saveChatsToDB(videoId, chats) {
 
   await initChatDB();
 
+  // 既存データを削除して重複を防ぐ
+  await deleteChatsByVideoId(videoId);
+
   const transaction = chatSearchDB.transaction([CHAT_STORE_NAME], 'readwrite');
   const store = transaction.objectStore(CHAT_STORE_NAME);
 
   const savedAt = new Date().toISOString();
 
-  for (const chat of chats) {
+  for (let i = 0; i < chats.length; i++) {
+    const chat = chats[i];
     const record = {
-      id: `${videoId}_${chat.timestamp}_${Math.random().toString(36).substr(2, 9)}`,
+      id: `${videoId}_${chat.timestamp}_${i}`,
       videoId,
       ...chat,
       savedAt
