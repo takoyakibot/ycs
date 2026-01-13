@@ -10,7 +10,9 @@
     "offscreen"
   ],
   "host_permissions": [
-    "https://www.youtube.com/*"
+    "https://www.youtube.com/*",
+    "http://localhost:8000/*",
+    "http://127.0.0.1:8000/*"
   ],
   "action": {
     "default_popup": "popup.html"
@@ -22,6 +24,14 @@
     {
       "matches": ["https://www.youtube.com/watch*"],
       "js": ["content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "http://localhost:8000/manage/archives*",
+        "http://127.0.0.1:8000/manage/archives*"
+      ],
+      "js": ["content-ycs.js"],
       "run_at": "document_idle"
     }
   ]
