@@ -42,20 +42,30 @@ chrome.storage.local.get('config', (result) => {
   }
 });
 
+// Service Worker起動時にクリーンアップ
+// tabCaptureの「つかみっぱなし」を防ぐため、既存のOffscreen Documentを閉じる
+(async () => {
+  try {
+    const contexts = await chrome.runtime.getContexts({
+      contextTypes: ['OFFSCREEN_DOCUMENT'],
+      documentUrls: [chrome.runtime.getURL('offscreen.html')]
+    });
+    if (contexts.length > 0) {
+      console.log('起動時: 既存のOffscreen Documentを閉じます');
+      await chrome.offscreen.closeDocument();
+    }
+    isCapturing = false;
+    isScanning = false;
+  } catch (error) {
+    console.log('起動時クリーンアップ（エラーは無視）:', error.message);
+  }
+})();
+
 // メッセージリスナー
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   switch (message.type) {
-    case 'START_CAPTURE':
-      startCapture(message.tabId).then(sendResponse);
-      return true;
-
-    case 'STOP_CAPTURE':
-      stopCapture().then(sendResponse);
-      return true;
-
     case 'GET_STATUS':
       sendResponse({
-        isCapturing,
         isScanning,
         timestamps,
         volumeGraphData,
@@ -186,7 +196,7 @@ async function closeOffscreenDocument() {
 }
 
 /**
- * タブの音声キャプチャを開始
+ * タブの音声キャプチャを開始（内部使用のみ）
  */
 async function startCapture(tabId) {
   if (isCapturing) {
@@ -226,9 +236,6 @@ async function startCapture(tabId) {
     currentTabId = tabId;
     timestamps = [];
 
-    // Content scriptに通知
-    chrome.tabs.sendMessage(tabId, { type: 'CAPTURE_STARTED' }).catch(() => {});
-
     return { success: true };
   } catch (error) {
     console.error('キャプチャ開始エラー:', error);
@@ -238,7 +245,7 @@ async function startCapture(tabId) {
 }
 
 /**
- * キャプチャを停止
+ * キャプチャを停止（内部使用のみ）
  */
 async function stopCapture() {
   try {
@@ -247,11 +254,6 @@ async function stopCapture() {
 
     // Offscreen Documentを閉じる
     await closeOffscreenDocument();
-
-    // Content scriptに通知
-    if (currentTabId) {
-      chrome.tabs.sendMessage(currentTabId, { type: 'CAPTURE_STOPPED' }).catch(() => {});
-    }
 
     isCapturing = false;
     currentTabId = null;

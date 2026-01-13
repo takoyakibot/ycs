@@ -2,22 +2,11 @@
  * 歌枠タイムスタンプ検出 - Popup Script
  */
 
-let isCapturing = false;
 let isScanning = false;
 let currentTabId = null;
 
 // DOM要素
 const elements = {
-  statusDot: document.getElementById('status-dot'),
-  statusText: document.getElementById('status-text'),
-  count: document.getElementById('count'),
-  toggleBtn: document.getElementById('toggle-btn'),
-  btnIcon: document.getElementById('btn-icon'),
-  btnText: document.getElementById('btn-text'),
-  timestampsList: document.getElementById('timestamps-list'),
-  copyBtn: document.getElementById('copy-btn'),
-  clearBtn: document.getElementById('clear-btn'),
-  toggleOverlayBtn: document.getElementById('toggle-overlay-btn'),
   toggleGraphBtn: document.getElementById('toggle-graph-btn'),
   scanBtn: document.getElementById('scan-btn'),
   errorContainer: document.getElementById('error-container'),
@@ -44,7 +33,6 @@ async function init() {
   // YouTubeかチェック
   if (!tab?.url?.includes('youtube.com/watch')) {
     showInfo('YouTubeの動画ページで使用してください');
-    elements.toggleBtn.disabled = true;
     return;
   }
 
@@ -77,10 +65,6 @@ async function checkContentScript() {
  * イベントリスナーを設定
  */
 function setupEventListeners() {
-  elements.toggleBtn.addEventListener('click', toggleCapture);
-  elements.copyBtn.addEventListener('click', copyTimestamps);
-  elements.clearBtn.addEventListener('click', clearTimestamps);
-  elements.toggleOverlayBtn.addEventListener('click', toggleOverlay);
   elements.toggleGraphBtn.addEventListener('click', toggleVolumeGraph);
   elements.scanBtn.addEventListener('click', toggleScan);
 
@@ -102,7 +86,6 @@ async function refreshStatus() {
   try {
     const response = await chrome.runtime.sendMessage({ type: 'GET_STATUS' });
 
-    isCapturing = response.isCapturing;
     isScanning = response.isScanning;
     updateUI(response);
 
@@ -122,23 +105,6 @@ async function refreshStatus() {
  * UIを更新
  */
 function updateUI(data) {
-  // ステータス表示
-  if (isCapturing) {
-    elements.statusDot.classList.add('active');
-    elements.statusText.textContent = '検出中';
-    elements.btnIcon.textContent = '■';
-    elements.btnText.textContent = '検出停止';
-    elements.toggleBtn.classList.remove('btn-start');
-    elements.toggleBtn.classList.add('btn-stop');
-  } else {
-    elements.statusDot.classList.remove('active');
-    elements.statusText.textContent = '停止中';
-    elements.btnIcon.textContent = '▶';
-    elements.btnText.textContent = '検出開始';
-    elements.toggleBtn.classList.remove('btn-stop');
-    elements.toggleBtn.classList.add('btn-start');
-  }
-
   // スキャンボタンの状態
   if (isScanning) {
     elements.scanBtn.classList.add('btn-scanning');
@@ -147,124 +113,6 @@ function updateUI(data) {
     elements.scanBtn.classList.remove('btn-scanning');
     elements.scanBtn.textContent = '高速スキャン';
   }
-
-  // タイムスタンプ一覧
-  renderTimestamps(data.timestamps || []);
-}
-
-/**
- * タイムスタンプ一覧を描画
- */
-function renderTimestamps(timestamps) {
-  elements.count.textContent = timestamps.length;
-
-  if (timestamps.length === 0) {
-    elements.timestampsList.innerHTML = '<div class="empty-state">まだ検出されていません</div>';
-    return;
-  }
-
-  elements.timestampsList.innerHTML = timestamps.map((ts, index) => `
-    <div class="timestamp-item" data-time="${ts.time}">
-      <span class="timestamp-time">${ts.formattedTime}</span>
-      <span class="timestamp-label">楽曲開始候補 #${index + 1}</span>
-    </div>
-  `).join('');
-
-  // クリックイベントを設定
-  elements.timestampsList.querySelectorAll('.timestamp-item').forEach(item => {
-    item.addEventListener('click', () => {
-      const time = parseFloat(item.dataset.time);
-      seekToTime(time);
-    });
-  });
-}
-
-/**
- * コンテンツスクリプトにメッセージを送信（エラーを無視）
- */
-async function sendToContentScript(message) {
-  try {
-    return await chrome.tabs.sendMessage(currentTabId, message);
-  } catch (error) {
-    // コンテンツスクリプトが読み込まれていない場合は無視
-    console.log('Content script not ready:', error.message);
-    return null;
-  }
-}
-
-/**
- * キャプチャ開始/停止を切り替え
- */
-async function toggleCapture() {
-  try {
-    if (isCapturing) {
-      await chrome.runtime.sendMessage({ type: 'STOP_CAPTURE' });
-      await sendToContentScript({ type: 'CAPTURE_STOPPED' });
-    } else {
-      const response = await chrome.runtime.sendMessage({
-        type: 'START_CAPTURE',
-        tabId: currentTabId
-      });
-
-      if (!response.success) {
-        showError(response.error || 'キャプチャを開始できませんでした');
-        return;
-      }
-
-      await sendToContentScript({ type: 'CAPTURE_STARTED' });
-    }
-
-    await refreshStatus();
-  } catch (error) {
-    console.error('切り替えエラー:', error);
-    showError('操作に失敗しました: ' + error.message);
-  }
-}
-
-/**
- * 指定時刻にシーク
- */
-async function seekToTime(time) {
-  await sendToContentScript({ type: 'SEEK_TO_TIME', time });
-}
-
-/**
- * タイムスタンプをコピー
- */
-async function copyTimestamps() {
-  try {
-    const response = await chrome.runtime.sendMessage({ type: 'GET_TIMESTAMPS' });
-    const timestamps = response.timestamps || [];
-
-    if (timestamps.length === 0) {
-      return;
-    }
-
-    const text = timestamps.map(ts => ts.formattedTime).join('\n');
-    await navigator.clipboard.writeText(text);
-
-    elements.copyBtn.textContent = 'コピーしました!';
-    setTimeout(() => {
-      elements.copyBtn.textContent = 'コピー';
-    }, 1500);
-  } catch (error) {
-    console.error('コピーエラー:', error);
-  }
-}
-
-/**
- * タイムスタンプをクリア
- */
-async function clearTimestamps() {
-  await chrome.runtime.sendMessage({ type: 'CLEAR_TIMESTAMPS' });
-  await refreshStatus();
-}
-
-/**
- * オーバーレイ表示を切り替え
- */
-async function toggleOverlay() {
-  await sendToContentScript({ type: 'TOGGLE_OVERLAY' });
 }
 
 /**
