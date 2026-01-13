@@ -230,7 +230,7 @@ function createListScanPanel() {
         right: 16px;
         z-index: 9998;
         width: 320px;
-        max-height: 400px;
+        max-height: 450px;
         background: rgba(20, 20, 20, 0.95);
         border-radius: 12px;
         box-shadow: 0 4px 20px rgba(0,0,0,0.4);
@@ -245,11 +245,16 @@ function createListScanPanel() {
         display: flex !important;
       }
       .lsp-header {
-        padding: 12px 16px;
+        padding: 8px 16px 0;
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        flex-direction: column;
+      }
+      .lsp-header-top {
         display: flex;
         justify-content: space-between;
         align-items: center;
+        margin-bottom: 8px;
       }
       .lsp-header-title {
         font-weight: 600;
@@ -271,13 +276,44 @@ function createListScanPanel() {
       .lsp-close-btn:hover {
         background: rgba(255,255,255,0.3);
       }
+      .lsp-tabs {
+        display: flex;
+        gap: 0;
+      }
+      .lsp-tab {
+        flex: 1;
+        padding: 8px 12px;
+        border: none;
+        background: rgba(255,255,255,0.1);
+        color: rgba(255,255,255,0.7);
+        font-size: 12px;
+        cursor: pointer;
+        border-radius: 8px 8px 0 0;
+        transition: all 0.2s;
+      }
+      .lsp-tab:hover {
+        background: rgba(255,255,255,0.15);
+      }
+      .lsp-tab.active {
+        background: rgba(20, 20, 20, 0.95);
+        color: #fff;
+        font-weight: 500;
+      }
       .lsp-content {
         padding: 12px;
         display: flex;
         flex-direction: column;
         gap: 12px;
         overflow-y: auto;
-        max-height: 300px;
+        max-height: 350px;
+      }
+      .lsp-tab-content {
+        display: none;
+      }
+      .lsp-tab-content.active {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
       }
       .lsp-input-section {
         display: flex;
@@ -413,32 +449,94 @@ function createListScanPanel() {
         background: #444;
         color: #fff;
       }
+      .lsp-delete-btn {
+        background: transparent;
+        border: none;
+        color: #888;
+        padding: 4px 6px;
+        border-radius: 4px;
+        font-size: 10px;
+        cursor: pointer;
+      }
+      .lsp-delete-btn:hover {
+        background: #c62828;
+        color: #fff;
+      }
       .lsp-empty {
         text-align: center;
         color: #888;
         padding: 20px;
         font-size: 12px;
       }
+      .lsp-scanned-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px;
+        background: #2a2a2a;
+        border-radius: 6px;
+        font-size: 11px;
+      }
+      .lsp-scanned-item .lsp-item-id {
+        font-family: monospace;
+        flex: 1;
+        color: #ddd;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .lsp-scanned-item .lsp-item-date {
+        color: #888;
+        font-size: 10px;
+      }
+      .lsp-scanned-item .lsp-item-actions {
+        display: flex;
+        gap: 4px;
+      }
+      .lsp-scanned-count {
+        font-size: 12px;
+        color: #aaa;
+        text-align: center;
+        padding: 4px;
+      }
     </style>
     <div class="lsp-header">
-      <span class="lsp-header-title">リストスキャン</span>
-      <button class="lsp-close-btn" id="lsp-close-btn">×</button>
+      <div class="lsp-header-top">
+        <span class="lsp-header-title">スキャン管理</span>
+        <button class="lsp-close-btn" id="lsp-close-btn">×</button>
+      </div>
+      <div class="lsp-tabs">
+        <button class="lsp-tab active" data-tab="list-scan">リストスキャン</button>
+        <button class="lsp-tab" data-tab="scanned-list">スキャン済み一覧</button>
+      </div>
     </div>
     <div class="lsp-content">
-      <div class="lsp-input-section">
-        <textarea class="lsp-textarea" id="lsp-video-ids" placeholder="videoIdを1行に1つずつ入力（11文字の英数字）"></textarea>
+      <!-- リストスキャン タブ -->
+      <div class="lsp-tab-content active" id="tab-list-scan">
+        <div class="lsp-input-section">
+          <textarea class="lsp-textarea" id="lsp-video-ids" placeholder="videoIdを1行に1つずつ入力（11文字の英数字）"></textarea>
+          <div class="lsp-btn-row">
+            <button class="lsp-btn lsp-btn-primary" id="lsp-load-btn">読み込み</button>
+            <button class="lsp-btn lsp-btn-secondary" id="lsp-clear-btn">クリア</button>
+          </div>
+        </div>
+        <div class="lsp-progress" id="lsp-progress-info">0 / 0</div>
+        <div class="lsp-list" id="lsp-video-list">
+          <div class="lsp-empty">VideoIDを入力して読み込みボタンをクリック</div>
+        </div>
         <div class="lsp-btn-row">
-          <button class="lsp-btn lsp-btn-primary" id="lsp-load-btn">読み込み</button>
-          <button class="lsp-btn lsp-btn-secondary" id="lsp-clear-btn">クリア</button>
+          <button class="lsp-btn lsp-btn-primary" id="lsp-start-btn" disabled>▶ スキャン開始</button>
+          <button class="lsp-btn lsp-btn-danger" id="lsp-stop-btn" style="display:none;">■ 停止</button>
         </div>
       </div>
-      <div class="lsp-progress" id="lsp-progress-info">0 / 0</div>
-      <div class="lsp-list" id="lsp-video-list">
-        <div class="lsp-empty">VideoIDを入力して読み込みボタンをクリック</div>
-      </div>
-      <div class="lsp-btn-row">
-        <button class="lsp-btn lsp-btn-primary" id="lsp-start-btn" disabled>▶ スキャン開始</button>
-        <button class="lsp-btn lsp-btn-danger" id="lsp-stop-btn" style="display:none;">■ 停止</button>
+      <!-- スキャン済み一覧 タブ -->
+      <div class="lsp-tab-content" id="tab-scanned-list">
+        <div class="lsp-scanned-count" id="lsp-scanned-count">0 件のスキャン済み動画</div>
+        <div class="lsp-list" id="lsp-scanned-video-list">
+          <div class="lsp-empty">スキャン済みの動画がありません</div>
+        </div>
+        <div class="lsp-btn-row">
+          <button class="lsp-btn lsp-btn-danger" id="lsp-clear-all-btn">全てクリア</button>
+        </div>
       </div>
     </div>
   `;
@@ -451,6 +549,12 @@ function createListScanPanel() {
   listScanPanel.querySelector('#lsp-clear-btn').addEventListener('click', clearVideoIdList);
   listScanPanel.querySelector('#lsp-start-btn').addEventListener('click', startListScanFromPanel);
   listScanPanel.querySelector('#lsp-stop-btn').addEventListener('click', stopListScanFromPanel);
+  listScanPanel.querySelector('#lsp-clear-all-btn').addEventListener('click', clearAllScannedVideos);
+
+  // タブ切り替えイベント
+  listScanPanel.querySelectorAll('.lsp-tab').forEach(tab => {
+    tab.addEventListener('click', () => switchTab(tab.dataset.tab));
+  });
 }
 
 /**
@@ -716,6 +820,164 @@ async function stopListScanFromPanel() {
 
   // スキャン中の場合は停止
   chrome.runtime.sendMessage({ type: 'STOP_SCAN' });
+}
+
+/**
+ * タブを切り替え
+ */
+function switchTab(tabId) {
+  if (!listScanPanel) return;
+
+  // タブボタンの状態を更新
+  listScanPanel.querySelectorAll('.lsp-tab').forEach(tab => {
+    tab.classList.toggle('active', tab.dataset.tab === tabId);
+  });
+
+  // タブコンテンツの表示を切り替え
+  listScanPanel.querySelector('#tab-list-scan').classList.toggle('active', tabId === 'list-scan');
+  listScanPanel.querySelector('#tab-scanned-list').classList.toggle('active', tabId === 'scanned-list');
+
+  // スキャン済み一覧タブに切り替えた場合はリストを更新
+  if (tabId === 'scanned-list') {
+    loadScannedVideosList();
+  }
+}
+
+/**
+ * スキャン済み動画一覧を読み込み
+ */
+async function loadScannedVideosList() {
+  try {
+    const allData = await chrome.storage.local.get(null);
+    const videos = [];
+
+    for (const key in allData) {
+      if (key.startsWith('volumeData_')) {
+        const videoId = key.replace('volumeData_', '');
+        const data = allData[key];
+
+        if (!data || !data.data) continue;
+
+        const filledCount = data.data.filter(v => v > 0).length;
+        const progress = Math.round((filledCount / GRAPH_RESOLUTION) * 100);
+
+        videos.push({
+          videoId,
+          savedAt: data.savedAt || null,
+          duration: data.duration || 0,
+          progress: progress >= 95 ? 100 : progress
+        });
+      }
+    }
+
+    // 日付でソート（新しい順）
+    videos.sort((a, b) => {
+      if (!a.savedAt) return 1;
+      if (!b.savedAt) return -1;
+      return new Date(b.savedAt) - new Date(a.savedAt);
+    });
+
+    renderScannedVideosList(videos);
+  } catch (error) {
+    console.error('スキャン済み動画一覧取得エラー:', error);
+  }
+}
+
+/**
+ * スキャン済み動画一覧を描画
+ */
+function renderScannedVideosList(videos) {
+  if (!listScanPanel) return;
+
+  const listContainer = listScanPanel.querySelector('#lsp-scanned-video-list');
+  const countEl = listScanPanel.querySelector('#lsp-scanned-count');
+  const clearAllBtn = listScanPanel.querySelector('#lsp-clear-all-btn');
+
+  countEl.textContent = `${videos.length} 件のスキャン済み動画`;
+
+  if (videos.length === 0) {
+    listContainer.innerHTML = '<div class="lsp-empty">スキャン済みの動画がありません</div>';
+    clearAllBtn.disabled = true;
+    return;
+  }
+
+  clearAllBtn.disabled = false;
+
+  const html = videos.map(video => {
+    const dateStr = video.savedAt
+      ? new Date(video.savedAt).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })
+      : '-';
+
+    return `
+      <div class="lsp-scanned-item" data-video-id="${video.videoId}">
+        <span class="lsp-item-id">${video.videoId}</span>
+        <span class="lsp-item-date">${dateStr}</span>
+        <span class="lsp-item-status">${video.progress}%</span>
+        <div class="lsp-item-actions">
+          <button class="lsp-open-btn" data-action="open" data-video-id="${video.videoId}">開く</button>
+          <button class="lsp-delete-btn" data-action="delete" data-video-id="${video.videoId}">×</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  listContainer.innerHTML = html;
+
+  // イベントリスナーを設定
+  listContainer.querySelectorAll('[data-action="open"]').forEach(btn => {
+    btn.addEventListener('click', () => openYouTubeVideo(btn.dataset.videoId));
+  });
+
+  listContainer.querySelectorAll('[data-action="delete"]').forEach(btn => {
+    btn.addEventListener('click', () => deleteScannedVideo(btn.dataset.videoId));
+  });
+}
+
+/**
+ * YouTube動画を開く
+ */
+function openYouTubeVideo(videoId) {
+  window.open(`https://www.youtube.com/watch?v=${videoId}`, '_blank');
+}
+
+/**
+ * スキャン済み動画データを削除
+ */
+async function deleteScannedVideo(videoId) {
+  const key = `volumeData_${videoId}`;
+  await chrome.storage.local.remove(key);
+
+  // リストを更新
+  loadScannedVideosList();
+}
+
+/**
+ * 全てのスキャン済み動画データを削除
+ */
+async function clearAllScannedVideos() {
+  if (!confirm('全てのスキャン済みデータを削除しますか？')) {
+    return;
+  }
+
+  try {
+    const allData = await chrome.storage.local.get(null);
+    const keysToRemove = [];
+
+    for (const key in allData) {
+      if (key.startsWith('volumeData_')) {
+        keysToRemove.push(key);
+      }
+    }
+
+    if (keysToRemove.length > 0) {
+      await chrome.storage.local.remove(keysToRemove);
+    }
+
+    // リストを更新
+    loadScannedVideosList();
+  } catch (error) {
+    console.error('全データ削除エラー:', error);
+  }
 }
 
 /**
