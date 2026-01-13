@@ -2,13 +2,11 @@
  * 歌枠タイムスタンプ検出 - Content Script
  *
  * YouTubeページに注入され、動画の再生時刻を取得してbackground.jsに送信する
- * また、検出されたタイムスタンプをオーバーレイ表示する
  * 音量ダイナミクスグラフを表示してシークバーとして機能させる
  */
 
 let videoElement = null;
 let timeUpdateInterval = null;
-let overlay = null;
 let volumeGraphContainer = null;
 let volumeCanvas = null;
 let volumeCtx = null;
@@ -52,6 +50,9 @@ const ZOOM_LEVELS = [1, 1.5, 2, 3, 4, 5, 6, 7, 8];
 let zoomIndex = 0; // ZOOM_LEVELSのインデックス
 let lastSaveTime = 0; // 最後に音量データを保存した時刻
 const SAVE_INTERVAL = 3000; // 保存間隔（ミリ秒）
+
+// 音量表示モード（false: 絶対値, true: 相対値）
+let isRelativeVolumeMode = false;
 
 /**
  * 現在の動画IDを取得
@@ -99,10 +100,6 @@ function loadVolumeData() {
       // タイムスタンプも読み込み
       if (saved.timestamps && saved.timestamps.length > 0) {
         detectedTimestamps = saved.timestamps;
-        // オーバーレイにも追加
-        for (const ts of detectedTimestamps) {
-          addTimestamp(ts);
-        }
       }
       console.log(`音量データを読み込みました: ${videoId} (${volumeData.length}サンプル, ${detectedTimestamps.length}候補)`);
       drawVolumeGraph();
@@ -172,10 +169,6 @@ function redetectTimestamps() {
 
   // 既存のタイムスタンプをクリア
   detectedTimestamps = [];
-  if (overlay) {
-    const list = overlay.querySelector('.timestamp-list');
-    if (list) list.innerHTML = '';
-  }
 
   const secondsPerSample = videoDuration / volumeData.length;
   let quietDuration = 0;
@@ -214,7 +207,6 @@ function redetectTimestamps() {
         };
 
         detectedTimestamps.push(timestamp);
-        addTimestamp(timestamp);
         lastDetectionTime = currentTime;
 
         console.log('タイムスタンプ検出:', timestamp.formattedTime, 'volume:', volume.toFixed(4));
@@ -377,9 +369,6 @@ function init() {
     // 動画要素を取得
     findVideoElement();
 
-    // オーバーレイを作成
-    createOverlay();
-
     // 音量グラフを作成
     createVolumeGraph();
 
@@ -421,15 +410,7 @@ function handleStorageChange(changes, areaName) {
 
       // タイムスタンプも更新
       if (newData.timestamps) {
-        const oldCount = detectedTimestamps.length;
         detectedTimestamps = newData.timestamps;
-
-        // 新しいタイムスタンプをオーバーレイに追加
-        if (detectedTimestamps.length > oldCount) {
-          for (let i = oldCount; i < detectedTimestamps.length; i++) {
-            addTimestamp(detectedTimestamps[i]);
-          }
-        }
       }
 
       // グラフを再描画
@@ -820,300 +801,6 @@ function startTimeSync() {
 }
 
 /**
- * オーバーレイUIを作成
- */
-function createOverlay() {
-  overlay = document.createElement('div');
-  overlay.id = 'timestamp-detector-overlay';
-  overlay.innerHTML = `
-    <style>
-      #timestamp-detector-overlay {
-        position: fixed;
-        top: 80px;
-        right: 20px;
-        width: 320px;
-        max-height: 400px;
-        background: rgba(0, 0, 0, 0.9);
-        border: 1px solid #444;
-        border-radius: 8px;
-        color: white;
-        font-family: 'Segoe UI', sans-serif;
-        font-size: 13px;
-        z-index: 9999;
-        display: none;
-        flex-direction: column;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-      }
-
-      #timestamp-detector-overlay.visible {
-        display: flex;
-      }
-
-      .tsd-header {
-        padding: 12px;
-        background: #1a1a1a;
-        border-bottom: 1px solid #444;
-        border-radius: 8px 8px 0 0;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-      }
-
-      .tsd-header h3 {
-        margin: 0;
-        font-size: 14px;
-        font-weight: 600;
-      }
-
-      .tsd-status {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 12px;
-      }
-
-      .tsd-status-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: #666;
-      }
-
-      .tsd-status-dot.active {
-        background: #4caf50;
-        animation: pulse 1.5s infinite;
-      }
-
-      @keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.5; }
-      }
-
-      .tsd-content {
-        padding: 12px;
-        overflow-y: auto;
-        flex: 1;
-      }
-
-      .tsd-timestamps {
-        list-style: none;
-        padding: 0;
-        margin: 0;
-      }
-
-      .tsd-timestamp-item {
-        display: flex;
-        align-items: center;
-        padding: 8px;
-        margin-bottom: 6px;
-        background: #2a2a2a;
-        border-radius: 4px;
-        cursor: pointer;
-        transition: background 0.2s;
-      }
-
-      .tsd-timestamp-item:hover {
-        background: #3a3a3a;
-      }
-
-      .tsd-timestamp-item.new {
-        animation: highlight 1s ease-out;
-      }
-
-      .tsd-timestamp-item.transcribing {
-        background: #1565c0;
-        border-left: 3px solid #4fc3f7;
-      }
-
-      @keyframes highlight {
-        0% { background: #4a6a4a; }
-        100% { background: #2a2a2a; }
-      }
-
-      .tsd-time {
-        font-family: monospace;
-        font-size: 14px;
-        font-weight: 600;
-        color: #4fc3f7;
-        margin-right: 12px;
-        min-width: 60px;
-      }
-
-      .tsd-label {
-        flex: 1;
-        color: #999;
-        font-size: 12px;
-      }
-
-      .tsd-remove {
-        background: none;
-        border: none;
-        color: #666;
-        cursor: pointer;
-        padding: 4px;
-        font-size: 16px;
-      }
-
-      .tsd-remove:hover {
-        color: #f44336;
-      }
-
-      .tsd-empty {
-        color: #666;
-        text-align: center;
-        padding: 20px;
-      }
-
-      .tsd-footer {
-        padding: 12px;
-        border-top: 1px solid #444;
-        display: flex;
-        gap: 8px;
-      }
-
-      .tsd-btn {
-        flex: 1;
-        padding: 8px 12px;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 12px;
-        font-weight: 500;
-        transition: background 0.2s;
-      }
-
-      .tsd-btn-primary {
-        background: #1976d2;
-        color: white;
-      }
-
-      .tsd-btn-primary:hover {
-        background: #1565c0;
-      }
-
-      .tsd-btn-secondary {
-        background: #333;
-        color: white;
-      }
-
-      .tsd-btn-secondary:hover {
-        background: #444;
-      }
-
-      .tsd-btn-danger {
-        background: #c62828;
-        color: white;
-      }
-
-      .tsd-btn-danger:hover {
-        background: #b71c1c;
-      }
-    </style>
-    <div class="tsd-header">
-      <h3>タイムスタンプ検出</h3>
-      <div class="tsd-status">
-        <span class="tsd-status-dot" id="tsd-status-dot"></span>
-        <span id="tsd-status-text">停止中</span>
-      </div>
-    </div>
-    <div class="tsd-content">
-      <ul class="tsd-timestamps" id="tsd-timestamp-list">
-        <li class="tsd-empty">検出されたタイムスタンプがありません</li>
-      </ul>
-    </div>
-    <div class="tsd-footer">
-      <button class="tsd-btn tsd-btn-secondary" id="tsd-copy-btn">コピー</button>
-      <button class="tsd-btn tsd-btn-danger" id="tsd-clear-btn">クリア</button>
-    </div>
-  `;
-
-  document.body.appendChild(overlay);
-
-  // イベントリスナーを設定
-  document.getElementById('tsd-copy-btn').addEventListener('click', copyTimestamps);
-  document.getElementById('tsd-clear-btn').addEventListener('click', clearTimestamps);
-}
-
-/**
- * タイムスタンプを追加
- */
-function addTimestamp(timestamp) {
-  const list = document.getElementById('tsd-timestamp-list');
-  const empty = list.querySelector('.tsd-empty');
-  if (empty) {
-    empty.remove();
-  }
-
-  // 文字起こし結果があれば表示
-  const labelText = timestamp.transcript || '楽曲開始候補';
-
-  const item = document.createElement('li');
-  item.className = 'tsd-timestamp-item new';
-  item.dataset.time = timestamp.time;
-  item.innerHTML = `
-    <span class="tsd-time">${timestamp.formattedTime}</span>
-    <span class="tsd-label">${labelText}</span>
-    <button class="tsd-remove" title="削除">&times;</button>
-  `;
-
-  // クリックで動画をシーク
-  item.addEventListener('click', (e) => {
-    if (e.target.classList.contains('tsd-remove')) {
-      item.remove();
-      if (list.children.length === 0) {
-        list.innerHTML = '<li class="tsd-empty">検出されたタイムスタンプがありません</li>';
-      }
-      return;
-    }
-    if (videoElement) {
-      videoElement.currentTime = parseFloat(item.dataset.time);
-    }
-  });
-
-  list.appendChild(item);
-
-  // newクラスを削除
-  setTimeout(() => item.classList.remove('new'), 1000);
-}
-
-/**
- * タイムスタンプをクリップボードにコピー
- */
-async function copyTimestamps() {
-  const items = document.querySelectorAll('.tsd-timestamp-item');
-  if (items.length === 0) return;
-
-  const lines = Array.from(items).map(item => {
-    const time = item.querySelector('.tsd-time').textContent;
-    const label = item.querySelector('.tsd-label').textContent;
-    // 文字起こし結果があれば一緒にコピー
-    if (label && label !== '楽曲開始候補') {
-      return `${time} ${label}`;
-    }
-    return time;
-  });
-
-  try {
-    await navigator.clipboard.writeText(lines.join('\n'));
-    const btn = document.getElementById('tsd-copy-btn');
-    const originalText = btn.textContent;
-    btn.textContent = 'コピーしました!';
-    setTimeout(() => btn.textContent = originalText, 1500);
-  } catch (err) {
-    console.error('コピーに失敗しました:', err);
-  }
-}
-
-/**
- * タイムスタンプをクリア
- */
-function clearTimestamps() {
-  chrome.runtime.sendMessage({ type: 'CLEAR_TIMESTAMPS' });
-  const list = document.getElementById('tsd-timestamp-list');
-  list.innerHTML = '<li class="tsd-empty">検出されたタイムスタンプがありません</li>';
-}
-
-/**
  * 音量グラフUIを作成
  */
 function createVolumeGraph() {
@@ -1285,6 +972,29 @@ function createVolumeGraph() {
         margin-left: 4px;
       }
 
+      .vdg-volume-mode {
+        font-size: 9px;
+        padding: 2px 6px;
+        margin-left: 4px;
+        background: #333;
+        border: 1px solid #555;
+        border-radius: 3px;
+        color: #aaa;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+
+      .vdg-volume-mode:hover {
+        background: #444;
+        color: #fff;
+      }
+
+      .vdg-volume-mode.active {
+        background: #1b5e20;
+        border-color: #4caf50;
+        color: #4caf50;
+      }
+
       .vdg-params-panel {
         border-top: 1px solid #333;
         margin-top: 4px;
@@ -1367,6 +1077,7 @@ function createVolumeGraph() {
         <span class="vdg-playlist-info" id="vdg-playlist-info"></span>
         <span class="vdg-progress" id="vdg-progress">0%</span>
         <span class="vdg-zoom-info" id="vdg-zoom-info">1x</span>
+        <button class="vdg-volume-mode" id="vdg-volume-mode-btn" title="固定スケールでの絶対値表示中（クリックで相対表示に切替）">絶対</button>
         <button class="vdg-btn" id="vdg-scan-btn" title="動画全体をスキャンしてグラフを生成">スキャン</button>
         <button class="vdg-btn" id="vdg-transcribe-btn" title="検出された候補を順番に文字起こし">文字起こし</button>
         <button class="vdg-btn" id="vdg-auto-scan-btn" title="再生リスト内の動画を順番にスキャン">自動</button>
@@ -1599,6 +1310,21 @@ function setupVolumeGraphEvents() {
         container.scrollLeft += e.deltaY;
       }
     }, { passive: false });
+  }
+
+  // 音量表示モード切り替えボタン
+  const volumeModeBtn = volumeGraphContainer.querySelector('#vdg-volume-mode-btn');
+  if (volumeModeBtn) {
+    volumeModeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      isRelativeVolumeMode = !isRelativeVolumeMode;
+      volumeModeBtn.classList.toggle('active', isRelativeVolumeMode);
+      volumeModeBtn.textContent = isRelativeVolumeMode ? '相対' : '絶対';
+      volumeModeBtn.title = isRelativeVolumeMode
+        ? 'アーカイブ内の最大音量を100%とした相対表示中'
+        : '固定スケールでの絶対値表示中';
+      drawVolumeGraph();
+    });
   }
 
   // スキャンボタン（tabCapture方式、常にミュート）
@@ -2044,6 +1770,12 @@ function drawVolumeGraph() {
   volumeCtx.fillStyle = '#1a1a1a';
   volumeCtx.fillRect(0, 0, width, height);
 
+  // 相対表示モードの場合、最大値を取得
+  let maxVolume = 1;
+  if (isRelativeVolumeMode) {
+    maxVolume = Math.max(...volumeData.filter(v => v > 0)) || 1;
+  }
+
   // グラデーション
   const gradient = volumeCtx.createLinearGradient(0, height, 0, 0);
   gradient.addColorStop(0, '#1b5e20');
@@ -2058,7 +1790,9 @@ function drawVolumeGraph() {
 
   const barWidth = width / volumeData.length;
   for (let i = 0; i < volumeData.length; i++) {
-    const barHeight = volumeData[i] * height;
+    // 相対表示モードの場合は最大値で正規化
+    const normalizedValue = isRelativeVolumeMode ? volumeData[i] / maxVolume : volumeData[i];
+    const barHeight = normalizedValue * height;
     const x = i * barWidth;
     volumeCtx.lineTo(x, height - barHeight);
   }
@@ -2158,11 +1892,6 @@ function startTranscription() {
 
   // UIを更新
   updateTranscribeButtonUI(true);
-
-  // オーバーレイを表示（結果を確認できるように）
-  if (overlay) {
-    overlay.classList.add('visible');
-  }
 
   console.log(`文字起こし開始: ${detectedTimestamps.length}件の候補`);
 
@@ -2512,22 +2241,6 @@ function observePageChanges() {
 }
 
 /**
- * ステータス表示を更新
- */
-function updateStatus(isCapturing) {
-  const dot = document.getElementById('tsd-status-dot');
-  const text = document.getElementById('tsd-status-text');
-
-  if (isCapturing) {
-    dot.classList.add('active');
-    text.textContent = '検出中';
-  } else {
-    dot.classList.remove('active');
-    text.textContent = '停止中';
-  }
-}
-
-/**
  * メッセージハンドラ
  */
 function handleMessage(message, sender, sendResponse) {
@@ -2537,32 +2250,10 @@ function handleMessage(message, sender, sendResponse) {
       return true;
 
     case 'TIMESTAMP_DETECTED':
-      addTimestamp(message.timestamp);
       // グラフ用にも保存
       detectedTimestamps.push(message.timestamp);
       // グラフを再描画してマーカーを表示
       drawVolumeGraph();
-      break;
-
-    case 'SHOW_OVERLAY':
-      overlay.classList.add('visible');
-      break;
-
-    case 'HIDE_OVERLAY':
-      overlay.classList.remove('visible');
-      break;
-
-    case 'TOGGLE_OVERLAY':
-      overlay.classList.toggle('visible');
-      break;
-
-    case 'CAPTURE_STARTED':
-      updateStatus(true);
-      overlay.classList.add('visible');
-      break;
-
-    case 'CAPTURE_STOPPED':
-      updateStatus(false);
       break;
 
     // 音量グラフ関連

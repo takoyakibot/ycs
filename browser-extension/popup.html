@@ -40,13 +40,6 @@
       padding: 16px;
     }
 
-    .status-card {
-      background: #f5f5f5;
-      border-radius: 8px;
-      padding: 16px;
-      margin-bottom: 16px;
-    }
-
     .status-row {
       display: flex;
       justify-content: space-between;
@@ -70,23 +63,6 @@
       gap: 6px;
     }
 
-    .status-dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: #999;
-    }
-
-    .status-dot.active {
-      background: #4caf50;
-      animation: pulse 1.5s infinite;
-    }
-
-    @keyframes pulse {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.4); }
-      50% { box-shadow: 0 0 0 6px rgba(76, 175, 80, 0); }
-    }
-
     .btn {
       width: 100%;
       padding: 14px;
@@ -100,24 +76,6 @@
       align-items: center;
       justify-content: center;
       gap: 8px;
-    }
-
-    .btn-start {
-      background: #4caf50;
-      color: white;
-    }
-
-    .btn-start:hover {
-      background: #43a047;
-    }
-
-    .btn-stop {
-      background: #f44336;
-      color: white;
-    }
-
-    .btn-stop:hover {
-      background: #e53935;
     }
 
     .btn:disabled {
@@ -136,50 +94,6 @@
       margin-bottom: 12px;
       text-transform: uppercase;
       letter-spacing: 0.5px;
-    }
-
-    .timestamps-list {
-      max-height: 200px;
-      overflow-y: auto;
-      border: 1px solid #e0e0e0;
-      border-radius: 8px;
-    }
-
-    .timestamp-item {
-      display: flex;
-      align-items: center;
-      padding: 10px 12px;
-      border-bottom: 1px solid #e0e0e0;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-
-    .timestamp-item:last-child {
-      border-bottom: none;
-    }
-
-    .timestamp-item:hover {
-      background: #f5f5f5;
-    }
-
-    .timestamp-time {
-      font-family: 'Consolas', monospace;
-      font-size: 14px;
-      font-weight: 600;
-      color: #1976d2;
-      min-width: 70px;
-    }
-
-    .timestamp-label {
-      flex: 1;
-      color: #666;
-      font-size: 12px;
-    }
-
-    .empty-state {
-      padding: 24px;
-      text-align: center;
-      color: #999;
     }
 
     .actions {
@@ -259,43 +173,12 @@
 <body>
   <div class="header">
     <h1>歌枠タイムスタンプ検出</h1>
-    <p>音量変化から楽曲開始を自動検出</p>
+    <p>高速スキャンで音量グラフを生成</p>
   </div>
 
   <div class="content">
     <div id="error-container"></div>
     <div id="info-container"></div>
-
-    <div class="status-card">
-      <div class="status-row">
-        <span class="status-label">ステータス</span>
-        <span class="status-value">
-          <span class="status-dot" id="status-dot"></span>
-          <span id="status-text">停止中</span>
-        </span>
-      </div>
-      <div class="status-row">
-        <span class="status-label">検出数</span>
-        <span class="status-value" id="count">0</span>
-      </div>
-    </div>
-
-    <button class="btn btn-start" id="toggle-btn">
-      <span id="btn-icon">▶</span>
-      <span id="btn-text">検出開始</span>
-    </button>
-
-    <div class="section">
-      <div class="section-title">検出されたタイムスタンプ</div>
-      <div class="timestamps-list" id="timestamps-list">
-        <div class="empty-state">まだ検出されていません</div>
-      </div>
-      <div class="actions">
-        <button class="btn btn-secondary" id="copy-btn">コピー</button>
-        <button class="btn btn-secondary" id="clear-btn">クリア</button>
-        <button class="btn btn-secondary" id="toggle-overlay-btn">オーバーレイ</button>
-      </div>
-    </div>
 
     <div class="section">
       <div class="section-title">音量ダイナミクスグラフ</div>
