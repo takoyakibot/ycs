@@ -12,7 +12,7 @@
     }
 
     body {
-      width: 360px;
+      width: 280px;
       font-family: 'Segoe UI', 'Hiragino Sans', sans-serif;
       font-size: 14px;
       color: #333;
@@ -22,217 +22,73 @@
     .header {
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       color: white;
-      padding: 16px;
+      padding: 12px 16px;
     }
 
     .header h1 {
-      font-size: 16px;
+      font-size: 14px;
       font-weight: 600;
-      margin-bottom: 4px;
-    }
-
-    .header p {
-      font-size: 12px;
-      opacity: 0.9;
     }
 
     .content {
       padding: 16px;
     }
 
-    .status-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 12px;
-    }
-
-    .status-row:last-child {
-      margin-bottom: 0;
-    }
-
-    .status-label {
-      color: #666;
-      font-size: 13px;
-    }
-
-    .status-value {
-      font-weight: 600;
+    .toggle-row {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 10px;
+      padding: 8px 0;
     }
 
-    .btn {
-      width: 100%;
-      padding: 14px;
-      border: none;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 600;
+    .toggle-row input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
       cursor: pointer;
-      transition: all 0.2s;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
     }
 
-    .btn:disabled {
-      background: #ccc;
-      cursor: not-allowed;
-    }
-
-    .section {
-      margin-top: 16px;
-    }
-
-    .section-title {
-      font-size: 13px;
-      font-weight: 600;
-      color: #666;
-      margin-bottom: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    .actions {
-      display: flex;
-      gap: 8px;
-      margin-top: 12px;
-    }
-
-    .btn-secondary {
-      flex: 1;
-      padding: 10px;
-      background: #f0f0f0;
-      color: #333;
-    }
-
-    .btn-secondary:hover {
-      background: #e0e0e0;
-    }
-
-    .settings-section {
-      margin-top: 16px;
-      padding-top: 16px;
-      border-top: 1px solid #e0e0e0;
-    }
-
-    .setting-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 12px;
-    }
-
-    .setting-label {
-      font-size: 13px;
-      color: #666;
-    }
-
-    .setting-input {
-      width: 80px;
-      padding: 6px 10px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      font-size: 13px;
-      text-align: right;
-    }
-
-    .error-message {
-      background: #ffebee;
-      color: #c62828;
-      padding: 12px;
-      border-radius: 8px;
-      margin-bottom: 16px;
+    .toggle-row label {
+      cursor: pointer;
       font-size: 13px;
     }
 
     .info-message {
       background: #e3f2fd;
       color: #1565c0;
-      padding: 12px;
-      border-radius: 8px;
-      margin-bottom: 16px;
-      font-size: 13px;
-    }
-
-    .graph-info {
+      padding: 10px 12px;
+      border-radius: 6px;
       font-size: 12px;
-      color: #666;
-      line-height: 1.4;
+      margin-top: 12px;
     }
 
-    .btn-scanning {
-      background: #ff9800 !important;
-      color: white !important;
+    .help-link {
+      display: block;
+      margin-top: 12px;
+      text-align: center;
+      color: #666;
+      font-size: 12px;
+      text-decoration: none;
+    }
+
+    .help-link:hover {
+      color: #333;
     }
   </style>
 </head>
 <body>
   <div class="header">
     <h1>歌枠タイムスタンプ検出</h1>
-    <p>高速スキャンで音量グラフを生成</p>
   </div>
 
   <div class="content">
-    <div id="error-container"></div>
     <div id="info-container"></div>
 
-    <div class="section">
-      <div class="section-title">音量ダイナミクスグラフ</div>
-      <div class="graph-info">動画プレーヤー下に音量の波形グラフを表示し、クリックでシークできます</div>
-      <div class="actions" style="margin-top: 8px;">
-        <button class="btn btn-secondary" id="toggle-graph-btn">グラフ表示</button>
-        <button class="btn btn-secondary" id="scan-btn">高速スキャン</button>
-      </div>
+    <div class="toggle-row">
+      <input type="checkbox" id="show-embedded-ui" checked>
+      <label for="show-embedded-ui">YouTube画面にUIを表示</label>
     </div>
 
-    <details class="settings-section" id="list-scan-section">
-      <summary class="section-title" style="cursor: pointer;">リストスキャン</summary>
-      <div style="padding-top: 12px;">
-        <div class="graph-info" style="margin-bottom: 8px;">
-          videoIdリストを貼り付けて、複数動画を連続でスキャンします。夜間の自動処理などに便利です。
-        </div>
-        <textarea id="video-id-list" placeholder="videoIdを1行に1つずつ入力（改行区切り）"
-          style="width: 100%; height: 80px; border: 1px solid #ddd; border-radius: 4px; padding: 8px; font-size: 12px; font-family: monospace; resize: vertical;"></textarea>
-        <div class="status-row" style="margin-top: 8px;">
-          <span class="status-label">進捗</span>
-          <span class="status-value" id="list-scan-progress">0 / 0</span>
-        </div>
-        <div class="actions" style="margin-top: 8px;">
-          <button class="btn btn-secondary" id="start-list-scan-btn">開始</button>
-          <button class="btn btn-secondary" id="stop-list-scan-btn" style="display: none;">停止</button>
-        </div>
-      </div>
-    </details>
-
-    <details class="settings-section">
-      <summary class="section-title" style="cursor: pointer;">設定</summary>
-      <div style="padding-top: 12px;">
-        <div class="setting-row">
-          <span class="setting-label">音量しきい値</span>
-          <input type="number" class="setting-input" id="volume-threshold"
-                 min="0.01" max="1" step="0.01" value="0.15">
-        </div>
-        <div class="setting-row">
-          <span class="setting-label">静音しきい値</span>
-          <input type="number" class="setting-input" id="quiet-threshold"
-                 min="0.01" max="1" step="0.01" value="0.05">
-        </div>
-        <div class="setting-row">
-          <span class="setting-label">静音最小時間(秒)</span>
-          <input type="number" class="setting-input" id="quiet-duration"
-                 min="0.5" max="10" step="0.5" value="1.0">
-        </div>
-        <div class="setting-row">
-          <span class="setting-label">クールダウン(秒)</span>
-          <input type="number" class="setting-input" id="cooldown"
-                 min="1" max="30" step="1" value="3">
-        </div>
-      </div>
-    </details>
+    <a href="#" class="help-link" id="help-link">使い方を見る</a>
   </div>
 
   <script src="popup.js"></script>

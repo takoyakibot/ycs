@@ -54,6 +54,135 @@ const SAVE_INTERVAL = 3000; // 保存間隔（ミリ秒）
 // 音量表示モード（false: 絶対値, true: 相対値）
 let isRelativeVolumeMode = false;
 
+// 埋め込みUI設定
+let embeddedUIVisible = true; // デフォルトは表示
+let embeddedTriggerButton = null;
+
+/**
+ * 埋め込みUI設定を読み込む
+ */
+async function loadEmbeddedUISettings() {
+  try {
+    const result = await chrome.storage.local.get('showEmbeddedUI');
+    embeddedUIVisible = result.showEmbeddedUI !== false; // デフォルトはtrue
+    return embeddedUIVisible;
+  } catch (error) {
+    console.error('埋め込みUI設定読み込みエラー:', error);
+    return true;
+  }
+}
+
+/**
+ * 埋め込みトリガーボタンを作成
+ */
+function createEmbeddedTriggerButton() {
+  if (embeddedTriggerButton) return;
+
+  embeddedTriggerButton = document.createElement('button');
+  embeddedTriggerButton.id = 'ycs-trigger-button';
+  embeddedTriggerButton.innerHTML = `
+    <style>
+      #ycs-trigger-button {
+        position: fixed;
+        bottom: 80px;
+        right: 16px;
+        z-index: 9999;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        border: none;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        font-size: 14px;
+        font-weight: bold;
+        cursor: pointer;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      #ycs-trigger-button:hover {
+        transform: scale(1.1);
+        box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+      }
+      #ycs-trigger-button.active {
+        background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);
+      }
+      #ycs-trigger-button.hidden {
+        display: none !important;
+      }
+    </style>
+    YCS
+  `;
+
+  embeddedTriggerButton.title = 'タイムスタンプ検出グラフを表示/非表示';
+
+  embeddedTriggerButton.addEventListener('click', () => {
+    toggleEmbeddedUI();
+  });
+
+  document.body.appendChild(embeddedTriggerButton);
+  updateTriggerButtonState();
+}
+
+/**
+ * 埋め込みUIの表示/非表示をトグル
+ */
+function toggleEmbeddedUI() {
+  if (volumeGraphContainer) {
+    const isVisible = volumeGraphContainer.classList.contains('visible');
+    if (isVisible) {
+      volumeGraphContainer.classList.remove('visible');
+      isGraphVisible = false;
+    } else {
+      volumeGraphContainer.classList.add('visible');
+      isGraphVisible = true;
+      updateVideoDuration();
+      resizeCanvas();
+    }
+    updateTriggerButtonState();
+  }
+}
+
+/**
+ * トリガーボタンの状態を更新
+ */
+function updateTriggerButtonState() {
+  if (!embeddedTriggerButton) return;
+
+  if (isGraphVisible) {
+    embeddedTriggerButton.classList.add('active');
+  } else {
+    embeddedTriggerButton.classList.remove('active');
+  }
+}
+
+/**
+ * 埋め込みUIを表示
+ */
+function showEmbeddedUI() {
+  embeddedUIVisible = true;
+  if (embeddedTriggerButton) {
+    embeddedTriggerButton.classList.remove('hidden');
+  }
+}
+
+/**
+ * 埋め込みUIを非表示
+ */
+function hideEmbeddedUI() {
+  embeddedUIVisible = false;
+  if (embeddedTriggerButton) {
+    embeddedTriggerButton.classList.add('hidden');
+  }
+  // グラフも非表示
+  if (volumeGraphContainer) {
+    volumeGraphContainer.classList.remove('visible');
+    isGraphVisible = false;
+  }
+}
+
 /**
  * 現在の動画IDを取得
  */
@@ -358,7 +487,7 @@ function getScanStatus() {
 }
 
 // 初期化
-function init() {
+async function init() {
   // メッセージリスナーを最初に設定（他の処理でエラーが出ても通信可能にする）
   chrome.runtime.onMessage.addListener(handleMessage);
 
@@ -366,11 +495,24 @@ function init() {
   chrome.storage.onChanged.addListener(handleStorageChange);
 
   try {
+    // 埋め込みUI設定を読み込み
+    await loadEmbeddedUISettings();
+
     // 動画要素を取得
     findVideoElement();
 
     // 音量グラフを作成
     createVolumeGraph();
+
+    // 埋め込みトリガーボタンを作成
+    createEmbeddedTriggerButton();
+
+    // 埋め込みUI設定に従ってボタンを表示/非表示
+    if (embeddedUIVisible) {
+      showEmbeddedUI();
+    } else {
+      hideEmbeddedUI();
+    }
 
     // YouTube SPAナビゲーション対応
     observePageChanges();
@@ -387,6 +529,16 @@ function init() {
  */
 function handleStorageChange(changes, areaName) {
   if (areaName !== 'local') return;
+
+  // 埋め込みUI設定の変更を監視
+  if (changes.showEmbeddedUI) {
+    const showUI = changes.showEmbeddedUI.newValue !== false;
+    if (showUI) {
+      showEmbeddedUI();
+    } else {
+      hideEmbeddedUI();
+    }
+  }
 
   const videoId = getVideoId();
   if (!videoId) return;
@@ -2247,6 +2399,16 @@ function handleMessage(message, sender, sendResponse) {
   switch (message.type) {
     case 'PING':
       sendResponse('PONG');
+      return true;
+
+    case 'SHOW_EMBEDDED_UI':
+      showEmbeddedUI();
+      sendResponse({ success: true });
+      return true;
+
+    case 'HIDE_EMBEDDED_UI':
+      hideEmbeddedUI();
+      sendResponse({ success: true });
       return true;
 
     case 'TIMESTAMP_DETECTED':
