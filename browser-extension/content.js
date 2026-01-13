@@ -1211,15 +1211,6 @@ function createChatSearchPanel() {
         flex-shrink: 0;
         width: 60px;
       }
-      .csp-result-author {
-        color: #4caf50;
-        font-size: 11px;
-        flex-shrink: 0;
-        max-width: 80px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
       .csp-result-message {
         flex: 1;
         font-size: 12px;
@@ -1236,10 +1227,6 @@ function createChatSearchPanel() {
       }
       .csp-badge-superchat {
         background: #ff6b6b;
-        color: white;
-      }
-      .csp-badge-member {
-        background: #2e7d32;
         color: white;
       }
       .csp-empty {
@@ -1267,7 +1254,6 @@ function createChatSearchPanel() {
       <div class="csp-filters">
         <button class="csp-filter-btn active" data-filter="all">全て</button>
         <button class="csp-filter-btn" data-filter="superchat">スパチャ</button>
-        <button class="csp-filter-btn" data-filter="member">メンバー</button>
       </div>
       <div class="csp-status" id="csp-status">チャットを読み込み中...</div>
       <div class="csp-results" id="csp-results">
@@ -1582,10 +1568,8 @@ function parseChatItem(item, offsetMsec) {
       const renderer = item.liveChatTextMessageRenderer;
       return {
         type: 'normal',
-        author: renderer.authorName?.simpleText || '',
         message: getMessageText(renderer.message),
         timestamp: parseInt(offsetMsec) || 0,
-        isMember: !!renderer.authorBadges?.some(b => b.liveChatAuthorBadgeRenderer?.customThumbnail),
         isSuperchat: false
       };
     }
@@ -1595,25 +1579,10 @@ function parseChatItem(item, offsetMsec) {
       const renderer = item.liveChatPaidMessageRenderer;
       return {
         type: 'superchat',
-        author: renderer.authorName?.simpleText || '',
         message: getMessageText(renderer.message),
         timestamp: parseInt(offsetMsec) || 0,
         amount: renderer.purchaseAmountText?.simpleText || '',
-        isMember: false,
         isSuperchat: true
-      };
-    }
-
-    // メンバー加入
-    if (item.liveChatMembershipItemRenderer) {
-      const renderer = item.liveChatMembershipItemRenderer;
-      return {
-        type: 'membership',
-        author: renderer.authorName?.simpleText || '',
-        message: renderer.headerSubtext?.simpleText || 'メンバー加入',
-        timestamp: parseInt(offsetMsec) || 0,
-        isMember: true,
-        isSuperchat: false
       };
     }
 
@@ -1704,15 +1673,12 @@ async function searchChats() {
 
   if (activeFilter === 'superchat') {
     filtered = filtered.filter(c => c.isSuperchat);
-  } else if (activeFilter === 'member') {
-    filtered = filtered.filter(c => c.isMember);
   }
 
   // 検索
   if (query) {
     filtered = filtered.filter(c =>
-      c.message?.toLowerCase().includes(query) ||
-      c.author?.toLowerCase().includes(query)
+      c.message?.toLowerCase().includes(query)
     );
   }
 
@@ -1737,17 +1703,13 @@ function renderChatResults(chats) {
 
   const html = chats.slice(0, 200).map(chat => {
     const timeStr = formatTimestamp(chat.timestamp);
-    let badge = '';
-    if (chat.isSuperchat) {
-      badge = `<span class="csp-result-badge csp-badge-superchat">${chat.amount || 'SC'}</span>`;
-    } else if (chat.isMember) {
-      badge = '<span class="csp-result-badge csp-badge-member">メンバー</span>';
-    }
+    const badge = chat.isSuperchat
+      ? `<span class="csp-result-badge csp-badge-superchat">${chat.amount || 'SC'}</span>`
+      : '';
 
     return `
       <div class="csp-result-item" data-timestamp="${chat.timestamp}">
         <span class="csp-result-time">${timeStr}</span>
-        <span class="csp-result-author">${escapeHtml(chat.author)}</span>
         <span class="csp-result-message">${escapeHtml(chat.message)}</span>
         ${badge}
       </div>
