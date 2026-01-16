@@ -6,6 +6,9 @@
 (function() {
   'use strict';
 
+  const STORAGE_KEY = 'hideGoogleAI';
+  const STYLE_ID = 'ycs-hide-ai-overview';
+
   // CSSを早期に注入してAI概要を非表示にする
   const hideAIOverviewCSS = `
     /* AI Overview / SGE 関連要素を非表示 */
@@ -26,10 +29,14 @@
     }
   `;
 
+  let observer = null;
+
   // スタイル要素を作成して注入
   function injectStyles() {
+    if (document.getElementById(STYLE_ID)) return;
+
     const style = document.createElement('style');
-    style.id = 'ycs-hide-ai-overview';
+    style.id = STYLE_ID;
     style.textContent = hideAIOverviewCSS;
 
     // document.headがまだない場合はdocumentElementに追加
@@ -39,9 +46,19 @@
     }
   }
 
+  // スタイルを削除
+  function removeStyles() {
+    const style = document.getElementById(STYLE_ID);
+    if (style) {
+      style.remove();
+    }
+  }
+
   // MutationObserverでAI概要要素を監視して削除
   function setupObserver() {
-    const observer = new MutationObserver((mutations) => {
+    if (observer) return;
+
+    observer = new MutationObserver((mutations) => {
       for (const mutation of mutations) {
         for (const node of mutation.addedNodes) {
           if (node.nodeType === Node.ELEMENT_NODE) {
@@ -65,6 +82,14 @@
     });
   }
 
+  // Observerを停止
+  function stopObserver() {
+    if (observer) {
+      observer.disconnect();
+      observer = null;
+    }
+  }
+
   // AI概要関連の要素かどうかを判定
   function isAIOverviewElement(element) {
     if (!element.getAttribute) return false;
@@ -83,15 +108,43 @@
     );
   }
 
-  // 初期化
-  injectStyles();
-
-  // DOMContentLoadedを待たずにObserverを開始
-  if (document.documentElement) {
-    setupObserver();
-  } else {
-    document.addEventListener('DOMContentLoaded', setupObserver);
+  // AI概要非表示を有効化
+  function enableHiding() {
+    injectStyles();
+    if (document.documentElement) {
+      setupObserver();
+    } else {
+      document.addEventListener('DOMContentLoaded', setupObserver);
+    }
+    console.log('[YCS] Google AI Overview hider enabled');
   }
 
-  console.log('[YCS] Google AI Overview hider loaded');
+  // AI概要非表示を無効化
+  function disableHiding() {
+    removeStyles();
+    stopObserver();
+    console.log('[YCS] Google AI Overview hider disabled');
+  }
+
+  // ポップアップからのメッセージを受信
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.type === 'HIDE_GOOGLE_AI') {
+      enableHiding();
+      sendResponse({ success: true });
+    } else if (message.type === 'SHOW_GOOGLE_AI') {
+      disableHiding();
+      sendResponse({ success: true });
+    }
+    return true;
+  });
+
+  // 初期化: 保存された設定を読み込み
+  chrome.storage.local.get(STORAGE_KEY, (result) => {
+    const hide = result[STORAGE_KEY] !== false; // デフォルトはtrue
+    if (hide) {
+      enableHiding();
+    } else {
+      console.log('[YCS] Google AI Overview hider loaded (disabled)');
+    }
+  });
 })();
