@@ -8,6 +8,7 @@
 
   const STORAGE_KEY = 'hideGoogleAI';
   const STYLE_ID = 'ycs-hide-ai-overview';
+  const INDICATOR_ID = 'ycs-ai-hidden-indicator';
 
   // CSSを早期に注入してAI概要を非表示にする
   const hideAIOverviewCSS = `
@@ -27,11 +28,29 @@
     .kno-rdesc[data-attrid^="description"] ~ div[data-attrid="SGE"] {
       display: none !important;
     }
+
+    /* 非表示インジケーター */
+    #${INDICATOR_ID} {
+      background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%);
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin: 8px 0 16px 0;
+      font-size: 13px;
+      color: #64748b;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    #${INDICATOR_ID} .icon {
+      font-size: 16px;
+    }
   `;
 
   let observer = null;
   let observerTimeout = null;
   let domReadyListener = null;
+  let aiOverviewDetected = false;
 
   // スタイル要素を作成して注入
   function injectStyles() {
@@ -56,6 +75,29 @@
     }
   }
 
+  // インジケーターを表示
+  function showIndicator() {
+    if (document.getElementById(INDICATOR_ID)) return;
+
+    const indicator = document.createElement('div');
+    indicator.id = INDICATOR_ID;
+    indicator.innerHTML = '<span class="icon">🤖</span><span>AI概要は拡張機能により非表示になっています</span>';
+
+    // 検索結果の上部に挿入
+    const insertTarget = document.querySelector('#search') || document.querySelector('#rso') || document.querySelector('#main');
+    if (insertTarget) {
+      insertTarget.insertBefore(indicator, insertTarget.firstChild);
+    }
+  }
+
+  // インジケーターを削除
+  function removeIndicator() {
+    const indicator = document.getElementById(INDICATOR_ID);
+    if (indicator) {
+      indicator.remove();
+    }
+  }
+
   // MutationObserverでAI概要要素を監視して削除
   function setupObserver() {
     if (observer) return;
@@ -73,11 +115,21 @@
               // AI概要関連の要素が追加されたら非表示にする
               if (isAIOverviewElement(node)) {
                 node.style.display = 'none';
+                if (!aiOverviewDetected) {
+                  aiOverviewDetected = true;
+                  showIndicator();
+                }
               }
               // 子要素も確認
               if (node.querySelectorAll) {
                 const aiElements = node.querySelectorAll('[data-attrid="SGE"], [aria-label="AI Overview"], [aria-label="AI による概要"], div[jsname="N6jJud"]');
-                aiElements.forEach(el => el.style.display = 'none');
+                if (aiElements.length > 0) {
+                  aiElements.forEach(el => el.style.display = 'none');
+                  if (!aiOverviewDetected) {
+                    aiOverviewDetected = true;
+                    showIndicator();
+                  }
+                }
               }
             }
           }
@@ -90,6 +142,18 @@
       childList: true,
       subtree: true
     });
+
+    // 既存のAI概要要素をチェック
+    checkExistingAIOverview();
+  }
+
+  // 既存のAI概要要素をチェック
+  function checkExistingAIOverview() {
+    const aiElements = document.querySelectorAll('[data-attrid="SGE"], [aria-label="AI Overview"], [aria-label="AI による概要"], div[jsname="N6jJud"]');
+    if (aiElements.length > 0 && !aiOverviewDetected) {
+      aiOverviewDetected = true;
+      showIndicator();
+    }
   }
 
   // Observerを停止
@@ -153,6 +217,8 @@
     removeStyles();
     stopObserver();
     cleanupDomReadyListener();
+    removeIndicator();
+    aiOverviewDetected = false;
   }
 
   // ポップアップからのメッセージを受信
