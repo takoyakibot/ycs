@@ -30,6 +30,8 @@
   `;
 
   let observer = null;
+  let observerTimeout = null;
+  let domReadyListener = null;
 
   // スタイル要素を作成して注入
   function injectStyles() {
@@ -59,21 +61,29 @@
     if (observer) return;
 
     observer = new MutationObserver((mutations) => {
-      for (const mutation of mutations) {
-        for (const node of mutation.addedNodes) {
-          if (node.nodeType === Node.ELEMENT_NODE) {
-            // AI概要関連の要素が追加されたら非表示にする
-            if (isAIOverviewElement(node)) {
-              node.style.display = 'none';
-            }
-            // 子要素も確認
-            const aiElements = node.querySelectorAll?.('[data-attrid="SGE"], [aria-label="AI Overview"], [aria-label="AI による概要"], div[jsname="N6jJud"]');
-            if (aiElements) {
-              aiElements.forEach(el => el.style.display = 'none');
+      // デバウンス: 連続した変更を100msごとにまとめて処理
+      if (observerTimeout) {
+        clearTimeout(observerTimeout);
+      }
+
+      observerTimeout = setTimeout(() => {
+        for (const mutation of mutations) {
+          for (const node of mutation.addedNodes) {
+            if (node.nodeType === Node.ELEMENT_NODE) {
+              // AI概要関連の要素が追加されたら非表示にする
+              if (isAIOverviewElement(node)) {
+                node.style.display = 'none';
+              }
+              // 子要素も確認
+              if (node.querySelectorAll) {
+                const aiElements = node.querySelectorAll('[data-attrid="SGE"], [aria-label="AI Overview"], [aria-label="AI による概要"], div[jsname="N6jJud"]');
+                aiElements.forEach(el => el.style.display = 'none');
+              }
             }
           }
         }
-      }
+        observerTimeout = null;
+      }, 100);
     });
 
     observer.observe(document.documentElement, {
@@ -84,6 +94,10 @@
 
   // Observerを停止
   function stopObserver() {
+    if (observerTimeout) {
+      clearTimeout(observerTimeout);
+      observerTimeout = null;
+    }
     if (observer) {
       observer.disconnect();
       observer = null;
@@ -92,7 +106,7 @@
 
   // AI概要関連の要素かどうかを判定
   function isAIOverviewElement(element) {
-    if (!element.getAttribute) return false;
+    if (!element?.getAttribute) return false;
 
     const attrid = element.getAttribute('data-attrid');
     const ariaLabel = element.getAttribute('aria-label');
@@ -108,22 +122,37 @@
     );
   }
 
+  // DOMContentLoadedリスナーのクリーンアップ
+  function cleanupDomReadyListener() {
+    if (domReadyListener) {
+      document.removeEventListener('DOMContentLoaded', domReadyListener);
+      domReadyListener = null;
+    }
+  }
+
   // AI概要非表示を有効化
   function enableHiding() {
     injectStyles();
+
+    // 既存のリスナーをクリーンアップ
+    cleanupDomReadyListener();
+
     if (document.documentElement) {
       setupObserver();
     } else {
-      document.addEventListener('DOMContentLoaded', setupObserver);
+      domReadyListener = () => {
+        setupObserver();
+        cleanupDomReadyListener();
+      };
+      document.addEventListener('DOMContentLoaded', domReadyListener);
     }
-    console.log('[YCS] Google AI Overview hider enabled');
   }
 
   // AI概要非表示を無効化
   function disableHiding() {
     removeStyles();
     stopObserver();
-    console.log('[YCS] Google AI Overview hider disabled');
+    cleanupDomReadyListener();
   }
 
   // ポップアップからのメッセージを受信
@@ -140,11 +169,17 @@
 
   // 初期化: 保存された設定を読み込み
   chrome.storage.local.get(STORAGE_KEY, (result) => {
+    // エラーハンドリング
+    if (chrome.runtime.lastError) {
+      console.error('[YCS] Failed to load settings:', chrome.runtime.lastError);
+      // デフォルト動作として非表示を有効化
+      enableHiding();
+      return;
+    }
+
     const hide = result[STORAGE_KEY] !== false; // デフォルトはtrue
     if (hide) {
       enableHiding();
-    } else {
-      console.log('[YCS] Google AI Overview hider loaded (disabled)');
     }
   });
 })();
