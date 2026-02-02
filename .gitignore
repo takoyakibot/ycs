@@ -22,3 +22,6 @@ yarn-error.log
 !/.vscode/settings.json
 !/.vscode/extensions.json
 !/.vscode/tasks.json
+
+# Claude Code
+.claude/settings.local.json
