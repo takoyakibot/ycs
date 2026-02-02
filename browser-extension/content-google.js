@@ -131,7 +131,7 @@
               }
               // 子要素も確認
               if (node.querySelectorAll) {
-                const aiElements = node.querySelectorAll('[data-attrid="SGE"], [aria-label="AI Overview"], [aria-label="AI による概要"], div[jsname="N6jJud"]');
+                const aiElements = node.querySelectorAll('[data-attrid="SGE"], [aria-label="AI Overview"], [aria-label="AI による概要"], div[jsname="N6jJud"], #m-x-content');
                 if (aiElements.length > 0) {
                   aiElements.forEach(el => el.style.display = 'none');
                   if (!aiOverviewDetected) {
@@ -159,7 +159,7 @@
   // 既存のAI概要要素をチェック
   function checkExistingAIOverview() {
     const check = () => {
-      const aiElements = document.querySelectorAll('[data-attrid="SGE"], [aria-label="AI Overview"], [aria-label="AI による概要"], div[jsname="N6jJud"]');
+      const aiElements = document.querySelectorAll('[data-attrid="SGE"], [aria-label="AI Overview"], [aria-label="AI による概要"], div[jsname="N6jJud"], #m-x-content');
       if (aiElements.length > 0 && !aiOverviewDetected) {
         aiOverviewDetected = true;
         showIndicator();
@@ -194,11 +194,13 @@
   function isAIOverviewElement(element) {
     if (!element?.getAttribute) return false;
 
+    const id = element.id;
     const attrid = element.getAttribute('data-attrid');
     const ariaLabel = element.getAttribute('aria-label');
     const jsname = element.getAttribute('jsname');
 
     return (
+      id === 'm-x-content' ||
       attrid === 'SGE' ||
       attrid === 'wa:/m/0jbk' ||
       ariaLabel === 'AI Overview' ||
