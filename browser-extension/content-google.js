@@ -87,6 +87,15 @@
     const insertTarget = document.querySelector('#search') || document.querySelector('#rso') || document.querySelector('#main');
     if (insertTarget) {
       insertTarget.insertBefore(indicator, insertTarget.firstChild);
+    } else {
+      // 挿入先がまだない場合は少し待ってリトライ
+      setTimeout(() => {
+        if (document.getElementById(INDICATOR_ID)) return;
+        const retryTarget = document.querySelector('#search') || document.querySelector('#rso') || document.querySelector('#main');
+        if (retryTarget) {
+          retryTarget.insertBefore(indicator, retryTarget.firstChild);
+        }
+      }, 500);
     }
   }
 
@@ -149,11 +158,24 @@
 
   // 既存のAI概要要素をチェック
   function checkExistingAIOverview() {
-    const aiElements = document.querySelectorAll('[data-attrid="SGE"], [aria-label="AI Overview"], [aria-label="AI による概要"], div[jsname="N6jJud"]');
-    if (aiElements.length > 0 && !aiOverviewDetected) {
-      aiOverviewDetected = true;
-      showIndicator();
+    const check = () => {
+      const aiElements = document.querySelectorAll('[data-attrid="SGE"], [aria-label="AI Overview"], [aria-label="AI による概要"], div[jsname="N6jJud"]');
+      if (aiElements.length > 0 && !aiOverviewDetected) {
+        aiOverviewDetected = true;
+        showIndicator();
+      }
+    };
+
+    // 即時チェック
+    check();
+
+    // DOMが完全に読み込まれた後にも再チェック
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', check);
     }
+
+    // 少し遅延してからも再チェック（動的に読み込まれる場合に対応）
+    setTimeout(check, 1000);
   }
 
   // Observerを停止
