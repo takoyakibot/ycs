@@ -34,7 +34,9 @@ class QueryHelper
             return [];
         }
 
-        return preg_split('/\s+|\x{3000}+/u', $trimmed, -1, PREG_SPLIT_NO_EMPTY);
+        $result = preg_split('/\s+|\x{3000}+/u', $trimmed, -1, PREG_SPLIT_NO_EMPTY);
+
+        return $result === false ? [] : $result;
     }
 
     /**

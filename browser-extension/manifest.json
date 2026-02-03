@@ -11,6 +11,8 @@
   ],
   "host_permissions": [
     "https://www.youtube.com/*",
+    "https://www.google.com/*",
+    "https://www.google.co.jp/*",
     "http://localhost:8000/*",
     "http://127.0.0.1:8000/*"
   ],
@@ -33,6 +35,14 @@
       ],
       "js": ["content-ycs.js"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.google.com/search*",
+        "https://www.google.co.jp/search*"
+      ],
+      "js": ["content-google.js"],
+      "run_at": "document_start"
     }
   ]
 }
