@@ -575,8 +575,8 @@ function registerArchiveListComponent() {
                     // 自動ガチャ中に手動で楽曲を選択した場合、自動再抽選をOFFにする
                     if (this.autoReshuffle) {
                         this.autoReshuffle = false;
-                        this.saveAutoReshuffle();
-                        this.stopReshuffleMonitor();
+                        autoReshuffleManager.setEnabled(false);
+                        autoReshuffleManager.stopMonitor();
                         toast.info('自動再抽選をOFFにしました');
                     }
 
@@ -605,8 +605,8 @@ function registerArchiveListComponent() {
                     // 自動ガチャ中に手動で楽曲を選択した場合、自動再抽選をOFFにする
                     if (this.autoReshuffle) {
                         this.autoReshuffle = false;
-                        this.saveAutoReshuffle();
-                        this.stopReshuffleMonitor();
+                        autoReshuffleManager.setEnabled(false);
+                        autoReshuffleManager.stopMonitor();
                         toast.info('自動再抽選をOFFにしました');
                     }
 
