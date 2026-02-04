@@ -1,7 +1,7 @@
 ---
 name: fix-issue
 description: 指定されたGitHub Issueをワークフローに従って修正する
-argument-hint: [Issue番号またはURL]
+argument-hint: <Issue番号またはURL> [--auto]
 disable-model-invocation: true
 ---
 
@@ -10,13 +10,31 @@ disable-model-invocation: true
 指定されたIssueを確認し、修正可能な内容をワークフローに従って修正してください。
 
 ## 引数
-- `$ARGUMENTS`: Issue番号またはIssue URL
+- `$ARGUMENTS`: Issue番号またはIssue URL、オプションで `--auto` フラグ
+
+## オプション
+
+- `--auto`: 自律モード。ユーザーへの確認を省略し、修正からマージまで自動で実行する
+
+## 動作モード判定
+
+`$ARGUMENTS` に `--auto` が含まれている場合は**自律モード**で動作する。
+Issue番号/URLは `--auto` を除いた部分から取得する。
+
+### 通常モード（デフォルト）
+- PR作成後にユーザーに変更内容を確認させる
+- マージ前にユーザーの承認を得る
+
+### 自律モード（--auto）
+- PR作成後の確認を省略
+- レビューで問題がなければ自動マージ
 
 ## 手順
 
 1. **Issueの確認**
-   - `gh issue view $ARGUMENTS` でIssueの内容を確認
+   - `gh issue view <Issue番号>` でIssueの内容を確認
    - 修正可能かどうかを判断
+   - 修正不可能な場合はその理由を説明して終了
 
 2. **ワークフローに従って対応**
    - developの最新化
@@ -27,7 +45,8 @@ disable-model-invocation: true
    - PRを作成（Issueを自動クローズするため `Closes #番号` を含める）
    - PRをレビュー
    - 指摘事項があれば修正
-   - ユーザーに変更内容を確認させる
+   - 【通常モード】ユーザーに変更内容を確認させる
+   - 【自律モード】レビューで問題がなければ続行
    - 問題がなければマージ
 
 3. **留意点**
