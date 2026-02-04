@@ -462,6 +462,79 @@ class TimestampDecompositionService
     }
 
     /**
+     * 操作を取り消し（undo）
+     *
+     * @return array{undone_count: int}
+     */
+    public function undoAction(string $id): array
+    {
+        $decomposition = TimestampDecomposition::findOrFail($id);
+        $undoneCount = 1;
+
+        // 紐付けられた楽曲マッピングを解除
+        if ($decomposition->song_id) {
+            TimestampSongMapping::where('normalized_text', $decomposition->normalized_text)
+                ->update([
+                    'song_id' => null,
+                    'is_manual' => false,
+                    'status' => 'pending',
+                    'updated_by' => Auth::id(),
+                ]);
+        }
+
+        // カスケード処理されたアイテムも元に戻す（同じupdated_byかつ近い時間に更新されたもの）
+        $cascadedItems = TimestampDecomposition::where('id', '!=', $id)
+            ->where('status', TimestampDecomposition::STATUS_AUTO_MATCHED)
+            ->where('updated_by', $decomposition->updated_by)
+            ->whereBetween('updated_at', [
+                $decomposition->updated_at->subSeconds(5),
+                $decomposition->updated_at->addSeconds(5),
+            ])
+            ->get();
+
+        foreach ($cascadedItems as $item) {
+            // マッピングを解除
+            if ($item->song_id) {
+                TimestampSongMapping::where('normalized_text', $item->normalized_text)
+                    ->update([
+                        'song_id' => null,
+                        'is_manual' => false,
+                        'status' => 'pending',
+                        'updated_by' => Auth::id(),
+                    ]);
+            }
+
+            // ステータスをpendingに戻す
+            $item->update([
+                'title_part_index' => null,
+                'artist_part_index' => null,
+                'derived_title' => null,
+                'derived_artist' => null,
+                'status' => TimestampDecomposition::STATUS_PENDING,
+                'song_id' => null,
+                'confidence' => null,
+                'updated_by' => Auth::id(),
+            ]);
+            $undoneCount++;
+        }
+
+        // 元のアイテムをpendingに戻す
+        $decomposition->update([
+            'title_part_index' => null,
+            'artist_part_index' => null,
+            'derived_title' => null,
+            'derived_artist' => null,
+            'status' => TimestampDecomposition::STATUS_PENDING,
+            'song_id' => null,
+            'updated_by' => Auth::id(),
+        ]);
+
+        return [
+            'undone_count' => $undoneCount,
+        ];
+    }
+
+    /**
      * 選別結果から楽曲マスタを検索・作成し、マッピングを作成
      */
     public function linkToSong(TimestampDecomposition $decomposition): ?Song

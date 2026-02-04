@@ -150,6 +150,19 @@ class TimestampDecompositionController extends Controller
     }
 
     /**
+     * 操作を取り消し（undo）
+     */
+    public function undo(string $id): JsonResponse
+    {
+        $result = $this->service->undoAction($id);
+
+        return response()->json([
+            'success' => true,
+            'undone_count' => $result['undone_count'],
+        ]);
+    }
+
+    /**
      * 統計情報取得
      */
     public function statistics(): JsonResponse
