@@ -1,3 +1,10 @@
+---
+name: fix-issue
+description: 指定されたGitHub Issueをワークフローに従って修正する
+argument-hint: [Issue番号またはURL]
+disable-model-invocation: true
+---
+
 # Issue修正コマンド
 
 指定されたIssueを確認し、修正可能な内容をワークフローに従って修正してください。

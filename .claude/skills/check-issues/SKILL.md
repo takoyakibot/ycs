@@ -1,3 +1,9 @@
+---
+name: check-issues
+description: オープンなGitHub Issue全体を確認し、修正可能なものをワークフローに従って対応する
+disable-model-invocation: true
+---
+
 # Issue一覧確認・修正コマンド
 
 オープンなIssue全体を確認し、修正可能なものをワークフローに従って対応してください。
