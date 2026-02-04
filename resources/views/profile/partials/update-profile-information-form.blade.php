@@ -41,20 +41,6 @@
             </p>
         </div>
 
-        <!-- APIキー削除用のフォーム -->
-        <form id="delete-api-key-form" method="post" action="{{ route('profile.api-key.destroy') }}" class="hidden">
-            @csrf
-            @method('delete')
-        </form>
-
-        <script>
-        function confirmDeleteApiKey() {
-            if (confirm('APIキーを削除してもよろしいですか？削除後はチャンネル管理機能が使用できなくなります。')) {
-                document.getElementById('delete-api-key-form').submit();
-            }
-        }
-        </script>
-
         <div class="flex items-center gap-4">
             <x-primary-button>{{ __('Save') }}</x-primary-button>
 
@@ -69,4 +55,20 @@
             @endif
         </div>
     </form>
+
+    <!-- APIキー削除用のフォーム（メインフォームの外に配置） -->
+    @if ($user->api_key)
+        <form id="delete-api-key-form" method="post" action="{{ route('profile.api-key.destroy') }}" class="hidden">
+            @csrf
+            @method('delete')
+        </form>
+    @endif
+
+    <script>
+    function confirmDeleteApiKey() {
+        if (confirm('APIキーを削除してもよろしいですか？削除後はチャンネル管理機能が使用できなくなります。')) {
+            document.getElementById('delete-api-key-form').submit();
+        }
+    }
+    </script>
 </section>
