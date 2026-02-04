@@ -1,6 +1,7 @@
 /**
  * 歌枠タイムスタンプ検出 - Popup Script
  * 埋め込みUIの表示/非表示とGoogle AI概要の表示/非表示を切り替える
+ * スキャン済み動画一覧の表示・管理
  */
 
 const STORAGE_KEY_EMBEDDED_UI = 'showEmbeddedUI';
@@ -11,7 +12,9 @@ const elements = {
   showEmbeddedUI: document.getElementById('show-embedded-ui'),
   hideGoogleAI: document.getElementById('hide-google-ai'),
   infoContainer: document.getElementById('info-container'),
-  helpLink: document.getElementById('help-link')
+  helpLink: document.getElementById('help-link'),
+  scannedList: document.getElementById('scanned-list'),
+  clearAllBtn: document.getElementById('clear-all-btn')
 };
 
 /**
@@ -41,6 +44,7 @@ async function init() {
   elements.showEmbeddedUI.addEventListener('change', toggleEmbeddedUI);
   elements.hideGoogleAI.addEventListener('change', toggleHideGoogleAI);
   elements.helpLink.addEventListener('click', showHelp);
+  elements.clearAllBtn.addEventListener('click', clearAllScannedData);
 
   // YouTube埋め込みUIの初期状態をコンテンツスクリプトに通知
   if (isYouTube) {
@@ -51,6 +55,9 @@ async function init() {
   if (isGoogle) {
     notifyGoogleContentScript(hideGoogleAI);
   }
+
+  // スキャン済み一覧を読み込み
+  await loadScannedList();
 }
 
 /**
@@ -112,6 +119,124 @@ async function notifyGoogleContentScript(hide) {
 }
 
 /**
+ * スキャン済み動画一覧を取得
+ */
+async function getScannedVideosList() {
+  const allData = await chrome.storage.local.get(null);
+  const videos = [];
+
+  for (const key in allData) {
+    if (key.startsWith('volumeData_')) {
+      const videoId = key.replace('volumeData_', '');
+      const data = allData[key];
+      videos.push({
+        videoId,
+        savedAt: data.savedAt,
+        duration: data.duration
+      });
+    }
+  }
+
+  return videos.sort((a, b) => new Date(b.savedAt) - new Date(a.savedAt));
+}
+
+/**
+ * スキャン済み一覧を読み込み・表示
+ */
+async function loadScannedList() {
+  const videos = await getScannedVideosList();
+
+  if (videos.length === 0) {
+    elements.scannedList.innerHTML = '<div class="empty-message">スキャン済みの動画はありません</div>';
+    elements.clearAllBtn.style.display = 'none';
+    return;
+  }
+
+  elements.clearAllBtn.style.display = 'block';
+
+  const html = videos.map(video => {
+    const date = video.savedAt ? formatDate(video.savedAt) : '不明';
+    return `
+      <div class="scanned-item" data-video-id="${video.videoId}">
+        <div class="scanned-info">
+          <a href="#" class="scanned-video-id" data-video-id="${video.videoId}">${video.videoId}</a>
+          <span class="scanned-date">${date}</span>
+        </div>
+        <div class="scanned-actions">
+          <button class="btn-small btn-open" data-video-id="${video.videoId}">開く</button>
+          <button class="btn-small btn-delete" data-video-id="${video.videoId}">削除</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  elements.scannedList.innerHTML = html;
+
+  // イベントリスナーを設定
+  elements.scannedList.querySelectorAll('.scanned-video-id, .btn-open').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.preventDefault();
+      openVideo(el.dataset.videoId);
+    });
+  });
+
+  elements.scannedList.querySelectorAll('.btn-delete').forEach(el => {
+    el.addEventListener('click', () => deleteScannedData(el.dataset.videoId));
+  });
+}
+
+/**
+ * 日付をフォーマット
+ */
+function formatDate(dateString) {
+  try {
+    const date = new Date(dateString);
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const day = date.getDate().toString().padStart(2, '0');
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    return `${month}/${day} ${hours}:${minutes}`;
+  } catch {
+    return '不明';
+  }
+}
+
+/**
+ * 動画を開く
+ */
+function openVideo(videoId) {
+  chrome.tabs.create({
+    url: `https://www.youtube.com/watch?v=${videoId}`
+  });
+}
+
+/**
+ * スキャンデータを削除
+ */
+async function deleteScannedData(videoId) {
+  await chrome.storage.local.remove(`volumeData_${videoId}`);
+  await loadScannedList();
+}
+
+/**
+ * 全てのスキャンデータをクリア
+ */
+async function clearAllScannedData() {
+  if (!confirm('全てのスキャンデータを削除しますか？')) {
+    return;
+  }
+
+  const allData = await chrome.storage.local.get(null);
+  const keysToRemove = Object.keys(allData).filter(key => key.startsWith('volumeData_'));
+
+  if (keysToRemove.length > 0) {
+    await chrome.storage.local.remove(keysToRemove);
+  }
+
+  await loadScannedList();
+}
+
+/**
  * ヘルプを表示
  */
 function showHelp(e) {
@@ -119,7 +244,8 @@ function showHelp(e) {
   showInfo(`
     <strong>使い方:</strong><br>
     ・YouTube画面にUI: チェックでYouTube動画画面に音量検出UIを表示<br>
-    ・AI概要を非表示: チェックでGoogle検索のAI概要を非表示
+    ・AI概要を非表示: チェックでGoogle検索のAI概要を非表示<br>
+    ・スキャン済み一覧: スキャン済みの動画を確認・開く・削除
   `);
 }
 
