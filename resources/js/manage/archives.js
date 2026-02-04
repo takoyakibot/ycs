@@ -48,7 +48,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 archives.forEach(archive => {
                     const youtubeUrl = "https://youtu.be/" + encodeURIComponent(archive.video_id || '');
                     html += `
-                        <div class="archive flex flex-col sm:flex-row w-[100%] max-w-5xl border rounded-lg shadow-lg p-4 gap-4 mb-6 ${archive.is_display ? 'bg-white' : 'bg-gray-200'}">
+                        <div class="archive flex flex-col sm:flex-row w-[100%] max-w-5xl border rounded-lg shadow-lg p-4 gap-4 mb-6 ${archive.is_display ? 'bg-white' : 'bg-gray-200'}" data-video-id="${archive.video_id}">
                             <div class="flex flex-col flex-shrink-0 sm:w-1/3">
                                 <div class="flex flex-col gap-2">
                                     <a href="${youtubeUrl}" target="_blank" rel="noopener noreferrer">
@@ -56,7 +56,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                             class="h-auto rounded-md object-cover filter ${archive.is_display ? 'grayscale-0' : 'grayscale'}" />
                                     </a>
                                     <div>
-                                        <h4 class="font-semibold ${archive.is_display ? 'text-gray-800' : 'text-gray-500'}">
+                                        <h4 class="archive-title font-semibold ${archive.is_display ? 'text-gray-800' : 'text-gray-500'}">
                                             ${escapeHTML(archive.title || '')}
                                         </h4>
                                         <p class="text-sm text-gray-600" title="元の値: ${escapeHTML(archive.published_at || '')}">
