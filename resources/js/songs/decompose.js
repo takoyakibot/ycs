@@ -20,6 +20,7 @@ class TimestampDecomposition {
         this.selectedTitleIndices = [];  // 複数選択対応（配列）
         this.selectedArtistIndices = []; // 複数選択対応（配列）
         this.statistics = null;
+        this.lastProcessedItem = null;   // 直前に処理したアイテム（undo用）
 
         this.init();
     }
@@ -29,6 +30,7 @@ class TimestampDecomposition {
         this.bindKeyboard();
         this.loadStatistics();
         this.loadNext();
+        this.updateUndoButton();
     }
 
     bindEvents() {
@@ -49,6 +51,9 @@ class TimestampDecomposition {
 
         // 確定ボタン
         document.getElementById('confirmBtn').addEventListener('click', () => this.confirm());
+
+        // 戻るボタン
+        document.getElementById('undoBtn').addEventListener('click', () => this.undo());
     }
 
     bindKeyboard() {
@@ -126,6 +131,13 @@ class TimestampDecomposition {
             if (e.key.toLowerCase() === 'r') {
                 e.preventDefault();
                 this.reset();
+                return;
+            }
+
+            // Z: 戻る（undo）
+            if (e.key.toLowerCase() === 'z' && !e.ctrlKey && !e.metaKey) {
+                e.preventDefault();
+                this.undo();
                 return;
             }
         });
@@ -469,6 +481,14 @@ class TimestampDecomposition {
                 link_to_song: true
             });
 
+            // undo用に処理したアイテムを保存
+            this.lastProcessedItem = {
+                id: this.currentItem.id,
+                action: 'confirm',
+                cascadedCount: response.data.cascaded_count || 0
+            };
+            this.updateUndoButton();
+
             const cascadedCount = response.data.cascaded_count || 0;
             if (cascadedCount > 0) {
                 toast.success(`保存しました（同じアーティストの ${cascadedCount} 件も自動処理）`);
@@ -495,6 +515,14 @@ class TimestampDecomposition {
             this.showLoading();
             await axios.post(`/api/songs/decompose/${this.currentItem.id}/skip`);
 
+            // undo用に処理したアイテムを保存
+            this.lastProcessedItem = {
+                id: this.currentItem.id,
+                action: 'skip',
+                cascadedCount: 0
+            };
+            this.updateUndoButton();
+
             toast.info('スキップしました');
             await this.loadStatistics();
             await this.loadNext();
@@ -519,6 +547,14 @@ class TimestampDecomposition {
                 link_to_song: true
             });
 
+            // undo用に処理したアイテムを保存
+            this.lastProcessedItem = {
+                id: this.currentItem.id,
+                action: 'wholeTitle',
+                cascadedCount: 0
+            };
+            this.updateUndoButton();
+
             toast.success('全体を楽曲名として登録しました');
             await this.loadStatistics();
             await this.loadNext();
@@ -527,6 +563,48 @@ class TimestampDecomposition {
             toast.error('登録に失敗しました');
         } finally {
             this.hideLoading();
+        }
+    }
+
+    /**
+     * 戻る（undo）
+     */
+    async undo() {
+        if (!this.lastProcessedItem) {
+            toast.warning('戻れる操作がありません');
+            return;
+        }
+
+        try {
+            this.showLoading();
+            await axios.post(`/api/songs/decompose/${this.lastProcessedItem.id}/undo`);
+
+            const cascadedCount = this.lastProcessedItem.cascadedCount;
+            if (cascadedCount > 0) {
+                toast.success(`操作を取り消しました（カスケード処理された ${cascadedCount} 件も取り消し）`);
+            } else {
+                toast.success('操作を取り消しました');
+            }
+
+            this.lastProcessedItem = null;
+            this.updateUndoButton();
+            await this.loadStatistics();
+            await this.loadNext();
+        } catch (error) {
+            console.error('取り消しに失敗しました:', error);
+            toast.error('取り消しに失敗しました');
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    /**
+     * 戻るボタンの状態を更新
+     */
+    updateUndoButton() {
+        const btn = document.getElementById('undoBtn');
+        if (btn) {
+            btn.disabled = !this.lastProcessedItem;
         }
     }
 
