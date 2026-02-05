@@ -14,8 +14,13 @@ const elements = {
   infoContainer: document.getElementById('info-container'),
   helpLink: document.getElementById('help-link'),
   scannedList: document.getElementById('scanned-list'),
-  clearAllBtn: document.getElementById('clear-all-btn')
+  clearAllBtn: document.getElementById('clear-all-btn'),
+  scanSection: document.getElementById('scan-section'),
+  scanBtn: document.getElementById('scan-btn'),
+  scanStatus: document.getElementById('scan-status')
 };
+
+let isScanning = false;
 
 /**
  * 初期化
@@ -49,6 +54,11 @@ async function init() {
   // YouTube埋め込みUIの初期状態をコンテンツスクリプトに通知
   if (isYouTube) {
     notifyYouTubeContentScript(showUI);
+    // スキャンセクションを表示
+    elements.scanSection.style.display = 'block';
+    elements.scanBtn.addEventListener('click', toggleScan);
+    // スキャン状態を確認
+    await updateScanButtonState(tab.id);
   }
 
   // Googleの場合は設定変更を通知
@@ -243,6 +253,7 @@ function showHelp(e) {
   e.preventDefault();
   showInfo(`
     <strong>使い方:</strong><br>
+    ・スキャン開始: YouTube動画ページでこのボタンをクリック<br>
     ・YouTube画面にUI: チェックでYouTube動画画面に音量検出UIを表示<br>
     ・AI概要を非表示: チェックでGoogle検索のAI概要を非表示<br>
     ・スキャン済み一覧: スキャン済みの動画を確認・開く・削除
@@ -254,6 +265,60 @@ function showHelp(e) {
  */
 function showInfo(message) {
   elements.infoContainer.innerHTML = `<div class="info-message">${message}</div>`;
+}
+
+/**
+ * スキャンボタンの状態を更新
+ */
+async function updateScanButtonState(tabId) {
+  try {
+    const status = await chrome.tabs.sendMessage(tabId, { type: 'GET_SCAN_STATUS' });
+    if (status.isComplete) {
+      elements.scanBtn.textContent = '完了';
+      elements.scanBtn.style.background = '#2e7d32';
+      elements.scanStatus.textContent = 'スキャン完了済み';
+    } else if (status.hasData && status.progress > 0) {
+      elements.scanBtn.textContent = `再開 (${status.progress.toFixed(0)}%)`;
+      elements.scanBtn.style.background = '#f57c00';
+      elements.scanStatus.textContent = `${status.progress.toFixed(1)}%完了`;
+    } else {
+      elements.scanBtn.textContent = 'スキャン開始';
+      elements.scanStatus.textContent = '';
+    }
+  } catch (error) {
+    console.log('スキャン状態取得エラー:', error.message);
+    elements.scanBtn.textContent = 'スキャン開始';
+  }
+}
+
+/**
+ * スキャンを開始/停止
+ */
+async function toggleScan() {
+  try {
+    const response = await chrome.runtime.sendMessage({ type: 'START_SCAN' });
+    console.log('スキャン応答:', response);
+
+    if (response.isScanning) {
+      elements.scanBtn.textContent = '停止';
+      elements.scanBtn.classList.add('scanning');
+      elements.scanStatus.textContent = 'スキャン中...';
+      isScanning = true;
+    } else {
+      elements.scanBtn.textContent = 'スキャン開始';
+      elements.scanBtn.classList.remove('scanning');
+      elements.scanStatus.textContent = '';
+      isScanning = false;
+      // 状態を再確認
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab?.id) {
+        await updateScanButtonState(tab.id);
+      }
+    }
+  } catch (error) {
+    console.error('スキャンエラー:', error);
+    elements.scanStatus.textContent = 'エラー: ' + error.message;
+  }
 }
 
 // 初期化実行

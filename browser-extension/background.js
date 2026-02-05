@@ -127,12 +127,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     // 音量グラフ関連
     case 'START_SCAN':
+      console.log('START_SCAN受信', { isScanning });
       if (isScanning) {
         stopScan();
+        sendResponse({ success: true, isScanning: false });
       } else {
-        startScan(message.muted);
+        // 非同期で開始し、結果を返す
+        startScan(message.muted).then(result => {
+          sendResponse({ success: result.success, isScanning, error: result.error });
+        });
       }
-      sendResponse({ success: true, isScanning });
       return true;
 
     case 'STOP_SCAN':
@@ -320,19 +324,26 @@ async function sendVolumeDataToContent() {
  * スキャン中は常にミュート（tabCaptureの仕様により音声出力は不可）
  */
 async function startScan() {
+  console.log('startScan開始');
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id) return;
+    console.log('アクティブタブ:', tab?.id, tab?.url);
+    if (!tab?.id) {
+      console.error('アクティブタブが見つかりません');
+      return { success: false, error: 'NO_ACTIVE_TAB' };
+    }
 
     // スキャン状況を確認
+    console.log('GET_SCAN_STATUS送信中...');
     const scanStatus = await chrome.tabs.sendMessage(tab.id, { type: 'GET_SCAN_STATUS' });
+    console.log('スキャン状況:', scanStatus);
 
     // 既にスキャン完了済みなら実行しない
     if (scanStatus.isComplete) {
       console.log('この動画は既にスキャン完了済みです（進捗: ' + scanStatus.progress.toFixed(1) + '%）');
       // グラフを表示
       chrome.tabs.sendMessage(tab.id, { type: 'SHOW_VOLUME_GRAPH' });
-      return;
+      return { success: true, alreadyComplete: true };
     }
 
     // 動画情報を取得
@@ -341,7 +352,7 @@ async function startScan() {
 
     if (!videoDuration) {
       console.error('動画の長さを取得できません');
-      return;
+      return { success: false, error: 'NO_VIDEO_DURATION' };
     }
 
     // キャプチャを開始（既存のキャプチャは停止してから再開始）
@@ -351,7 +362,11 @@ async function startScan() {
     const result = await startCapture(tab.id);
     if (!result.success) {
       console.error('キャプチャ開始失敗:', result.error);
-      return;
+      // activeTab権限エラーの場合、コンテンツスクリプトに通知
+      if (result.error?.includes('activeTab') || result.error?.includes('invoked')) {
+        chrome.tabs.sendMessage(tab.id, { type: 'SCAN_PERMISSION_ERROR' });
+      }
+      return { success: false, error: 'CAPTURE_FAILED', message: result.error };
     }
 
     isScanning = true;
@@ -411,9 +426,11 @@ async function startScan() {
     monitorScanProgress(tab.id);
 
     console.log('高速スキャン開始' + (startTime > 0 ? `（${startTime.toFixed(0)}秒から再開）` : ''));
+    return { success: true };
   } catch (error) {
     console.error('スキャン開始エラー:', error);
     isScanning = false;
+    return { success: false, error: 'UNKNOWN_ERROR', message: error.message };
   }
 }
 
