@@ -1956,6 +1956,61 @@ function updateScanButtonState(status) {
 }
 
 /**
+ * 権限エラーメッセージを表示
+ */
+function showPermissionError() {
+  if (!volumeGraphContainer) return;
+
+  // 既にメッセージがあれば何もしない
+  if (volumeGraphContainer.querySelector('.vdg-permission-error')) return;
+
+  const message = document.createElement('div');
+  message.className = 'vdg-permission-error';
+  message.innerHTML = `
+    <div style="
+      background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+      border: 1px solid #ffb74d;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin: 8px 0;
+      font-size: 13px;
+      color: #e65100;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    ">
+      <span style="font-size: 18px;">⚠️</span>
+      <div>
+        <div style="font-weight: 600; margin-bottom: 4px;">スキャンを開始できません</div>
+        <div style="font-size: 12px; color: #f57c00;">
+          拡張機能アイコンをクリックしてポップアップを開き、<br>
+          「スキャン開始」ボタンからスキャンしてください。
+        </div>
+      </div>
+    </div>
+  `;
+
+  // グラフコンテナの先頭に挿入
+  const graphContainer = volumeGraphContainer.querySelector('.vdg-canvas-container');
+  if (graphContainer) {
+    graphContainer.parentNode.insertBefore(message, graphContainer);
+  } else {
+    volumeGraphContainer.appendChild(message);
+  }
+}
+
+/**
+ * 権限エラーメッセージを非表示
+ */
+function hidePermissionError() {
+  if (!volumeGraphContainer) return;
+  const errorMsg = volumeGraphContainer.querySelector('.vdg-permission-error');
+  if (errorMsg) {
+    errorMsg.remove();
+  }
+}
+
+/**
  * 保存された音量データを削除
  */
 function deleteVolumeData() {
@@ -3171,9 +3226,15 @@ function setupVolumeGraphEvents() {
 
   // スキャンボタン（tabCapture方式、常にミュート）
   if (scanBtn) {
-    scanBtn.addEventListener('click', (e) => {
+    scanBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
-      chrome.runtime.sendMessage({ type: 'START_SCAN' });
+      console.log('スキャンボタンがクリックされました');
+      try {
+        const response = await chrome.runtime.sendMessage({ type: 'START_SCAN' });
+        console.log('START_SCAN応答:', response);
+      } catch (error) {
+        console.error('START_SCANエラー:', error);
+      }
     });
   }
 
@@ -4184,9 +4245,16 @@ function handleMessage(message, sender, sendResponse) {
           scanBtn.classList.add('scanning');
           scanBtn.textContent = '停止';
         }
+        // エラーメッセージを非表示
+        hidePermissionError();
       }
       // リストスキャンボタンの状態更新
       updateListScanButtonState(true);
+      break;
+
+    case 'SCAN_PERMISSION_ERROR':
+      // 権限エラー: ポップアップからの操作を促すメッセージを表示
+      showPermissionError();
       break;
 
     case 'SCAN_STOPPED':
