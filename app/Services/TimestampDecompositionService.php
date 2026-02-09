@@ -543,24 +543,20 @@ class TimestampDecompositionService
             return null;
         }
 
-        $normalizedTitle = TextNormalizer::normalize($decomposition->derived_title);
-        $normalizedArtist = $decomposition->derived_artist
-            ? TextNormalizer::normalize($decomposition->derived_artist)
-            : null;
+        $title = $decomposition->derived_title;
+        $artist = $decomposition->derived_artist ?? '';
 
-        // 既存の楽曲を検索
-        $query = Song::where('normalized_title', $normalizedTitle);
-        if ($normalizedArtist) {
-            $query->where('normalized_artist', $normalizedArtist);
-        }
-        $song = $query->first();
+        // 既存の楽曲を検索（ユニーク制約と同じ条件で検索）
+        $song = Song::where('title', $title)
+            ->where('artist', $artist)
+            ->first();
 
         // 見つからなければ新規作成
         if (! $song) {
             $song = Song::create([
                 'id' => (string) Str::ulid(),
-                'title' => $decomposition->derived_title,
-                'artist' => $decomposition->derived_artist ?? '',
+                'title' => $title,
+                'artist' => $artist,
                 'created_by' => Auth::id(),
             ]);
         }
