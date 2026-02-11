@@ -2231,6 +2231,64 @@ function getScanStatus() {
   });
 }
 
+/**
+ * 現在のページがYouTubeの動画視聴ページかどうか判定
+ */
+function isWatchPage() {
+  return location.pathname === '/watch';
+}
+
+/**
+ * watchページ用のUI初期化
+ * SPA遷移でwatchページに来た場合にも呼ばれる
+ */
+function initWatchPageUI() {
+  // 動画要素を取得
+  findVideoElement();
+
+  // 音量グラフを作成
+  createVolumeGraph();
+
+  // 埋め込みトリガーボタンを作成
+  createEmbeddedTriggerButton();
+
+  // 埋め込みUI設定に従ってボタンを表示/非表示
+  if (embeddedUIVisible) {
+    showEmbeddedUI();
+  } else {
+    hideEmbeddedUI();
+  }
+
+  // 音量グラフを挿入（SPA遷移時はDOMが変わるため再挿入）
+  insertVolumeGraph();
+
+  // リストスキャンモードをチェック
+  checkAndStartListScan();
+}
+
+/**
+ * watchページから離れる際のUI非表示処理
+ */
+function hideWatchPageUI() {
+  if (embeddedTriggerButton) {
+    embeddedTriggerButton.classList.add('hidden');
+  }
+  if (volumeGraphContainer) {
+    volumeGraphContainer.classList.remove('visible');
+    isGraphVisible = false;
+  }
+
+  // スキャン中なら停止
+  if (isScanning) {
+    chrome.runtime.sendMessage({ type: 'STOP_SCAN' });
+  }
+
+  // 文字起こし中なら停止
+  if (isTranscribing) {
+    stopTranscription();
+  }
+}
+
 // 初期化
 async function init() {
   // メッセージリスナーを最初に設定（他の処理でエラーが出ても通信可能にする）
@@ -2243,27 +2301,13 @@ async function init() {
     // 埋め込みUI設定を読み込み
     await loadEmbeddedUISettings();
 
-    // 動画要素を取得
-    findVideoElement();
-
-    // 音量グラフを作成
-    createVolumeGraph();
-
-    // 埋め込みトリガーボタンを作成
-    createEmbeddedTriggerButton();
-
-    // 埋め込みUI設定に従ってボタンを表示/非表示
-    if (embeddedUIVisible) {
-      showEmbeddedUI();
-    } else {
-      hideEmbeddedUI();
+    // watchページの場合のみUI初期化
+    if (isWatchPage()) {
+      initWatchPageUI();
     }
 
-    // YouTube SPAナビゲーション対応
+    // YouTube SPAナビゲーション対応（全ページで監視）
     observePageChanges();
-
-    // リストスキャンモードをチェック
-    checkAndStartListScan();
   } catch (error) {
     console.error('Content script初期化エラー:', error);
   }
@@ -2701,6 +2745,8 @@ function startTimeSync() {
  * 音量グラフUIを作成
  */
 function createVolumeGraph() {
+  if (volumeGraphContainer) return;
+
   volumeGraphContainer = document.createElement('div');
   volumeGraphContainer.id = 'volume-dynamics-graph';
   volumeGraphContainer.innerHTML = `
@@ -4079,64 +4125,108 @@ function updateVideoDuration() {
 function observePageChanges() {
   let lastUrl = location.href;
   let lastVideoId = getVideoId();
+  let wasWatchPage = isWatchPage();
 
+  /**
+   * ページ遷移時の共通処理
+   */
+  function handleNavigation() {
+    const currentUrl = location.href;
+    if (currentUrl === lastUrl) return;
+
+    lastUrl = currentUrl;
+    const nowWatchPage = isWatchPage();
+    const currentVideoId = getVideoId();
+
+    if (nowWatchPage && !wasWatchPage) {
+      // 非watchページ → watchページへのSPA遷移（ホームや検索結果からの遷移）
+      lastVideoId = currentVideoId;
+
+      // 以前のwatchページのステートが残っている場合のためリセット
+      volumeData = [];
+      videoDuration = 0;
+      detectedTimestamps = [];
+      zoomIndex = 0;
+      if (isTranscribing) {
+        stopTranscription();
+      }
+      currentTranscriptIndex = 0;
+      if (mediaElementSource) {
+        mediaElementSource.disconnect();
+        mediaElementSource = null;
+      }
+      analyserNode = null;
+      gainNode = null;
+      audioInitialized = false;
+
+      initWatchPageUI();
+      loadVolumeData();
+    } else if (nowWatchPage && currentVideoId !== lastVideoId) {
+      // watchページ → 別の動画のwatchページへの遷移
+      lastVideoId = currentVideoId;
+      volumeData = [];
+      videoDuration = 0;
+      detectedTimestamps = []; // タイムスタンプもクリア
+      zoomIndex = 0; // ズームレベルをリセット
+
+      // 文字起こし状態をリセット
+      if (isTranscribing) {
+        stopTranscription();
+      }
+      currentTranscriptIndex = 0;
+
+      // 音声解析の状態をリセット（新しいVideo要素用）
+      if (mediaElementSource) {
+        mediaElementSource.disconnect();
+        mediaElementSource = null;
+      }
+      analyserNode = null;
+      gainNode = null;
+      audioInitialized = false;
+      // AudioContextは再利用可能なのでそのまま
+
+      drawVolumeGraph();
+      findVideoElement();
+      insertVolumeGraph();
+
+      // 再生リストUIを更新
+      updatePlaylistUI();
+
+      // 保存済みデータを読み込み
+      loadVolumeData();
+
+      // 自動スキャンモードの場合は継続
+      if (isAutoScanMode && !autoScanStopRequested) {
+        console.log('自動スキャン継続: 新しい動画を検出');
+        // 少し待ってから次の動画のスキャンを開始
+        setTimeout(async () => {
+          if (!isAutoScanMode || autoScanStopRequested) return;
+
+          const alreadyScanned = await isCurrentVideoScanned();
+          if (alreadyScanned) {
+            console.log('この動画はスキャン済み、次へ');
+            proceedToNextVideoOrFinish();
+          } else {
+            // tabCapture方式でスキャン開始（常にミュート）
+            chrome.runtime.sendMessage({ type: 'START_SCAN' });
+          }
+        }, 3000); // 動画の読み込みを待つ
+      }
+    } else if (!nowWatchPage && wasWatchPage) {
+      // watchページ → 非watchページへの遷移（ホームや検索結果への遷移）
+      hideWatchPageUI();
+    }
+
+    wasWatchPage = nowWatchPage;
+  }
+
+  // YouTube SPAナビゲーションイベントを監視（最も信頼性が高い）
+  document.addEventListener('yt-navigate-finish', handleNavigation);
+
+  // MutationObserverもフォールバックとして残す
   const observer = new MutationObserver(() => {
     if (location.href !== lastUrl) {
-      lastUrl = location.href;
-      const currentVideoId = getVideoId();
-
-      // 新しい動画ページに遷移したらリセット
-      if (location.href.includes('/watch') && currentVideoId !== lastVideoId) {
-        lastVideoId = currentVideoId;
-        volumeData = [];
-        videoDuration = 0;
-        detectedTimestamps = []; // タイムスタンプもクリア
-        zoomIndex = 0; // ズームレベルをリセット
-
-        // 文字起こし状態をリセット
-        if (isTranscribing) {
-          stopTranscription();
-        }
-        currentTranscriptIndex = 0;
-
-        // 音声解析の状態をリセット（新しいVideo要素用）
-        if (mediaElementSource) {
-          mediaElementSource.disconnect();
-          mediaElementSource = null;
-        }
-        analyserNode = null;
-        gainNode = null;
-        audioInitialized = false;
-        // AudioContextは再利用可能なのでそのまま
-
-        drawVolumeGraph();
-        findVideoElement();
-        insertVolumeGraph();
-
-        // 再生リストUIを更新
-        updatePlaylistUI();
-
-        // 保存済みデータを読み込み
-        loadVolumeData();
-
-        // 自動スキャンモードの場合は継続
-        if (isAutoScanMode && !autoScanStopRequested) {
-          console.log('自動スキャン継続: 新しい動画を検出');
-          // 少し待ってから次の動画のスキャンを開始
-          setTimeout(async () => {
-            if (!isAutoScanMode || autoScanStopRequested) return;
-
-            const alreadyScanned = await isCurrentVideoScanned();
-            if (alreadyScanned) {
-              console.log('この動画はスキャン済み、次へ');
-              proceedToNextVideoOrFinish();
-            } else {
-              // tabCapture方式でスキャン開始（常にミュート）
-              chrome.runtime.sendMessage({ type: 'START_SCAN' });
-            }
-          }, 3000); // 動画の読み込みを待つ
-        }
-      }
+      handleNavigation();
     }
   });
 
