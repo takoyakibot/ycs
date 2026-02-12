@@ -167,7 +167,7 @@ class AutoLinkService
         // 正規化後のTitle + Artistで完全一致チェック
         $normalizedTitle = TextNormalizer::normalize($title);
         $normalizedArtist = TextNormalizer::normalize($artist);
-        $exactMatch = $this->songSearchService->findExactMatch($normalizedTitle, $normalizedArtist);
+        $exactMatch = $this->songSearchService->findExactMatch($normalizedTitle, $normalizedArtist, $title, $artist);
 
         if ($exactMatch) {
             // 既存の楽曲マスタを使用
@@ -209,17 +209,27 @@ class AutoLinkService
     }
 
     /**
-     * Spotifyトラックデータから楽曲マスタを作成
+     * Spotifyトラックデータから楽曲マスタを作成または取得
+     *
+     * ユニーク制約（title + artist）に基づいてfirstOrCreateを使用し、
+     * 重複エラーを防止する
      */
     protected function createSongFromSpotify(array $track): Song
     {
-        return Song::create([
-            'id' => Str::ulid(),
-            'title' => $track['name'],
-            'artist' => collect($track['artists'])->pluck('name')->join(', '),
-            'spotify_track_id' => $track['id'],
-            'spotify_data' => $track,
-        ]);
+        $title = $track['name'];
+        $artist = collect($track['artists'])->pluck('name')->join(', ');
+
+        return Song::firstOrCreate(
+            [
+                'title' => $title,
+                'artist' => $artist,
+            ],
+            [
+                'id' => Str::ulid(),
+                'spotify_track_id' => $track['id'],
+                'spotify_data' => $track,
+            ]
+        );
     }
 
     /**
