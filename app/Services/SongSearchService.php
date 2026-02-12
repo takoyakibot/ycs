@@ -73,12 +73,15 @@ class SongSearchService
      *
      * 1. まずtimestamp_song_mappingsを類似検索して、既存マッピング経由で楽曲を探す
      * 2. マッピングで見つからない場合、正規化カラムを使用してDBレベルで検索
+     * 3. 正規化カラムで見つからない場合、生のカラムでも検索（ユニーク制約と整合性を取る）
      *
      * @param  string  $normalizedTitle  正規化済みタイトル
      * @param  string  $normalizedArtist  正規化済みアーティスト名
+     * @param  string|null  $rawTitle  生のタイトル（オプション）
+     * @param  string|null  $rawArtist  生のアーティスト名（オプション）
      * @return Song|null 一致する楽曲、存在しない場合はnull
      */
-    public function findExactMatch(string $normalizedTitle, string $normalizedArtist): ?Song
+    public function findExactMatch(string $normalizedTitle, string $normalizedArtist, ?string $rawTitle = null, ?string $rawArtist = null): ?Song
     {
         // 1. マッピング経由の検索（表記ゆれを考慮）
         // "title / artist" 形式でテキストを生成
@@ -91,8 +94,21 @@ class SongSearchService
         }
 
         // 2. 正規化カラムを使用してDBレベルで検索（効率化）
-        return Song::where('normalized_title', $normalizedTitle)
+        $song = Song::where('normalized_title', $normalizedTitle)
             ->where('normalized_artist', $normalizedArtist)
             ->first();
+
+        if ($song) {
+            return $song;
+        }
+
+        // 3. 生のカラムでも検索（ユニーク制約はtitle + artistにかかっている）
+        if ($rawTitle !== null && $rawArtist !== null) {
+            return Song::where('title', $rawTitle)
+                ->where('artist', $rawArtist)
+                ->first();
+        }
+
+        return null;
     }
 }
