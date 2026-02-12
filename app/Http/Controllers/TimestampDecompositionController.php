@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Services\TimestampDecompositionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class TimestampDecompositionController extends Controller
@@ -70,35 +71,44 @@ class TimestampDecompositionController extends Controller
             'link_to_song' => 'boolean',
         ]);
 
-        $result = $this->service->saveSelection(
-            $validated['id'],
-            $validated['title_indices'] ?? [],
-            $validated['artist_indices'] ?? []
-        );
+        // トランザクションで囲んでエラー時にロールバックする
+        $data = DB::transaction(function () use ($validated, $request) {
+            $result = $this->service->saveSelection(
+                $validated['id'],
+                $validated['title_indices'] ?? [],
+                $validated['artist_indices'] ?? []
+            );
 
-        $decomposition = $result['decomposition'];
-        $cascadedCount = $result['cascaded_count'];
+            $decomposition = $result['decomposition'];
+            $cascadedCount = $result['cascaded_count'];
 
-        // 楽曲マスタへの紐付けも同時に行う場合
-        $song = null;
-        if ($request->boolean('link_to_song', true) && $decomposition->derived_title) {
-            $song = $this->service->linkToSong($decomposition);
-        }
+            // 楽曲マスタへの紐付けも同時に行う場合
+            $song = null;
+            if ($request->boolean('link_to_song', true) && $decomposition->derived_title) {
+                $song = $this->service->linkToSong($decomposition);
+            }
+
+            return [
+                'decomposition' => $decomposition,
+                'song' => $song,
+                'cascaded_count' => $cascadedCount,
+            ];
+        });
 
         return response()->json([
             'success' => true,
             'decomposition' => [
-                'id' => $decomposition->id,
-                'derived_title' => $decomposition->derived_title,
-                'derived_artist' => $decomposition->derived_artist,
-                'status' => $decomposition->status,
+                'id' => $data['decomposition']->id,
+                'derived_title' => $data['decomposition']->derived_title,
+                'derived_artist' => $data['decomposition']->derived_artist,
+                'status' => $data['decomposition']->status,
             ],
-            'song' => $song ? [
-                'id' => $song->id,
-                'title' => $song->title,
-                'artist' => $song->artist,
+            'song' => $data['song'] ? [
+                'id' => $data['song']->id,
+                'title' => $data['song']->title,
+                'artist' => $data['song']->artist,
             ] : null,
-            'cascaded_count' => $cascadedCount,
+            'cascaded_count' => $data['cascaded_count'],
         ]);
     }
 
@@ -112,27 +122,35 @@ class TimestampDecompositionController extends Controller
             'link_to_song' => 'boolean',
         ]);
 
-        $result = $this->service->saveAsWholeTitle($validated['id']);
-        $decomposition = $result['decomposition'];
+        // トランザクションで囲んでエラー時にロールバックする
+        $data = DB::transaction(function () use ($validated, $request) {
+            $result = $this->service->saveAsWholeTitle($validated['id']);
+            $decomposition = $result['decomposition'];
 
-        // 楽曲マスタへの紐付けも同時に行う場合
-        $song = null;
-        if ($request->boolean('link_to_song', true) && $decomposition->derived_title) {
-            $song = $this->service->linkToSong($decomposition);
-        }
+            // 楽曲マスタへの紐付けも同時に行う場合
+            $song = null;
+            if ($request->boolean('link_to_song', true) && $decomposition->derived_title) {
+                $song = $this->service->linkToSong($decomposition);
+            }
+
+            return [
+                'decomposition' => $decomposition,
+                'song' => $song,
+            ];
+        });
 
         return response()->json([
             'success' => true,
             'decomposition' => [
-                'id' => $decomposition->id,
-                'derived_title' => $decomposition->derived_title,
-                'derived_artist' => $decomposition->derived_artist,
-                'status' => $decomposition->status,
+                'id' => $data['decomposition']->id,
+                'derived_title' => $data['decomposition']->derived_title,
+                'derived_artist' => $data['decomposition']->derived_artist,
+                'status' => $data['decomposition']->status,
             ],
-            'song' => $song ? [
-                'id' => $song->id,
-                'title' => $song->title,
-                'artist' => $song->artist,
+            'song' => $data['song'] ? [
+                'id' => $data['song']->id,
+                'title' => $data['song']->title,
+                'artist' => $data['song']->artist,
             ] : null,
         ]);
     }
