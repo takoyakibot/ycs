@@ -516,6 +516,62 @@ class AutoLinkServiceTest extends TestCase
     }
 
     /**
+     * 文字バリエーション（例: ' vs '）がある場合でも既存楽曲を検出するテスト
+     */
+    public function test_auto_link_detects_existing_song_with_character_variants(): void
+    {
+        // 既存楽曲を作成（シングルクォート ' U+0027 を使用）
+        $existingSong = Song::factory()->create([
+            'title' => "Don't say \"lazy\"",
+            'artist' => '桜高軽音部',
+            'spotify_track_id' => 'existing_spotify_id',
+        ]);
+
+        // テストデータ作成
+        $channel = Channel::factory()->create();
+        $archive = Archive::factory()->create(['channel_id' => $channel->channel_id]);
+        TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'text' => "Don\xE2\x80\x99t say \xE2\x80\x9Clazy\xE2\x80\x9D / 桜高軽音部",
+            'is_display' => 1,
+        ]);
+
+        // Spotify APIをモック（右シングルクォート ' U+2019 を含む結果を返す）
+        Http::fake([
+            'https://accounts.spotify.com/api/token' => Http::response([
+                'access_token' => 'test_token',
+            ], 200),
+            'https://api.spotify.com/v1/search*' => Http::response([
+                'tracks' => [
+                    'items' => [
+                        [
+                            'id' => 'new_spotify_id',
+                            'name' => "Don\xE2\x80\x99t say \xE2\x80\x9Clazy\xE2\x80\x9D",
+                            'artists' => [['name' => '桜高軽音部']],
+                        ],
+                    ],
+                ],
+            ], 200),
+        ]);
+
+        config(['services.spotify.client_id' => 'test_id']);
+        config(['services.spotify.client_secret' => 'test_secret']);
+
+        $result = $this->service->autoLinkUnlinkedTimestamps(10);
+
+        $this->assertEquals(1, $result['processed']);
+        $this->assertEquals(1, $result['linked']);
+
+        // 新しい楽曲マスタが作成されていないことを確認（既存楽曲を使用）
+        $this->assertDatabaseCount('songs', 1);
+
+        // 既存楽曲にマッピングされたことを確認
+        $this->assertDatabaseHas('timestamp_song_mappings', [
+            'song_id' => $existingSong->id,
+        ]);
+    }
+
+    /**
      * 結果配列にpendingが含まれることを確認するテスト
      */
     public function test_auto_link_result_includes_pending_count(): void

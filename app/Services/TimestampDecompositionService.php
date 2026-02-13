@@ -546,10 +546,20 @@ class TimestampDecompositionService
         $title = $decomposition->derived_title;
         $artist = $decomposition->derived_artist ?? '';
 
-        // 既存の楽曲を検索（ユニーク制約と同じ条件で検索）
-        $song = Song::where('title', $title)
-            ->where('artist', $artist)
+        // 正規化済みテキストで既存楽曲を検索（文字バリエーションによる重複を防止）
+        $normalizedTitle = TextNormalizer::normalize($title);
+        $normalizedArtist = TextNormalizer::normalize($artist);
+
+        $song = Song::where('normalized_title', $normalizedTitle)
+            ->where('normalized_artist', $normalizedArtist)
             ->first();
+
+        // 正規化検索で見つからない場合、生テキストでも検索（ユニーク制約と同じ条件）
+        if (! $song) {
+            $song = Song::where('title', $title)
+                ->where('artist', $artist)
+                ->first();
+        }
 
         // 見つからなければ新規作成
         if (! $song) {

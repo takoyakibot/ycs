@@ -206,6 +206,43 @@ class TextNormalizerTest extends TestCase
     }
 
     /**
+     * カーリークォート（スマートクォート）の正規化テスト
+     *
+     * Unicode escape sequence を使用して、ソースコードの文字化けに依存しないテストを実現
+     */
+    public function test_curly_quote_normalization(): void
+    {
+        // LEFT SINGLE QUOTATION MARK (U+2018) → '
+        $this->assertEquals("'test'", TextNormalizer::normalize("\u{2018}test\u{2018}"));
+
+        // RIGHT SINGLE QUOTATION MARK (U+2019) → '
+        $this->assertEquals("'test'", TextNormalizer::normalize("\u{2019}test\u{2019}"));
+
+        // LEFT DOUBLE QUOTATION MARK (U+201C) → "
+        $this->assertEquals('"test"', TextNormalizer::normalize("\u{201C}test\u{201C}"));
+
+        // RIGHT DOUBLE QUOTATION MARK (U+201D) → "
+        $this->assertEquals('"test"', TextNormalizer::normalize("\u{201D}test\u{201D}"));
+
+        // SINGLE LOW-9 QUOTATION MARK (U+201A) → '
+        $this->assertEquals("'test'", TextNormalizer::normalize("\u{201A}test\u{201A}"));
+
+        // DOUBLE LOW-9 QUOTATION MARK (U+201E) → "
+        $this->assertEquals('"test"', TextNormalizer::normalize("\u{201E}test\u{201E}"));
+
+        // 実際のユースケース: "Don't say "lazy""のバリエーション
+        $straight = "don't say \"lazy\"";
+        $this->assertEquals($straight, TextNormalizer::normalize("Don\u{2019}t say \u{201C}lazy\u{201D}"));
+        $this->assertEquals($straight, TextNormalizer::normalize("Don't say \"lazy\""));
+
+        // 両方のバリエーションが同一の正規化結果になること
+        $this->assertTrue(TextNormalizer::equals(
+            "Don\u{2019}t say \u{201C}lazy\u{201D}",
+            "Don't say \"lazy\""
+        ));
+    }
+
+    /**
      * 括弧の統一テスト
      */
     public function test_bracket_normalization(): void
