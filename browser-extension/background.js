@@ -161,6 +161,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case 'SHOW_VOLUME_GRAPH':
       showVolumeGraph();
       return false;
+
+    case 'CHECK_TOXICITY':
+      checkToxicity(message.text, message.recentMessages)
+        .then(result => sendResponse(result))
+        .catch(error => sendResponse({ error: error.message }));
+      return true;
   }
 });
 
@@ -525,5 +531,113 @@ async function showVolumeGraph() {
     }
   } catch (error) {
     console.error('グラフ表示エラー:', error);
+  }
+}
+
+/**
+ * Claude APIを使ってメッセージの毒性をチェック
+ * @param {string} text - チェック対象のメッセージ
+ * @param {string[]} recentMessages - 直近のチャットメッセージ（文脈用）
+ * @returns {Promise<{toxic: boolean, reason: string}>}
+ */
+const TOXICITY_MODEL = 'claude-haiku-4-5-20251001';
+const TOXICITY_TIMEOUT_MS = 10000;
+const TOXICITY_MIN_INTERVAL_MS = 1000;
+let lastToxicityCheckTime = 0;
+
+async function checkToxicity(text, recentMessages = []) {
+  try {
+    // レート制限
+    const now = Date.now();
+    if (now - lastToxicityCheckTime < TOXICITY_MIN_INTERVAL_MS) {
+      return { toxic: false, reason: '', skipped: true };
+    }
+    lastToxicityCheckTime = now;
+
+    const result = await chrome.storage.local.get(['claudeApiKey', 'toxicityCheckEnabled']);
+    if (!result.toxicityCheckEnabled || !result.claudeApiKey) {
+      return { toxic: false, reason: '', skipped: true };
+    }
+
+    let contextPart = '';
+    if (recentMessages && recentMessages.length > 0) {
+      const recent = recentMessages.slice(-10).join('\n');
+      contextPart = `\n\n参考: 直近のチャット:\n${recent}`;
+    }
+
+    // タイムアウト付きfetch
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), TOXICITY_TIMEOUT_MS);
+
+    let response;
+    try {
+      response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': result.claudeApiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({
+          model: TOXICITY_MODEL,
+          max_tokens: 150,
+          messages: [{
+            role: 'user',
+            content: `あなたはYouTubeライブチャットの投稿内容を確認するモデレーターです。
+以下のメッセージが攻撃的・侮辱的・不適切でないか判定してください。
+
+判定基準:
+- 誹謗中傷、人格攻撃、差別的表現
+- 過度な煽り、嫌がらせ
+- 配信者や他の視聴者への攻撃
+
+以下のJSON形式のみで回答してください（他のテキストは不要）:
+{"toxic": true/false, "reason": "理由（問題がない場合は空文字）"}
+
+送信しようとしているメッセージ: ${text}${contextPart}`
+          }]
+        }),
+        signal: controller.signal
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      console.error('Claude API エラー:', response.status, errorBody);
+      return { toxic: false, reason: '', error: `API error: ${response.status}` };
+    }
+
+    const data = await response.json();
+    const content = data.content?.[0]?.text || '';
+
+    // JSONを抽出（"toxic"キーを含むオブジェクトを検索）
+    try {
+      const jsonMatch = content.match(/\{[^{}]*"toxic"[^{}]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        if (typeof parsed.toxic === 'boolean') {
+          return { toxic: parsed.toxic, reason: parsed.reason || '' };
+        }
+      }
+      // フォールバック: 全体をパース
+      const parsed = JSON.parse(content);
+      if (typeof parsed.toxic === 'boolean') {
+        return { toxic: parsed.toxic, reason: parsed.reason || '' };
+      }
+    } catch (parseError) {
+      console.error('JSON parse error:', parseError, 'Content:', content);
+    }
+
+    return { toxic: false, reason: '', error: 'Failed to parse response' };
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      console.error('毒性チェック: タイムアウト');
+      return { toxic: false, reason: '', error: 'タイムアウト' };
+    }
+    console.error('毒性チェックエラー:', error);
+    return { toxic: false, reason: '', error: error.message };
   }
 }

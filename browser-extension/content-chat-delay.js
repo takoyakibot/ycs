@@ -17,11 +17,13 @@
 
   const STORAGE_KEY_CHAT_DELAY_ENABLED = 'chatDelayEnabled';
   const STORAGE_KEY_CHAT_DELAY_SECONDS = 'chatDelaySeconds';
+  const STORAGE_KEY_TOXICITY_CHECK = 'toxicityCheckEnabled';
   const DEFAULT_DELAY_SECONDS = 10;
   const MIN_DELAY_SECONDS = 3;
 
   let isEnabled = false;
   let delaySeconds = DEFAULT_DELAY_SECONDS;
+  let toxicityCheckEnabled = false;
   let pendingMessage = null; // { text, timer, countdownInterval }
   let indicatorFadeTimeout = null;
 
@@ -111,6 +113,29 @@
         background: #4caf50;
         color: #fff;
       }
+      .ycs-delay-toxicity {
+        margin-bottom: 8px;
+        padding: 8px 12px;
+        border-radius: 6px;
+        font-size: 12px;
+        display: none;
+      }
+      .ycs-delay-toxicity.checking {
+        display: block;
+        background: rgba(255, 255, 255, 0.1);
+        color: #bbb;
+      }
+      .ycs-delay-toxicity.warning {
+        display: block;
+        background: rgba(244, 67, 54, 0.2);
+        border: 1px solid rgba(244, 67, 54, 0.5);
+        color: #ff8a80;
+      }
+      .ycs-delay-toxicity.safe {
+        display: block;
+        background: rgba(76, 175, 80, 0.15);
+        color: #81c784;
+      }
       #ycs-chat-delay-indicator {
         position: fixed;
         top: 8px;
@@ -138,10 +163,12 @@
     try {
       const result = await chrome.storage.local.get([
         STORAGE_KEY_CHAT_DELAY_ENABLED,
-        STORAGE_KEY_CHAT_DELAY_SECONDS
+        STORAGE_KEY_CHAT_DELAY_SECONDS,
+        STORAGE_KEY_TOXICITY_CHECK
       ]);
       isEnabled = result[STORAGE_KEY_CHAT_DELAY_ENABLED] === true;
       delaySeconds = Math.max(MIN_DELAY_SECONDS, result[STORAGE_KEY_CHAT_DELAY_SECONDS] || DEFAULT_DELAY_SECONDS);
+      toxicityCheckEnabled = result[STORAGE_KEY_TOXICITY_CHECK] === true;
     } catch (e) {
       console.log('チャット遅延: 設定読み込みエラー', e);
     }
@@ -162,6 +189,9 @@
     }
     if (changes[STORAGE_KEY_CHAT_DELAY_SECONDS]) {
       delaySeconds = Math.max(MIN_DELAY_SECONDS, changes[STORAGE_KEY_CHAT_DELAY_SECONDS].newValue || DEFAULT_DELAY_SECONDS);
+    }
+    if (changes[STORAGE_KEY_TOXICITY_CHECK]) {
+      toxicityCheckEnabled = changes[STORAGE_KEY_TOXICITY_CHECK].newValue === true;
     }
   });
 
@@ -272,7 +302,13 @@
     actions.appendChild(cancelBtn);
     actions.appendChild(sendNowBtn);
 
+    // 毒性チェック結果エリア
+    const toxicityDiv = document.createElement('div');
+    toxicityDiv.className = 'ycs-delay-toxicity';
+    toxicityDiv.id = 'ycs-toxicity-result';
+
     content.appendChild(preview);
+    content.appendChild(toxicityDiv);
     content.appendChild(timerDiv);
     content.appendChild(barContainer);
     content.appendChild(actions);
@@ -286,6 +322,63 @@
     });
 
     return overlay;
+  }
+
+  /**
+   * 直近のチャットメッセージを取得
+   */
+  function getRecentChatMessages(limit = 10) {
+    const messages = [];
+    const items = document.querySelectorAll(
+      'yt-live-chat-text-message-renderer, ' +
+      'yt-live-chat-paid-message-renderer'
+    );
+    const recentItems = Array.from(items).slice(-limit);
+    for (const item of recentItems) {
+      const msgEl = item.querySelector('#message');
+      if (msgEl) {
+        const text = msgEl.textContent?.trim();
+        if (text && text.length > 0) {
+          // 長さ制限と制御文字の除去
+          const sanitized = text.substring(0, 500).replace(/[\x00-\x1F\x7F]/g, '');
+          messages.push(sanitized);
+        }
+      }
+    }
+    return messages;
+  }
+
+  /**
+   * 毒性チェック結果をオーバーレイに表示
+   */
+  function showToxicityResult(result) {
+    const el = document.getElementById('ycs-toxicity-result');
+    if (!el) return;
+
+    if (result.error) {
+      el.className = 'ycs-delay-toxicity checking';
+      el.textContent = 'AI判定: エラー (' + result.error + ')';
+      return;
+    }
+
+    if (result.skipped) {
+      return; // 非表示のまま
+    }
+
+    if (result.toxic) {
+      el.className = 'ycs-delay-toxicity warning';
+      el.textContent = 'AI判定: 問題のある可能性 - ' + result.reason;
+    } else {
+      el.className = 'ycs-delay-toxicity safe';
+      el.textContent = 'AI判定: 問題なし';
+      // 2秒後にフェードアウト
+      setTimeout(() => {
+        if (el.classList.contains('safe')) {
+          el.style.transition = 'opacity 0.5s';
+          el.style.opacity = '0';
+        }
+      }, 2000);
+    }
   }
 
   /**
@@ -355,6 +448,29 @@
     }, delaySeconds * 1000);
 
     pendingMessage = { text, timer, countdownInterval };
+
+    // 毒性チェック（バックグラウンドに依頼）
+    if (toxicityCheckEnabled) {
+      const toxicityEl = document.getElementById('ycs-toxicity-result');
+      if (toxicityEl) {
+        toxicityEl.className = 'ycs-delay-toxicity checking';
+        toxicityEl.textContent = 'AI判定中...';
+      }
+
+      const recentMessages = getRecentChatMessages();
+      chrome.runtime.sendMessage({
+        type: 'CHECK_TOXICITY',
+        text: text,
+        recentMessages: recentMessages
+      }).then(result => {
+        // まだ同じメッセージが保留中の場合のみ表示
+        if (pendingMessage && pendingMessage.text === text) {
+          showToxicityResult(result);
+        }
+      }).catch(error => {
+        console.error('毒性チェック通信エラー:', error);
+      });
+    }
   }
 
   /**

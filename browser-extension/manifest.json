@@ -14,7 +14,8 @@
     "https://www.google.com/*",
     "https://www.google.co.jp/*",
     "http://localhost:8000/*",
-    "http://127.0.0.1:8000/*"
+    "http://127.0.0.1:8000/*",
+    "https://api.anthropic.com/*"
   ],
   "action": {
     "default_popup": "popup.html"

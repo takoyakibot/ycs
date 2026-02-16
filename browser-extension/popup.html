@@ -245,6 +245,17 @@
         <input type="range" id="chat-delay-seconds" min="3" max="30" value="10" style="flex: 1; cursor: pointer;">
         <span id="chat-delay-value">10秒</span>
       </div>
+      <div class="toggle-row" style="padding: 4px 0 0;">
+        <input type="checkbox" id="toxicity-check-enabled" style="width: 14px; height: 14px;">
+        <label for="toxicity-check-enabled" style="font-size: 12px;">AI毒性チェック</label>
+      </div>
+      <div id="api-key-section" style="display: none; margin-top: 6px;">
+        <div style="display: flex; align-items: center; gap: 4px;">
+          <input type="password" id="claude-api-key" placeholder="sk-ant-..." style="flex: 1; font-size: 11px; padding: 4px 6px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace;">
+          <button id="save-api-key" style="font-size: 11px; padding: 4px 8px; background: #667eea; color: #fff; border: none; border-radius: 4px; cursor: pointer; white-space: nowrap;">保存</button>
+        </div>
+        <div id="api-key-status" style="font-size: 10px; color: #888; margin-top: 3px;"></div>
+      </div>
     </div>
 
     <!-- スキャンボタン（YouTube動画ページ用） -->

@@ -8,6 +8,8 @@ const STORAGE_KEY_EMBEDDED_UI = 'showEmbeddedUI';
 const STORAGE_KEY_HIDE_GOOGLE_AI = 'hideGoogleAI';
 const STORAGE_KEY_CHAT_DELAY_ENABLED = 'chatDelayEnabled';
 const STORAGE_KEY_CHAT_DELAY_SECONDS = 'chatDelaySeconds';
+const STORAGE_KEY_TOXICITY_CHECK = 'toxicityCheckEnabled';
+const STORAGE_KEY_CLAUDE_API_KEY = 'claudeApiKey';
 
 // DOM要素
 const elements = {
@@ -17,6 +19,11 @@ const elements = {
   chatDelayOptions: document.getElementById('chat-delay-options'),
   chatDelaySeconds: document.getElementById('chat-delay-seconds'),
   chatDelayValue: document.getElementById('chat-delay-value'),
+  toxicityCheckEnabled: document.getElementById('toxicity-check-enabled'),
+  apiKeySection: document.getElementById('api-key-section'),
+  claudeApiKey: document.getElementById('claude-api-key'),
+  saveApiKey: document.getElementById('save-api-key'),
+  apiKeyStatus: document.getElementById('api-key-status'),
   infoContainer: document.getElementById('info-container'),
   helpLink: document.getElementById('help-link'),
   scannedList: document.getElementById('scanned-list'),
@@ -48,12 +55,16 @@ async function init() {
     STORAGE_KEY_EMBEDDED_UI,
     STORAGE_KEY_HIDE_GOOGLE_AI,
     STORAGE_KEY_CHAT_DELAY_ENABLED,
-    STORAGE_KEY_CHAT_DELAY_SECONDS
+    STORAGE_KEY_CHAT_DELAY_SECONDS,
+    STORAGE_KEY_TOXICITY_CHECK,
+    STORAGE_KEY_CLAUDE_API_KEY
   ]);
   const showUI = result[STORAGE_KEY_EMBEDDED_UI] !== false; // デフォルトはtrue
   const hideGoogleAI = result[STORAGE_KEY_HIDE_GOOGLE_AI] !== false; // デフォルトはtrue
   const chatDelayEnabled = result[STORAGE_KEY_CHAT_DELAY_ENABLED] === true; // デフォルトはfalse
   const chatDelaySeconds = result[STORAGE_KEY_CHAT_DELAY_SECONDS] || 10;
+  const toxicityCheckEnabled = result[STORAGE_KEY_TOXICITY_CHECK] === true;
+  const hasApiKey = !!result[STORAGE_KEY_CLAUDE_API_KEY];
 
   elements.showEmbeddedUI.checked = showUI;
   elements.hideGoogleAI.checked = hideGoogleAI;
@@ -61,12 +72,21 @@ async function init() {
   elements.chatDelaySeconds.value = chatDelaySeconds;
   elements.chatDelayValue.textContent = chatDelaySeconds + '秒';
   elements.chatDelayOptions.style.display = chatDelayEnabled ? 'block' : 'none';
+  elements.toxicityCheckEnabled.checked = toxicityCheckEnabled;
+  elements.apiKeySection.style.display = toxicityCheckEnabled ? 'block' : 'none';
+  if (hasApiKey) {
+    elements.claudeApiKey.placeholder = '設定済み';
+    elements.apiKeyStatus.textContent = 'APIキー設定済み';
+    elements.apiKeyStatus.style.color = '#2e7d32';
+  }
 
   // イベントリスナーを設定
   elements.showEmbeddedUI.addEventListener('change', toggleEmbeddedUI);
   elements.hideGoogleAI.addEventListener('change', toggleHideGoogleAI);
   elements.chatDelayEnabled.addEventListener('change', toggleChatDelay);
   elements.chatDelaySeconds.addEventListener('input', changeChatDelaySeconds);
+  elements.toxicityCheckEnabled.addEventListener('change', toggleToxicityCheck);
+  elements.saveApiKey.addEventListener('click', saveClaudeApiKey);
   elements.helpLink.addEventListener('click', showHelp);
   elements.clearAllBtn.addEventListener('click', clearAllScannedData);
 
@@ -131,6 +151,48 @@ async function changeChatDelaySeconds() {
   const seconds = parseInt(elements.chatDelaySeconds.value, 10);
   elements.chatDelayValue.textContent = seconds + '秒';
   await chrome.storage.local.set({ [STORAGE_KEY_CHAT_DELAY_SECONDS]: seconds });
+}
+
+/**
+ * AI毒性チェックを切り替え
+ */
+async function toggleToxicityCheck() {
+  const enabled = elements.toxicityCheckEnabled.checked;
+  await chrome.storage.local.set({ [STORAGE_KEY_TOXICITY_CHECK]: enabled });
+  elements.apiKeySection.style.display = enabled ? 'block' : 'none';
+
+  // APIキーが未設定の場合に警告
+  if (enabled) {
+    const result = await chrome.storage.local.get(STORAGE_KEY_CLAUDE_API_KEY);
+    if (!result[STORAGE_KEY_CLAUDE_API_KEY]) {
+      elements.apiKeyStatus.textContent = 'APIキーを入力してください';
+      elements.apiKeyStatus.style.color = '#f57c00';
+    }
+  }
+}
+
+/**
+ * Claude APIキーを保存
+ */
+async function saveClaudeApiKey() {
+  const apiKey = elements.claudeApiKey.value.trim();
+  if (!apiKey) {
+    elements.apiKeyStatus.textContent = 'APIキーを入力してください';
+    elements.apiKeyStatus.style.color = '#c62828';
+    return;
+  }
+
+  if (!apiKey.startsWith('sk-ant-')) {
+    elements.apiKeyStatus.textContent = 'APIキーはsk-ant-で始まる必要があります';
+    elements.apiKeyStatus.style.color = '#c62828';
+    return;
+  }
+
+  await chrome.storage.local.set({ [STORAGE_KEY_CLAUDE_API_KEY]: apiKey });
+  elements.claudeApiKey.value = '';
+  elements.claudeApiKey.placeholder = '設定済み';
+  elements.apiKeyStatus.textContent = 'APIキーを保存しました';
+  elements.apiKeyStatus.style.color = '#2e7d32';
 }
 
 /**
