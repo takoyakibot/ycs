@@ -236,6 +236,17 @@
       <label for="hide-google-ai">Google検索のAI概要を非表示</label>
     </div>
 
+    <div class="toggle-row">
+      <input type="checkbox" id="chat-delay-enabled">
+      <label for="chat-delay-enabled">チャット遅延送信</label>
+    </div>
+    <div id="chat-delay-options" style="display: none; padding: 4px 0 4px 28px;">
+      <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #555;">
+        <input type="range" id="chat-delay-seconds" min="3" max="30" value="10" style="flex: 1; cursor: pointer;">
+        <span id="chat-delay-value">10秒</span>
+      </div>
+    </div>
+
     <!-- スキャンボタン（YouTube動画ページ用） -->
     <div id="scan-section" style="display: none; margin-top: 12px;">
       <button id="scan-btn" class="btn-scan">スキャン開始</button>

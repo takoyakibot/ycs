@@ -38,6 +38,15 @@
     },
     {
       "matches": [
+        "https://www.youtube.com/live_chat*",
+        "https://www.youtube.com/live_chat_replay*"
+      ],
+      "js": ["content-chat-delay.js"],
+      "all_frames": true,
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
         "https://www.google.com/search*",
         "https://www.google.co.jp/search*"
       ],
