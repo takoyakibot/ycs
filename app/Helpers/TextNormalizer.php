@@ -67,11 +67,18 @@ class TextNormalizer
         // U+301C (WAVE DASH), U+FF5E (FULLWIDTH TILDE), U+223C (TILDE OPERATOR), U+02DC (SMALL TILDE)
         $text = str_replace(['～', '〜', '∼', '˜'], '~', $text);
 
-        // 引用符を統一
-        // ダブルクォート系 → "
-        $text = str_replace(['"', '"', '„', '″', '〝', '〞', '＂'], '"', $text);
-        // シングルクォート系 → '
-        $text = str_replace(["'", "'", '‚', '′', '`', '´', '＇'], "'", $text);
+        // 引用符を統一（Unicode escape sequence を使用してソースコード上の文字化けを防止）
+        // ダブルクォート系 → " (U+0022)
+        // U+201C: LEFT DOUBLE QUOTATION MARK, U+201D: RIGHT DOUBLE QUOTATION MARK,
+        // U+201E: DOUBLE LOW-9 QUOTATION MARK, U+2033: DOUBLE PRIME,
+        // U+301D: REVERSED DOUBLE PRIME QUOTATION MARK, U+301E: DOUBLE PRIME QUOTATION MARK,
+        // U+FF02: FULLWIDTH QUOTATION MARK
+        $text = str_replace(["\u{201C}", "\u{201D}", "\u{201E}", "\u{2033}", "\u{301D}", "\u{301E}", "\u{FF02}"], '"', $text);
+        // シングルクォート系 → ' (U+0027)
+        // U+2018: LEFT SINGLE QUOTATION MARK, U+2019: RIGHT SINGLE QUOTATION MARK,
+        // U+201A: SINGLE LOW-9 QUOTATION MARK, U+2032: PRIME,
+        // U+0060: GRAVE ACCENT, U+00B4: ACUTE ACCENT, U+FF07: FULLWIDTH APOSTROPHE
+        $text = str_replace(["\u{2018}", "\u{2019}", "\u{201A}", "\u{2032}", '`', "\u{00B4}", "\u{FF07}"], "'", $text);
 
         // 括弧を統一
         // 全角丸括弧 → 半角（mb_convert_kanaでは変換されない）

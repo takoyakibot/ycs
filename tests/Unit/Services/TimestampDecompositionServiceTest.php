@@ -5,6 +5,7 @@ namespace Tests\Unit\Services;
 use App\Helpers\TextNormalizer;
 use App\Models\Archive;
 use App\Models\Channel;
+use App\Models\Song;
 use App\Models\TimestampDecomposition;
 use App\Models\TimestampSongMapping;
 use App\Models\TsItem;
@@ -582,6 +583,45 @@ class TimestampDecompositionServiceTest extends TestCase
         // 再度getNextPendingを実行すると、紐付け済みはスキップされてnullになる
         $next = $this->service->getNextPending();
         $this->assertNull($next);
+    }
+
+    /**
+     * linkToSongが文字バリエーション（例: ' vs '）のある既存楽曲を正しく検出するテスト
+     */
+    public function test_link_to_song_detects_existing_song_with_character_variants(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        // 既存楽曲を作成（シングルクォート ' U+0027 を使用）
+        $existingSong = Song::create([
+            'id' => (string) Str::ulid(),
+            'title' => "Don't say \"lazy\"",
+            'artist' => '桜高軽音部',
+        ]);
+
+        // 分解済みのタイムスタンプを作成（右シングルクォート ' U+2019 を使用）
+        $decomposition = TimestampDecomposition::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize("Don\xE2\x80\x99t say \xE2\x80\x9Clazy\xE2\x80\x9D / 桜高軽音部"),
+            'original_text' => "Don\xE2\x80\x99t say \xE2\x80\x9Clazy\xE2\x80\x9D / 桜高軽音部",
+            'parts' => ["Don\xE2\x80\x99t say \xE2\x80\x9Clazy\xE2\x80\x9D", '桜高軽音部'],
+            'separator_count' => 1,
+            'status' => TimestampDecomposition::STATUS_SELECTED,
+            'confidence' => 1.0,
+            'derived_title' => "Don\xE2\x80\x99t say \xE2\x80\x9Clazy\xE2\x80\x9D",
+            'derived_artist' => '桜高軽音部',
+            'title_part_index' => 0,
+            'artist_part_index' => 1,
+        ]);
+
+        // linkToSongを実行
+        $song = $this->service->linkToSong($decomposition);
+
+        // 既存の楽曲が使用されること（新規作成されないこと）
+        $this->assertNotNull($song);
+        $this->assertEquals($existingSong->id, $song->id);
+        $this->assertDatabaseCount('songs', 1);
     }
 
     /**

@@ -211,13 +211,26 @@ class AutoLinkService
     /**
      * Spotifyトラックデータから楽曲マスタを作成または取得
      *
-     * ユニーク制約（title + artist）に基づいてfirstOrCreateを使用し、
-     * 重複エラーを防止する
+     * 正規化済みのタイトル・アーティスト名で既存楽曲を検索し、
+     * 文字バリエーション（例: ' vs '）による重複登録を防止する。
+     * 見つからない場合のみ新規作成する。
      */
     protected function createSongFromSpotify(array $track): Song
     {
         $title = $track['name'];
         $artist = collect($track['artists'])->pluck('name')->join(', ');
+
+        // 正規化済みテキストで既存楽曲を検索（文字バリエーションによる重複を防止）
+        $normalizedTitle = TextNormalizer::normalize($title);
+        $normalizedArtist = TextNormalizer::normalize($artist);
+
+        $existingSong = Song::where('normalized_title', $normalizedTitle)
+            ->where('normalized_artist', $normalizedArtist)
+            ->first();
+
+        if ($existingSong) {
+            return $existingSong;
+        }
 
         return Song::firstOrCreate(
             [
