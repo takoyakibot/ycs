@@ -14,7 +14,8 @@
     "https://www.google.com/*",
     "https://www.google.co.jp/*",
     "http://localhost:8000/*",
-    "http://127.0.0.1:8000/*"
+    "http://127.0.0.1:8000/*",
+    "https://api.anthropic.com/*"
   ],
   "action": {
     "default_popup": "popup.html"
@@ -34,6 +35,15 @@
         "http://127.0.0.1:8000/manage/archives*"
       ],
       "js": ["content-ycs.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.youtube.com/live_chat*",
+        "https://www.youtube.com/live_chat_replay*"
+      ],
+      "js": ["content-chat-delay.js"],
+      "all_frames": true,
       "run_at": "document_idle"
     },
     {
