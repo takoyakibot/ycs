@@ -245,6 +245,28 @@ class AutoLinkServiceTest extends TestCase
     }
 
     /**
+     * type='3'（歌ってみた/カバー曲）は処理対象外のテスト
+     */
+    public function test_auto_link_skips_cover_song_timestamps(): void
+    {
+        // テストデータ作成
+        $channel = Channel::factory()->create();
+        $archive = Archive::factory()->create(['channel_id' => $channel->channel_id]);
+
+        // type='3'のカバー曲タイムスタンプ
+        TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'text' => 'Cover Song',
+            'type' => '3',
+            'is_display' => 1,
+        ]);
+
+        $result = $this->service->autoLinkUnlinkedTimestamps(10);
+
+        $this->assertEquals(0, $result['processed']);
+    }
+
+    /**
      * 処理件数上限のテスト
      */
     public function test_auto_link_respects_limit(): void

@@ -40,12 +40,13 @@ class TimestampDecompositionService
                     ->whereColumn('timestamp_song_mappings.normalized_text', 'ts_items.normalized_text')
                     ->where('timestamp_song_mappings.is_not_song', true);
             })
-            // すでに楽曲マスタに紐付け済みのタイムスタンプを除外
+            // 手動紐付け済みのタイムスタンプを除外（自動紐付けはTS分解で再処理可能）
             ->whereNotExists(function ($query) {
                 $query->select(DB::raw(1))
                     ->from('timestamp_song_mappings')
                     ->whereColumn('timestamp_song_mappings.normalized_text', 'ts_items.normalized_text')
-                    ->whereNotNull('timestamp_song_mappings.song_id');
+                    ->whereNotNull('timestamp_song_mappings.song_id')
+                    ->where('timestamp_song_mappings.is_manual', true);
             })
             ->whereNotExists(function ($query) {
                 $query->select(DB::raw(1))
@@ -157,12 +158,13 @@ class TimestampDecompositionService
                     ->whereColumn('timestamp_song_mappings.normalized_text', 'timestamp_decompositions.normalized_text')
                     ->where('timestamp_song_mappings.is_not_song', true);
             })
-            // すでに楽曲マスタに紐付け済みのタイムスタンプを除外
+            // 手動紐付け済みのタイムスタンプを除外（自動紐付けはTS分解で再処理可能）
             ->whereNotExists(function ($query) {
                 $query->select(DB::raw(1))
                     ->from('timestamp_song_mappings')
                     ->whereColumn('timestamp_song_mappings.normalized_text', 'timestamp_decompositions.normalized_text')
-                    ->whereNotNull('timestamp_song_mappings.song_id');
+                    ->whereNotNull('timestamp_song_mappings.song_id')
+                    ->where('timestamp_song_mappings.is_manual', true);
             })
             ->orderBy('separator_count', 'asc') // パーツが少ないものから処理（簡単なものから）
             ->orderBy('created_at', 'asc')
@@ -605,7 +607,7 @@ class TimestampDecompositionService
      */
     public function getStatistics(): array
     {
-        // 「楽曲でない」および「紐付け済み」を除外したpending件数
+        // 「楽曲でない」および「手動紐付け済み」を除外したpending件数
         $pendingCount = TimestampDecomposition::where('status', TimestampDecomposition::STATUS_PENDING)
             ->whereNotExists(function ($query) {
                 $query->select(DB::raw(1))
@@ -613,12 +615,13 @@ class TimestampDecompositionService
                     ->whereColumn('timestamp_song_mappings.normalized_text', 'timestamp_decompositions.normalized_text')
                     ->where('timestamp_song_mappings.is_not_song', true);
             })
-            // すでに楽曲マスタに紐付け済みのタイムスタンプを除外
+            // 手動紐付け済みのタイムスタンプを除外（自動紐付けはTS分解で再処理可能）
             ->whereNotExists(function ($query) {
                 $query->select(DB::raw(1))
                     ->from('timestamp_song_mappings')
                     ->whereColumn('timestamp_song_mappings.normalized_text', 'timestamp_decompositions.normalized_text')
-                    ->whereNotNull('timestamp_song_mappings.song_id');
+                    ->whereNotNull('timestamp_song_mappings.song_id')
+                    ->where('timestamp_song_mappings.is_manual', true);
             })
             ->count();
 
@@ -649,12 +652,13 @@ class TimestampDecompositionService
                     ->whereColumn('timestamp_song_mappings.normalized_text', 'ts_items.normalized_text')
                     ->where('timestamp_song_mappings.is_not_song', true);
             })
-            // すでに楽曲マスタに紐付け済みのタイムスタンプを除外
+            // 手動紐付け済みのタイムスタンプを除外（自動紐付けはTS分解で再処理可能）
             ->whereNotExists(function ($query) {
                 $query->select(DB::raw(1))
                     ->from('timestamp_song_mappings')
                     ->whereColumn('timestamp_song_mappings.normalized_text', 'ts_items.normalized_text')
-                    ->whereNotNull('timestamp_song_mappings.song_id');
+                    ->whereNotNull('timestamp_song_mappings.song_id')
+                    ->where('timestamp_song_mappings.is_manual', true);
             })
             ->whereNotExists(function ($query) {
                 $query->select(DB::raw(1))

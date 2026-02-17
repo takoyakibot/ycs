@@ -120,6 +120,7 @@ class AutoLinkService
             ->where('ts_items.text', '!=', '')
             ->whereNotNull('ts_items.normalized_text')
             ->where('ts_items.is_display', 1)
+            ->where('ts_items.type', '!=', '3') // 歌ってみた/カバー曲はノイズが多いため除外
             ->whereHas('archive', function ($q) {
                 $q->where('is_display', 1);
             })

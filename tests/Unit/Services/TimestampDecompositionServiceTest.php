@@ -524,6 +524,72 @@ class TimestampDecompositionServiceTest extends TestCase
     }
 
     /**
+     * 自動紐付け済み（is_manual=false）のタイムスタンプがスキャン対象に含まれることをテスト
+     */
+    public function test_scan_includes_auto_linked_timestamps(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        // チャンネルとアーカイブを作成
+        $channel = Channel::create([
+            'channel_id' => 'UC_test_channel_auto',
+            'handle' => '@testauto',
+            'title' => 'Test Channel Auto',
+            'user_id' => $user->id,
+        ]);
+
+        $archive = Archive::create([
+            'id' => (string) Str::ulid(),
+            'video_id' => 'test_video_auto',
+            'channel_id' => 'UC_test_channel_auto',
+            'title' => 'Test Video Auto',
+            'is_display' => true,
+            'published_at' => now(),
+            'comments_updated_at' => now(),
+        ]);
+
+        // 自動紐付け済みのタイムスタンプ（TS分解で再処理可能）
+        $autoLinkedTs = TsItem::create([
+            'id' => (string) Str::ulid(),
+            'video_id' => 'test_video_auto',
+            'comment_id' => 'test_video_auto',
+            'type' => '1',
+            'ts_text' => '0:00',
+            'ts_num' => 0,
+            'text' => '自動アーティスト / 自動曲',
+            'normalized_text' => TextNormalizer::normalize('自動アーティスト / 自動曲'),
+            'is_display' => true,
+        ]);
+
+        // 楽曲マスタを作成
+        $song = \App\Models\Song::create([
+            'id' => (string) Str::ulid(),
+            'title' => '自動曲',
+            'artist' => '自動アーティスト',
+        ]);
+
+        // 自動紐付けマッピングを作成（is_manual=false）
+        TimestampSongMapping::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize('自動アーティスト / 自動曲'),
+            'song_id' => $song->id,
+            'is_not_song' => false,
+            'is_manual' => false,
+            'status' => 'linked',
+        ]);
+
+        // スキャン実行
+        $count = $this->service->scanAndDecompose();
+
+        // 自動紐付け済みのタイムスタンプがスキャン対象に含まれる
+        $this->assertEquals(1, $count);
+        $this->assertDatabaseHas('timestamp_decompositions', [
+            'normalized_text' => TextNormalizer::normalize('自動アーティスト / 自動曲'),
+        ]);
+    }
+
+    /**
      * すでに楽曲マスタに紐付け済みのタイムスタンプがgetNextPendingから除外されることをテスト
      */
     public function test_get_next_pending_excludes_linked_timestamps(): void
