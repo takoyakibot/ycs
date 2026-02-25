@@ -24,7 +24,7 @@
   let isEnabled = false;
   let delaySeconds = DEFAULT_DELAY_SECONDS;
   let toxicityCheckEnabled = false;
-  let pendingMessage = null; // { text, timer, countdownInterval }
+  let pendingMessage = null; // { text, html, timer, countdownInterval }
   let indicatorFadeTimeout = null;
 
   /**
@@ -230,12 +230,32 @@
   }
 
   /**
+   * チャット入力のHTMLを取得（絵文字等の要素を保持）
+   */
+  function getChatHtml() {
+    const { chatInput } = getChatElements();
+    if (!chatInput) return '';
+    return chatInput.innerHTML || '';
+  }
+
+  /**
    * チャット入力のテキストをセット
    */
   function setChatText(text) {
     const { chatInput } = getChatElements();
     if (!chatInput) return false;
     chatInput.textContent = text;
+    chatInput.dispatchEvent(new Event('input', { bubbles: true }));
+    return true;
+  }
+
+  /**
+   * チャット入力のHTMLをセット（絵文字等の要素を復元）
+   */
+  function setChatHtml(html) {
+    const { chatInput } = getChatElements();
+    if (!chatInput) return false;
+    chatInput.innerHTML = html;
     chatInput.dispatchEvent(new Event('input', { bubbles: true }));
     return true;
   }
@@ -398,11 +418,14 @@
     e.stopPropagation();
     e.stopImmediatePropagation();
 
+    // HTMLを保存（絵文字等の要素を保持）
+    const html = getChatHtml();
+
     // 入力欄をクリア（送信されたように見せる）
     setChatText('');
 
     // 遅延送信を開始
-    startDelay(text);
+    startDelay(text, html);
   }
 
   /**
@@ -420,14 +443,17 @@
     e.stopPropagation();
     e.stopImmediatePropagation();
 
+    // HTMLを保存（絵文字等の要素を保持）
+    const html = getChatHtml();
+
     setChatText('');
-    startDelay(text);
+    startDelay(text, html);
   }
 
   /**
    * 遅延送信を開始
    */
-  function startDelay(text) {
+  function startDelay(text, html) {
     let remaining = delaySeconds;
 
     const overlay = createDelayOverlay(text, remaining);
@@ -447,7 +473,7 @@
       executeSend(text);
     }, delaySeconds * 1000);
 
-    pendingMessage = { text, timer, countdownInterval };
+    pendingMessage = { text, html, timer, countdownInterval };
 
     // 毒性チェック（バックグラウンドに依頼）
     if (toxicityCheckEnabled) {
@@ -516,6 +542,11 @@
 
     clearTimeout(pendingMessage.timer);
     clearInterval(pendingMessage.countdownInterval);
+
+    // 元のテキスト（絵文字含む）を復元
+    if (pendingMessage.html) {
+      setChatHtml(pendingMessage.html);
+    }
 
     removeOverlay();
     pendingMessage = null;
