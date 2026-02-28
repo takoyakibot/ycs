@@ -469,11 +469,13 @@
       }
     }, 1000);
 
+    pendingMessage = { text, html, timer: null, countdownInterval };
+
     const timer = setTimeout(() => {
-      executeSend(text);
+      executeSend();
     }, delaySeconds * 1000);
 
-    pendingMessage = { text, html, timer, countdownInterval };
+    pendingMessage.timer = timer;
 
     // 毒性チェック（バックグラウンドに依頼）
     if (toxicityCheckEnabled) {
@@ -502,7 +504,9 @@
   /**
    * 送信を実行（遅延完了後）
    */
-  function executeSend(text) {
+  function executeSend() {
+    if (!pendingMessage) return;
+
     removeOverlay();
 
     const { chatInput, sendButton } = getChatElements();
@@ -512,7 +516,12 @@
       return;
     }
 
-    setChatText(text);
+    // HTMLを復元して絵文字を保持
+    if (pendingMessage.html) {
+      setChatHtml(pendingMessage.html);
+    } else {
+      setChatText(pendingMessage.text);
+    }
 
     // DOMの反映を待ってから送信
     setTimeout(() => {
@@ -530,8 +539,7 @@
     clearTimeout(pendingMessage.timer);
     clearInterval(pendingMessage.countdownInterval);
 
-    const text = pendingMessage.text;
-    executeSend(text);
+    executeSend();
   }
 
   /**
