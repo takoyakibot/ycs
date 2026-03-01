@@ -33,6 +33,7 @@ export class AutoReshuffleManager {
         this.onSongEnd = null;          // 曲の終了時に呼び出される
         this.onStallDetected = null;    // スタック検知時に呼び出される
         this.onBufferingTimeout = null; // バッファリングタイムアウト時に呼び出される
+        this.onNextTimestampReached = null; // 次のタイムスタンプに到達時に呼び出される（表示更新用）
     }
 
     /**
@@ -94,13 +95,16 @@ export class AutoReshuffleManager {
     /**
      * 終了時刻を計算
      *
-     * 動画終了まで再生するため、終了時刻は設定しない。
-     * YT.PlayerState.ENDED で遷移を処理する。
+     * 次のタイムスタンプの秒数を返す。
+     * 次のタイムスタンプがない場合はnullを返し、YT.PlayerState.ENDED で遷移を処理する。
      *
-     * @param {Object} timestamp - タイムスタンプオブジェクト（未使用）
-     * @returns {null} 常にnullを返す
+     * @param {Object} timestamp - タイムスタンプオブジェクト
+     * @returns {number|null} 次のタイムスタンプの秒数、または null
      */
     calculateEndTime(timestamp) {
+        if (timestamp && timestamp.next_ts_num !== null && timestamp.next_ts_num !== undefined) {
+            return timestamp.next_ts_num;
+        }
         return null;
     }
 
@@ -171,11 +175,15 @@ export class AutoReshuffleManager {
                 this.startFadeOut();
             }
 
-            // 終了時刻に到達
+            // 終了時刻（次のタイムスタンプ）に到達
             if (currentTime >= this.currentSongEndTime) {
                 this.stopMonitor();
-                if (this.onSongEnd) {
+                if (this.enabled && this.onSongEnd) {
+                    // 自動再抽選ON: 次の曲へ遷移
                     this.onSongEnd();
+                } else if (this.onNextTimestampReached) {
+                    // 自動再抽選OFF: 表示のみ更新
+                    this.onNextTimestampReached();
                 }
             }
         }, CHECK_INTERVAL);
