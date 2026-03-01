@@ -749,7 +749,7 @@ function registerArchiveListComponent() {
                         this.playNextOrRandom();
                     };
 
-                    // 次のタイムスタンプ到達時の表示更新（自動再抽選OFFでも動作）
+                    // 次のタイムスタンプ到達時の表示更新
                     autoReshuffleManager.onNextTimestampReached = () => {
                         this.updateDisplayForNextTimestamp();
                     };
@@ -906,7 +906,7 @@ function registerArchiveListComponent() {
 
                         toast.success('ランダムで楽曲を選びました！');
 
-                        // 次のタイムスタンプまでの監視を開始（自動再抽選OFFでも表示更新のため）
+                        // 次のタイムスタンプがある場合は表示更新用の監視を開始
                         if (endTime !== null) {
                             autoReshuffleManager.startMonitor();
                         }
@@ -964,7 +964,7 @@ function registerArchiveListComponent() {
                     }
 
                     try {
-                        // 同じアーカイブ内の次の楽曲を取得
+                        // 同じアーカイブ内の次の楽曲情報を取得
                         const nextTimestamp = await ChannelApiService.fetchNextTimestampInArchive(
                             this.channel.handle,
                             this.selectedTimestamp.video_id,
@@ -980,7 +980,7 @@ function registerArchiveListComponent() {
                                 text: nextTimestamp.text
                             });
 
-                            // 楽曲情報または疑似楽曲オブジェクトを設定
+                            // 楽曲情報を更新（表示のみ、再生位置は変更しない）
                             if (nextTimestamp.mapping?.song) {
                                 this.selectedSong = nextTimestamp.mapping.song;
                             } else {
@@ -992,11 +992,9 @@ function registerArchiveListComponent() {
                             }
                             this.selectedTimestamp = nextTimestamp;
 
-                            // 次のタイムスタンプまでの監視を設定
+                            // 次のタイムスタンプまでの監視を再設定
                             const endTime = autoReshuffleManager.calculateEndTime(nextTimestamp);
                             autoReshuffleManager.setEndTime(endTime);
-
-                            // 終了時刻がある場合は監視を再開
                             if (endTime !== null) {
                                 autoReshuffleManager.startMonitor();
                             }
@@ -1004,8 +1002,6 @@ function registerArchiveListComponent() {
                         // 次のタイムスタンプがない場合は何もしない（動画終了まで現在の表示を維持）
                     } catch (error) {
                         console.error('次の楽曲情報の取得に失敗しました:', error);
-                        // エラー時は監視を停止して不整合を防ぐ
-                        autoReshuffleManager.stopMonitor();
                     }
                 },
 
@@ -1059,7 +1055,7 @@ function registerArchiveListComponent() {
                             toast.success('次の曲を再生します');
                         }
 
-                        // 次のタイムスタンプまでの監視を開始（自動再抽選OFFでも表示更新のため）
+                        // 次のタイムスタンプがある場合は表示更新用の監視を開始
                         if (endTime !== null) {
                             autoReshuffleManager.startMonitor();
                         }

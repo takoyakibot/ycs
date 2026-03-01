@@ -30,10 +30,10 @@ export class AutoReshuffleManager {
         this.stallCount = 0;
 
         // コールバック
-        this.onSongEnd = null;          // 曲の終了時に呼び出される
+        this.onSongEnd = null;          // 動画終了時に呼び出される（自動再抽選用）
         this.onStallDetected = null;    // スタック検知時に呼び出される
         this.onBufferingTimeout = null; // バッファリングタイムアウト時に呼び出される
-        this.onNextTimestampReached = null; // 次のタイムスタンプに到達時に呼び出される（表示更新用）
+        this.onNextTimestampReached = null; // 次のタイムスタンプ到達時に呼び出される（表示更新用）
     }
 
     /**
@@ -93,13 +93,13 @@ export class AutoReshuffleManager {
     }
 
     /**
-     * 終了時刻を計算
+     * 次のタイムスタンプの秒数を取得（表示更新用）
      *
-     * 次のタイムスタンプの秒数を返す。
-     * 次のタイムスタンプがない場合はnullを返し、YT.PlayerState.ENDED で遷移を処理する。
+     * 次のタイムスタンプがある場合はその秒数を返す。
+     * ない場合はnullを返す。
      *
      * @param {Object} timestamp - タイムスタンプオブジェクト
-     * @returns {number|null} 次のタイムスタンプの秒数、または null
+     * @returns {number|null} 次のタイムスタンプの秒数、またはnull
      */
     calculateEndTime(timestamp) {
         if (timestamp &&
@@ -137,7 +137,6 @@ export class AutoReshuffleManager {
 
         if (!videoPlayerManager.isInitialized() || this.currentSongEndTime === null) return;
 
-        const FADE_OUT_DURATION = 3; // フェードアウト秒数
         const CHECK_INTERVAL = 500; // チェック間隔（ミリ秒）
         const MAX_STALL_COUNT = 6; // 3秒間（500ms × 6回）進まなければスタックと判定
 
@@ -152,7 +151,6 @@ export class AutoReshuffleManager {
             }
 
             const currentTime = videoPlayerManager.getCurrentTime();
-            const fadeOutStartTime = this.currentSongEndTime - FADE_OUT_DURATION;
             const isPlaying = videoPlayerManager.getIsPlaying();
 
             // スタック検知: 再生中なのに時間が進まない状態を検知
@@ -174,20 +172,11 @@ export class AutoReshuffleManager {
             }
             this.lastPlaybackTime = currentTime;
 
-            // フェードアウト開始時刻に到達（自動再抽選ONの場合のみ）
-            // 自動再抽選OFFの場合は動画が継続再生されるためフェードアウトしない
-            if (this.enabled && currentTime >= fadeOutStartTime && !this.fadeOutIntervalId) {
-                this.startFadeOut();
-            }
-
-            // 終了時刻（次のタイムスタンプ）に到達
+            // 次のタイムスタンプに到達（表示更新のみ、動画は継続再生）
+            // フェードアウトは行わない
             if (currentTime >= this.currentSongEndTime) {
                 this.stopMonitor();
-                if (this.enabled && this.onSongEnd) {
-                    // 自動再抽選ON: 次の曲へ遷移
-                    this.onSongEnd();
-                } else if (this.onNextTimestampReached) {
-                    // 自動再抽選OFF: 表示のみ更新
+                if (this.onNextTimestampReached) {
                     this.onNextTimestampReached();
                 }
             }
