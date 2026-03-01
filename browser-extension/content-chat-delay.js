@@ -527,6 +527,8 @@
     setTimeout(() => {
       doSend();
       pendingMessage = null;
+      // 送信後にフォーカスを戻す
+      chatInput.focus();
     }, 200);
   }
 
@@ -558,6 +560,12 @@
 
     removeOverlay();
     pendingMessage = null;
+
+    // キャンセル後にフォーカスを戻す
+    const { chatInput } = getChatElements();
+    if (chatInput) {
+      chatInput.focus();
+    }
   }
 
   /**
