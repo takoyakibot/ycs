@@ -956,8 +956,10 @@ function registerArchiveListComponent() {
                  * 動画が自然に再生されて次のタイムスタンプに到達した際に呼ばれる
                  */
                 async updateDisplayForNextTimestamp() {
-                    // 現在再生中のタイムスタンプ情報がなければ何もしない
-                    if (!this.selectedTimestamp?.video_id || this.selectedTimestamp?.ts_num === undefined) {
+                    // 必要な情報がなければ何もしない
+                    if (!this.channel?.handle ||
+                        !this.selectedTimestamp?.video_id ||
+                        this.selectedTimestamp?.ts_num === undefined) {
                         return;
                     }
 
@@ -1002,6 +1004,8 @@ function registerArchiveListComponent() {
                         // 次のタイムスタンプがない場合は何もしない（動画終了まで現在の表示を維持）
                     } catch (error) {
                         console.error('次の楽曲情報の取得に失敗しました:', error);
+                        // エラー時は監視を停止して不整合を防ぐ
+                        autoReshuffleManager.stopMonitor();
                     }
                 },
 

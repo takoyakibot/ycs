@@ -102,7 +102,11 @@ export class AutoReshuffleManager {
      * @returns {number|null} 次のタイムスタンプの秒数、または null
      */
     calculateEndTime(timestamp) {
-        if (timestamp && timestamp.next_ts_num !== null && timestamp.next_ts_num !== undefined) {
+        if (timestamp &&
+            timestamp.next_ts_num !== null &&
+            timestamp.next_ts_num !== undefined &&
+            typeof timestamp.next_ts_num === 'number' &&
+            timestamp.next_ts_num >= 0) {
             return timestamp.next_ts_num;
         }
         return null;
@@ -170,8 +174,9 @@ export class AutoReshuffleManager {
             }
             this.lastPlaybackTime = currentTime;
 
-            // フェードアウト開始時刻に到達
-            if (currentTime >= fadeOutStartTime && !this.fadeOutIntervalId) {
+            // フェードアウト開始時刻に到達（自動再抽選ONの場合のみ）
+            // 自動再抽選OFFの場合は動画が継続再生されるためフェードアウトしない
+            if (this.enabled && currentTime >= fadeOutStartTime && !this.fadeOutIntervalId) {
                 this.startFadeOut();
             }
 
