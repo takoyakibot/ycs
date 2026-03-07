@@ -29,7 +29,10 @@
                                 <span class="text-gray-300 dark:text-gray-600 mx-1">|</span>
                                 <!-- 絞り込みボタン -->
                                 <div class="flex gap-1 flex-wrap" id="filterButtons">
-                                    <button data-filter="all" class="filter-btn px-3 py-1 text-sm rounded bg-blue-600 text-white">
+                                    <button data-filter="active" class="filter-btn px-3 py-1 text-sm rounded bg-blue-600 text-white">
+                                        有効
+                                    </button>
+                                    <button data-filter="all" class="filter-btn px-3 py-1 text-sm rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">
                                         全
                                     </button>
                                     <button data-filter="unlinked" class="filter-btn px-3 py-1 text-sm rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">
