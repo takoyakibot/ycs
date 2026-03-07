@@ -38,12 +38,14 @@ return [
         // レート制限エラー時の待機時間（秒）
         'rate_limit_wait_seconds' => env('AUTO_LINK_RATE_LIMIT_WAIT_SECONDS', 60),
 
-        // 自動紐付け時の類似度しきい値（これ以上で自動紐付け）
+        // 類似度しきい値（将来の類似度チェック拡張用に保持）
         'similarity_threshold' => env('AUTO_LINK_SIMILARITY_THRESHOLD', 0.95),
 
-        // 保留時の類似度しきい値（これ以上で保留、similarity_threshold未満の場合）
-        // 類似度がこの値未満の場合は新規楽曲マスタを作成
+        // 保留時の類似度しきい値（将来の類似度チェック拡張用に保持）
         'pending_threshold' => env('AUTO_LINK_PENDING_THRESHOLD', 0.85),
+
+        // Spotify検索時の取得件数（逆検証用に複数件取得）
+        'spotify_search_limit' => env('AUTO_LINK_SPOTIFY_SEARCH_LIMIT', 3),
     ],
 
     /*
