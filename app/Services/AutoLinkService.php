@@ -13,8 +13,6 @@ class AutoLinkService
 {
     protected SpotifyService $spotifyService;
 
-    protected SongSearchService $songSearchService;
-
     /**
      * 1リクエストあたりの遅延時間（ミリ秒）
      */
@@ -25,12 +23,17 @@ class AutoLinkService
      */
     protected int $rateLimitWaitSeconds;
 
-    public function __construct(SpotifyService $spotifyService, SongSearchService $songSearchService)
+    /**
+     * Spotify検索時の取得件数（逆検証用に複数件取得）
+     */
+    protected int $spotifySearchLimit;
+
+    public function __construct(SpotifyService $spotifyService)
     {
         $this->spotifyService = $spotifyService;
-        $this->songSearchService = $songSearchService;
         $this->delayMs = config('songs.auto_link.delay_ms', 500);
         $this->rateLimitWaitSeconds = config('songs.auto_link.rate_limit_wait_seconds', 60);
+        $this->spotifySearchLimit = config('songs.auto_link.spotify_search_limit', 3);
     }
 
     /**
@@ -170,89 +173,162 @@ class AutoLinkService
     /**
      * 単一テキストの自動紐付け処理
      *
+     * フロー:
+     * ❶ 既存DB照合: タイムスタンプのnormalized_textからtitle部分を抽出し、
+     *    songs.normalized_titleと照合。一致すればリンク。
+     * ❷ Spotify検索 + 逆検証: Spotify上位N件の楽曲名をnormalizeして
+     *    元のnormalized_textに含まれるか照合。一致すれば新規Song作成+リンク。
+     *    一致しなければ未紐づけのまま。
+     *
      * @return string 'linked'|'pending'|'skipped'|'not_found'
      */
     protected function processAutoLink(string $text, string $normalizedText): string
     {
-        // Spotify検索実行
-        $tracks = $this->spotifyService->searchWithAuth($text, 1);
-
-        if (empty($tracks)) {
-            return 'not_found';
-        }
-
-        $track = $tracks[0];
-        $title = $track['name'];
-        $artist = collect($track['artists'])->pluck('name')->join(', ');
-        $spotifyTrackId = $track['id'];
-
-        // 既存の楽曲マスタを検索（Spotify Track IDで）
-        $existingSong = Song::where('spotify_track_id', $spotifyTrackId)->first();
-
+        // ❶ 既存DB照合: normalized_textから楽曲名を抽出してsongsテーブルと照合
+        $existingSong = $this->findSongByNormalizedText($normalizedText);
         if ($existingSong) {
-            // 既存の楽曲マスタを使用
             $this->createAutoLinkMapping($normalizedText, $existingSong->id);
 
             return 'linked';
         }
 
-        // 正規化後のTitle + Artistで完全一致チェック
-        $normalizedTitle = TextNormalizer::normalize($title);
-        $normalizedArtist = TextNormalizer::normalize($artist);
-        $exactMatch = $this->songSearchService->findExactMatch($normalizedTitle, $normalizedArtist, $title, $artist);
+        // ❷ Spotify検索 + 逆検証
+        $tracks = $this->spotifyService->searchWithAuth($text, $this->spotifySearchLimit);
 
-        if ($exactMatch) {
-            // 既存の楽曲マスタを使用
-            $this->createAutoLinkMapping($normalizedText, $exactMatch->id);
+        if (empty($tracks)) {
+            return 'not_found';
+        }
+
+        // Spotify結果の楽曲名で逆検証: 元のnormalized_textに含まれるか確認
+        $matchedTrack = $this->findMatchingTrack($tracks, $normalizedText);
+
+        if (! $matchedTrack) {
+            // 逆検証で一致しない → 楽曲ではない可能性が高い。未紐づけのまま
+            return 'not_found';
+        }
+
+        $track = $matchedTrack;
+        $spotifyTrackId = $track['id'];
+
+        // Spotify Track IDで既存songを検索
+        $existingSong = Song::where('spotify_track_id', $spotifyTrackId)->first();
+        if ($existingSong) {
+            $this->createAutoLinkMapping($normalizedText, $existingSong->id);
 
             return 'linked';
         }
 
-        // 閾値を取得（0.0〜1.0の値）
-        $similarityThreshold = config('songs.auto_link.similarity_threshold', 0.95);
-        $pendingThreshold = config('songs.auto_link.pending_threshold', 0.85);
-
-        // 類似度チェック（保留閾値以上の楽曲を検索）
-        $similarSongs = $this->songSearchService->findSimilarSongs($normalizedTitle, $normalizedArtist, $pendingThreshold);
-
-        if (count($similarSongs) > 0) {
-            $bestMatch = $similarSongs[0];
-            // findSimilarSongsはパーセント値（0〜100）を返すので、0〜1に変換して比較
-            $bestSimilarity = $bestMatch['similarity'] / 100;
-
-            if ($bestSimilarity >= $similarityThreshold) {
-                // 自動紐付け閾値以上 → 紐付け
-                $this->createAutoLinkMapping($normalizedText, $bestMatch['song']->id);
-
-                return 'linked';
-            } else {
-                // 保留閾値以上、自動紐付け閾値未満 → 保留
-                $this->createPendingMapping($normalizedText, $bestMatch['song']->id, $bestSimilarity);
-
-                return 'pending';
-            }
-        }
-
-        // 新規楽曲マスタを作成
-        $song = $this->createSongFromSpotify($track);
+        // 新規楽曲マスタを作成（タイムスタンプの情報を使用）
+        $song = $this->createSongFromTimestamp($normalizedText, $track);
         $this->createAutoLinkMapping($normalizedText, $song->id);
 
         return 'linked';
     }
 
     /**
-     * Spotifyトラックデータから楽曲マスタを作成または取得
+     * normalized_textから楽曲名を抽出し、既存songsテーブルと照合する
      *
-     * 正規化済みのタイトル・アーティスト名で既存楽曲を検索し、
-     * 文字バリエーション（例: ' vs '）による重複登録を防止する。
-     * 見つからない場合のみ新規作成する。
+     * extractSongInfo()で分割し、title部分とartist部分の両方で
+     * songs.normalized_titleを検索する（順序が不定のため）
      */
-    protected function createSongFromSpotify(array $track): Song
+    protected function findSongByNormalizedText(string $normalizedText): ?Song
     {
-        $title = $track['name'];
-        $artist = collect($track['artists'])->pluck('name')->join(', ');
+        // extractSongInfoはparts[0]をartist、parts[1]をtitleとして返すが、
+        // 実際のタイムスタンプでは「曲名 / アーティスト名」「アーティスト名 / 曲名」の
+        // 両パターンがあるため、両方のパートでsongs.normalized_titleを検索する
+        $songInfo = TextNormalizer::extractSongInfo($normalizedText);
 
-        // 正規化済みテキストで既存楽曲を検索（文字バリエーションによる重複を防止）
+        $candidates = [];
+
+        // parts[1]（title部分）でnormalized_titleを検索
+        if (! empty($songInfo['title'])) {
+            $song = Song::where('normalized_title', $songInfo['title'])->first();
+            if ($song) {
+                $candidates[] = $song;
+            }
+        }
+
+        // parts[0]（artist部分）でもnormalized_titleを検索（順序が逆の場合に対応）
+        if (! empty($songInfo['artist'])) {
+            $song = Song::where('normalized_title', $songInfo['artist'])->first();
+            if ($song && ! in_array($song->id, array_map(fn ($s) => $s->id, $candidates))) {
+                $candidates[] = $song;
+            }
+        }
+
+        // 区切りなしの場合：extractSongInfoがtitleに全体を入れるため、上のtitle検索で対応済み
+        if (empty($songInfo['artist'])) {
+            return $candidates[0] ?? null;
+        }
+
+        // 候補が1つならそのまま返す
+        if (count($candidates) === 1) {
+            return $candidates[0];
+        }
+
+        // 候補が複数ある場合、artist側も一致するものを優先
+        foreach ($candidates as $candidate) {
+            $normalizedArtist = $candidate->normalized_artist;
+            if ($normalizedArtist === $songInfo['artist'] || $normalizedArtist === $songInfo['title']) {
+                return $candidate;
+            }
+        }
+
+        return $candidates[0] ?? null;
+    }
+
+    /**
+     * Spotify検索結果の楽曲名を元のnormalized_textと照合し、一致するトラックを返す
+     *
+     * 各trackのnameをnormalizeして、normalized_textに含まれるか確認する。
+     */
+    protected function findMatchingTrack(array $tracks, string $normalizedText): ?array
+    {
+        // normalized_textを分割（ループの外で1回だけ実行）
+        // extractSongInfoはparts[0]をartist、parts[1]をtitleとして返すが、
+        // 実際のタイムスタンプでは順序が不定なので両方で照合する
+        $songInfo = TextNormalizer::extractSongInfo($normalizedText);
+
+        foreach ($tracks as $track) {
+            $normalizedTrackName = TextNormalizer::normalize($track['name']);
+
+            if (empty($normalizedTrackName)) {
+                continue;
+            }
+
+            // 完全一致
+            if ($normalizedText === $normalizedTrackName) {
+                return $track;
+            }
+
+            // 分割後のtitle部分と照合
+            if (! empty($songInfo['title']) && $songInfo['title'] === $normalizedTrackName) {
+                return $track;
+            }
+
+            // 分割後のartist部分と照合（artist/titleの順序が逆の場合に対応）
+            if (! empty($songInfo['artist']) && $songInfo['artist'] === $normalizedTrackName) {
+                return $track;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * タイムスタンプの情報を使って楽曲マスタを作成または取得
+     *
+     * タイムスタンプのnormalized_textから楽曲名・アーティスト名を抽出して登録する。
+     * Spotifyのトラック情報はspotify_track_idとspotify_dataとして保持する。
+     * 正規化済みテキストで既存楽曲を検索し、重複登録を防止する。
+     */
+    protected function createSongFromTimestamp(string $normalizedText, array $track): Song
+    {
+        $songInfo = TextNormalizer::extractSongInfo($normalizedText);
+        $title = $songInfo['title'] ?? $normalizedText;
+        $artist = $songInfo['artist'] ?? '';
+
+        // 正規化済みテキストで既存楽曲を検索（重複防止）
         $normalizedTitle = TextNormalizer::normalize($title);
         $normalizedArtist = TextNormalizer::normalize($artist);
 
