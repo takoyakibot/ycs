@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Services\SimilarityService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 
 class TimestampSongMapping extends Model
 {
@@ -38,6 +39,21 @@ class TimestampSongMapping extends Model
         'is_manual' => 'boolean',
         'confidence' => 'float',
     ];
+
+    /**
+     * モデルのブートメソッド
+     */
+    protected static function boot()
+    {
+        parent::boot();
+
+        // 新規作成時にIDが未設定の場合、ULIDを自動生成
+        static::creating(function ($model) {
+            if (empty($model->id)) {
+                $model->id = Str::ulid();
+            }
+        });
+    }
 
     /**
      * 保留状態かどうかを判定

@@ -87,7 +87,7 @@ class AutoLinkService
                 }
             } catch (\Exception $e) {
                 // レート制限エラーの場合は待機して同じアイテムを再処理
-                if (strpos($e->getMessage(), 'レート制限') !== false) {
+                if (str_contains($e->getMessage(), 'レート制限')) {
                     $this->log('warning', sprintf('レート制限に達しました。%d秒待機して再試行します。', $this->rateLimitWaitSeconds));
                     $onProgress && $onProgress(sprintf('レート制限に達しました。%d秒待機して再試行します...', $this->rateLimitWaitSeconds));
                     sleep($this->rateLimitWaitSeconds);
@@ -108,6 +108,11 @@ class AutoLinkService
                         } else {
                             $result['failed']++;
                             $onProgress && $onProgress(sprintf('[%d/%d] 検索結果なし（再試行）: %s', $index + 1, count($unlinkedTexts), $item['text']));
+                        }
+
+                        // 再試行成功後も遅延を入れる（連続レート制限を防止）
+                        if ($index < count($unlinkedTexts) - 1) {
+                            usleep($this->delayMs * 1000);
                         }
 
                         continue;
@@ -276,13 +281,13 @@ class AutoLinkService
      * 自動紐付けマッピングを作成
      *
      * updateOrCreateを使用してTOCTOU競合を防止
+     * 新規作成時のidはモデルのcreatingイベントで自動設定される
      */
     protected function createAutoLinkMapping(string $normalizedText, string $songId): void
     {
         TimestampSongMapping::updateOrCreate(
             ['normalized_text' => $normalizedText],
             [
-                'id' => Str::ulid(),
                 'song_id' => $songId,
                 'is_not_song' => false,
                 'status' => TimestampSongMapping::STATUS_LINKED,
@@ -296,13 +301,13 @@ class AutoLinkService
      * 保留マッピングを作成
      *
      * updateOrCreateを使用してTOCTOU競合を防止
+     * 新規作成時のidはモデルのcreatingイベントで自動設定される
      */
     protected function createPendingMapping(string $normalizedText, string $songId, float $similarity): void
     {
         TimestampSongMapping::updateOrCreate(
             ['normalized_text' => $normalizedText],
             [
-                'id' => Str::ulid(),
                 'song_id' => $songId,
                 'is_not_song' => false,
                 'status' => TimestampSongMapping::STATUS_PENDING,
