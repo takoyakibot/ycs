@@ -132,14 +132,14 @@ class TextNormalizerTest extends TestCase
         // U+200C: Zero Width Non-Joiner
         $this->assertEquals('testvalue', TextNormalizer::normalize("test\u{200C}value"));
 
-        // U+200D: Zero Width Joiner
-        $this->assertEquals('testvalue', TextNormalizer::normalize("test\u{200D}value"));
+        // U+200D: Zero Width Joiner（絵文字シーケンスで使用されるため保持）
+        $this->assertEquals("test\u{200D}value", TextNormalizer::normalize("test\u{200D}value"));
 
         // U+FEFF: BOM
         $this->assertEquals('testvalue', TextNormalizer::normalize("\u{FEFF}testvalue"));
 
-        // 複数の不可視文字が混在
-        $this->assertEquals('abc def', TextNormalizer::normalize("a\u{200B}bc\u{200C} \u{200D}def"));
+        // 複数の不可視文字が混在（U+200Dは保持される）
+        $this->assertEquals("abc \u{200D}def", TextNormalizer::normalize("a\u{200B}bc\u{200C} \u{200D}def"));
 
         // 先頭にゼロ幅スペースがある実際のケース
         $this->assertEquals('天野由梨 魂の扉', TextNormalizer::normalize("\u{200B} 天野由梨 魂の扉"));
@@ -401,5 +401,32 @@ class TextNormalizerTest extends TestCase
         $this->assertTrue(TextNormalizer::hasSeparators('コーヒー / カフェラテ'));
         $result = TextNormalizer::splitBySeparators('コーヒー / カフェラテ');
         $this->assertEquals(['コーヒー', 'カフェラテ'], $result['parts']);
+    }
+
+    /**
+     * normalizeメソッドが絵文字を保持することをテスト
+     */
+    public function test_normalize_preserves_emoji(): void
+    {
+        // 絵文字のみ
+        $this->assertEquals('🎵', TextNormalizer::normalize('🎵'));
+
+        // 絵文字を含むタイムスタンプテキスト
+        $this->assertEquals('🎵 アーティスト / 曲名 🎶', TextNormalizer::normalize('🎵 アーティスト / 曲名 🎶'));
+
+        // 複合絵文字（肌色修飾子付き等）
+        $this->assertEquals('hello 👋🏻 world', TextNormalizer::normalize('Hello 👋🏻 World'));
+
+        // 各種絵文字が混在
+        $this->assertEquals('🔥 fire 🔥', TextNormalizer::normalize('🔥 FIRE 🔥'));
+    }
+
+    /**
+     * trimFullwidthSpaceが絵文字を保持することをテスト
+     */
+    public function test_trim_fullwidth_space_preserves_emoji(): void
+    {
+        $this->assertEquals('🎵 テスト', TextNormalizer::trimFullwidthSpace('　🎵 テスト'));
+        $this->assertEquals('🎶 曲名', TextNormalizer::trimFullwidthSpace('🎶 曲名'));
     }
 }
