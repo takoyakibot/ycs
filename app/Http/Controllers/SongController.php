@@ -138,6 +138,16 @@ class SongController extends Controller
                 $query->whereNotNull('timestamp_song_mappings.id')
                     ->where('timestamp_song_mappings.status', TimestampSongMapping::STATUS_PENDING);
                 break;
+            case 'active':
+                // 有効: 非楽曲(is_not_song)と保留(pending)を除外
+                $query->where(function ($q) {
+                    $q->whereNull('timestamp_song_mappings.id')
+                        ->orWhere(function ($q2) {
+                            $q2->where('timestamp_song_mappings.is_not_song', false)
+                                ->where('timestamp_song_mappings.status', '!=', TimestampSongMapping::STATUS_PENDING);
+                        });
+                });
+                break;
                 // 'all' は条件なし
         }
 

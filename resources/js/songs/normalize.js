@@ -21,7 +21,7 @@ class TimestampNormalization {
         this.currentPage = 1;
         this.currentSearchQuery = ''; // 検索条件を保持
         this.searchTimeout = null;
-        this.currentFilter = 'all'; // all, unlinked, linked, not_song
+        this.currentFilter = sessionStorage.getItem('timestampFilter') || 'active'; // active, all, unlinked, linked, not_song, auto_linked, pending
         this.currentSongFilter = null; // 楽曲による絞り込み（楽曲オブジェクト）
         this.operationHistory = []; // 操作履歴
         this.maxHistoryItems = 20; // 最大履歴保持数
@@ -31,6 +31,7 @@ class TimestampNormalization {
 
     init() {
         this.bindEvents();
+        this.updateFilterButtons();
         this.loadTimestamps();
         this.showTab('spotifyTab');
         this.updateSelectionDisplay();
@@ -145,6 +146,7 @@ class TimestampNormalization {
 
     setFilter(filter) {
         this.currentFilter = filter;
+        sessionStorage.setItem('timestampFilter', filter);
         this.updateFilterButtons();
         this.loadTimestamps(1, this.currentSearchQuery);
     }
