@@ -6,7 +6,6 @@ use App\Helpers\TextNormalizer;
 use App\Models\Song;
 use App\Models\TimestampSongMapping;
 use App\Models\TsItem;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
@@ -87,17 +86,42 @@ class AutoLinkService
                     usleep($this->delayMs * 1000);
                 }
             } catch (\Exception $e) {
-                $result['failed']++;
-
-                // レート制限エラーの場合は待機して続行
+                // レート制限エラーの場合は待機して同じアイテムを再処理
                 if (strpos($e->getMessage(), 'レート制限') !== false) {
-                    $this->log('warning', sprintf('レート制限に達しました。%d秒待機します。', $this->rateLimitWaitSeconds));
-                    $onProgress && $onProgress(sprintf('レート制限に達しました。%d秒待機します...', $this->rateLimitWaitSeconds));
+                    $this->log('warning', sprintf('レート制限に達しました。%d秒待機して再試行します。', $this->rateLimitWaitSeconds));
+                    $onProgress && $onProgress(sprintf('レート制限に達しました。%d秒待機して再試行します...', $this->rateLimitWaitSeconds));
                     sleep($this->rateLimitWaitSeconds);
 
-                    continue;
+                    // 同じアイテムを再処理
+                    try {
+                        $linkResult = $this->processAutoLink($item['text'], $item['normalized_text']);
+
+                        if ($linkResult === 'linked') {
+                            $result['linked']++;
+                            $onProgress && $onProgress(sprintf('[%d/%d] 紐付け成功（再試行）: %s', $index + 1, count($unlinkedTexts), $item['text']));
+                        } elseif ($linkResult === 'pending') {
+                            $result['pending']++;
+                            $onProgress && $onProgress(sprintf('[%d/%d] 保留（再試行）: %s', $index + 1, count($unlinkedTexts), $item['text']));
+                        } elseif ($linkResult === 'skipped') {
+                            $result['skipped']++;
+                            $onProgress && $onProgress(sprintf('[%d/%d] スキップ（再試行）: %s', $index + 1, count($unlinkedTexts), $item['text']));
+                        } else {
+                            $result['failed']++;
+                            $onProgress && $onProgress(sprintf('[%d/%d] 検索結果なし（再試行）: %s', $index + 1, count($unlinkedTexts), $item['text']));
+                        }
+
+                        continue;
+                    } catch (\Exception $retryException) {
+                        // 再試行も失敗した場合はfailed扱い
+                        $result['failed']++;
+                        $this->log('error', sprintf('自動紐付けエラー（再試行失敗）: %s - %s', $item['text'], $retryException->getMessage()));
+                        $onProgress && $onProgress(sprintf('[%d/%d] エラー（再試行失敗）: %s - %s', $index + 1, count($unlinkedTexts), $item['text'], $retryException->getMessage()));
+
+                        continue;
+                    }
                 }
 
+                $result['failed']++;
                 $this->log('error', sprintf('自動紐付けエラー: %s - %s', $item['text'], $e->getMessage()));
                 $onProgress && $onProgress(sprintf('[%d/%d] エラー: %s - %s', $index + 1, count($unlinkedTexts), $item['text'], $e->getMessage()));
             }
@@ -114,7 +138,9 @@ class AutoLinkService
      */
     protected function getUnlinkedTexts(int $limit): array
     {
-        return TsItem::select('ts_items.text', 'ts_items.normalized_text')
+        // normalized_textのみでグループ化し、textはMIN()で代表値を取得
+        // これにより同じnormalized_textで異なるtextを持つケースでも重複排除される
+        return TsItem::selectRaw('MIN(ts_items.text) as text, ts_items.normalized_text')
             ->leftJoin('timestamp_song_mappings', 'ts_items.normalized_text', '=', 'timestamp_song_mappings.normalized_text')
             ->whereNotNull('ts_items.text')
             ->where('ts_items.text', '!=', '')
@@ -125,8 +151,8 @@ class AutoLinkService
                 $q->where('is_display', 1);
             })
             ->whereNull('timestamp_song_mappings.id')
-            ->groupBy('ts_items.normalized_text', 'ts_items.text')
-            ->orderBy('ts_items.text', 'asc')
+            ->groupBy('ts_items.normalized_text')
+            ->orderByRaw('MIN(ts_items.text) asc')
             ->limit($limit)
             ->get()
             ->map(fn ($item) => [
@@ -248,69 +274,51 @@ class AutoLinkService
 
     /**
      * 自動紐付けマッピングを作成
+     *
+     * updateOrCreateを使用してTOCTOU競合を防止
      */
     protected function createAutoLinkMapping(string $normalizedText, string $songId): void
     {
-        DB::transaction(function () use ($normalizedText, $songId) {
-            $mapping = TimestampSongMapping::where('normalized_text', $normalizedText)->first();
-
-            if ($mapping) {
-                $mapping->update([
-                    'song_id' => $songId,
-                    'is_not_song' => false,
-                    'status' => TimestampSongMapping::STATUS_LINKED,
-                    'is_manual' => false,
-                    'confidence' => 0.8, // 自動紐付けは0.8
-                ]);
-            } else {
-                TimestampSongMapping::create([
-                    'id' => Str::ulid(),
-                    'normalized_text' => $normalizedText,
-                    'song_id' => $songId,
-                    'is_not_song' => false,
-                    'status' => TimestampSongMapping::STATUS_LINKED,
-                    'is_manual' => false,
-                    'confidence' => 0.8,
-                ]);
-            }
-        });
+        TimestampSongMapping::updateOrCreate(
+            ['normalized_text' => $normalizedText],
+            [
+                'id' => Str::ulid(),
+                'song_id' => $songId,
+                'is_not_song' => false,
+                'status' => TimestampSongMapping::STATUS_LINKED,
+                'is_manual' => false,
+                'confidence' => 0.8, // 自動紐付けは0.8
+            ]
+        );
     }
 
     /**
      * 保留マッピングを作成
+     *
+     * updateOrCreateを使用してTOCTOU競合を防止
      */
     protected function createPendingMapping(string $normalizedText, string $songId, float $similarity): void
     {
-        DB::transaction(function () use ($normalizedText, $songId, $similarity) {
-            $mapping = TimestampSongMapping::where('normalized_text', $normalizedText)->first();
-
-            if ($mapping) {
-                $mapping->update([
-                    'song_id' => $songId,
-                    'is_not_song' => false,
-                    'status' => TimestampSongMapping::STATUS_PENDING,
-                    'is_manual' => false,
-                    'confidence' => $similarity,
-                ]);
-            } else {
-                TimestampSongMapping::create([
-                    'id' => Str::ulid(),
-                    'normalized_text' => $normalizedText,
-                    'song_id' => $songId,
-                    'is_not_song' => false,
-                    'status' => TimestampSongMapping::STATUS_PENDING,
-                    'is_manual' => false,
-                    'confidence' => $similarity,
-                ]);
-            }
-        });
+        TimestampSongMapping::updateOrCreate(
+            ['normalized_text' => $normalizedText],
+            [
+                'id' => Str::ulid(),
+                'song_id' => $songId,
+                'is_not_song' => false,
+                'status' => TimestampSongMapping::STATUS_PENDING,
+                'is_manual' => false,
+                'confidence' => $similarity,
+            ]
+        );
     }
 
     /**
      * ログ出力
+     *
+     * Log::log()を使用して静的解析・IDEサポートを改善
      */
     protected function log(string $level, string $message): void
     {
-        Log::$level('[AutoLinkService] '.$message);
+        Log::log($level, '[AutoLinkService] '.$message);
     }
 }
