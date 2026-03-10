@@ -219,13 +219,14 @@ function updateTriggerButtonState() {
     }
   }
 
+  const chatBtn = embeddedTriggerButton.querySelector('#ycs-chat-btn');
+  if (chatBtn) {
+    chatBtn.classList.toggle('active', chatSearchPanelVisible);
+  }
+
   const subtitleBtn = embeddedTriggerButton.querySelector('#ycs-subtitle-btn');
   if (subtitleBtn) {
-    if (subtitlePanelVisible) {
-      subtitleBtn.classList.add('active');
-    } else {
-      subtitleBtn.classList.remove('active');
-    }
+    subtitleBtn.classList.toggle('active', subtitlePanelVisible);
   }
 }
 
@@ -1039,6 +1040,11 @@ function toggleChatSearchPanel() {
  * チャット検索パネルを表示
  */
 async function showChatSearchPanel() {
+  // 字幕パネルと排他（同一位置のため）
+  if (subtitlePanelVisible) {
+    hideSubtitlePanel();
+  }
+
   if (!chatSearchPanel) {
     createChatSearchPanel();
   }
@@ -1914,6 +1920,11 @@ function toggleSubtitlePanel() {
  * 字幕パネルを表示
  */
 async function showSubtitlePanel() {
+  // チャット検索パネルと排他（同一位置のため）
+  if (chatSearchPanelVisible) {
+    hideChatSearchPanel();
+  }
+
   if (!subtitlePanel) {
     createSubtitlePanel();
   }
@@ -2238,6 +2249,24 @@ async function fetchSubtitleContent(videoId) {
 
   if (!url) return;
 
+  // URL検証: YouTube/Google Videoドメインのみ許可
+  try {
+    const parsedUrl = new URL(url);
+    if (!parsedUrl.hostname.endsWith('.youtube.com') && !parsedUrl.hostname.endsWith('.googlevideo.com')
+        && parsedUrl.hostname !== 'youtube.com' && parsedUrl.hostname !== 'googlevideo.com') {
+      throw new Error('不正な字幕URLです');
+    }
+    if (parsedUrl.protocol !== 'https:') {
+      throw new Error('不正な字幕URLです');
+    }
+  } catch (e) {
+    if (statusEl) {
+      statusEl.textContent = 'エラー: ' + e.message;
+      statusEl.classList.remove('loading');
+    }
+    return;
+  }
+
   if (fetchBtn) fetchBtn.disabled = true;
   if (statusEl) {
     statusEl.textContent = '字幕を取得中...';
@@ -2301,7 +2330,7 @@ function renderSubtitleResults(subtitles) {
     return;
   }
 
-  const html = subtitles.map(sub => {
+  const html = subtitles.slice(0, 500).map(sub => {
     const sec = Math.floor(sub.start);
     const timeStr = formatSubtitleTime(sec);
     return `
@@ -4612,6 +4641,7 @@ function observePageChanges() {
       videoDuration = 0;
       detectedTimestamps = [];
       zoomIndex = 0;
+      currentSubtitles = [];
       if (isTranscribing) {
         stopTranscription();
       }
@@ -4633,6 +4663,7 @@ function observePageChanges() {
       videoDuration = 0;
       detectedTimestamps = []; // タイムスタンプもクリア
       zoomIndex = 0; // ズームレベルをリセット
+      currentSubtitles = []; // 字幕データをクリア
 
       // 文字起こし状態をリセット
       if (isTranscribing) {
