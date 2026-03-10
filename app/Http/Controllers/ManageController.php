@@ -91,7 +91,7 @@ class ManageController extends Controller
             abort(404, '指定された動画はアーカイブに登録されていません');
         }
 
-        $channel = Channel::where('channel_id', $archive->channel_id)->first();
+        $channel = $archive->channel;
         if (! $channel || ! $this->canAccessChannel($channel)) {
             abort(403, 'このチャンネルへのアクセス権限がありません');
         }
@@ -110,7 +110,7 @@ class ManageController extends Controller
     public function fetchSubtitles(Request $request)
     {
         $request->validate([
-            'video_id' => 'required|string|size:11',
+            'video_id' => ['required', 'string', 'size:11', 'regex:/^[A-Za-z0-9_-]{11}$/'],
             'lang' => ['nullable', 'string', 'regex:/^[a-zA-Z]{2,3}(-[a-zA-Z0-9]+)*$/', 'max:20'],
         ]);
 
@@ -149,7 +149,7 @@ class ManageController extends Controller
     public function fetchSubtitleTracks(Request $request)
     {
         $request->validate([
-            'video_id' => 'required|string|size:11',
+            'video_id' => ['required', 'string', 'size:11', 'regex:/^[A-Za-z0-9_-]{11}$/'],
         ]);
 
         $videoId = $request->input('video_id');

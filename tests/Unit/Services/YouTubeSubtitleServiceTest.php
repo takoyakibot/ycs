@@ -348,4 +348,90 @@ class YouTubeSubtitleServiceTest extends TestCase
 
         $this->service->getSubtitles('dQw4w9WgXcQ', 'ja');
     }
+
+    // ==========================================
+    // isAllowedSubtitleUrl() のテスト
+    // ==========================================
+
+    /**
+     * HTTPS YouTubeドメインは許可される
+     */
+    public function test_is_allowed_subtitle_url_accepts_youtube_https(): void
+    {
+        $method = new ReflectionMethod(YouTubeSubtitleService::class, 'isAllowedSubtitleUrl');
+        $method->setAccessible(true);
+
+        $this->assertTrue($method->invoke($this->service, 'https://www.youtube.com/api/timedtext?lang=ja'));
+        $this->assertTrue($method->invoke($this->service, 'https://youtube.com/api/timedtext?lang=ja'));
+        $this->assertTrue($method->invoke($this->service, 'https://www.googlevideo.com/subtitle'));
+        $this->assertTrue($method->invoke($this->service, 'https://googlevideo.com/subtitle'));
+    }
+
+    /**
+     * HTTPスキームは拒否される
+     */
+    public function test_is_allowed_subtitle_url_rejects_http(): void
+    {
+        $method = new ReflectionMethod(YouTubeSubtitleService::class, 'isAllowedSubtitleUrl');
+        $method->setAccessible(true);
+
+        $this->assertFalse($method->invoke($this->service, 'http://www.youtube.com/api/timedtext'));
+    }
+
+    /**
+     * 非許可スキーム（gopher, file等）は拒否される
+     */
+    public function test_is_allowed_subtitle_url_rejects_dangerous_schemes(): void
+    {
+        $method = new ReflectionMethod(YouTubeSubtitleService::class, 'isAllowedSubtitleUrl');
+        $method->setAccessible(true);
+
+        $this->assertFalse($method->invoke($this->service, 'gopher://www.youtube.com/'));
+        $this->assertFalse($method->invoke($this->service, 'file:///etc/passwd'));
+        $this->assertFalse($method->invoke($this->service, 'dict://www.youtube.com/'));
+    }
+
+    /**
+     * 非許可ドメインは拒否される
+     */
+    public function test_is_allowed_subtitle_url_rejects_unknown_hosts(): void
+    {
+        $method = new ReflectionMethod(YouTubeSubtitleService::class, 'isAllowedSubtitleUrl');
+        $method->setAccessible(true);
+
+        $this->assertFalse($method->invoke($this->service, 'https://evil.com/'));
+        $this->assertFalse($method->invoke($this->service, 'https://notyoutube.com/'));
+        $this->assertFalse($method->invoke($this->service, 'https://example.com/youtube.com'));
+    }
+
+    /**
+     * 不正なURLは拒否される
+     */
+    public function test_is_allowed_subtitle_url_rejects_invalid_urls(): void
+    {
+        $method = new ReflectionMethod(YouTubeSubtitleService::class, 'isAllowedSubtitleUrl');
+        $method->setAccessible(true);
+
+        $this->assertFalse($method->invoke($this->service, 'not-a-url'));
+        $this->assertFalse($method->invoke($this->service, ''));
+    }
+
+    // ==========================================
+    // callInnerTubePlayer() のテスト（レスポンス検証）
+    // ==========================================
+
+    /**
+     * 不正なJSONレスポンスで例外をスロー
+     */
+    public function test_call_innertube_player_throws_on_invalid_json(): void
+    {
+        Http::fake([
+            'www.youtube.com/youtubei/v1/player*' => Http::response('not json', 200),
+        ]);
+
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessage('YouTube字幕APIから不正なレスポンスが返されました');
+
+        $this->service->getCaptionTracks('dQw4w9WgXcQ');
+    }
 }

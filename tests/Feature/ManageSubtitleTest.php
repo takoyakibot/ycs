@@ -132,6 +132,25 @@ class ManageSubtitleTest extends TestCase
     }
 
     /**
+     * トラック取得でサービスエラー時は422を返す
+     */
+    public function test_fetch_subtitle_tracks_returns_422_on_service_error(): void
+    {
+        $mockService = Mockery::mock(YouTubeSubtitleService::class);
+        $mockService->shouldReceive('getCaptionTracks')
+            ->with('dQw4w9WgXcQ')
+            ->once()
+            ->andThrow(new \Exception('動画を取得できません: Video unavailable'));
+        $this->app->instance(YouTubeSubtitleService::class, $mockService);
+
+        $response = $this->actingAs($this->superAdmin)
+            ->getJson('/api/manage/archives/subtitle-tracks?video_id=dQw4w9WgXcQ');
+
+        $response->assertStatus(422)
+            ->assertJsonPath('message', '動画を取得できません: Video unavailable');
+    }
+
+    /**
      * 他のユーザーのチャンネルのアーカイブにはアクセスできない
      */
     public function test_fetch_subtitle_tracks_denied_for_other_user(): void
@@ -273,5 +292,27 @@ class ManageSubtitleTest extends TestCase
             ->getJson('/api/manage/archives/subtitles?video_id=dQw4w9WgXcQ');
 
         $response->assertStatus(403);
+    }
+
+    /**
+     * 不正なlangパラメータはバリデーションエラーになる
+     */
+    public function test_fetch_subtitles_rejects_invalid_lang(): void
+    {
+        $response = $this->actingAs($this->superAdmin)
+            ->getJson('/api/manage/archives/subtitles?video_id=dQw4w9WgXcQ&lang=../../etc');
+
+        $response->assertStatus(422);
+    }
+
+    /**
+     * 不正なvideo_idはバリデーションエラーになる
+     */
+    public function test_fetch_subtitles_rejects_invalid_video_id(): void
+    {
+        $response = $this->actingAs($this->superAdmin)
+            ->getJson('/api/manage/archives/subtitles?video_id=abc<script>');
+
+        $response->assertStatus(422);
     }
 }

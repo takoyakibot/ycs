@@ -136,6 +136,11 @@ class YouTubeSubtitleService
      */
     private function isAllowedSubtitleUrl(string $url): bool
     {
+        $scheme = parse_url($url, PHP_URL_SCHEME);
+        if ($scheme !== 'https') {
+            return false;
+        }
+
         $host = parse_url($url, PHP_URL_HOST);
         if ($host === false || $host === null) {
             return false;
@@ -187,7 +192,12 @@ class YouTubeSubtitleService
             throw new Exception("YouTube字幕APIへの通信に失敗しました（HTTP {$response->status()}）");
         }
 
-        return $response->json();
+        $data = $response->json();
+        if (! is_array($data)) {
+            throw new Exception('YouTube字幕APIから不正なレスポンスが返されました');
+        }
+
+        return $data;
     }
 
     /**
