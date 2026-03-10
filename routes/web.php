@@ -68,6 +68,14 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::get('api/manage/channels/{id}/cover-songs/preview', [ManageSettingsApiController::class, 'previewCoverSongs'])->name('manage.previewCoverSongs');
     Route::post('api/manage/channels/{id}/cover-songs/reprocess', [ManageSettingsApiController::class, 'reprocessCoverSongs'])->name('manage.reprocessCoverSongs');
 
+    // 字幕取得API
+    Route::get('api/manage/archives/subtitle-tracks', [ManageController::class, 'fetchSubtitleTracks'])
+        ->name('manage.fetchSubtitleTracks')
+        ->middleware('throttle:10,1'); // 1分間に10回まで
+    Route::get('api/manage/archives/subtitles', [ManageController::class, 'fetchSubtitles'])
+        ->name('manage.fetchSubtitles')
+        ->middleware('throttle:10,1'); // 1分間に10回まで
+
     // 楽曲マスタAPI
     Route::get('api/songs/timestamps', [SongController::class, 'fetchTimestamps'])->name('songs.fetchTimestamps');
     Route::get('api/songs', [SongController::class, 'fetchSongs'])->name('songs.fetchSongs');
