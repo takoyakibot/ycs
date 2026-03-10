@@ -76,7 +76,8 @@ class ManageSubtitleTest extends TestCase
         $response->assertStatus(200)
             ->assertJsonPath('video_id', 'dQw4w9WgXcQ')
             ->assertJsonCount(1, 'tracks')
-            ->assertJsonPath('tracks.0.languageCode', 'ja');
+            ->assertJsonPath('tracks.0.languageCode', 'ja')
+            ->assertJsonMissingPath('tracks.0.baseUrl');
     }
 
     /**

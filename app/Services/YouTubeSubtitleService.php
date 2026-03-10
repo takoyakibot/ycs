@@ -160,8 +160,6 @@ class YouTubeSubtitleService
      */
     private function callInnerTubePlayer(string $videoId): array
     {
-        $alreadyHandled = false;
-
         try {
             $response = Http::withHeaders([
                 'Content-Type' => 'application/json',
@@ -177,24 +175,19 @@ class YouTubeSubtitleService
                     ],
                     'videoId' => $videoId,
                 ]);
-
-            if (! $response->successful()) {
-                $alreadyHandled = true;
-                throw new Exception("YouTube字幕APIへの通信に失敗しました（HTTP {$response->status()}）");
-            }
-
-            return $response->json();
         } catch (Exception $e) {
-            if ($alreadyHandled) {
-                throw $e;
-            }
-
             Log::error('YouTubeSubtitleService: InnerTube API通信エラー', [
                 'video_id' => $videoId,
                 'error' => $e->getMessage(),
             ]);
             throw new Exception('YouTube字幕APIへの通信に失敗しました');
         }
+
+        if (! $response->successful()) {
+            throw new Exception("YouTube字幕APIへの通信に失敗しました（HTTP {$response->status()}）");
+        }
+
+        return $response->json();
     }
 
     /**
@@ -215,36 +208,24 @@ class YouTubeSubtitleService
             throw new Exception('字幕URLが不正です');
         }
 
-        $alreadyHandled = false;
-
         try {
             $response = Http::withHeaders([
                 'User-Agent' => self::USER_AGENT,
             ])
                 ->timeout(self::HTTP_TIMEOUT)
                 ->get($url);
-
-            if (! $response->successful()) {
-                $alreadyHandled = true;
-                throw new Exception("字幕データの取得に失敗しました（HTTP {$response->status()}）");
-            }
-
-            return $this->parseSubtitleXml($response->body());
         } catch (Exception $e) {
-            if ($alreadyHandled) {
-                throw $e;
-            }
-
-            // parseSubtitleXmlからの例外はそのまま伝播
-            if (str_starts_with($e->getMessage(), '字幕XMLのパースに失敗しました')) {
-                throw $e;
-            }
-
             Log::error('YouTubeSubtitleService: 字幕XML取得エラー', [
                 'error' => $e->getMessage(),
             ]);
             throw new Exception('字幕データの取得に失敗しました');
         }
+
+        if (! $response->successful()) {
+            throw new Exception("字幕データの取得に失敗しました（HTTP {$response->status()}）");
+        }
+
+        return $this->parseSubtitleXml($response->body());
     }
 
     /**

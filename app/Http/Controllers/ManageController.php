@@ -159,6 +159,13 @@ class ManageController extends Controller
         try {
             $tracks = $this->youtubeSubtitleService->getCaptionTracks($videoId);
 
+            // 内部URLをクライアントに公開しない
+            $tracks = array_map(function ($track) {
+                unset($track['baseUrl']);
+
+                return $track;
+            }, $tracks);
+
             return response()->json([
                 'video_id' => $videoId,
                 'tracks' => $tracks,
