@@ -70,6 +70,10 @@ const CHAT_DB_VERSION = 1;
 const CHAT_STORE_NAME = 'chats';
 const CHAT_MAX_AGE_DAYS = 30; // 30日以上前のデータは削除
 
+// 字幕取得用
+let subtitlePanel = null;
+let subtitlePanelVisible = false;
+
 /**
  * 埋め込みUI設定を読み込む
  */
@@ -136,10 +140,14 @@ function createEmbeddedTriggerButton() {
       #ycs-chat-btn {
         font-size: 14px;
       }
+      #ycs-subtitle-btn {
+        font-size: 14px;
+      }
     </style>
     <button class="ycs-btn" id="ycs-trigger-btn" title="タイムスタンプ検出グラフを表示/非表示">YCS</button>
     <button class="ycs-btn" id="ycs-list-btn" title="リストスキャンパネルを開く">☰</button>
     <button class="ycs-btn" id="ycs-chat-btn" title="チャット検索パネルを開く">💬</button>
+    <button class="ycs-btn" id="ycs-subtitle-btn" title="字幕取得パネルを開く">📝</button>
   `;
 
   document.body.appendChild(buttonContainer);
@@ -158,6 +166,11 @@ function createEmbeddedTriggerButton() {
   // チャット検索ボタンのイベント
   buttonContainer.querySelector('#ycs-chat-btn').addEventListener('click', () => {
     toggleChatSearchPanel();
+  });
+
+  // 字幕取得ボタンのイベント
+  buttonContainer.querySelector('#ycs-subtitle-btn').addEventListener('click', () => {
+    toggleSubtitlePanel();
   });
 
   updateTriggerButtonState();
@@ -203,6 +216,15 @@ function updateTriggerButtonState() {
       listBtn.classList.add('active');
     } else {
       listBtn.classList.remove('active');
+    }
+  }
+
+  const subtitleBtn = embeddedTriggerButton.querySelector('#ycs-subtitle-btn');
+  if (subtitleBtn) {
+    if (subtitlePanelVisible) {
+      subtitleBtn.classList.add('active');
+    } else {
+      subtitleBtn.classList.remove('active');
     }
   }
 }
@@ -1872,6 +1894,449 @@ async function cleanupOldChatData() {
 
 // 起動時に古いデータをクリーンアップ
 setTimeout(cleanupOldChatData, 5000);
+
+// ==========================================
+// 字幕取得機能
+// ==========================================
+
+/**
+ * 字幕パネルを表示/非表示トグル
+ */
+function toggleSubtitlePanel() {
+  if (subtitlePanelVisible) {
+    hideSubtitlePanel();
+  } else {
+    showSubtitlePanel();
+  }
+}
+
+/**
+ * 字幕パネルを表示
+ */
+async function showSubtitlePanel() {
+  if (!subtitlePanel) {
+    createSubtitlePanel();
+  }
+  subtitlePanel.classList.add('visible');
+  subtitlePanelVisible = true;
+  updateTriggerButtonState();
+
+  // 字幕トラックを自動取得
+  const videoId = getVideoId();
+  if (videoId) {
+    await fetchSubtitleTracks(videoId);
+  }
+}
+
+/**
+ * 字幕パネルを非表示
+ */
+function hideSubtitlePanel() {
+  if (subtitlePanel) {
+    subtitlePanel.classList.remove('visible');
+  }
+  subtitlePanelVisible = false;
+  updateTriggerButtonState();
+}
+
+/**
+ * 字幕パネルを作成
+ */
+function createSubtitlePanel() {
+  if (subtitlePanel) return;
+
+  subtitlePanel = document.createElement('div');
+  subtitlePanel.id = 'ycs-subtitle-panel';
+  subtitlePanel.innerHTML = `
+    <style>
+      #ycs-subtitle-panel {
+        position: fixed;
+        bottom: 140px;
+        right: 70px;
+        z-index: 9997;
+        width: 400px;
+        max-height: 550px;
+        background: rgba(20, 20, 20, 0.95);
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+        font-family: 'Segoe UI', 'Hiragino Sans', sans-serif;
+        font-size: 13px;
+        color: #fff;
+        display: none;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      #ycs-subtitle-panel.visible {
+        display: flex !important;
+      }
+      .stp-header {
+        padding: 12px 16px;
+        background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .stp-header-title {
+        font-weight: 600;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .stp-close-btn {
+        background: rgba(255,255,255,0.2);
+        border: none;
+        color: white;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        cursor: pointer;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .stp-close-btn:hover {
+        background: rgba(255,255,255,0.3);
+      }
+      .stp-content {
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        overflow-y: auto;
+        max-height: 460px;
+      }
+      .stp-controls {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .stp-lang-select {
+        flex: 1;
+        background: #333;
+        border: 1px solid #444;
+        border-radius: 6px;
+        color: #fff;
+        padding: 6px 10px;
+        font-size: 12px;
+      }
+      .stp-btn {
+        padding: 6px 14px;
+        border: none;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .stp-btn-primary {
+        background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
+        color: white;
+      }
+      .stp-btn-primary:hover {
+        filter: brightness(1.1);
+      }
+      .stp-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .stp-search-row {
+        display: flex;
+        gap: 8px;
+      }
+      .stp-search-input {
+        flex: 1;
+        background: #333;
+        border: 1px solid #444;
+        border-radius: 6px;
+        color: #fff;
+        padding: 6px 10px;
+        font-size: 12px;
+      }
+      .stp-search-input::placeholder {
+        color: #888;
+      }
+      .stp-status {
+        font-size: 12px;
+        color: #888;
+        text-align: center;
+        padding: 4px;
+      }
+      .stp-status.loading {
+        color: #a78bfa;
+      }
+      .stp-results {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        max-height: 340px;
+        overflow-y: auto;
+      }
+      .stp-result-item {
+        display: flex;
+        gap: 8px;
+        padding: 6px 8px;
+        background: #2a2a2a;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background 0.2s;
+        align-items: flex-start;
+      }
+      .stp-result-item:hover {
+        background: #3a3a3a;
+      }
+      .stp-result-time {
+        color: #a78bfa;
+        font-family: monospace;
+        font-size: 11px;
+        flex-shrink: 0;
+        width: 58px;
+        text-align: right;
+      }
+      .stp-result-text {
+        flex: 1;
+        font-size: 12px;
+        color: #ddd;
+        line-height: 1.4;
+      }
+      .stp-empty {
+        text-align: center;
+        color: #888;
+        padding: 20px;
+        font-size: 12px;
+      }
+    </style>
+    <div class="stp-header">
+      <span class="stp-header-title">📝 字幕取得</span>
+      <button class="stp-close-btn" id="stp-close-btn">×</button>
+    </div>
+    <div class="stp-content">
+      <div class="stp-controls">
+        <select class="stp-lang-select" id="stp-lang-select">
+          <option value="">字幕トラックを読み込み中...</option>
+        </select>
+        <button class="stp-btn stp-btn-primary" id="stp-fetch-btn" disabled>取得</button>
+      </div>
+      <div class="stp-search-row">
+        <input type="text" class="stp-search-input" id="stp-search-input" placeholder="字幕内を検索...">
+      </div>
+      <div class="stp-status" id="stp-status">字幕トラックを読み込み中...</div>
+      <div class="stp-results" id="stp-results">
+        <div class="stp-empty">字幕がここに表示されます</div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(subtitlePanel);
+
+  // イベントリスナー設定
+  subtitlePanel.querySelector('#stp-close-btn').addEventListener('click', hideSubtitlePanel);
+  subtitlePanel.querySelector('#stp-fetch-btn').addEventListener('click', () => {
+    const videoId = getVideoId();
+    if (videoId) fetchSubtitleContent(videoId);
+  });
+  subtitlePanel.querySelector('#stp-search-input').addEventListener('input', filterSubtitleResults);
+}
+
+// 現在表示中の字幕データ（フィルタ用に保持）
+let currentSubtitles = [];
+
+/**
+ * InnerTube APIから字幕トラック一覧を取得
+ */
+async function fetchSubtitleTracks(videoId) {
+  const statusEl = subtitlePanel?.querySelector('#stp-status');
+  const selectEl = subtitlePanel?.querySelector('#stp-lang-select');
+  const fetchBtn = subtitlePanel?.querySelector('#stp-fetch-btn');
+
+  if (statusEl) {
+    statusEl.textContent = '字幕トラックを読み込み中...';
+    statusEl.classList.add('loading');
+  }
+
+  try {
+    const response = await fetch('https://www.youtube.com/youtubei/v1/player?prettyPrint=false', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        context: {
+          client: {
+            clientName: 'WEB',
+            clientVersion: '2.20240101.00.00'
+          }
+        },
+        videoId: videoId
+      })
+    });
+
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+
+    const playabilityStatus = data?.playabilityStatus?.status;
+    if (playabilityStatus !== 'OK') {
+      const reason = data?.playabilityStatus?.reason || '不明なエラー';
+      throw new Error(`動画を取得できません: ${reason}`);
+    }
+
+    const captionTracks = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
+
+    if (selectEl) {
+      if (captionTracks.length === 0) {
+        selectEl.innerHTML = '<option value="">字幕がありません</option>';
+        if (fetchBtn) fetchBtn.disabled = true;
+        if (statusEl) {
+          statusEl.textContent = 'この動画には字幕がありません';
+          statusEl.classList.remove('loading');
+        }
+        return;
+      }
+
+      selectEl.innerHTML = captionTracks.map(track => {
+        const lang = track.languageCode || '';
+        const name = track.name?.simpleText || lang;
+        const kind = track.kind === 'asr' ? ' (自動生成)' : '';
+        const url = track.baseUrl || '';
+        return `<option value="${escapeHtml(url)}" data-lang="${escapeHtml(lang)}">${escapeHtml(name)}${kind}</option>`;
+      }).join('');
+
+      // 日本語を優先選択
+      const jaOption = selectEl.querySelector('option[data-lang="ja"]');
+      if (jaOption) jaOption.selected = true;
+
+      if (fetchBtn) fetchBtn.disabled = false;
+    }
+
+    if (statusEl) {
+      statusEl.textContent = `${captionTracks.length}件の字幕トラックが見つかりました`;
+      statusEl.classList.remove('loading');
+    }
+
+    // トラックが見つかったら自動で字幕を取得
+    await fetchSubtitleContent(videoId);
+  } catch (error) {
+    console.error('字幕トラック取得エラー:', error);
+    if (statusEl) {
+      statusEl.textContent = 'エラー: ' + error.message;
+      statusEl.classList.remove('loading');
+    }
+    if (selectEl) {
+      selectEl.innerHTML = '<option value="">取得エラー</option>';
+    }
+    if (fetchBtn) fetchBtn.disabled = true;
+  }
+}
+
+/**
+ * 選択された字幕トラックの内容を取得
+ */
+async function fetchSubtitleContent(videoId) {
+  const selectEl = subtitlePanel?.querySelector('#stp-lang-select');
+  const statusEl = subtitlePanel?.querySelector('#stp-status');
+  const fetchBtn = subtitlePanel?.querySelector('#stp-fetch-btn');
+  const url = selectEl?.value;
+
+  if (!url) return;
+
+  if (fetchBtn) fetchBtn.disabled = true;
+  if (statusEl) {
+    statusEl.textContent = '字幕を取得中...';
+    statusEl.classList.add('loading');
+  }
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    const xmlText = await response.text();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(xmlText, 'text/xml');
+
+    const textElements = doc.querySelectorAll('text');
+    currentSubtitles = Array.from(textElements).map(el => ({
+      start: parseFloat(el.getAttribute('start') || '0'),
+      duration: parseFloat(el.getAttribute('dur') || '0'),
+      text: el.textContent || ''
+    }));
+
+    if (statusEl) {
+      statusEl.textContent = `${currentSubtitles.length}件の字幕を取得しました`;
+      statusEl.classList.remove('loading');
+    }
+
+    renderSubtitleResults(currentSubtitles);
+  } catch (error) {
+    console.error('字幕取得エラー:', error);
+    if (statusEl) {
+      statusEl.textContent = 'エラー: ' + error.message;
+      statusEl.classList.remove('loading');
+    }
+  } finally {
+    if (fetchBtn) fetchBtn.disabled = false;
+  }
+}
+
+/**
+ * 字幕検索フィルター
+ */
+function filterSubtitleResults() {
+  const query = subtitlePanel?.querySelector('#stp-search-input')?.value?.trim().toLowerCase() || '';
+  if (!query) {
+    renderSubtitleResults(currentSubtitles);
+    return;
+  }
+  const filtered = currentSubtitles.filter(sub => sub.text.toLowerCase().includes(query));
+  renderSubtitleResults(filtered);
+}
+
+/**
+ * 字幕結果を描画
+ */
+function renderSubtitleResults(subtitles) {
+  const resultsEl = subtitlePanel?.querySelector('#stp-results');
+  if (!resultsEl) return;
+
+  if (subtitles.length === 0) {
+    resultsEl.innerHTML = '<div class="stp-empty">字幕がありません</div>';
+    return;
+  }
+
+  const html = subtitles.map(sub => {
+    const sec = Math.floor(sub.start);
+    const timeStr = formatSubtitleTime(sec);
+    return `
+      <div class="stp-result-item" data-time="${sec}">
+        <span class="stp-result-time">${timeStr}</span>
+        <span class="stp-result-text">${escapeHtml(sub.text)}</span>
+      </div>
+    `;
+  }).join('');
+
+  resultsEl.innerHTML = html;
+
+  // クリックでシーク
+  resultsEl.querySelectorAll('.stp-result-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const time = parseInt(item.dataset.time);
+      if (videoElement && !isNaN(time)) {
+        videoElement.currentTime = time;
+      }
+    });
+  });
+}
+
+/**
+ * 秒数をH:MM:SS形式にフォーマット
+ */
+function formatSubtitleTime(totalSeconds) {
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  if (h > 0) {
+    return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  }
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
 
 /**
  * 現在の動画IDを取得
