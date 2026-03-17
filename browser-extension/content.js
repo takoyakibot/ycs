@@ -2164,54 +2164,46 @@ function createSubtitlePanel() {
 let currentSubtitles = [];
 
 /**
- * 動画ページのHTMLからytInitialPlayerResponseの字幕データを取得
- * YouTubeはSPA遷移するため、現在のDOMのscriptタグには最新の動画データがない場合がある。
- * そのため動画ページを直接fetchしてHTMLからパースする。
- * fetchにはユーザーのCookieが含まれるため、ログイン状態が反映される。
+ * ページコンテキストのytInitialPlayerResponseから字幕トラックを取得
+ * content scriptはページのJS名前空間にアクセスできないため、
+ * page-bridge.jsをページに注入してwindow.postMessageで通信する。
  */
-async function getCaptionTracksFromPage(videoId) {
-  const response = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
-    credentials: 'include'
+let pageBridgeReady = null;
+function ensurePageBridge() {
+  if (pageBridgeReady) return pageBridgeReady;
+  pageBridgeReady = new Promise((resolve) => {
+    const script = document.createElement('script');
+    script.src = chrome.runtime.getURL('page-bridge.js');
+    script.onload = () => { script.remove(); resolve(); };
+    document.documentElement.appendChild(script);
   });
-  if (!response.ok) throw new Error(`ページ取得失敗: HTTP ${response.status}`);
+  return pageBridgeReady;
+}
 
-  const html = await response.text();
+async function getCaptionTracksFromPage() {
+  await ensurePageBridge();
 
-  // ytInitialPlayerResponse の開始位置を見つけ、ブレースカウントでJSON全体を抽出
-  const marker = 'ytInitialPlayerResponse';
-  const markerIdx = html.indexOf(marker);
-  if (markerIdx === -1) {
-    throw new Error('字幕データを取得できませんでした（playerResponse not found）');
-  }
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      window.removeEventListener('message', handler);
+      reject(new Error('字幕データの取得がタイムアウトしました'));
+    }, 5000);
 
-  const jsonStart = html.indexOf('{', markerIdx);
-  if (jsonStart === -1) {
-    throw new Error('字幕データを取得できませんでした（JSON start not found）');
-  }
+    function handler(event) {
+      if (event.source !== window || event.data?.type !== 'YCS_CAPTION_TRACKS_RESPONSE') return;
+      window.removeEventListener('message', handler);
+      clearTimeout(timeout);
 
-  // ブレースカウントで対応する閉じ括弧を探す
-  let depth = 0;
-  let jsonEnd = -1;
-  for (let i = jsonStart; i < html.length; i++) {
-    if (html[i] === '{') depth++;
-    else if (html[i] === '}') depth--;
-    if (depth === 0) {
-      jsonEnd = i + 1;
-      break;
+      if (event.data.playabilityStatus !== 'OK') {
+        reject(new Error('動画を取得できません。動画が非公開・削除済み、または年齢制限がある可能性があります'));
+        return;
+      }
+      resolve(event.data.tracks);
     }
-  }
 
-  if (jsonEnd === -1) {
-    throw new Error('字幕データを取得できませんでした（JSON end not found）');
-  }
-
-  const playerResponse = JSON.parse(html.substring(jsonStart, jsonEnd));
-  const playability = playerResponse?.playabilityStatus?.status;
-  if (playability !== 'OK') {
-    throw new Error('動画を取得できません。動画が非公開・削除済み、または年齢制限がある可能性があります');
-  }
-
-  return playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
+    window.addEventListener('message', handler);
+    window.postMessage({ type: 'YCS_GET_CAPTION_TRACKS' }, '*');
+  });
 }
 
 // ブラウザ拡張はYouTubeページ上のcontent scriptとして動作するため、
@@ -2228,8 +2220,8 @@ async function fetchSubtitleTracks(videoId) {
   }
 
   try {
-    // 動画ページのHTMLから字幕トラックデータを取得
-    const captionTracks = await getCaptionTracksFromPage(videoId);
+    // ページコンテキストのytInitialPlayerResponseから字幕トラックデータを取得
+    const captionTracks = await getCaptionTracksFromPage();
 
     if (selectEl) {
       if (captionTracks.length === 0) {
@@ -2242,16 +2234,18 @@ async function fetchSubtitleTracks(videoId) {
         return;
       }
 
-      selectEl.innerHTML = captionTracks.map(track => {
-        const lang = track.languageCode || '';
-        const name = track.name?.simpleText || lang;
-        const kind = track.kind === 'asr' ? ' (自動生成)' : '';
-        const url = track.baseUrl || '';
-        return `<option value="${escapeHtml(url)}" data-lang="${escapeHtml(lang)}">${escapeHtml(name)}${kind}</option>`;
-      }).join('');
+      selectEl.innerHTML = '';
+      let jaOption = null;
+      captionTracks.forEach(track => {
+        const option = document.createElement('option');
+        option.value = track.languageCode || '';
+        option.dataset.lang = track.languageCode || '';
+        option.textContent = (track.name || track.languageCode || '') + (track.kind === 'asr' ? ' (自動生成)' : '');
+        selectEl.appendChild(option);
+        if (track.languageCode === 'ja' && !jaOption) jaOption = option;
+      });
 
       // 日本語を優先選択
-      const jaOption = selectEl.querySelector('option[data-lang="ja"]');
       if (jaOption) jaOption.selected = true;
 
       if (fetchBtn) fetchBtn.disabled = false;
@@ -2281,30 +2275,10 @@ async function fetchSubtitleTracks(videoId) {
  * 選択された字幕トラックの内容を取得
  */
 async function fetchSubtitleContent(videoId) {
-  const selectEl = subtitlePanel?.querySelector('#stp-lang-select');
   const statusEl = subtitlePanel?.querySelector('#stp-status');
   const fetchBtn = subtitlePanel?.querySelector('#stp-fetch-btn');
-  const url = selectEl?.value;
 
-  if (!url) return;
-
-  // URL検証: YouTube/Google Videoドメインのみ許可
-  try {
-    const parsedUrl = new URL(url);
-    if (!parsedUrl.hostname.endsWith('.youtube.com') && !parsedUrl.hostname.endsWith('.googlevideo.com')
-        && parsedUrl.hostname !== 'youtube.com' && parsedUrl.hostname !== 'googlevideo.com') {
-      throw new Error('不正な字幕URLです');
-    }
-    if (parsedUrl.protocol !== 'https:') {
-      throw new Error('不正な字幕URLです');
-    }
-  } catch (e) {
-    if (statusEl) {
-      statusEl.textContent = 'エラー: ' + e.message;
-      statusEl.classList.remove('loading');
-    }
-    return;
-  }
+  if (!videoId) return;
 
   if (fetchBtn) fetchBtn.disabled = true;
   if (statusEl) {
@@ -2313,21 +2287,27 @@ async function fetchSubtitleContent(videoId) {
   }
 
   try {
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    // get_transcript API経由で字幕を取得（timedtext APIのbaseUrlは空を返すため）
+    currentSubtitles = await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        window.removeEventListener('message', handler);
+        reject(new Error('字幕データの取得がタイムアウトしました'));
+      }, 10000);
 
-    const xmlText = await response.text();
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(xmlText, 'text/xml');
+      function handler(event) {
+        if (event.source !== window || event.data?.type !== 'YCS_TRANSCRIPT_RESPONSE') return;
+        window.removeEventListener('message', handler);
+        clearTimeout(timeout);
+        if (event.data.error) {
+          reject(new Error(event.data.error));
+        } else {
+          resolve(event.data.segments);
+        }
+      }
 
-    const textElements = doc.querySelectorAll('text');
-    // el.textContentはXMLパーサーがエンティティを解決済みだが、
-    // YouTubeの字幕XMLは二重エンコードされている場合があるためデコードを追加
-    currentSubtitles = Array.from(textElements).map(el => ({
-      start: parseFloat(el.getAttribute('start') || '0'),
-      duration: parseFloat(el.getAttribute('dur') || '0'),
-      text: decodeHtmlEntities(el.textContent || '')
-    }));
+      window.addEventListener('message', handler);
+      window.postMessage({ type: 'YCS_GET_TRANSCRIPT', videoId }, '*');
+    });
 
     if (statusEl) {
       statusEl.textContent = `${currentSubtitles.length}件の字幕を取得しました`;
@@ -3622,15 +3602,8 @@ function insertVolumeGraph() {
     // #below（動画の下のコンテンツセクション）の先頭に挿入
     // #player-containerはabsolute positionのため、そこに挿入すると動画に重なる
     const belowContainer = document.querySelector('ytd-watch-flexy #below');
-    console.log('insertVolumeGraph: belowContainer=', belowContainer?.id, 'already exists=', !!document.getElementById('volume-dynamics-graph'));
     if (belowContainer && !document.getElementById('volume-dynamics-graph')) {
       belowContainer.insertBefore(volumeGraphContainer, belowContainer.firstChild);
-      console.log('グラフを挿入しました:', {
-        parent: belowContainer.id,
-        inserted: volumeGraphContainer.id,
-        computedDisplay: getComputedStyle(volumeGraphContainer).display,
-        classList: volumeGraphContainer.className
-      });
       resizeCanvas();
       return true;
     }
