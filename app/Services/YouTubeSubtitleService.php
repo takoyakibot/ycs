@@ -51,7 +51,12 @@ class YouTubeSubtitleService
         $playabilityStatus = $response['playabilityStatus']['status'] ?? null;
         if ($playabilityStatus !== 'OK') {
             $reason = $response['playabilityStatus']['reason'] ?? '不明なエラー';
-            throw new Exception("動画を取得できません: {$reason}");
+            Log::warning('YouTubeSubtitleService: 動画再生不可', [
+                'video_id' => $videoId,
+                'status' => $playabilityStatus,
+                'reason' => $reason,
+            ]);
+            throw new Exception('動画を取得できません。動画が非公開・削除済み、または年齢制限がある可能性があります');
         }
 
         $captionTracks = $response['captions']['playerCaptionsTracklistRenderer']['captionTracks'] ?? [];

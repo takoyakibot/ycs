@@ -137,7 +137,7 @@ class ManageController extends Controller
 
             return response()->json([
                 'message' => $e->getMessage(),
-            ], 422);
+            ], 502);
         }
     }
 
@@ -178,7 +178,7 @@ class ManageController extends Controller
 
             return response()->json([
                 'message' => $e->getMessage(),
-            ], 422);
+            ], 502);
         }
     }
 }

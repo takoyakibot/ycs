@@ -132,22 +132,22 @@ class ManageSubtitleTest extends TestCase
     }
 
     /**
-     * トラック取得でサービスエラー時は422を返す
+     * トラック取得でサービスエラー時は502を返す
      */
-    public function test_fetch_subtitle_tracks_returns_422_on_service_error(): void
+    public function test_fetch_subtitle_tracks_returns_502_on_service_error(): void
     {
         $mockService = Mockery::mock(YouTubeSubtitleService::class);
         $mockService->shouldReceive('getCaptionTracks')
             ->with('dQw4w9WgXcQ')
             ->once()
-            ->andThrow(new \Exception('動画を取得できません: Video unavailable'));
+            ->andThrow(new \Exception('動画を取得できません。動画が非公開・削除済み、または年齢制限がある可能性があります'));
         $this->app->instance(YouTubeSubtitleService::class, $mockService);
 
         $response = $this->actingAs($this->superAdmin)
             ->getJson('/api/manage/archives/subtitle-tracks?video_id=dQw4w9WgXcQ');
 
-        $response->assertStatus(422)
-            ->assertJsonPath('message', '動画を取得できません: Video unavailable');
+        $response->assertStatus(502)
+            ->assertJsonPath('message', '動画を取得できません。動画が非公開・削除済み、または年齢制限がある可能性があります');
     }
 
     /**
@@ -249,9 +249,9 @@ class ManageSubtitleTest extends TestCase
     }
 
     /**
-     * 字幕取得エラー時は422を返す
+     * 字幕取得エラー時は502を返す
      */
-    public function test_fetch_subtitles_returns_422_on_service_error(): void
+    public function test_fetch_subtitles_returns_502_on_service_error(): void
     {
         $mockService = Mockery::mock(YouTubeSubtitleService::class);
         $mockService->shouldReceive('getSubtitles')
@@ -263,7 +263,7 @@ class ManageSubtitleTest extends TestCase
         $response = $this->actingAs($this->superAdmin)
             ->getJson('/api/manage/archives/subtitles?video_id=dQw4w9WgXcQ');
 
-        $response->assertStatus(422)
+        $response->assertStatus(502)
             ->assertJsonPath('message', 'この動画には字幕がありません');
     }
 

@@ -1812,6 +1812,16 @@ function escapeHtml(text) {
 }
 
 /**
+ * HTMLエンティティをデコード（字幕XMLの二重エンコード対策）
+ */
+function decodeHtmlEntities(text) {
+  if (!text) return '';
+  const textarea = document.createElement('textarea');
+  textarea.innerHTML = text;
+  return textarea.value;
+}
+
+/**
  * 動画のチャットデータを削除
  */
 async function clearChatDataForVideo() {
@@ -2156,6 +2166,9 @@ let currentSubtitles = [];
 /**
  * InnerTube APIから字幕トラック一覧を取得
  */
+// ブラウザ拡張はYouTubeページ上のcontent scriptとして動作するため、
+// InnerTube APIを直接呼び出す設計としている（サーバーサイドAPI経由ではない）。
+// サーバーサイドのSubtitle APIは管理画面からの利用を想定。
 async function fetchSubtitleTracks(videoId) {
   const statusEl = subtitlePanel?.querySelector('#stp-status');
   const selectEl = subtitlePanel?.querySelector('#stp-lang-select');
@@ -2282,10 +2295,12 @@ async function fetchSubtitleContent(videoId) {
     const doc = parser.parseFromString(xmlText, 'text/xml');
 
     const textElements = doc.querySelectorAll('text');
+    // el.textContentはXMLパーサーがエンティティを解決済みだが、
+    // YouTubeの字幕XMLは二重エンコードされている場合があるためデコードを追加
     currentSubtitles = Array.from(textElements).map(el => ({
       start: parseFloat(el.getAttribute('start') || '0'),
       duration: parseFloat(el.getAttribute('dur') || '0'),
-      text: el.textContent || ''
+      text: decodeHtmlEntities(el.textContent || '')
     }));
 
     if (statusEl) {
