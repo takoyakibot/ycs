@@ -2164,10 +2164,58 @@ function createSubtitlePanel() {
 let currentSubtitles = [];
 
 /**
- * InnerTube APIから字幕トラック一覧を取得
+ * 動画ページのHTMLからytInitialPlayerResponseの字幕データを取得
+ * YouTubeはSPA遷移するため、現在のDOMのscriptタグには最新の動画データがない場合がある。
+ * そのため動画ページを直接fetchしてHTMLからパースする。
+ * fetchにはユーザーのCookieが含まれるため、ログイン状態が反映される。
  */
+async function getCaptionTracksFromPage(videoId) {
+  const response = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+    credentials: 'include'
+  });
+  if (!response.ok) throw new Error(`ページ取得失敗: HTTP ${response.status}`);
+
+  const html = await response.text();
+
+  // ytInitialPlayerResponse の開始位置を見つけ、ブレースカウントでJSON全体を抽出
+  const marker = 'ytInitialPlayerResponse';
+  const markerIdx = html.indexOf(marker);
+  if (markerIdx === -1) {
+    throw new Error('字幕データを取得できませんでした（playerResponse not found）');
+  }
+
+  const jsonStart = html.indexOf('{', markerIdx);
+  if (jsonStart === -1) {
+    throw new Error('字幕データを取得できませんでした（JSON start not found）');
+  }
+
+  // ブレースカウントで対応する閉じ括弧を探す
+  let depth = 0;
+  let jsonEnd = -1;
+  for (let i = jsonStart; i < html.length; i++) {
+    if (html[i] === '{') depth++;
+    else if (html[i] === '}') depth--;
+    if (depth === 0) {
+      jsonEnd = i + 1;
+      break;
+    }
+  }
+
+  if (jsonEnd === -1) {
+    throw new Error('字幕データを取得できませんでした（JSON end not found）');
+  }
+
+  const playerResponse = JSON.parse(html.substring(jsonStart, jsonEnd));
+  const playability = playerResponse?.playabilityStatus?.status;
+  if (playability !== 'OK') {
+    throw new Error('動画を取得できません。動画が非公開・削除済み、または年齢制限がある可能性があります');
+  }
+
+  return playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
+}
+
 // ブラウザ拡張はYouTubeページ上のcontent scriptとして動作するため、
-// InnerTube APIを直接呼び出す設計としている（サーバーサイドAPI経由ではない）。
+// ページ埋め込みデータから字幕トラックを取得する設計としている。
 // サーバーサイドのSubtitle APIは管理画面からの利用を想定。
 async function fetchSubtitleTracks(videoId) {
   const statusEl = subtitlePanel?.querySelector('#stp-status');
@@ -2180,30 +2228,8 @@ async function fetchSubtitleTracks(videoId) {
   }
 
   try {
-    const response = await fetch('https://www.youtube.com/youtubei/v1/player?prettyPrint=false', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        context: {
-          client: {
-            clientName: 'WEB',
-            clientVersion: '2.20240101.00.00'
-          }
-        },
-        videoId: videoId
-      })
-    });
-
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const data = await response.json();
-
-    const playabilityStatus = data?.playabilityStatus?.status;
-    if (playabilityStatus !== 'OK') {
-      const reason = data?.playabilityStatus?.reason || '不明なエラー';
-      throw new Error(`動画を取得できません: ${reason}`);
-    }
-
-    const captionTracks = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
+    // 動画ページのHTMLから字幕トラックデータを取得
+    const captionTracks = await getCaptionTracksFromPage(videoId);
 
     if (selectEl) {
       if (captionTracks.length === 0) {

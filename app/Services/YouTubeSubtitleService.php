@@ -20,8 +20,9 @@ class YouTubeSubtitleService
     /**
      * InnerTubeクライアントバージョン
      * YouTubeがバージョン検証を強化した場合、更新が必要になる可能性がある
+     * 古いバージョンは"Video unavailable"エラーで拒否される
      */
-    private const CLIENT_VERSION = '2.20240101.00.00';
+    private const CLIENT_VERSION = '2.20260316.00.00';
 
     /** HTTPタイムアウト（秒） */
     private const HTTP_TIMEOUT = 15;
