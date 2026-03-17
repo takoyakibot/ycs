@@ -419,6 +419,10 @@ class TextNormalizerTest extends TestCase
 
         // 各種絵文字が混在
         $this->assertEquals('🔥 fire 🔥', TextNormalizer::normalize('🔥 FIRE 🔥'));
+
+        // ZWJ結合絵文字（🏳️‍🌈 = 🏳 + VS16 + ZWJ + 🌈）
+        $zwjEmoji = "\u{1F3F3}\u{FE0F}\u{200D}\u{1F308}";
+        $this->assertEquals($zwjEmoji, TextNormalizer::normalize($zwjEmoji));
     }
 
     /**

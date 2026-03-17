@@ -1,7 +1,7 @@
 <?php
 
-use App\Models\TimestampSongMapping;
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 return new class extends Migration
@@ -18,11 +18,15 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // 注意: このパターンは主要な絵文字範囲をカバーするが、
+        // Unicode全絵文字を網羅するものではない（例: U+1F900-1F9FF等は未含）。
+        // 削除漏れがあってもマッピング不一致が残るだけで機能上の問題はない。
         $emojiPattern = '/[\x{1F000}-\x{1FFFF}\x{2600}-\x{27BF}\x{2300}-\x{23FF}\x{2B50}-\x{2B55}\x{FE00}-\x{FE0F}\x{20E3}\x{E0020}-\x{E007F}]/u';
 
         $deletedCount = 0;
 
-        TimestampSongMapping::chunk(500, function ($mappings) use ($emojiPattern, &$deletedCount) {
+        DB::table('timestamp_song_mappings')->orderBy('id')->chunk(500, function ($mappings) use ($emojiPattern, &$deletedCount) {
+            $idsToDelete = [];
             foreach ($mappings as $mapping) {
                 if (preg_match($emojiPattern, $mapping->normalized_text)) {
                     Log::info('[Migration] Deleting emoji mapping', [
@@ -30,9 +34,12 @@ return new class extends Migration
                         'normalized_text' => $mapping->normalized_text,
                         'song_id' => $mapping->song_id,
                     ]);
-                    $mapping->delete();
-                    $deletedCount++;
+                    $idsToDelete[] = $mapping->id;
                 }
+            }
+            if (! empty($idsToDelete)) {
+                DB::table('timestamp_song_mappings')->whereIn('id', $idsToDelete)->delete();
+                $deletedCount += count($idsToDelete);
             }
         });
 

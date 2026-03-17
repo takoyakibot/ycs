@@ -21,7 +21,7 @@ class TimestampExtractorServiceTest extends TestCase
     public function test_extract_timestamps_preserves_emoji(): void
     {
         $description = "0:00 🎵 オープニング\n1:30 🔥 アーティスト / 曲名 🎶\n3:00 ⭐ エンディング";
-        $results = $this->service->extractTimestamps('test_video1', '1', $description, 'test_video1');
+        $results = $this->service->extractTimestamps('test_video1', '1', $description, 'dummy_comment_id');
 
         $this->assertCount(3, $results);
         $this->assertEquals('🎵 オープニング', $results[0]['text']);
@@ -35,7 +35,7 @@ class TimestampExtractorServiceTest extends TestCase
     public function test_extract_timestamps_preserves_complex_emoji(): void
     {
         $description = "0:00 👋🏻 あいさつ\n1:00 🏳️‍🌈 テスト";
-        $results = $this->service->extractTimestamps('test_video2', '1', $description, 'test_video2');
+        $results = $this->service->extractTimestamps('test_video2', '1', $description, 'dummy_comment_id');
 
         $this->assertCount(2, $results);
         $this->assertEquals('👋🏻 あいさつ', $results[0]['text']);
