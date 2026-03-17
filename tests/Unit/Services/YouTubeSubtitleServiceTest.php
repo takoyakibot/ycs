@@ -257,7 +257,7 @@ class YouTubeSubtitleServiceTest extends TestCase
         ]);
 
         $this->expectException(\Exception::class);
-        $this->expectExceptionMessage('動画を取得できません: Video unavailable');
+        $this->expectExceptionMessage('動画を取得できません。動画が非公開・削除済み、または年齢制限がある可能性があります');
 
         $this->service->getCaptionTracks('dQw4w9WgXcQ');
     }
