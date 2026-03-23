@@ -2162,6 +2162,7 @@ function createSubtitlePanel() {
 
 // 現在表示中の字幕データ（フィルタ用に保持）
 let currentSubtitles = [];
+let currentCaptionTracks = [];
 
 /**
  * ページコンテキストのytInitialPlayerResponseから字幕トラックを取得
@@ -2222,6 +2223,7 @@ async function fetchSubtitleTracks(videoId) {
   try {
     // ページコンテキストのytInitialPlayerResponseから字幕トラックデータを取得
     const captionTracks = await getCaptionTracksFromPage();
+    currentCaptionTracks = captionTracks;
 
     if (selectEl) {
       if (captionTracks.length === 0) {
@@ -2273,10 +2275,13 @@ async function fetchSubtitleTracks(videoId) {
 
 /**
  * 選択された字幕トラックの内容を取得
+ * timedtext APIのbaseUrlを使用してJSON形式で字幕を取得する。
+ * baseUrlが利用できない場合はget_transcript APIにフォールバック。
  */
 async function fetchSubtitleContent(videoId) {
   const statusEl = subtitlePanel?.querySelector('#stp-status');
   const fetchBtn = subtitlePanel?.querySelector('#stp-fetch-btn');
+  const selectEl = subtitlePanel?.querySelector('#stp-lang-select');
 
   if (!videoId) return;
 
@@ -2287,27 +2292,17 @@ async function fetchSubtitleContent(videoId) {
   }
 
   try {
-    // get_transcript API経由で字幕を取得（timedtext APIのbaseUrlは空を返すため）
-    currentSubtitles = await new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        window.removeEventListener('message', handler);
-        reject(new Error('字幕データの取得がタイムアウトしました'));
-      }, 10000);
+    // 選択中の言語に対応するトラックを取得
+    const selectedLang = selectEl?.value || 'ja';
+    const track = currentCaptionTracks.find(t => t.languageCode === selectedLang);
 
-      function handler(event) {
-        if (event.source !== window || event.data?.type !== 'YCS_TRANSCRIPT_RESPONSE') return;
-        window.removeEventListener('message', handler);
-        clearTimeout(timeout);
-        if (event.data.error) {
-          reject(new Error(event.data.error));
-        } else {
-          resolve(event.data.segments);
-        }
-      }
-
-      window.addEventListener('message', handler);
-      window.postMessage({ type: 'YCS_GET_TRANSCRIPT', videoId }, '*');
-    });
+    if (track?.baseUrl) {
+      // timedtext APIのbaseUrlにfmt=json3を付与してJSON形式で取得
+      currentSubtitles = await fetchTimedText(track.baseUrl);
+    } else {
+      // baseUrlがない場合はget_transcript APIにフォールバック
+      currentSubtitles = await fetchTranscriptApi(videoId);
+    }
 
     if (statusEl) {
       statusEl.textContent = `${currentSubtitles.length}件の字幕を取得しました`;
@@ -2324,6 +2319,61 @@ async function fetchSubtitleContent(videoId) {
   } finally {
     if (fetchBtn) fetchBtn.disabled = false;
   }
+}
+
+/**
+ * timedtext APIから字幕をJSON形式で取得
+ */
+async function fetchTimedText(baseUrl) {
+  const url = new URL(baseUrl);
+  url.searchParams.set('fmt', 'json3');
+
+  const res = await fetch(url.toString());
+  if (!res.ok) throw new Error('timedtext API HTTP ' + res.status);
+
+  const data = await res.json();
+  const segments = [];
+
+  for (const event of (data.events || [])) {
+    if (!event.segs) continue;
+    const text = event.segs.map(s => s.utf8 || '').join('');
+    if (!text.trim()) continue;
+    const startMs = event.tStartMs || 0;
+    const durMs = event.dDurationMs || 0;
+    segments.push({
+      start: startMs / 1000,
+      duration: durMs / 1000,
+      text: text,
+    });
+  }
+
+  return segments;
+}
+
+/**
+ * get_transcript APIで字幕を取得（フォールバック）
+ */
+function fetchTranscriptApi(videoId) {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      window.removeEventListener('message', handler);
+      reject(new Error('字幕データの取得がタイムアウトしました'));
+    }, 10000);
+
+    function handler(event) {
+      if (event.source !== window || event.data?.type !== 'YCS_TRANSCRIPT_RESPONSE') return;
+      window.removeEventListener('message', handler);
+      clearTimeout(timeout);
+      if (event.data.error) {
+        reject(new Error(event.data.error));
+      } else {
+        resolve(event.data.segments);
+      }
+    }
+
+    window.addEventListener('message', handler);
+    window.postMessage({ type: 'YCS_GET_TRANSCRIPT', videoId }, '*');
+  });
 }
 
 /**

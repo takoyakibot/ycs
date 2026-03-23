@@ -19,6 +19,7 @@
           languageCode: track.languageCode || '',
           name: track.name?.simpleText || '',
           kind: track.kind || '',
+          baseUrl: track.baseUrl || '',
           isTranslatable: track.isTranslatable || false,
         })),
         playabilityStatus: playerResponse?.playabilityStatus?.status || '',
