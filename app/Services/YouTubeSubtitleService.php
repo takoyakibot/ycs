@@ -212,6 +212,8 @@ class YouTubeSubtitleService
      * @param  string  $url  字幕XML URL（baseUrl）
      * @return array 字幕エントリ配列。各要素: {start, duration, text}
      *
+     * サーバーサイドではXML形式を使用（ブラウザ拡張はfmt=json3でJSON形式を使用）。
+     *
      * @throws Exception URL検証エラー、XML取得・パースエラー時
      */
     private function fetchSubtitleXml(string $url): array

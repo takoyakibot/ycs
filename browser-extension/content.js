@@ -1811,15 +1811,7 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-/**
- * HTMLエンティティをデコード（字幕XMLの二重エンコード対策）
- */
-function decodeHtmlEntities(text) {
-  if (!text) return '';
-  const textarea = document.createElement('textarea');
-  textarea.innerHTML = text;
-  return textarea.value;
-}
+
 
 /**
  * 動画のチャットデータを削除
@@ -2172,10 +2164,11 @@ let currentCaptionTracks = [];
 let pageBridgeReady = null;
 function ensurePageBridge() {
   if (pageBridgeReady) return pageBridgeReady;
-  pageBridgeReady = new Promise((resolve) => {
+  pageBridgeReady = new Promise((resolve, reject) => {
     const script = document.createElement('script');
     script.src = chrome.runtime.getURL('page-bridge.js');
     script.onload = () => { script.remove(); resolve(); };
+    script.onerror = () => { script.remove(); reject(new Error('page-bridge.jsのロードに失敗しました')); };
     document.documentElement.appendChild(script);
   });
   return pageBridgeReady;
@@ -2296,7 +2289,11 @@ async function fetchSubtitleContent(videoId) {
     const selectedLang = selectEl?.value || 'ja';
     const track = currentCaptionTracks.find(t => t.languageCode === selectedLang);
 
-    if (track?.baseUrl) {
+    if (!track) {
+      throw new Error(`言語「${selectedLang}」の字幕トラックが見つかりません。パネルを閉じて再度開いてください。`);
+    }
+
+    if (track.baseUrl) {
       // timedtext APIのbaseUrlにfmt=json3を付与してJSON形式で取得
       currentSubtitles = await fetchTimedText(track.baseUrl);
     } else {
@@ -4706,6 +4703,8 @@ function observePageChanges() {
       detectedTimestamps = [];
       zoomIndex = 0;
       currentSubtitles = [];
+      currentCaptionTracks = [];
+      pageBridgeReady = null;
       if (isTranscribing) {
         stopTranscription();
       }
@@ -4728,6 +4727,8 @@ function observePageChanges() {
       detectedTimestamps = []; // タイムスタンプもクリア
       zoomIndex = 0; // ズームレベルをリセット
       currentSubtitles = []; // 字幕データをクリア
+      currentCaptionTracks = [];
+      pageBridgeReady = null;
 
       // 文字起こし状態をリセット
       if (isTranscribing) {
