@@ -37,6 +37,17 @@
                     </svg>
                     <span class="hidden sm:inline" x-text="isPlaying ? '停止' : '再生'"></span>
                 </button>
+                {{-- 次の曲ボタン --}}
+                <button @click="skipToNextSong()"
+                        :disabled="!selectedTimestamp?.video_id || isSkippingToNext"
+                        :class="(!selectedTimestamp?.video_id || isSkippingToNext) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-200 dark:hover:bg-gray-600'"
+                        class="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded text-xs transition-colors"
+                        title="次の曲">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
+                    </svg>
+                    <span class="hidden sm:inline">次の曲</span>
+                </button>
                 {{-- ワイプサイズ選択（モバイルでは非表示） --}}
                 <div x-show="!isMobile" class="hidden sm:inline-flex items-center rounded overflow-hidden border border-gray-300 dark:border-gray-600">
                     <template x-for="(config, size) in pipSizes" :key="size">

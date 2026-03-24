@@ -137,6 +137,8 @@ function registerArchiveListComponent() {
                 playerInitialized: false,
                 // ランダム再生機能
                 isRandomPlaying: false,
+                // 次の曲スキップ中フラグ
+                isSkippingToNext: false,
 
                 // 自動再抽選機能
                 autoReshuffle: false,
@@ -948,6 +950,51 @@ function registerArchiveListComponent() {
                         console.error('次の楽曲の取得に失敗しました:', error);
                         // エラー時はランダム再生にフォールバック
                         this.playRandomTimestamp();
+                    }
+                },
+
+                /**
+                 * ユーザー操作で次の曲にスキップ
+                 * 同じアーカイブ内の次の曲に飛ばす。次の曲がなければアーカイブ末尾と同じ挙動。
+                 */
+                async skipToNextSong() {
+                    if (this.isSkippingToNext || this.isRandomPlaying) return;
+
+                    // 現在再生中のタイムスタンプ情報がなければ何もしない
+                    if (!this.channel?.handle ||
+                        !this.selectedTimestamp?.video_id ||
+                        this.selectedTimestamp?.ts_num === undefined) {
+                        return;
+                    }
+
+                    try {
+                        this.isSkippingToNext = true;
+
+                        logUserAction('skipToNextSong', {
+                            videoId: this.selectedTimestamp.video_id,
+                            tsNum: this.selectedTimestamp.ts_num,
+                        });
+
+                        // 同じアーカイブ内の次の楽曲を取得
+                        const nextTimestamp = await ChannelApiService.fetchNextTimestampInArchive(
+                            this.channel.handle,
+                            this.selectedTimestamp.video_id,
+                            this.selectedTimestamp.ts_num
+                        );
+
+                        if (nextTimestamp) {
+                            // 同じアーカイブ内の次の曲を再生
+                            await this.playTimestamp(nextTimestamp, true);
+                        } else {
+                            // アーカイブ内に次の曲がない場合、アーカイブ末尾到達と同じ挙動
+                            toast.info('このアーカイブの再生が終わりました');
+                            this.playRandomTimestamp();
+                        }
+                    } catch (error) {
+                        console.error('次の曲へのスキップに失敗しました:', error);
+                        toast.error('次の曲へのスキップに失敗しました');
+                    } finally {
+                        this.isSkippingToNext = false;
                     }
                 },
 
