@@ -135,8 +135,8 @@ function registerArchiveListComponent() {
                 isPlaying: false,
                 playerReady: false,
                 playerInitialized: false,
-                // ランダム再生機能
-                isRandomPlaying: false,
+                // 再生遷移中フラグ（ランダム再生・次の曲再生など）
+                isPlaybackTransitioning: false,
                 // 次の曲スキップ中フラグ
                 isSkippingToNext: false,
 
@@ -851,10 +851,10 @@ function registerArchiveListComponent() {
 
                 // ランダム再生
                 async playRandomTimestamp() {
-                    if (this.isRandomPlaying) return;
+                    if (this.isPlaybackTransitioning) return;
 
                     try {
-                        this.isRandomPlaying = true;
+                        this.isPlaybackTransitioning = true;
 
                         const timestamp = await ChannelApiService.fetchRandomTimestamp(this.channel.handle);
 
@@ -916,7 +916,7 @@ function registerArchiveListComponent() {
                         console.error('ランダム再生に失敗しました:', error);
                         toast.error(error.message || 'ランダム再生に失敗しました');
                     } finally {
-                        this.isRandomPlaying = false;
+                        this.isPlaybackTransitioning = false;
                     }
                 },
 
@@ -958,7 +958,7 @@ function registerArchiveListComponent() {
                  * 同じアーカイブ内の次の曲に飛ばす。次の曲がなければアーカイブ末尾と同じ挙動。
                  */
                 async skipToNextSong() {
-                    if (this.isSkippingToNext || this.isRandomPlaying) return;
+                    if (this.isSkippingToNext || this.isPlaybackTransitioning) return;
 
                     // 現在再生中のタイムスタンプ情報がなければ何もしない
                     if (!this.channel?.handle ||
@@ -1058,10 +1058,10 @@ function registerArchiveListComponent() {
                  * @param {boolean} showToast - トースト表示するか
                  */
                 async playTimestamp(timestamp, showToast = true) {
-                    if (this.isRandomPlaying) return;
+                    if (this.isPlaybackTransitioning) return;
 
                     try {
-                        this.isRandomPlaying = true;
+                        this.isPlaybackTransitioning = true;
 
                         logUserAction('playNextInArchive', {
                             timestampId: timestamp.id,
@@ -1107,7 +1107,7 @@ function registerArchiveListComponent() {
                             autoReshuffleManager.startMonitor();
                         }
                     } finally {
-                        this.isRandomPlaying = false;
+                        this.isPlaybackTransitioning = false;
                     }
                 },
 
