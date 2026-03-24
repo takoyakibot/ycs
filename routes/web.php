@@ -47,11 +47,14 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::post('api/songs/decompose/bulk-link', [TimestampDecompositionController::class, 'bulkLink'])->name('songs.decompose.bulkLink');
 
     Route::get('api/manage/channels', [ManageController::class, 'fetchChannel'])->name('manage.fetchChannel');
-    Route::post('api/manage/channels', [ManageController::class, 'addChannel'])->name('manage.addChannel');
+    Route::post('api/manage/channels', [ManageController::class, 'addChannel'])->name('manage.addChannel')
+        ->middleware('throttle:10,1'); // 1分間に10回まで（YouTube API呼び出し）
     Route::get('api/manage/channels/{id}', [ManageController::class, 'fetchArchives'])->name('manage.fetchArchives');
-    Route::post('api/manage/archives', [ManageController::class, 'addArchives'])->name('manage.addArchives');
+    Route::post('api/manage/archives', [ManageController::class, 'addArchives'])->name('manage.addArchives')
+        ->middleware('throttle:10,1'); // 1分間に10回まで（YouTube API呼び出し）
     Route::patch('api/manage/archives/toggle-display', [ManageController::class, 'toggleDisplay'])->name('manage.toggleDisplay');
-    Route::patch('api/manage/archives/fetch-comments', [ManageController::class, 'fetchComments'])->name('manage.fetchComments');
+    Route::patch('api/manage/archives/fetch-comments', [ManageController::class, 'fetchComments'])->name('manage.fetchComments')
+        ->middleware('throttle:10,1'); // 1分間に10回まで（YouTube API呼び出し）
     Route::patch('api/manage/archives/edit-timestamps', [ManageController::class, 'editTimestamps'])->name('manage.editTimestamps');
 
     // チャンネル設定API（除外ワード管理）
@@ -73,8 +76,10 @@ Route::middleware(['auth', 'admin'])->group(function () {
     // Specific routes must come before parameterized routes to avoid parameter capture
     Route::delete('api/songs/unlink', [SongController::class, 'unlinkTimestamp'])->name('songs.unlinkTimestamp');
     Route::get('api/songs/fuzzy-search', [SongController::class, 'fuzzySearch'])->name('songs.fuzzySearch');
-    Route::get('api/songs/search-spotify', [SongController::class, 'searchSpotify'])->name('songs.searchSpotify');
-    Route::post('api/songs/video-duration', [SongController::class, 'fetchVideoDuration'])->name('songs.fetchVideoDuration');
+    Route::get('api/songs/search-spotify', [SongController::class, 'searchSpotify'])->name('songs.searchSpotify')
+        ->middleware('throttle:30,1'); // 1分間に30回まで（Spotify API呼び出し）
+    Route::post('api/songs/video-duration', [SongController::class, 'fetchVideoDuration'])->name('songs.fetchVideoDuration')
+        ->middleware('throttle:30,1'); // 1分間に30回まで（YouTube API呼び出し）
     // 個別マッピング用API
     Route::post('api/songs/link-ts-item', [SongController::class, 'linkTsItemToSong'])->name('songs.linkTsItemToSong');
     Route::delete('api/songs/unlink-ts-item', [SongController::class, 'unlinkTsItem'])->name('songs.unlinkTsItem');
@@ -141,8 +146,9 @@ Route::post('/contact', [ContactController::class, 'store'])
     ->name('contact.store')
     ->middleware('throttle:5,60'); // 60分間に5回まで
 
-// タイムスタンプ報告API（ゲスト可）
-Route::post('api/timestamp-reports', [TimestampReportController::class, 'store'])->name('timestamp-reports.store');
+// タイムスタンプ報告API（ゲスト可、レートリミット適用）
+Route::post('api/timestamp-reports', [TimestampReportController::class, 'store'])->name('timestamp-reports.store')
+    ->middleware('throttle:5,1'); // 1分間に5回まで
 
 // ユーザー操作ログAPI（ゲスト可、レートリミット適用）
 Route::post('api/user-actions/log', [\App\Http\Controllers\UserActionLogController::class, 'log'])
