@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Exceptions\NotFoundException;
-use App\Http\Controllers\Concerns\ManageAccessControl;
 use App\Models\Channel;
 use App\Services\YouTubeService;
 use Exception;
@@ -14,8 +13,6 @@ use Illuminate\Support\Facades\Log;
 
 class ManageChannelApiController extends Controller
 {
-    use ManageAccessControl;
-
     protected $youtubeService;
 
     public function __construct(YouTubeService $youtubeService)
