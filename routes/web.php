@@ -4,7 +4,10 @@ use App\Http\Controllers\AdminController;
 use App\Http\Controllers\ChannelController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\LogController;
+use App\Http\Controllers\ManageArchiveApiController;
+use App\Http\Controllers\ManageChannelApiController;
 use App\Http\Controllers\ManageController;
+use App\Http\Controllers\ManageSettingsApiController;
 use App\Http\Controllers\MarkdownController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SongController;
@@ -46,23 +49,23 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::post('api/songs/decompose/scan', [TimestampDecompositionController::class, 'scan'])->name('songs.decompose.scan');
     Route::post('api/songs/decompose/bulk-link', [TimestampDecompositionController::class, 'bulkLink'])->name('songs.decompose.bulkLink');
 
-    Route::get('api/manage/channels', [ManageController::class, 'fetchChannel'])->name('manage.fetchChannel');
-    Route::post('api/manage/channels', [ManageController::class, 'addChannel'])->name('manage.addChannel')
+    Route::get('api/manage/channels', [ManageChannelApiController::class, 'fetchChannel'])->name('manage.fetchChannel');
+    Route::post('api/manage/channels', [ManageChannelApiController::class, 'addChannel'])->name('manage.addChannel')
         ->middleware('throttle:10,1'); // 1分間に10回まで（YouTube API呼び出し）
-    Route::get('api/manage/channels/{id}', [ManageController::class, 'fetchArchives'])->name('manage.fetchArchives');
-    Route::post('api/manage/archives', [ManageController::class, 'addArchives'])->name('manage.addArchives')
+    Route::get('api/manage/channels/{id}', [ManageArchiveApiController::class, 'fetchArchives'])->name('manage.fetchArchives');
+    Route::post('api/manage/archives', [ManageArchiveApiController::class, 'addArchives'])->name('manage.addArchives')
         ->middleware('throttle:10,1'); // 1分間に10回まで（YouTube API呼び出し）
-    Route::patch('api/manage/archives/toggle-display', [ManageController::class, 'toggleDisplay'])->name('manage.toggleDisplay');
-    Route::patch('api/manage/archives/fetch-comments', [ManageController::class, 'fetchComments'])->name('manage.fetchComments')
+    Route::patch('api/manage/archives/toggle-display', [ManageArchiveApiController::class, 'toggleDisplay'])->name('manage.toggleDisplay');
+    Route::patch('api/manage/archives/fetch-comments', [ManageArchiveApiController::class, 'fetchComments'])->name('manage.fetchComments')
         ->middleware('throttle:10,1'); // 1分間に10回まで（YouTube API呼び出し）
-    Route::patch('api/manage/archives/edit-timestamps', [ManageController::class, 'editTimestamps'])->name('manage.editTimestamps');
+    Route::patch('api/manage/archives/edit-timestamps', [ManageArchiveApiController::class, 'editTimestamps'])->name('manage.editTimestamps');
 
-    // チャンネル設定API（除外ワード管理）
-    Route::get('api/manage/channels/{id}/excluded-words', [ManageController::class, 'fetchExcludedWords'])->name('manage.fetchExcludedWords');
-    Route::post('api/manage/channels/{id}/excluded-words', [ManageController::class, 'addExcludedWord'])->name('manage.addExcludedWord');
-    Route::delete('api/manage/channels/{id}/excluded-words/{wordId}', [ManageController::class, 'deleteExcludedWord'])->name('manage.deleteExcludedWord');
-    Route::get('api/manage/channels/{id}/cover-songs/preview', [ManageController::class, 'previewCoverSongs'])->name('manage.previewCoverSongs');
-    Route::post('api/manage/channels/{id}/cover-songs/reprocess', [ManageController::class, 'reprocessCoverSongs'])->name('manage.reprocessCoverSongs');
+    // チャンネル設定API（除外ワード管理・カバー曲）
+    Route::get('api/manage/channels/{id}/excluded-words', [ManageSettingsApiController::class, 'fetchExcludedWords'])->name('manage.fetchExcludedWords');
+    Route::post('api/manage/channels/{id}/excluded-words', [ManageSettingsApiController::class, 'addExcludedWord'])->name('manage.addExcludedWord');
+    Route::delete('api/manage/channels/{id}/excluded-words/{wordId}', [ManageSettingsApiController::class, 'deleteExcludedWord'])->name('manage.deleteExcludedWord');
+    Route::get('api/manage/channels/{id}/cover-songs/preview', [ManageSettingsApiController::class, 'previewCoverSongs'])->name('manage.previewCoverSongs');
+    Route::post('api/manage/channels/{id}/cover-songs/reprocess', [ManageSettingsApiController::class, 'reprocessCoverSongs'])->name('manage.reprocessCoverSongs');
 
     // 楽曲マスタAPI
     Route::get('api/songs/timestamps', [SongController::class, 'fetchTimestamps'])->name('songs.fetchTimestamps');
