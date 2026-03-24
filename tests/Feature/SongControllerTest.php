@@ -1533,6 +1533,89 @@ class SongControllerTest extends TestCase
     }
 
     /**
+     * activeフィルターのテスト
+     * 非楽曲(is_not_song)と保留(pending)を除外し、未紐付け・紐付け済み・自動紐付けを含むこと
+     */
+    public function test_fetch_timestamps_with_active_filter(): void
+    {
+        $channel = Channel::factory()->create();
+        $archive = Archive::factory()->create(['channel_id' => $channel->channel_id]);
+
+        // 未紐付けタイムスタンプ（含まれるべき）
+        TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'text' => 'Unlinked Song',
+            'is_display' => 1,
+        ]);
+
+        // 紐付け済みタイムスタンプ（含まれるべき）
+        $linkedTs = TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'text' => 'Linked Song',
+            'is_display' => 1,
+        ]);
+
+        $song1 = Song::factory()->create();
+        TimestampSongMapping::factory()
+            ->withSong($song1)
+            ->withText($linkedTs->text)
+            ->create();
+
+        // 自動紐付けタイムスタンプ（含まれるべき）
+        $autoLinkedTs = TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'text' => 'Auto Linked Song',
+            'is_display' => 1,
+        ]);
+
+        $song2 = Song::factory()->create();
+        TimestampSongMapping::factory()
+            ->withSong($song2)
+            ->withText($autoLinkedTs->text)
+            ->autoLinked()
+            ->create();
+
+        // 非楽曲タイムスタンプ（除外されるべき）
+        $notSongTs = TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'text' => 'Not A Song',
+            'is_display' => 1,
+        ]);
+
+        TimestampSongMapping::factory()
+            ->withText($notSongTs->text)
+            ->notSong()
+            ->create();
+
+        // 保留状態タイムスタンプ（除外されるべき）
+        $pendingTs = TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'text' => 'Pending Song',
+            'is_display' => 1,
+        ]);
+
+        TimestampSongMapping::factory()
+            ->withText($pendingTs->text)
+            ->pending()
+            ->create();
+
+        $response = $this->actingAs($this->user)->getJson(route('songs.fetchTimestamps', [
+            'filter' => 'active',
+        ]));
+
+        $response->assertStatus(200);
+        $this->assertEquals(3, $response->json('total'));
+
+        // 返却されたテキストに非楽曲と保留が含まれないこと
+        $texts = collect($response->json('data'))->pluck('text')->toArray();
+        $this->assertContains('Unlinked Song', $texts);
+        $this->assertContains('Linked Song', $texts);
+        $this->assertContains('Auto Linked Song', $texts);
+        $this->assertNotContains('Not A Song', $texts);
+        $this->assertNotContains('Pending Song', $texts);
+    }
+
+    /**
      * 保留状態から紐付けするとlinked状態に戻るテスト
      */
     public function test_link_timestamp_from_pending_restores_linked_status(): void
