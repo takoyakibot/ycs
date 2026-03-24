@@ -11,6 +11,11 @@ return new class extends Migration
 {
     /**
      * ゼロ幅スペースのPHP正規表現パターン（U+200B, U+200C, U+200D, U+FEFF）
+     *
+     * 注意: このパターンにはZWJ(U+200D)が含まれているが、現在の方針ではZWJは
+     * 絵文字シーケンスで使用されるため保持する方針に変更済み。
+     * （参照: TextNormalizer.php の removeZeroWidthChars メソッド）
+     * 本マイグレーションは適用済みのため修正不要。
      */
     private string $zeroWidthPattern = '/[\x{200B}-\x{200D}\x{FEFF}]/u';
 
