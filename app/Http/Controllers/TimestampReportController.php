@@ -34,7 +34,7 @@ class TimestampReportController extends Controller
         }
 
         $validated = $request->validate([
-            'video_id' => 'required|string|max:11',
+            'video_id' => ['required', 'string', 'size:11', 'regex:/^[A-Za-z0-9_-]{11}$/'],
             'ts_text' => 'required|string|max:20',
             'ts_num' => 'required|integer|min:0',
             'report_type' => 'required|string|max:20',
