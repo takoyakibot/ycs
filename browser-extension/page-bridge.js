@@ -26,6 +26,45 @@
       }, '*');
     }
 
+    // timedtext APIで字幕をJSON形式で取得
+    if (event.data?.type === 'YCS_FETCH_TIMEDTEXT') {
+      const baseUrl = event.data.baseUrl;
+      if (!baseUrl) {
+        window.postMessage({ type: 'YCS_TIMEDTEXT_RESPONSE', error: 'baseUrlが指定されていません' }, '*');
+        return;
+      }
+
+      try {
+        const url = new URL(baseUrl);
+        url.searchParams.set('fmt', 'json3');
+
+        fetch(url.toString())
+          .then(res => {
+            if (!res.ok) throw new Error('timedtext API HTTP ' + res.status);
+            return res.json();
+          })
+          .then(data => {
+            const segments = [];
+            for (const ev of (data.events || [])) {
+              if (!ev.segs) continue;
+              const text = ev.segs.map(s => s.utf8 || '').join('');
+              if (!text.trim()) continue;
+              segments.push({
+                start: (ev.tStartMs || 0) / 1000,
+                duration: (ev.dDurationMs || 0) / 1000,
+                text: text,
+              });
+            }
+            window.postMessage({ type: 'YCS_TIMEDTEXT_RESPONSE', segments }, '*');
+          })
+          .catch(err => {
+            window.postMessage({ type: 'YCS_TIMEDTEXT_RESPONSE', error: err.message }, '*');
+          });
+      } catch (err) {
+        window.postMessage({ type: 'YCS_TIMEDTEXT_RESPONSE', error: err.message }, '*');
+      }
+    }
+
     // get_transcript APIで字幕テキストを取得
     // YouTubeページのytInitialDataからトランスクリプト用パラメータを取得し、
     // get_transcript APIに渡す。手動でprotobufを構築するのではなく、

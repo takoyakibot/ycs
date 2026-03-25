@@ -2319,32 +2319,31 @@ async function fetchSubtitleContent(videoId) {
 }
 
 /**
- * timedtext APIから字幕をJSON形式で取得
+ * timedtext APIから字幕をJSON形式で取得（page-bridge.js経由）
+ * content scriptからのfetchではcookieやoriginが異なるため、
+ * ページコンテキストのpage-bridge.jsに委譲する。
  */
-async function fetchTimedText(baseUrl) {
-  const url = new URL(baseUrl);
-  url.searchParams.set('fmt', 'json3');
+function fetchTimedText(baseUrl) {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      window.removeEventListener('message', handler);
+      reject(new Error('timedtext APIの取得がタイムアウトしました'));
+    }, 10000);
 
-  const res = await fetch(url.toString());
-  if (!res.ok) throw new Error('timedtext API HTTP ' + res.status);
+    function handler(event) {
+      if (event.source !== window || event.data?.type !== 'YCS_TIMEDTEXT_RESPONSE') return;
+      window.removeEventListener('message', handler);
+      clearTimeout(timeout);
+      if (event.data.error) {
+        reject(new Error(event.data.error));
+      } else {
+        resolve(event.data.segments);
+      }
+    }
 
-  const data = await res.json();
-  const segments = [];
-
-  for (const event of (data.events || [])) {
-    if (!event.segs) continue;
-    const text = event.segs.map(s => s.utf8 || '').join('');
-    if (!text.trim()) continue;
-    const startMs = event.tStartMs || 0;
-    const durMs = event.dDurationMs || 0;
-    segments.push({
-      start: startMs / 1000,
-      duration: durMs / 1000,
-      text: text,
-    });
-  }
-
-  return segments;
+    window.addEventListener('message', handler);
+    window.postMessage({ type: 'YCS_FETCH_TIMEDTEXT', baseUrl }, '*');
+  });
 }
 
 /**
