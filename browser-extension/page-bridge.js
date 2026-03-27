@@ -18,49 +18,19 @@
   }
 
   /**
-   * InnerTube player APIを呼び出して最新のプレイヤーデータを取得する。
-   * baseUrlの署名期限切れを回避するため、字幕取得時に毎回呼び出す。
-   */
-  function callInnerTubePlayer(videoId) {
-    const cfg = window.ytcfg;
-    const clientVersion = cfg?.get?.('INNERTUBE_CLIENT_VERSION') || '2.20260325.00.00';
-    const apiKey = cfg?.get?.('INNERTUBE_API_KEY') || '';
-    const url = 'https://www.youtube.com/youtubei/v1/player'
-      + (apiKey ? '?key=' + apiKey + '&prettyPrint=false' : '?prettyPrint=false');
-
-    return fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        context: {
-          client: {
-            clientName: 'WEB',
-            clientVersion: clientVersion,
-            hl: document.documentElement.lang || 'ja',
-          },
-        },
-        videoId: videoId,
-      }),
-    }).then(res => {
-      if (!res.ok) throw new Error('InnerTube player API HTTP ' + res.status);
-      return res.json();
-    });
-  }
-
-  /**
    * timedtext URLから字幕セグメントを取得する（JSON3→XMLフォールバック）
    */
   function fetchTimedTextSegments(baseUrl) {
     function tryJson3() {
       const url = new URL(baseUrl);
       url.searchParams.set('fmt', 'json3');
-      return fetch(url.toString())
+      return fetch(url.toString(), { credentials: 'include' })
         .then(res => {
-          if (!res.ok) throw new Error('HTTP ' + res.status);
+          if (!res.ok) throw new Error('json3 HTTP ' + res.status);
           return res.text();
         })
         .then(text => {
-          if (!text || text.trim().length === 0) throw new Error('empty');
+          if (!text || text.trim().length === 0) throw new Error('json3 empty');
           const data = JSON.parse(text);
           const segments = [];
           for (const ev of (data.events || [])) {
@@ -78,13 +48,13 @@
     }
 
     function tryXml() {
-      return fetch(baseUrl)
+      return fetch(baseUrl, { credentials: 'include' })
         .then(res => {
-          if (!res.ok) throw new Error('HTTP ' + res.status);
+          if (!res.ok) throw new Error('xml HTTP ' + res.status);
           return res.text();
         })
         .then(text => {
-          if (!text || text.trim().length === 0) throw new Error('empty');
+          if (!text || text.trim().length === 0) throw new Error('xml empty');
           const parser = new DOMParser();
           const doc = parser.parseFromString(text, 'text/xml');
           const textEls = doc.querySelectorAll('text');
@@ -127,7 +97,7 @@
     }
 
     // timedtext APIで字幕を取得
-    // InnerTube player APIを呼んで最新のbaseUrlを取得してからfetchする。
+    // videoIdとlangから最新のプレイヤーレスポンスのbaseUrlを使用してfetch
     if (event.data?.type === 'YCS_FETCH_TIMEDTEXT') {
       const videoId = event.data.videoId;
       const lang = event.data.lang || 'ja';
@@ -137,25 +107,41 @@
         return;
       }
 
-      callInnerTubePlayer(videoId)
-        .then(data => {
-          const tracks = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
-          // 指定言語のトラックを検索（完全一致→前方一致）
-          let track = tracks.find(t => t.languageCode === lang);
-          if (!track) track = tracks.find(t => t.languageCode?.startsWith(lang));
-          if (!track && tracks.length > 0) track = tracks[0];
+      // プレイヤーから最新のキャプショントラックを取得
+      const playerResponse = getPlayerResponse();
+      const tracks = playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
 
-          if (!track?.baseUrl) {
-            throw new Error('この動画には利用可能な字幕がありません');
-          }
+      let track = tracks.find(t => t.languageCode === lang);
+      if (!track) track = tracks.find(t => t.languageCode?.startsWith(lang));
+      if (!track && tracks.length > 0) track = tracks[0];
 
-          return fetchTimedTextSegments(track.baseUrl);
-        })
+      if (!track?.baseUrl) {
+        // デバッグ情報を含める
+        const debugInfo = {
+          tracksCount: tracks.length,
+          trackLangs: tracks.map(t => t.languageCode).join(','),
+          hasBaseUrl: tracks.map(t => !!t.baseUrl).join(','),
+          playerResponseKeys: Object.keys(playerResponse || {}).join(','),
+          hasCaptions: !!playerResponse?.captions,
+        };
+        window.postMessage({
+          type: 'YCS_TIMEDTEXT_RESPONSE',
+          error: '字幕トラックが見つかりません (debug: ' + JSON.stringify(debugInfo) + ')',
+        }, '*');
+        return;
+      }
+
+      fetchTimedTextSegments(track.baseUrl)
         .then(segments => {
           window.postMessage({ type: 'YCS_TIMEDTEXT_RESPONSE', segments }, '*');
         })
         .catch(err => {
-          window.postMessage({ type: 'YCS_TIMEDTEXT_RESPONSE', error: err.message }, '*');
+          // fetchの失敗時もデバッグ情報を含める
+          const urlInfo = track.baseUrl.substring(0, 100) + '...';
+          window.postMessage({
+            type: 'YCS_TIMEDTEXT_RESPONSE',
+            error: 'timedtext fetch失敗: ' + err.message + ' (url: ' + urlInfo + ')',
+          }, '*');
         });
     }
 
@@ -192,6 +178,7 @@
         fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({
             context: {
               client: {
