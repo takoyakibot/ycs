@@ -14,6 +14,7 @@ use App\Models\Song;
 use App\Models\TimestampSongMapping;
 use App\Models\TsItem;
 use App\Services\SongMappingService;
+use App\Services\SongMergeService;
 use App\Services\SongSearchService;
 use App\Services\SpotifyService;
 use App\Services\VideoUrlService;
@@ -28,6 +29,8 @@ class SongController extends Controller
 
     protected SongMappingService $songMappingService;
 
+    protected SongMergeService $songMergeService;
+
     protected SpotifyService $spotifyService;
 
     protected YouTubeApiService $youtubeApiService;
@@ -37,12 +40,14 @@ class SongController extends Controller
     public function __construct(
         SongSearchService $songSearchService,
         SongMappingService $songMappingService,
+        SongMergeService $songMergeService,
         SpotifyService $spotifyService,
         YouTubeApiService $youtubeApiService,
         VideoUrlService $videoUrlService
     ) {
         $this->songSearchService = $songSearchService;
         $this->songMappingService = $songMappingService;
+        $this->songMergeService = $songMergeService;
         $this->spotifyService = $spotifyService;
         $this->youtubeApiService = $youtubeApiService;
         $this->videoUrlService = $videoUrlService;
@@ -54,6 +59,50 @@ class SongController extends Controller
     public function index()
     {
         return view('songs.index');
+    }
+
+    /**
+     * 楽曲名寄せ画面を表示
+     */
+    public function duplicates()
+    {
+        return view('songs.duplicates');
+    }
+
+    /**
+     * 重複楽曲グループを取得
+     */
+    public function findDuplicates(Request $request)
+    {
+        $search = (string) $request->query('search', '');
+        $groups = $this->songMergeService->findDuplicates($search);
+
+        return response()->json($groups);
+    }
+
+    /**
+     * 楽曲をマージする
+     */
+    public function mergeSongs(Request $request)
+    {
+        $validated = $request->validate([
+            'source_song_id' => 'required|string|exists:songs,id',
+            'target_song_id' => 'required|string|exists:songs,id|different:source_song_id',
+        ]);
+
+        $result = $this->songMergeService->merge(
+            $validated['source_song_id'],
+            $validated['target_song_id']
+        );
+
+        return response()->json([
+            'message' => sprintf(
+                '楽曲をマージしました（マッピング %d件、個別紐付け %d件を移行）',
+                $result['affected_mappings'],
+                $result['affected_ts_items']
+            ),
+            ...$result,
+        ]);
     }
 
     /**

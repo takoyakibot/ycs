@@ -37,6 +37,7 @@ Route::middleware(['auth', 'admin'])->group(function () {
 
     // 楽曲マスタ管理
     Route::get('/songs/normalize', [SongController::class, 'index'])->name('songs.index');
+    Route::get('/songs/duplicates', [SongController::class, 'duplicates'])->name('songs.duplicates');
 
     // タイムスタンプ分解・選別
     Route::get('/songs/decompose', [TimestampDecompositionController::class, 'index'])->name('songs.decompose');
@@ -87,6 +88,8 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::post('api/songs/link-ts-item', [SongController::class, 'linkTsItemToSong'])->name('songs.linkTsItemToSong');
     Route::delete('api/songs/unlink-ts-item', [SongController::class, 'unlinkTsItem'])->name('songs.unlinkTsItem');
     Route::get('api/songs/ts-items-by-normalized-text', [SongController::class, 'getTsItemsByNormalizedText'])->name('songs.getTsItemsByNormalizedText');
+    Route::get('api/songs/duplicates', [SongController::class, 'findDuplicates'])->name('songs.findDuplicates');
+    Route::post('api/songs/merge', [SongController::class, 'mergeSongs'])->name('songs.mergeSongs');
     // Parameterized route - must be last to avoid capturing specific route names
     Route::put('api/songs/{id}', [SongController::class, 'updateSong'])->name('songs.updateSong');
     Route::delete('api/songs/{id}', [SongController::class, 'deleteSong'])->name('songs.deleteSong');
