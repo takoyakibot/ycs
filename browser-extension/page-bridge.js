@@ -5,33 +5,52 @@
  * web_accessible_resourcesとして登録し、<script src>で読み込むことでCSPを回避する。
  */
 (function () {
-  // timedtextレスポンスのキャッシュ（fetchインターセプトで収集）
+  // timedtextレスポンスのキャッシュ（fetch/XHRインターセプトで収集）
   const timedTextCache = {};
+
+  function cacheTimedText(url, text) {
+    if (!text || text.trim().length === 0) return;
+    try {
+      const urlObj = new URL(url, location.origin);
+      const lang = urlObj.searchParams.get('lang') || 'unknown';
+      const videoId = urlObj.searchParams.get('v') || 'unknown';
+      timedTextCache[videoId + ':' + lang] = { text, url, timestamp: Date.now() };
+    } catch (e) { /* ignore */ }
+  }
 
   /**
    * fetchをインターセプトしてtimedtextレスポンスをキャッシュする。
-   * YouTubeプレイヤーが字幕を読み込む際のリクエストを横取りする。
    */
   const originalFetch = window.fetch;
   window.fetch = async function (...args) {
     const response = await originalFetch.apply(this, args);
     try {
       const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
-      if (url.includes('/api/timedtext') || url.includes('timedtext')) {
+      if (url.includes('timedtext')) {
         const clone = response.clone();
         const text = await clone.text();
-        if (text && text.trim().length > 0) {
-          // URLからlangパラメータを抽出してキーにする
-          const urlObj = new URL(url, location.origin);
-          const lang = urlObj.searchParams.get('lang') || 'unknown';
-          const videoId = urlObj.searchParams.get('v') || 'unknown';
-          timedTextCache[videoId + ':' + lang] = { text, url, timestamp: Date.now() };
-        }
+        cacheTimedText(url, text);
       }
-    } catch (e) {
-      // インターセプトのエラーは無視（元のfetchに影響させない）
-    }
+    } catch (e) { /* ignore */ }
     return response;
+  };
+
+  /**
+   * XMLHttpRequestもインターセプト（プレイヤーがXHRを使う場合）
+   */
+  const originalXHROpen = XMLHttpRequest.prototype.open;
+  const originalXHRSend = XMLHttpRequest.prototype.send;
+  XMLHttpRequest.prototype.open = function (method, url, ...rest) {
+    this._ycsUrl = url;
+    return originalXHROpen.call(this, method, url, ...rest);
+  };
+  XMLHttpRequest.prototype.send = function (...args) {
+    if (this._ycsUrl && String(this._ycsUrl).includes('timedtext')) {
+      this.addEventListener('load', function () {
+        try { cacheTimedText(this._ycsUrl, this.responseText); } catch (e) { /* ignore */ }
+      });
+    }
+    return originalXHRSend.apply(this, args);
   };
 
   /**
@@ -84,60 +103,54 @@
   }
 
   /**
-   * キャッシュまたはプレイヤー字幕有効化でtimedtextを取得
+   * キャッシュまたはCCボタン経由でtimedtextを取得
    */
   function getTimedTextViaPlayer(videoId, lang) {
     return new Promise((resolve, reject) => {
-      // 1. キャッシュを確認
-      const cacheKey = videoId + ':' + lang;
-      const cached = timedTextCache[cacheKey];
-      if (cached && (Date.now() - cached.timestamp) < 300000) {
+      // 1. キャッシュを確認（言語完全一致→前方一致→任意の言語）
+      function findCache() {
+        const exact = timedTextCache[videoId + ':' + lang];
+        if (exact && (Date.now() - exact.timestamp) < 300000) return exact;
+        for (const key of Object.keys(timedTextCache)) {
+          if (key.startsWith(videoId + ':') && (Date.now() - timedTextCache[key].timestamp) < 300000) {
+            return timedTextCache[key];
+          }
+        }
+        return null;
+      }
+
+      const cached = findCache();
+      if (cached) {
         try {
           const segments = cached.text.trim().startsWith('{')
             ? parseJson3(cached.text)
             : parseXml(cached.text);
           resolve(segments);
           return;
-        } catch (e) {
-          // パース失敗は無視してプレイヤー経由で取得
-        }
+        } catch (e) { /* パース失敗は無視 */ }
       }
 
-      // 2. プレイヤーの字幕を有効にしてインターセプトを待つ
-      const player = document.querySelector('#movie_player');
-      if (!player) {
-        reject(new Error('movie_playerが見つかりません'));
+      // 2. CCボタンをクリックして字幕を有効にし、インターセプトを待つ
+      const ccButton = document.querySelector('.ytp-subtitles-button');
+      if (!ccButton) {
+        reject(new Error('字幕ボタンが見つかりません'));
         return;
       }
 
-      // 現在の字幕状態を保存
-      const wasSubtitleOn = player.getOption?.('captions', 'track') != null;
+      const wasOn = ccButton.getAttribute('aria-pressed') === 'true';
 
-      // 字幕トラックリストを取得
-      const tracklist = player.getOption?.('captions', 'tracklist') || [];
-      let targetTrack = tracklist.find(t => t.languageCode === lang);
-      if (!targetTrack) targetTrack = tracklist.find(t => t.languageCode?.startsWith(lang));
-      if (!targetTrack && tracklist.length > 0) targetTrack = tracklist[0];
-
-      if (!targetTrack) {
-        reject(new Error('字幕トラックがプレイヤーで利用できません'));
-        return;
-      }
-
-      // インターセプト待ちのリスナーを設定
       let resolved = false;
       const checkInterval = setInterval(() => {
-        const key = videoId + ':' + (targetTrack.languageCode || lang);
-        const entry = timedTextCache[key];
+        const entry = findCache();
         if (entry && (Date.now() - entry.timestamp) < 5000) {
           clearInterval(checkInterval);
           clearTimeout(timeoutId);
           if (resolved) return;
           resolved = true;
 
-          // 元の字幕状態に戻す
-          if (!wasSubtitleOn) {
-            try { player.setOption?.('captions', 'track', {}); } catch (e) { /* ignore */ }
+          // 元の状態に戻す
+          if (!wasOn) {
+            try { ccButton.click(); } catch (e) { /* ignore */ }
           }
 
           try {
@@ -156,21 +169,31 @@
         if (resolved) return;
         resolved = true;
 
-        // 元の字幕状態に戻す
-        if (!wasSubtitleOn) {
-          try { player.setOption?.('captions', 'track', {}); } catch (e) { /* ignore */ }
+        if (!wasOn) {
+          try { ccButton.click(); } catch (e) { /* ignore */ }
         }
 
-        reject(new Error('プレイヤー経由の字幕取得がタイムアウトしました'));
+        // タイムアウト時にキャッシュにあれば使う（古くてもOK）
+        const lastResort = findCache();
+        if (lastResort) {
+          try {
+            const segments = lastResort.text.trim().startsWith('{')
+              ? parseJson3(lastResort.text)
+              : parseXml(lastResort.text);
+            resolve(segments);
+            return;
+          } catch (e) { /* ignore */ }
+        }
+
+        reject(new Error('プレイヤー経由の字幕取得がタイムアウトしました（CCボタンクリック後にtimedtextリクエストを検出できませんでした）'));
       }, 8000);
 
-      // 字幕を有効にする（これによりプレイヤーがtimedtextをfetchする）
-      try {
-        player.setOption?.('captions', 'track', targetTrack);
-      } catch (e) {
-        clearInterval(checkInterval);
-        clearTimeout(timeoutId);
-        reject(new Error('字幕の有効化に失敗: ' + e.message));
+      // CCが既にONならOFF→ONでリロードを強制
+      if (wasOn) {
+        ccButton.click(); // OFF
+        setTimeout(() => { ccButton.click(); }, 300); // ON
+      } else {
+        ccButton.click(); // ON
       }
     });
   }
