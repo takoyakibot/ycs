@@ -26,7 +26,7 @@
       }, '*');
     }
 
-    // timedtext APIで字幕をJSON形式で取得
+    // timedtext APIで字幕を取得（JSON→XMLフォールバック）
     if (event.data?.type === 'YCS_FETCH_TIMEDTEXT') {
       const baseUrl = event.data.baseUrl;
       if (!baseUrl) {
@@ -34,35 +34,66 @@
         return;
       }
 
-      try {
+      // JSON3形式を試行し、失敗時はXML形式にフォールバック
+      function tryFetchJson3() {
         const url = new URL(baseUrl);
         url.searchParams.set('fmt', 'json3');
-
-        fetch(url.toString())
+        return fetch(url.toString())
           .then(res => {
-            if (!res.ok) throw new Error('timedtext API HTTP ' + res.status);
-            return res.json();
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            return res.text();
           })
-          .then(data => {
+          .then(text => {
+            if (!text || text.trim().length === 0) throw new Error('empty response');
+            const data = JSON.parse(text);
             const segments = [];
             for (const ev of (data.events || [])) {
               if (!ev.segs) continue;
-              const text = ev.segs.map(s => s.utf8 || '').join('');
-              if (!text.trim()) continue;
+              const t = ev.segs.map(s => s.utf8 || '').join('');
+              if (!t.trim()) continue;
               segments.push({
                 start: (ev.tStartMs || 0) / 1000,
                 duration: (ev.dDurationMs || 0) / 1000,
-                text: text,
+                text: t,
               });
             }
-            window.postMessage({ type: 'YCS_TIMEDTEXT_RESPONSE', segments }, '*');
-          })
-          .catch(err => {
-            window.postMessage({ type: 'YCS_TIMEDTEXT_RESPONSE', error: err.message }, '*');
+            return segments;
           });
-      } catch (err) {
-        window.postMessage({ type: 'YCS_TIMEDTEXT_RESPONSE', error: err.message }, '*');
       }
+
+      function tryFetchXml() {
+        return fetch(baseUrl)
+          .then(res => {
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            return res.text();
+          })
+          .then(text => {
+            if (!text || text.trim().length === 0) throw new Error('empty response');
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(text, 'text/xml');
+            const textEls = doc.querySelectorAll('text');
+            const segments = [];
+            for (const el of textEls) {
+              const content = el.textContent || '';
+              if (!content.trim()) continue;
+              segments.push({
+                start: parseFloat(el.getAttribute('start') || '0'),
+                duration: parseFloat(el.getAttribute('dur') || '0'),
+                text: content.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'").replace(/&quot;/g, '"'),
+              });
+            }
+            return segments;
+          });
+      }
+
+      tryFetchJson3()
+        .catch(() => tryFetchXml())
+        .then(segments => {
+          window.postMessage({ type: 'YCS_TIMEDTEXT_RESPONSE', segments }, '*');
+        })
+        .catch(err => {
+          window.postMessage({ type: 'YCS_TIMEDTEXT_RESPONSE', error: 'timedtext API: ' + err.message }, '*');
+        });
     }
 
     // get_transcript APIで字幕テキストを取得
