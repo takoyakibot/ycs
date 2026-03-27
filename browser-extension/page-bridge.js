@@ -11,13 +11,98 @@
    * movie_player.getPlayerResponse()を優先的に使用する。
    */
   function getPlayerResponse() {
-    // movie_playerのAPIから最新のレスポンスを取得（SPA遷移対応）
     const player = document.querySelector('#movie_player');
     const fresh = player?.getPlayerResponse?.();
     if (fresh?.captions) return fresh;
-
-    // フォールバック: 初回ロード時のレスポンス
     return window.ytInitialPlayerResponse;
+  }
+
+  /**
+   * InnerTube player APIを呼び出して最新のプレイヤーデータを取得する。
+   * baseUrlの署名期限切れを回避するため、字幕取得時に毎回呼び出す。
+   */
+  function callInnerTubePlayer(videoId) {
+    const cfg = window.ytcfg;
+    const clientVersion = cfg?.get?.('INNERTUBE_CLIENT_VERSION') || '2.20260325.00.00';
+    const apiKey = cfg?.get?.('INNERTUBE_API_KEY') || '';
+    const url = 'https://www.youtube.com/youtubei/v1/player'
+      + (apiKey ? '?key=' + apiKey + '&prettyPrint=false' : '?prettyPrint=false');
+
+    return fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        context: {
+          client: {
+            clientName: 'WEB',
+            clientVersion: clientVersion,
+            hl: document.documentElement.lang || 'ja',
+          },
+        },
+        videoId: videoId,
+      }),
+    }).then(res => {
+      if (!res.ok) throw new Error('InnerTube player API HTTP ' + res.status);
+      return res.json();
+    });
+  }
+
+  /**
+   * timedtext URLから字幕セグメントを取得する（JSON3→XMLフォールバック）
+   */
+  function fetchTimedTextSegments(baseUrl) {
+    function tryJson3() {
+      const url = new URL(baseUrl);
+      url.searchParams.set('fmt', 'json3');
+      return fetch(url.toString())
+        .then(res => {
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          return res.text();
+        })
+        .then(text => {
+          if (!text || text.trim().length === 0) throw new Error('empty');
+          const data = JSON.parse(text);
+          const segments = [];
+          for (const ev of (data.events || [])) {
+            if (!ev.segs) continue;
+            const t = ev.segs.map(s => s.utf8 || '').join('');
+            if (!t.trim()) continue;
+            segments.push({
+              start: (ev.tStartMs || 0) / 1000,
+              duration: (ev.dDurationMs || 0) / 1000,
+              text: t,
+            });
+          }
+          return segments;
+        });
+    }
+
+    function tryXml() {
+      return fetch(baseUrl)
+        .then(res => {
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          return res.text();
+        })
+        .then(text => {
+          if (!text || text.trim().length === 0) throw new Error('empty');
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(text, 'text/xml');
+          const textEls = doc.querySelectorAll('text');
+          const segments = [];
+          for (const el of textEls) {
+            const content = el.textContent || '';
+            if (!content.trim()) continue;
+            segments.push({
+              start: parseFloat(el.getAttribute('start') || '0'),
+              duration: parseFloat(el.getAttribute('dur') || '0'),
+              text: content,
+            });
+          }
+          return segments;
+        });
+    }
+
+    return tryJson3().catch(() => tryXml());
   }
 
   window.addEventListener('message', function (event) {
@@ -41,90 +126,48 @@
       }, '*');
     }
 
-    // timedtext APIで字幕を取得（JSON→XMLフォールバック）
+    // timedtext APIで字幕を取得
+    // InnerTube player APIを呼んで最新のbaseUrlを取得してからfetchする。
     if (event.data?.type === 'YCS_FETCH_TIMEDTEXT') {
-      const baseUrl = event.data.baseUrl;
-      if (!baseUrl) {
-        window.postMessage({ type: 'YCS_TIMEDTEXT_RESPONSE', error: 'baseUrlが指定されていません' }, '*');
+      const videoId = event.data.videoId;
+      const lang = event.data.lang || 'ja';
+
+      if (!videoId) {
+        window.postMessage({ type: 'YCS_TIMEDTEXT_RESPONSE', error: 'videoIdが指定されていません' }, '*');
         return;
       }
 
-      // JSON3形式を試行し、失敗時はXML形式にフォールバック
-      function tryFetchJson3() {
-        const url = new URL(baseUrl);
-        url.searchParams.set('fmt', 'json3');
-        return fetch(url.toString())
-          .then(res => {
-            if (!res.ok) throw new Error('HTTP ' + res.status);
-            return res.text();
-          })
-          .then(text => {
-            if (!text || text.trim().length === 0) throw new Error('empty response');
-            const data = JSON.parse(text);
-            const segments = [];
-            for (const ev of (data.events || [])) {
-              if (!ev.segs) continue;
-              const t = ev.segs.map(s => s.utf8 || '').join('');
-              if (!t.trim()) continue;
-              segments.push({
-                start: (ev.tStartMs || 0) / 1000,
-                duration: (ev.dDurationMs || 0) / 1000,
-                text: t,
-              });
-            }
-            return segments;
-          });
-      }
+      callInnerTubePlayer(videoId)
+        .then(data => {
+          const tracks = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
+          // 指定言語のトラックを検索（完全一致→前方一致）
+          let track = tracks.find(t => t.languageCode === lang);
+          if (!track) track = tracks.find(t => t.languageCode?.startsWith(lang));
+          if (!track && tracks.length > 0) track = tracks[0];
 
-      function tryFetchXml() {
-        return fetch(baseUrl)
-          .then(res => {
-            if (!res.ok) throw new Error('HTTP ' + res.status);
-            return res.text();
-          })
-          .then(text => {
-            if (!text || text.trim().length === 0) throw new Error('empty response');
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(text, 'text/xml');
-            const textEls = doc.querySelectorAll('text');
-            const segments = [];
-            for (const el of textEls) {
-              const content = el.textContent || '';
-              if (!content.trim()) continue;
-              segments.push({
-                start: parseFloat(el.getAttribute('start') || '0'),
-                duration: parseFloat(el.getAttribute('dur') || '0'),
-                text: content.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'").replace(/&quot;/g, '"'),
-              });
-            }
-            return segments;
-          });
-      }
+          if (!track?.baseUrl) {
+            throw new Error('この動画には利用可能な字幕がありません');
+          }
 
-      tryFetchJson3()
-        .catch(() => tryFetchXml())
+          return fetchTimedTextSegments(track.baseUrl);
+        })
         .then(segments => {
           window.postMessage({ type: 'YCS_TIMEDTEXT_RESPONSE', segments }, '*');
         })
         .catch(err => {
-          window.postMessage({ type: 'YCS_TIMEDTEXT_RESPONSE', error: 'timedtext API: ' + err.message }, '*');
+          window.postMessage({ type: 'YCS_TIMEDTEXT_RESPONSE', error: err.message }, '*');
         });
     }
 
-    // get_transcript APIで字幕テキストを取得
-    // YouTubeページのytInitialDataからトランスクリプト用パラメータを取得し、
-    // get_transcript APIに渡す。手動でprotobufを構築するのではなく、
-    // YouTubeが用意したパラメータをそのまま使用する。
+    // get_transcript APIで字幕テキストを取得（レガシーフォールバック）
     if (event.data?.type === 'YCS_GET_TRANSCRIPT') {
       try {
-        // ytInitialDataのengagementPanelsからトランスクリプトパネルのパラメータを取得
         const panels = window.ytInitialData?.engagementPanels || [];
         let transcriptParams = null;
 
         for (const panel of panels) {
           const panelId = panel?.engagementPanelSectionListRenderer?.panelIdentifier;
           if (panelId === 'engagement-panel-searchable-transcript') {
-            // トランスクリプトパネルの継続トークンまたはパラメータを取得
             const content = panel?.engagementPanelSectionListRenderer?.content;
             const continuation = content?.continuationItemRenderer?.continuationEndpoint
               ?.getTranscriptEndpoint?.params;
@@ -141,7 +184,7 @@
         }
 
         const cfg = window.ytcfg;
-        const clientVersion = cfg?.get?.('INNERTUBE_CLIENT_VERSION') || '2.20260316.00.00';
+        const clientVersion = cfg?.get?.('INNERTUBE_CLIENT_VERSION') || '2.20260325.00.00';
         const apiKey = cfg?.get?.('INNERTUBE_API_KEY') || '';
         const url = 'https://www.youtube.com/youtubei/v1/get_transcript'
           + (apiKey ? '?key=' + apiKey + '&prettyPrint=false' : '?prettyPrint=false');
@@ -166,7 +209,6 @@
           })
           .then(data => {
             const segments = [];
-            // レスポンス構造を探索してセグメントを抽出
             const actions = data?.actions || [];
             for (const action of actions) {
               const panelContent = action?.updateEngagementPanelAction?.content

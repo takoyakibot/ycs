@@ -2285,21 +2285,10 @@ async function fetchSubtitleContent(videoId) {
   }
 
   try {
-    // 選択中の言語に対応するトラックを取得
     const selectedLang = selectEl?.value || 'ja';
-    const track = currentCaptionTracks.find(t => t.languageCode === selectedLang);
 
-    if (!track) {
-      throw new Error(`言語「${selectedLang}」の字幕トラックが見つかりません。パネルを閉じて再度開いてください。`);
-    }
-
-    if (track.baseUrl) {
-      // timedtext APIのbaseUrlにfmt=json3を付与してJSON形式で取得
-      currentSubtitles = await fetchTimedText(track.baseUrl);
-    } else {
-      // baseUrlがない場合はget_transcript APIにフォールバック
-      currentSubtitles = await fetchTranscriptApi(videoId);
-    }
+    // InnerTube player APIで最新のbaseUrlを取得してtimedtextをfetch
+    currentSubtitles = await fetchTimedText(videoId, selectedLang);
 
     if (statusEl) {
       statusEl.textContent = `${currentSubtitles.length}件の字幕を取得しました`;
@@ -2319,16 +2308,15 @@ async function fetchSubtitleContent(videoId) {
 }
 
 /**
- * timedtext APIから字幕をJSON形式で取得（page-bridge.js経由）
- * content scriptからのfetchではcookieやoriginが異なるため、
- * ページコンテキストのpage-bridge.jsに委譲する。
+ * InnerTube player API経由で最新の字幕を取得（page-bridge.js経由）
+ * 毎回InnerTube APIを呼ぶことでbaseUrlの署名期限切れを回避する。
  */
-function fetchTimedText(baseUrl) {
+function fetchTimedText(videoId, lang) {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
       window.removeEventListener('message', handler);
-      reject(new Error('timedtext APIの取得がタイムアウトしました'));
-    }, 10000);
+      reject(new Error('字幕の取得がタイムアウトしました'));
+    }, 15000);
 
     function handler(event) {
       if (event.source !== window || event.data?.type !== 'YCS_TIMEDTEXT_RESPONSE') return;
@@ -2342,7 +2330,7 @@ function fetchTimedText(baseUrl) {
     }
 
     window.addEventListener('message', handler);
-    window.postMessage({ type: 'YCS_FETCH_TIMEDTEXT', baseUrl }, '*');
+    window.postMessage({ type: 'YCS_FETCH_TIMEDTEXT', videoId, lang }, '*');
   });
 }
 
