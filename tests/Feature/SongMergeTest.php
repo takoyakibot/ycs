@@ -2,12 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Models\Archive;
+use App\Models\Channel;
 use App\Models\Song;
 use App\Models\TimestampSongMapping;
 use App\Models\TsItem;
 use App\Models\User;
-use App\Models\Archive;
-use App\Models\Channel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -172,12 +172,12 @@ class SongMergeTest extends TestCase
 
     public function test_search_songs_for_merge_returns_partial_matches(): void
     {
-        Song::factory()->create(['title' => '夜に駆ける', 'artist' => 'YOASOBI']);
-        Song::factory()->create(['title' => '夜に駆ける / YOASOBI', 'artist' => '']);
-        Song::factory()->create(['title' => '全く関係ない曲', 'artist' => 'Other']);
+        Song::factory()->create(['title' => 'Yoru ni Kakeru', 'artist' => 'YOASOBI']);
+        Song::factory()->create(['title' => 'Yoru ni Kakeru / YOASOBI', 'artist' => '']);
+        Song::factory()->create(['title' => 'Unrelated Song', 'artist' => 'Other']);
 
         $response = $this->actingAs($this->user)
-            ->getJson('/api/songs/search-for-merge?search=夜に駆ける');
+            ->getJson('/api/songs/search-for-merge?search=Yoru ni Kakeru');
 
         $response->assertStatus(200);
         $data = $response->json();
