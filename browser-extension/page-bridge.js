@@ -18,12 +18,40 @@
   }
 
   /**
+   * POT (Proof of Origin Token) を取得する。
+   * 2025年4月以降、YouTubeのtimedtext APIはPOTを要求する。
+   */
+  function getPoToken() {
+    // playerResponseのserviceIntegrityDimensions
+    const player = document.querySelector('#movie_player');
+    const pr = player?.getPlayerResponse?.() || window.ytInitialPlayerResponse;
+    const pot = pr?.serviceIntegrityDimensions?.poToken;
+    if (pot) return pot;
+
+    // ytcfgから取得
+    const cfg = window.ytcfg;
+    const ctxPot = cfg?.get?.('INNERTUBE_CONTEXT')?.serviceIntegrityDimensions?.poToken;
+    if (ctxPot) return ctxPot;
+
+    // PLAYER_VARSから取得
+    const pvPot = cfg?.data_?.PLAYER_VARS?.pot;
+    if (pvPot) return pvPot;
+
+    return null;
+  }
+
+  /**
    * timedtext URLから字幕セグメントを取得する（JSON3→XMLフォールバック）
+   * POTが利用可能な場合はURLに付与する。
    */
   function fetchTimedTextSegments(baseUrl) {
+    // POTをURLに付与
+    const pot = getPoToken();
+
     function tryJson3() {
       const url = new URL(baseUrl);
       url.searchParams.set('fmt', 'json3');
+      if (pot) url.searchParams.set('pot', pot);
       return fetch(url.toString(), { credentials: 'include' })
         .then(res => {
           if (!res.ok) throw new Error('json3 HTTP ' + res.status);
@@ -48,13 +76,15 @@
     }
 
     function tryXml() {
-      return fetch(baseUrl, { credentials: 'include' })
+      const xmlUrl = new URL(baseUrl);
+      if (pot) xmlUrl.searchParams.set('pot', pot);
+      return fetch(xmlUrl.toString(), { credentials: 'include' })
         .then(res => {
           if (!res.ok) throw new Error('xml HTTP ' + res.status);
           return res.text();
         })
         .then(text => {
-          if (!text || text.trim().length === 0) throw new Error('xml empty');
+          if (!text || text.trim().length === 0) throw new Error('xml empty (pot=' + (pot ? 'yes' : 'no') + ')');
           const parser = new DOMParser();
           const doc = parser.parseFromString(text, 'text/xml');
           const textEls = doc.querySelectorAll('text');
