@@ -54,11 +54,14 @@ class RefreshArchiveService
 
     public function refreshArchives(Channel $channel): int
     {
+        // チャンネルの除去パターンをロード
+        $stripPatterns = $channel->stripPatterns()->pluck('pattern')->toArray();
+
         // 外部API呼び出しを全てトランザクション外で事前に実行
         // 1. archivesとts_itemsの取得および整形
         try {
             $rtn_archives = $this->youtubeService
-                ->getArchivesAndTsItems($channel->channel_id);
+                ->getArchivesAndTsItems($channel->channel_id, $stripPatterns);
         } catch (Exception $e) {
             error_log($e->getMessage());
             throw new Exception('youtubeとの接続でエラーが発生しました');
@@ -112,7 +115,7 @@ class RefreshArchiveService
             }
             try {
                 // API呼び出しのみ実行し、結果を保存
-                $comment_ts_items_map[$video_id] = $this->youtubeService->getTimeStampsFromComments($video_id);
+                $comment_ts_items_map[$video_id] = $this->youtubeService->getTimeStampsFromComments($video_id, $stripPatterns);
             } catch (Exception $e) {
                 error_log($e->getMessage());
                 throw new Exception('youtubeとの接続でエラーが発生しました');
@@ -268,8 +271,18 @@ class RefreshArchiveService
      */
     public function refreshTimeStampsFromComments(string $videoId): void
     {
+        // videoIdからチャンネルの除去パターンを取得
+        $archive = Archive::where('video_id', $videoId)->first();
+        $stripPatterns = [];
+        if ($archive) {
+            $channel = Channel::where('channel_id', $archive->channel_id)->first();
+            if ($channel) {
+                $stripPatterns = $channel->stripPatterns()->pluck('pattern')->toArray();
+            }
+        }
+
         try {
-            $ts_items = $this->youtubeService->getTimeStampsFromComments($videoId);
+            $ts_items = $this->youtubeService->getTimeStampsFromComments($videoId, $stripPatterns);
         } catch (Exception $e) {
             error_log($e->getMessage());
             throw new Exception('youtubeとの接続でエラーが発生しました');

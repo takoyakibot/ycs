@@ -7,6 +7,12 @@ document.addEventListener('DOMContentLoaded', function () {
     const addExcludedWordBtn = document.getElementById('addExcludedWordBtn');
     const excludedWordError = document.getElementById('excludedWordError');
     const excludedWordsList = document.getElementById('excludedWordsList');
+    const newStripPatternInput = document.getElementById('newStripPattern');
+    const addStripPatternBtn = document.getElementById('addStripPatternBtn');
+    const stripPatternError = document.getElementById('stripPatternError');
+    const stripPatternsList = document.getElementById('stripPatternsList');
+    const reapplyStripPatternsBtn = document.getElementById('reapplyStripPatternsBtn');
+    const stripPatternMessage = document.getElementById('stripPatternMessage');
     const loadPreviewBtn = document.getElementById('loadPreviewBtn');
     const reprocessBtn = document.getElementById('reprocessBtn');
     const previewMessage = document.getElementById('previewMessage');
@@ -178,6 +184,136 @@ document.addEventListener('DOMContentLoaded', function () {
             });
     }
 
+    // 除去パターン一覧の取得
+    function fetchStripPatterns() {
+        axios.get(`/api/manage/channels/${encodeURIComponent(cryptHandle)}/strip-patterns`)
+            .then(function (response) {
+                const patterns = response.data;
+                if (patterns.length === 0) {
+                    stripPatternsList.innerHTML = '<div class="text-center text-gray-500 dark:text-gray-400 py-4">除去パターンが登録されていません</div>';
+                    return;
+                }
+
+                let html = '<ul class="divide-y dark:divide-gray-700">';
+                patterns.forEach(pattern => {
+                    html += `
+                        <li class="flex items-center justify-between px-4 py-3">
+                            <span class="text-gray-800 dark:text-gray-200">${escapeHTML(pattern.pattern)}</span>
+                            <button type="button" class="delete-pattern-btn text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-sm" data-id="${escapeHTML(pattern.id)}">
+                                削除
+                            </button>
+                        </li>
+                    `;
+                });
+                html += '</ul>';
+                stripPatternsList.innerHTML = html;
+
+                document.querySelectorAll('.delete-pattern-btn').forEach(btn => {
+                    btn.addEventListener('click', function () {
+                        deleteStripPattern(this.dataset.id);
+                    });
+                });
+            })
+            .catch(function (error) {
+                console.error("Error fetching strip patterns:", error);
+                stripPatternsList.innerHTML = '<div class="text-center text-red-500 py-4">除去パターンの取得に失敗しました</div>';
+            });
+    }
+
+    // 除去パターンの追加
+    function addStripPattern() {
+        const pattern = newStripPatternInput.value.trim();
+        if (!pattern) {
+            showStripPatternError('除去パターンを入力してください');
+            return;
+        }
+
+        if (isProcessing) return;
+        isProcessing = true;
+        toggleButtonDisabled(addStripPatternBtn, true);
+
+        axios.post(`/api/manage/channels/${encodeURIComponent(cryptHandle)}/strip-patterns`, { pattern })
+            .then(function () {
+                newStripPatternInput.value = '';
+                hideStripPatternError();
+                fetchStripPatterns();
+            })
+            .catch(function (error) {
+                if (error.response && error.response.data && error.response.data.message) {
+                    showStripPatternError(error.response.data.message);
+                } else {
+                    showStripPatternError('エラーが発生しました');
+                }
+            })
+            .finally(function () {
+                isProcessing = false;
+                toggleButtonDisabled(addStripPatternBtn, false);
+            });
+    }
+
+    // 除去パターンの削除
+    function deleteStripPattern(patternId) {
+        if (isProcessing) return;
+        if (!confirm('この除去パターンを削除しますか？')) return;
+
+        isProcessing = true;
+
+        axios.delete(`/api/manage/channels/${encodeURIComponent(cryptHandle)}/strip-patterns/${encodeURIComponent(patternId)}`)
+            .then(function () {
+                fetchStripPatterns();
+            })
+            .catch(function (error) {
+                console.error("Error deleting strip pattern:", error);
+                alert('削除に失敗しました');
+            })
+            .finally(function () {
+                isProcessing = false;
+            });
+    }
+
+    // 除去パターンの再適用
+    function reapplyStripPatterns() {
+        if (isProcessing) return;
+        if (!confirm('既存のタイムスタンプに除去パターンを再適用しますか？\nnormalized_textが再生成されます。')) return;
+
+        isProcessing = true;
+        toggleButtonDisabled(reapplyStripPatternsBtn, true);
+
+        showStripPatternMessage('再適用中...', 'text-gray-600');
+
+        axios.post(`/api/manage/channels/${encodeURIComponent(cryptHandle)}/strip-patterns/reapply`)
+            .then(function (response) {
+                showStripPatternMessage(response.data.message, 'text-green-600');
+            })
+            .catch(function (error) {
+                console.error("Error reapplying strip patterns:", error);
+                showStripPatternMessage('再適用に失敗しました', 'text-red-500');
+            })
+            .finally(function () {
+                isProcessing = false;
+                toggleButtonDisabled(reapplyStripPatternsBtn, false);
+            });
+    }
+
+    // 除去パターンエラー表示
+    function showStripPatternError(message) {
+        stripPatternError.textContent = message;
+        stripPatternError.classList.remove('hidden');
+    }
+
+    // 除去パターンエラー非表示
+    function hideStripPatternError() {
+        stripPatternError.textContent = '';
+        stripPatternError.classList.add('hidden');
+    }
+
+    // 除去パターンメッセージ表示
+    function showStripPatternMessage(message, colorClass) {
+        stripPatternMessage.textContent = message;
+        stripPatternMessage.className = `text-sm mt-2 ${colorClass}`;
+        stripPatternMessage.classList.remove('hidden');
+    }
+
     // マッピング状態に応じたCSSクラスを返す
     function getMappingClass(status) {
         switch (status) {
@@ -225,9 +361,18 @@ document.addEventListener('DOMContentLoaded', function () {
             addExcludedWord();
         }
     });
+    addStripPatternBtn.addEventListener('click', addStripPattern);
+    newStripPatternInput.addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            addStripPattern();
+        }
+    });
+    reapplyStripPatternsBtn.addEventListener('click', reapplyStripPatterns);
     loadPreviewBtn.addEventListener('click', loadPreview);
     reprocessBtn.addEventListener('click', reprocessCoverSongs);
 
     // 初期化
     fetchExcludedWords();
+    fetchStripPatterns();
 });

@@ -8,15 +8,32 @@ use Illuminate\Support\Str;
 class TimestampExtractorService
 {
     /**
+     * 除去パターンを適用してテキストから装飾文字を除去する
+     *
+     * @param  string  $text  元テキスト
+     * @param  array  $stripPatterns  除去パターン文字列の配列
+     * @return string 除去後のテキスト
+     */
+    public static function applyStripPatterns(string $text, array $stripPatterns): string
+    {
+        foreach ($stripPatterns as $pattern) {
+            $text = str_replace($pattern, '', $text);
+        }
+
+        return trim($text);
+    }
+
+    /**
      * テキストからタイムスタンプを抽出
      *
      * @param  string  $videoId  動画ID
      * @param  string  $type  タイプ（1: description, 2: comment）
      * @param  string  $description  抽出対象のテキスト
      * @param  string  $commentId  コメントID
+     * @param  array  $stripPatterns  除去パターン文字列の配列（チャンネル設定）
      * @return array タイムスタンプ配列
      */
-    public function extractTimestamps(string $videoId, string $type, string $description, string $commentId): array
+    public function extractTimestamps(string $videoId, string $type, string $description, string $commentId, array $stripPatterns = []): array
     {
         // 引数のバリデーション
         if (! is_string($videoId) || ! is_string($description)) {
@@ -48,6 +65,11 @@ class TimestampExtractorService
                 // 不正なUTF-8をサニタイズしてから保存
                 $sanitizedComment = TextNormalizer::sanitizeUtf8($comment);
 
+                // 除去パターンを適用してからnormalize（textは元のまま保持）
+                $textForNormalize = ! empty($stripPatterns)
+                    ? self::applyStripPatterns($sanitizedComment, $stripPatterns)
+                    : $sanitizedComment;
+
                 // 結果に追加
                 $results[] = [
                     'id' => Str::ulid(),
@@ -57,7 +79,7 @@ class TimestampExtractorService
                     'ts_text' => $timestamp,
                     'ts_num' => $this->timestampToSeconds($timestamp),
                     'text' => $sanitizedComment,
-                    'normalized_text' => TextNormalizer::normalize($sanitizedComment),
+                    'normalized_text' => TextNormalizer::normalize($textForNormalize),
                 ];
             }
         }
