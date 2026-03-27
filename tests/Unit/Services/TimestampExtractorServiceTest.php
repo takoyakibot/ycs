@@ -2,6 +2,7 @@
 
 namespace Tests\Unit\Services;
 
+use App\Helpers\TextNormalizer;
 use App\Services\TimestampExtractorService;
 use Tests\TestCase;
 
@@ -119,9 +120,8 @@ class TimestampExtractorServiceTest extends TestCase
         // textは元のまま保持
         $this->assertEquals('🎵 テスト曲名 ♪', $results[0]['text']);
         $this->assertEquals('▶ アーティスト / 曲名', $results[1]['text']);
-        // normalized_textには除去パターンが適用されている
-        $this->assertStringNotContainsString('🎵', $results[0]['normalized_text']);
-        $this->assertStringNotContainsString('♪', $results[0]['normalized_text']);
-        $this->assertStringNotContainsString('▶', $results[1]['normalized_text']);
+        // normalized_textには除去パターンが適用された上でnormalizeされた値が入る
+        $this->assertEquals(TextNormalizer::normalize('テスト曲名'), $results[0]['normalized_text']);
+        $this->assertEquals(TextNormalizer::normalize('アーティスト / 曲名'), $results[1]['normalized_text']);
     }
 }

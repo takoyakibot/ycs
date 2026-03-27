@@ -274,7 +274,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // 除去パターンの再適用
     function reapplyStripPatterns() {
         if (isProcessing) return;
-        if (!confirm('既存のタイムスタンプに除去パターンを再適用しますか？\nnormalized_textが再生成されます。')) return;
+        if (!confirm('既存のタイムスタンプに除去パターンを再適用しますか？\n照合テキストが再生成され、自動紐付けがリセットされます。')) return;
 
         isProcessing = true;
         toggleButtonDisabled(reapplyStripPatternsBtn, true);

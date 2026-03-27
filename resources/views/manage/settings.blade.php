@@ -85,7 +85,7 @@
                     <x-primary-button id="reapplyStripPatternsBtn" type="button" class="bg-orange-600 hover:bg-orange-700">
                         既存タイムスタンプに再適用
                     </x-primary-button>
-                    <span class="text-xs text-gray-500 dark:text-gray-400 ml-2">パターン変更後に実行すると、既存のタイムスタンプのnormalized_textが更新されます</span>
+                    <span class="text-xs text-gray-500 dark:text-gray-400 ml-2">パターン変更後に実行すると、既存のタイムスタンプの照合テキストが再生成されます</span>
                 </div>
                 <div id="stripPatternMessage" class="text-sm mt-2 hidden"></div>
             </div>
