@@ -34,24 +34,38 @@ class SongMergeService
 
         $groups = $query->limit(50)->get();
 
-        // 各グループの詳細情報を取得
-        return $groups->map(function ($group) {
-            $songs = Song::where('normalized_title', $group->normalized_title)
-                ->where('normalized_artist', $group->normalized_artist)
-                ->withCount('mappings')
-                ->get()
-                ->map(function ($song) {
-                    $tsItemCount = TsItem::where('song_id', $song->id)->count();
+        // 全グループの楽曲を一括取得（N+1クエリ対策）
+        $groupKeys = $groups->map(fn ($g) => [$g->normalized_title, $g->normalized_artist]);
 
-                    return [
-                        'id' => $song->id,
-                        'title' => $song->title,
-                        'artist' => $song->artist,
-                        'spotify_track_id' => $song->spotify_track_id,
-                        'mappings_count' => $song->mappings_count,
-                        'ts_items_count' => $tsItemCount,
-                    ];
+        $allSongs = Song::where(function ($q) use ($groupKeys) {
+            foreach ($groupKeys as $key) {
+                $q->orWhere(function ($q2) use ($key) {
+                    $q2->where('normalized_title', $key[0])
+                        ->where('normalized_artist', $key[1]);
                 });
+            }
+        })
+            ->withCount('mappings')
+            ->get();
+
+        // ts_items.song_idのカウントを一括取得
+        $songIds = $allSongs->pluck('id')->toArray();
+        $tsItemCounts = TsItem::selectRaw('song_id, COUNT(*) as count')
+            ->whereIn('song_id', $songIds)
+            ->groupBy('song_id')
+            ->pluck('count', 'song_id');
+
+        return $groups->map(function ($group) use ($allSongs, $tsItemCounts) {
+            $songs = $allSongs->filter(fn ($s) => $s->normalized_title === $group->normalized_title
+                    && $s->normalized_artist === $group->normalized_artist)
+                ->map(fn ($song) => [
+                    'id' => $song->id,
+                    'title' => $song->title,
+                    'artist' => $song->artist,
+                    'spotify_track_id' => $song->spotify_track_id,
+                    'mappings_count' => $song->mappings_count,
+                    'ts_items_count' => $tsItemCounts->get($song->id, 0),
+                ])->values();
 
             return [
                 'normalized_title' => $group->normalized_title,
@@ -74,7 +88,7 @@ class SongMergeService
      */
     public function merge(string $sourceSongId, string $targetSongId, ?int $userId = null): array
     {
-        $userId = $userId ?? Auth::id();
+        $userId = $userId ?? Auth::id() ?? throw new \RuntimeException('認証されていないユーザーによるマージは許可されていません');
 
         $sourceSong = Song::findOrFail($sourceSongId);
         $targetSong = Song::findOrFail($targetSongId);
@@ -89,23 +103,21 @@ class SongMergeService
                 ->update(['song_id' => $targetSong->id]);
 
             // ログ記録
-            if ($userId) {
-                NormalizationLog::log(
-                    $userId,
-                    NormalizationLog::ACTION_MERGE_SONG,
-                    NormalizationLog::TARGET_SONG,
-                    $targetSong->id,
-                    [
-                        'source_song_id' => $sourceSong->id,
-                        'source_title' => $sourceSong->title,
-                        'source_artist' => $sourceSong->artist,
-                        'target_title' => $targetSong->title,
-                        'target_artist' => $targetSong->artist,
-                        'affected_mappings' => $affectedMappings,
-                        'affected_ts_items' => $affectedTsItems,
-                    ]
-                );
-            }
+            NormalizationLog::log(
+                $userId,
+                NormalizationLog::ACTION_MERGE_SONG,
+                NormalizationLog::TARGET_SONG,
+                $targetSong->id,
+                [
+                    'source_song_id' => $sourceSong->id,
+                    'source_title' => $sourceSong->title,
+                    'source_artist' => $sourceSong->artist,
+                    'target_title' => $targetSong->title,
+                    'target_artist' => $targetSong->artist,
+                    'affected_mappings' => $affectedMappings,
+                    'affected_ts_items' => $affectedTsItems,
+                ]
+            );
 
             // マージ元を削除
             $sourceSong->delete();

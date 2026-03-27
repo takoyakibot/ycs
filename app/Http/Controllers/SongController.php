@@ -101,7 +101,8 @@ class SongController extends Controller
                 $result['affected_mappings'],
                 $result['affected_ts_items']
             ),
-            ...$result,
+            'affected_mappings' => $result['affected_mappings'],
+            'affected_ts_items' => $result['affected_ts_items'],
         ]);
     }
 
