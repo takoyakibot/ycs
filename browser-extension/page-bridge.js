@@ -5,10 +5,37 @@
  * web_accessible_resourcesとして登録し、<script src>で読み込むことでCSPを回避する。
  */
 (function () {
+  // timedtextレスポンスのキャッシュ（fetchインターセプトで収集）
+  const timedTextCache = {};
+
+  /**
+   * fetchをインターセプトしてtimedtextレスポンスをキャッシュする。
+   * YouTubeプレイヤーが字幕を読み込む際のリクエストを横取りする。
+   */
+  const originalFetch = window.fetch;
+  window.fetch = async function (...args) {
+    const response = await originalFetch.apply(this, args);
+    try {
+      const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
+      if (url.includes('/api/timedtext') || url.includes('timedtext')) {
+        const clone = response.clone();
+        const text = await clone.text();
+        if (text && text.trim().length > 0) {
+          // URLからlangパラメータを抽出してキーにする
+          const urlObj = new URL(url, location.origin);
+          const lang = urlObj.searchParams.get('lang') || 'unknown';
+          const videoId = urlObj.searchParams.get('v') || 'unknown';
+          timedTextCache[videoId + ':' + lang] = { text, url, timestamp: Date.now() };
+        }
+      }
+    } catch (e) {
+      // インターセプトのエラーは無視（元のfetchに影響させない）
+    }
+    return response;
+  };
+
   /**
    * 最新のプレイヤーレスポンスを取得する。
-   * ytInitialPlayerResponseはSPA遷移で古くなるため、
-   * movie_player.getPlayerResponse()を優先的に使用する。
    */
   function getPlayerResponse() {
     const player = document.querySelector('#movie_player');
@@ -18,91 +45,134 @@
   }
 
   /**
-   * POT (Proof of Origin Token) を取得する。
-   * 2025年4月以降、YouTubeのtimedtext APIはPOTを要求する。
+   * timedtextのJSON3レスポンスをセグメントに変換
    */
-  function getPoToken() {
-    // playerResponseのserviceIntegrityDimensions
-    const player = document.querySelector('#movie_player');
-    const pr = player?.getPlayerResponse?.() || window.ytInitialPlayerResponse;
-    const pot = pr?.serviceIntegrityDimensions?.poToken;
-    if (pot) return pot;
-
-    // ytcfgから取得
-    const cfg = window.ytcfg;
-    const ctxPot = cfg?.get?.('INNERTUBE_CONTEXT')?.serviceIntegrityDimensions?.poToken;
-    if (ctxPot) return ctxPot;
-
-    // PLAYER_VARSから取得
-    const pvPot = cfg?.data_?.PLAYER_VARS?.pot;
-    if (pvPot) return pvPot;
-
-    return null;
+  function parseJson3(text) {
+    const data = JSON.parse(text);
+    const segments = [];
+    for (const ev of (data.events || [])) {
+      if (!ev.segs) continue;
+      const t = ev.segs.map(s => s.utf8 || '').join('');
+      if (!t.trim()) continue;
+      segments.push({
+        start: (ev.tStartMs || 0) / 1000,
+        duration: (ev.dDurationMs || 0) / 1000,
+        text: t,
+      });
+    }
+    return segments;
   }
 
   /**
-   * timedtext URLから字幕セグメントを取得する（JSON3→XMLフォールバック）
-   * POTが利用可能な場合はURLに付与する。
+   * timedtextのXMLレスポンスをセグメントに変換
    */
-  function fetchTimedTextSegments(baseUrl) {
-    // POTをURLに付与
-    const pot = getPoToken();
-
-    function tryJson3() {
-      const url = new URL(baseUrl);
-      url.searchParams.set('fmt', 'json3');
-      if (pot) url.searchParams.set('pot', pot);
-      return fetch(url.toString(), { credentials: 'include' })
-        .then(res => {
-          if (!res.ok) throw new Error('json3 HTTP ' + res.status);
-          return res.text();
-        })
-        .then(text => {
-          if (!text || text.trim().length === 0) throw new Error('json3 empty');
-          const data = JSON.parse(text);
-          const segments = [];
-          for (const ev of (data.events || [])) {
-            if (!ev.segs) continue;
-            const t = ev.segs.map(s => s.utf8 || '').join('');
-            if (!t.trim()) continue;
-            segments.push({
-              start: (ev.tStartMs || 0) / 1000,
-              duration: (ev.dDurationMs || 0) / 1000,
-              text: t,
-            });
-          }
-          return segments;
-        });
+  function parseXml(text) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(text, 'text/xml');
+    const textEls = doc.querySelectorAll('text');
+    const segments = [];
+    for (const el of textEls) {
+      const content = el.textContent || '';
+      if (!content.trim()) continue;
+      segments.push({
+        start: parseFloat(el.getAttribute('start') || '0'),
+        duration: parseFloat(el.getAttribute('dur') || '0'),
+        text: content,
+      });
     }
+    return segments;
+  }
 
-    function tryXml() {
-      const xmlUrl = new URL(baseUrl);
-      if (pot) xmlUrl.searchParams.set('pot', pot);
-      return fetch(xmlUrl.toString(), { credentials: 'include' })
-        .then(res => {
-          if (!res.ok) throw new Error('xml HTTP ' + res.status);
-          return res.text();
-        })
-        .then(text => {
-          if (!text || text.trim().length === 0) throw new Error('xml empty (pot=' + (pot ? 'yes' : 'no') + ')');
-          const parser = new DOMParser();
-          const doc = parser.parseFromString(text, 'text/xml');
-          const textEls = doc.querySelectorAll('text');
-          const segments = [];
-          for (const el of textEls) {
-            const content = el.textContent || '';
-            if (!content.trim()) continue;
-            segments.push({
-              start: parseFloat(el.getAttribute('start') || '0'),
-              duration: parseFloat(el.getAttribute('dur') || '0'),
-              text: content,
-            });
+  /**
+   * キャッシュまたはプレイヤー字幕有効化でtimedtextを取得
+   */
+  function getTimedTextViaPlayer(videoId, lang) {
+    return new Promise((resolve, reject) => {
+      // 1. キャッシュを確認
+      const cacheKey = videoId + ':' + lang;
+      const cached = timedTextCache[cacheKey];
+      if (cached && (Date.now() - cached.timestamp) < 300000) {
+        try {
+          const segments = cached.text.trim().startsWith('{')
+            ? parseJson3(cached.text)
+            : parseXml(cached.text);
+          resolve(segments);
+          return;
+        } catch (e) {
+          // パース失敗は無視してプレイヤー経由で取得
+        }
+      }
+
+      // 2. プレイヤーの字幕を有効にしてインターセプトを待つ
+      const player = document.querySelector('#movie_player');
+      if (!player) {
+        reject(new Error('movie_playerが見つかりません'));
+        return;
+      }
+
+      // 現在の字幕状態を保存
+      const wasSubtitleOn = player.getOption?.('captions', 'track') != null;
+
+      // 字幕トラックリストを取得
+      const tracklist = player.getOption?.('captions', 'tracklist') || [];
+      let targetTrack = tracklist.find(t => t.languageCode === lang);
+      if (!targetTrack) targetTrack = tracklist.find(t => t.languageCode?.startsWith(lang));
+      if (!targetTrack && tracklist.length > 0) targetTrack = tracklist[0];
+
+      if (!targetTrack) {
+        reject(new Error('字幕トラックがプレイヤーで利用できません'));
+        return;
+      }
+
+      // インターセプト待ちのリスナーを設定
+      let resolved = false;
+      const checkInterval = setInterval(() => {
+        const key = videoId + ':' + (targetTrack.languageCode || lang);
+        const entry = timedTextCache[key];
+        if (entry && (Date.now() - entry.timestamp) < 5000) {
+          clearInterval(checkInterval);
+          clearTimeout(timeoutId);
+          if (resolved) return;
+          resolved = true;
+
+          // 元の字幕状態に戻す
+          if (!wasSubtitleOn) {
+            try { player.setOption?.('captions', 'track', {}); } catch (e) { /* ignore */ }
           }
-          return segments;
-        });
-    }
 
-    return tryJson3().catch(() => tryXml());
+          try {
+            const segments = entry.text.trim().startsWith('{')
+              ? parseJson3(entry.text)
+              : parseXml(entry.text);
+            resolve(segments);
+          } catch (e) {
+            reject(new Error('字幕データのパースに失敗: ' + e.message));
+          }
+        }
+      }, 100);
+
+      const timeoutId = setTimeout(() => {
+        clearInterval(checkInterval);
+        if (resolved) return;
+        resolved = true;
+
+        // 元の字幕状態に戻す
+        if (!wasSubtitleOn) {
+          try { player.setOption?.('captions', 'track', {}); } catch (e) { /* ignore */ }
+        }
+
+        reject(new Error('プレイヤー経由の字幕取得がタイムアウトしました'));
+      }, 8000);
+
+      // 字幕を有効にする（これによりプレイヤーがtimedtextをfetchする）
+      try {
+        player.setOption?.('captions', 'track', targetTrack);
+      } catch (e) {
+        clearInterval(checkInterval);
+        clearTimeout(timeoutId);
+        reject(new Error('字幕の有効化に失敗: ' + e.message));
+      }
+    });
   }
 
   window.addEventListener('message', function (event) {
@@ -126,8 +196,7 @@
       }, '*');
     }
 
-    // timedtext APIで字幕を取得
-    // videoIdとlangから最新のプレイヤーレスポンスのbaseUrlを使用してfetch
+    // プレイヤー経由で字幕を取得
     if (event.data?.type === 'YCS_FETCH_TIMEDTEXT') {
       const videoId = event.data.videoId;
       const lang = event.data.lang || 'ja';
@@ -137,41 +206,12 @@
         return;
       }
 
-      // プレイヤーから最新のキャプショントラックを取得
-      const playerResponse = getPlayerResponse();
-      const tracks = playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
-
-      let track = tracks.find(t => t.languageCode === lang);
-      if (!track) track = tracks.find(t => t.languageCode?.startsWith(lang));
-      if (!track && tracks.length > 0) track = tracks[0];
-
-      if (!track?.baseUrl) {
-        // デバッグ情報を含める
-        const debugInfo = {
-          tracksCount: tracks.length,
-          trackLangs: tracks.map(t => t.languageCode).join(','),
-          hasBaseUrl: tracks.map(t => !!t.baseUrl).join(','),
-          playerResponseKeys: Object.keys(playerResponse || {}).join(','),
-          hasCaptions: !!playerResponse?.captions,
-        };
-        window.postMessage({
-          type: 'YCS_TIMEDTEXT_RESPONSE',
-          error: '字幕トラックが見つかりません (debug: ' + JSON.stringify(debugInfo) + ')',
-        }, '*');
-        return;
-      }
-
-      fetchTimedTextSegments(track.baseUrl)
+      getTimedTextViaPlayer(videoId, lang)
         .then(segments => {
           window.postMessage({ type: 'YCS_TIMEDTEXT_RESPONSE', segments }, '*');
         })
         .catch(err => {
-          // fetchの失敗時もデバッグ情報を含める
-          const urlInfo = track.baseUrl.substring(0, 100) + '...';
-          window.postMessage({
-            type: 'YCS_TIMEDTEXT_RESPONSE',
-            error: 'timedtext fetch失敗: ' + err.message + ' (url: ' + urlInfo + ')',
-          }, '*');
+          window.postMessage({ type: 'YCS_TIMEDTEXT_RESPONSE', error: err.message }, '*');
         });
     }
 
