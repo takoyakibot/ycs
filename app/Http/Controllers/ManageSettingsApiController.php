@@ -134,21 +134,17 @@ class ManageSettingsApiController extends Controller
         }
 
         $validated = $request->validate([
-            'pattern' => 'required|string|max:255',
+            'pattern' => ['required', 'string', 'max:255', 'regex:/\S/'],
         ]);
 
-        $exists = ChannelStripPattern::where('channel_id', $channel->channel_id)
-            ->where('pattern', $validated['pattern'])
-            ->exists();
-
-        if ($exists) {
+        try {
+            $pattern = ChannelStripPattern::create([
+                'channel_id' => $channel->channel_id,
+                'pattern' => $validated['pattern'],
+            ]);
+        } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
             return response()->json(['message' => '既に登録されています'], 422);
         }
-
-        $pattern = ChannelStripPattern::create([
-            'channel_id' => $channel->channel_id,
-            'pattern' => $validated['pattern'],
-        ]);
 
         return response()->json($pattern, 201);
     }
@@ -190,34 +186,52 @@ class ManageSettingsApiController extends Controller
 
         $updatedCount = 0;
 
-        // チャンネルのts_itemsをチャンクで処理
-        TsItem::whereHas('archive', function ($q) use ($channel) {
-            $q->where('channel_id', $channel->channel_id);
-        })
-            ->chunk(200, function ($tsItems) use ($stripPatterns, &$updatedCount) {
-                foreach ($tsItems as $tsItem) {
-                    $text = $tsItem->text;
-                    if (! $text) {
-                        continue;
-                    }
+        \Log::info('reapplyStripPatterns: 処理開始', [
+            'channel_id' => $channel->channel_id,
+            'strip_patterns_count' => count($stripPatterns),
+        ]);
 
-                    // 除去パターンを適用してからnormalize
-                    $textForNormalize = ! empty($stripPatterns)
-                        ? TimestampExtractorService::applyStripPatterns($text, $stripPatterns)
-                        : $text;
-                    $newNormalized = TextNormalizer::normalize($textForNormalize);
+        DB::transaction(function () use ($channel, $stripPatterns, &$updatedCount) {
+            // チャンネルのts_itemsをチャンクで処理
+            TsItem::whereHas('archive', function ($q) use ($channel) {
+                $q->where('channel_id', $channel->channel_id);
+            })
+                ->chunk(200, function ($tsItems) use ($stripPatterns, &$updatedCount) {
+                    foreach ($tsItems as $tsItem) {
+                        // アクセサを経由せず生のtext値を使用（TsItem::savingと同じ）
+                        $rawText = $tsItem->attributes['text'] ?? null;
+                        if (! $rawText) {
+                            continue;
+                        }
 
-                    if ($tsItem->normalized_text !== $newNormalized) {
-                        DB::table('ts_items')
-                            ->where('id', $tsItem->id)
-                            ->update([
-                                'normalized_text' => $newNormalized,
-                                'updated_at' => now(),
-                            ]);
-                        $updatedCount++;
+                        // 除去パターンを適用してからnormalize
+                        $textForNormalize = ! empty($stripPatterns)
+                            ? TimestampExtractorService::applyStripPatterns($rawText, $stripPatterns)
+                            : $rawText;
+                        $newNormalized = TextNormalizer::normalize($textForNormalize);
+
+                        // 正規化結果が空の場合のフォールバック（TsItem::savingと同じロジック）
+                        if ($newNormalized === '' && trim($textForNormalize) !== '') {
+                            $newNormalized = mb_strtolower(trim($textForNormalize), 'UTF-8');
+                        }
+
+                        if ($tsItem->normalized_text !== $newNormalized) {
+                            DB::table('ts_items')
+                                ->where('id', $tsItem->id)
+                                ->update([
+                                    'normalized_text' => $newNormalized,
+                                    'updated_at' => now(),
+                                ]);
+                            $updatedCount++;
+                        }
                     }
-                }
-            });
+                });
+        });
+
+        \Log::info('reapplyStripPatterns: 処理完了', [
+            'channel_id' => $channel->channel_id,
+            'updated_count' => $updatedCount,
+        ]);
 
         return response()->json([
             'message' => sprintf('除去パターンを再適用しました（%d件更新）', $updatedCount),

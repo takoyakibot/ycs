@@ -69,7 +69,9 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::get('api/manage/channels/{id}/strip-patterns', [ManageSettingsApiController::class, 'fetchStripPatterns'])->name('manage.fetchStripPatterns');
     Route::post('api/manage/channels/{id}/strip-patterns', [ManageSettingsApiController::class, 'addStripPattern'])->name('manage.addStripPattern');
     Route::delete('api/manage/channels/{id}/strip-patterns/{patternId}', [ManageSettingsApiController::class, 'deleteStripPattern'])->name('manage.deleteStripPattern');
-    Route::post('api/manage/channels/{id}/strip-patterns/reapply', [ManageSettingsApiController::class, 'reapplyStripPatterns'])->name('manage.reapplyStripPatterns');
+    Route::post('api/manage/channels/{id}/strip-patterns/reapply', [ManageSettingsApiController::class, 'reapplyStripPatterns'])
+        ->name('manage.reapplyStripPatterns')
+        ->middleware('throttle:5,1'); // 1分間に5回まで
 
     Route::get('api/manage/channels/{id}/cover-songs/preview', [ManageSettingsApiController::class, 'previewCoverSongs'])->name('manage.previewCoverSongs');
     Route::post('api/manage/channels/{id}/cover-songs/reprocess', [ManageSettingsApiController::class, 'reprocessCoverSongs'])->name('manage.reprocessCoverSongs');
