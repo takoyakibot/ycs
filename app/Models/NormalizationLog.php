@@ -43,6 +43,8 @@ class NormalizationLog extends Model
 
     public const ACTION_MARK_PENDING = 'mark_pending';
 
+    public const ACTION_MERGE_SONG = 'merge_song';
+
     /**
      * ターゲット種別
      */
