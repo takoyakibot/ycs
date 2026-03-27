@@ -5,12 +5,27 @@
  * web_accessible_resourcesとして登録し、<script src>で読み込むことでCSPを回避する。
  */
 (function () {
+  /**
+   * 最新のプレイヤーレスポンスを取得する。
+   * ytInitialPlayerResponseはSPA遷移で古くなるため、
+   * movie_player.getPlayerResponse()を優先的に使用する。
+   */
+  function getPlayerResponse() {
+    // movie_playerのAPIから最新のレスポンスを取得（SPA遷移対応）
+    const player = document.querySelector('#movie_player');
+    const fresh = player?.getPlayerResponse?.();
+    if (fresh?.captions) return fresh;
+
+    // フォールバック: 初回ロード時のレスポンス
+    return window.ytInitialPlayerResponse;
+  }
+
   window.addEventListener('message', function (event) {
     if (event.source !== window) return;
 
     // 字幕トラック一覧の取得
     if (event.data?.type === 'YCS_GET_CAPTION_TRACKS') {
-      const playerResponse = window.ytInitialPlayerResponse;
+      const playerResponse = getPlayerResponse();
       const captionTracks = playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
 
       window.postMessage({
