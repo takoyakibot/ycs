@@ -81,6 +81,17 @@ class SongController extends Controller
     }
 
     /**
+     * 名寄せ用の楽曲検索（部分一致）
+     */
+    public function searchSongsForMerge(Request $request)
+    {
+        $search = (string) $request->query('search', '');
+        $songs = $this->songMergeService->searchSongs($search);
+
+        return response()->json($songs);
+    }
+
+    /**
      * 楽曲をマージする
      */
     public function mergeSongs(Request $request)

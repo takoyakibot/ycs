@@ -89,6 +89,7 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::delete('api/songs/unlink-ts-item', [SongController::class, 'unlinkTsItem'])->name('songs.unlinkTsItem');
     Route::get('api/songs/ts-items-by-normalized-text', [SongController::class, 'getTsItemsByNormalizedText'])->name('songs.getTsItemsByNormalizedText');
     Route::get('api/songs/duplicates', [SongController::class, 'findDuplicates'])->name('songs.findDuplicates');
+    Route::get('api/songs/search-for-merge', [SongController::class, 'searchSongsForMerge'])->name('songs.searchForMerge');
     Route::post('api/songs/merge', [SongController::class, 'mergeSongs'])->name('songs.mergeSongs');
     // Parameterized route - must be last to avoid capturing specific route names
     Route::put('api/songs/{id}', [SongController::class, 'updateSong'])->name('songs.updateSong');

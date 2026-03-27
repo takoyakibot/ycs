@@ -76,6 +76,43 @@ class SongMergeService
     }
 
     /**
+     * 楽曲を部分一致で検索する（名寄せ候補用）
+     *
+     * @param  string  $search  検索文字列（タイトル・アーティストで部分一致）
+     * @return array 楽曲の配列（マッピング数・ts_item数付き）
+     */
+    public function searchSongs(string $search): array
+    {
+        if ($search === '') {
+            return [];
+        }
+
+        $songs = Song::where(function ($q) use ($search) {
+            $q->where('title', 'LIKE', "%{$search}%")
+                ->orWhere('artist', 'LIKE', "%{$search}%");
+        })
+            ->withCount('mappings')
+            ->orderBy('title')
+            ->limit(100)
+            ->get();
+
+        $songIds = $songs->pluck('id')->toArray();
+        $tsItemCounts = TsItem::selectRaw('song_id, COUNT(*) as count')
+            ->whereIn('song_id', $songIds)
+            ->groupBy('song_id')
+            ->pluck('count', 'song_id');
+
+        return $songs->map(fn ($song) => [
+            'id' => $song->id,
+            'title' => $song->title,
+            'artist' => $song->artist,
+            'spotify_track_id' => $song->spotify_track_id,
+            'mappings_count' => $song->mappings_count,
+            'ts_items_count' => $tsItemCounts->get($song->id, 0),
+        ])->toArray();
+    }
+
+    /**
      * 2つの楽曲をマージする
      *
      * source の楽曲に紐付くマッピングと個別ts_itemをすべて target に付け替え、

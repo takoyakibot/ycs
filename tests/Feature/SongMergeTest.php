@@ -169,4 +169,29 @@ class SongMergeTest extends TestCase
         $response->assertStatus(200)
             ->assertJsonCount(0);
     }
+
+    public function test_search_songs_for_merge_returns_partial_matches(): void
+    {
+        Song::factory()->create(['title' => '夜に駆ける', 'artist' => 'YOASOBI']);
+        Song::factory()->create(['title' => '夜に駆ける / YOASOBI', 'artist' => '']);
+        Song::factory()->create(['title' => '全く関係ない曲', 'artist' => 'Other']);
+
+        $response = $this->actingAs($this->user)
+            ->getJson('/api/songs/search-for-merge?search=夜に駆ける');
+
+        $response->assertStatus(200);
+        $data = $response->json();
+        $this->assertCount(2, $data);
+    }
+
+    public function test_search_songs_for_merge_empty_search_returns_empty(): void
+    {
+        Song::factory()->create(['title' => 'Test']);
+
+        $response = $this->actingAs($this->user)
+            ->getJson('/api/songs/search-for-merge?search=');
+
+        $response->assertStatus(200)
+            ->assertJsonCount(0);
+    }
 }
