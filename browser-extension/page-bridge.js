@@ -14,7 +14,19 @@
       const urlObj = new URL(url, location.origin);
       const lang = urlObj.searchParams.get('lang') || 'unknown';
       const videoId = urlObj.searchParams.get('v') || 'unknown';
-      timedTextCache[videoId + ':' + lang] = { text, url, timestamp: Date.now() };
+      const key = videoId + ':' + lang;
+      if (!timedTextCache[key]) {
+        timedTextCache[key] = { entries: [], lastUpdated: 0 };
+      }
+      // 同一URLのレスポンスは更新、異なるURLは追加
+      const existing = timedTextCache[key].entries.findIndex(e => e.url === url);
+      const entry = { text, url, timestamp: Date.now() };
+      if (existing >= 0) {
+        timedTextCache[key].entries[existing] = entry;
+      } else {
+        timedTextCache[key].entries.push(entry);
+      }
+      timedTextCache[key].lastUpdated = Date.now();
     } catch (e) { /* ignore */ }
   }
 
@@ -103,34 +115,58 @@
   }
 
   /**
+   * 複数チャンクのセグメントを結合し、重複を除去する
+   */
+  function mergeSegments(entriesArray) {
+    const allSegments = [];
+    for (const entry of entriesArray) {
+      try {
+        const segments = entry.text.trim().startsWith('{')
+          ? parseJson3(entry.text) : parseXml(entry.text);
+        allSegments.push(...segments);
+      } catch (e) { /* skip */ }
+    }
+    // startでソートし、重複除去（0.1秒以内は同一とみなす）
+    allSegments.sort((a, b) => a.start - b.start);
+    const unique = [];
+    for (const seg of allSegments) {
+      if (unique.length === 0 || Math.abs(seg.start - unique[unique.length - 1].start) > 0.1) {
+        unique.push(seg);
+      }
+    }
+    return unique;
+  }
+
+  /**
    * キャッシュまたはCCボタン経由でtimedtextを取得
    */
   function getTimedTextViaPlayer(videoId, lang) {
     return new Promise((resolve, reject) => {
-      // 1. キャッシュを確認（言語完全一致→前方一致→任意の言語）
+      // キャッシュを確認（言語完全一致→前方一致→任意の言語）
       function findCache() {
         const exact = timedTextCache[videoId + ':' + lang];
-        if (exact && (Date.now() - exact.timestamp) < 300000) return exact;
+        if (exact && (Date.now() - exact.lastUpdated) < 300000) return exact;
         for (const key of Object.keys(timedTextCache)) {
-          if (key.startsWith(videoId + ':') && (Date.now() - timedTextCache[key].timestamp) < 300000) {
+          if (key.startsWith(videoId + ':') && (Date.now() - timedTextCache[key].lastUpdated) < 300000) {
             return timedTextCache[key];
           }
         }
         return null;
       }
 
+      // キャッシュヒット時は全エントリを結合して返す
       const cached = findCache();
-      if (cached) {
+      if (cached && cached.entries.length > 0) {
         try {
-          const segments = cached.text.trim().startsWith('{')
-            ? parseJson3(cached.text)
-            : parseXml(cached.text);
-          resolve(segments);
-          return;
-        } catch (e) { /* パース失敗は無視 */ }
+          const segments = mergeSegments(cached.entries);
+          if (segments.length > 0) {
+            resolve(segments);
+            return;
+          }
+        } catch (e) { /* パース失敗は無視、CCボタン経由で再取得 */ }
       }
 
-      // 2. CCボタンをクリックして字幕を有効にし、インターセプトを待つ
+      // CCボタンをクリックして字幕を有効にし、インターセプトを待つ
       const ccButton = document.querySelector('.ytp-subtitles-button');
       if (!ccButton) {
         reject(new Error('字幕ボタンが見つかりません'));
@@ -139,26 +175,44 @@
 
       const wasOn = ccButton.getAttribute('aria-pressed') === 'true';
 
+      // CCクリック前に該当videoIdのキャッシュを全てクリア（lang不一致キーの混入防止）
+      for (const key of Object.keys(timedTextCache)) {
+        if (key.startsWith(videoId + ':')) delete timedTextCache[key];
+      }
+
       let resolved = false;
+      let lastEntryCount = 0;
+      let stableStartTime = 0;
+      const STABLE_WAIT_MS = 2000;
+      const TIMEOUT_MS = 15000;
+
       const checkInterval = setInterval(() => {
         const entry = findCache();
-        if (entry && (Date.now() - entry.timestamp) < 5000) {
+        if (!entry || entry.entries.length === 0) return;
+
+        const currentCount = entry.entries.length;
+        if (currentCount > lastEntryCount) {
+          // 新しいチャンクが到着した → 安定タイマーをリセット
+          lastEntryCount = currentCount;
+          stableStartTime = Date.now();
+        } else if (stableStartTime > 0 && (Date.now() - stableStartTime) >= STABLE_WAIT_MS) {
+          // 安定期間経過 → 全チャンクを結合してresolve
           clearInterval(checkInterval);
           clearTimeout(timeoutId);
           if (resolved) return;
           resolved = true;
 
-          // 元の状態に戻す
           if (!wasOn) {
             try { ccButton.click(); } catch (e) { /* ignore */ }
           }
 
           try {
-            const segments = entry.text.trim().startsWith('{')
-              ? parseJson3(entry.text)
-              : parseXml(entry.text);
+            const segments = mergeSegments(entry.entries);
             resolve(segments);
           } catch (e) {
+            if (!wasOn) {
+              try { ccButton.click(); } catch (_) { /* ignore */ }
+            }
             reject(new Error('字幕データのパースに失敗: ' + e.message));
           }
         }
@@ -173,20 +227,20 @@
           try { ccButton.click(); } catch (e) { /* ignore */ }
         }
 
-        // タイムアウト時にキャッシュにあれば使う（古くてもOK）
+        // タイムアウト時にキャッシュにあれば使う
         const lastResort = findCache();
-        if (lastResort) {
+        if (lastResort && lastResort.entries.length > 0) {
           try {
-            const segments = lastResort.text.trim().startsWith('{')
-              ? parseJson3(lastResort.text)
-              : parseXml(lastResort.text);
-            resolve(segments);
-            return;
+            const segments = mergeSegments(lastResort.entries);
+            if (segments.length > 0) {
+              resolve(segments);
+              return;
+            }
           } catch (e) { /* ignore */ }
         }
 
         reject(new Error('プレイヤー経由の字幕取得がタイムアウトしました（CCボタンクリック後にtimedtextリクエストを検出できませんでした）'));
-      }, 8000);
+      }, TIMEOUT_MS);
 
       // CCが既にONならOFF→ONでリロードを強制
       if (wasOn) {
