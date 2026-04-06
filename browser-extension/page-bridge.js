@@ -175,7 +175,9 @@
 
       const wasOn = ccButton.getAttribute('aria-pressed') === 'true';
 
-      // CCクリック前に該当videoIdのキャッシュを全てクリア（lang不一致キーの混入防止）
+      // CCクリック前に該当videoIdのキャッシュを全てクリア
+      // lang=unknownなどの別言語キーが残ると古いチャンクが混入するため、
+      // videoIdに紐づく全キーを削除してクリーンな状態からチャンク蓄積を開始する
       for (const key of Object.keys(timedTextCache)) {
         if (key.startsWith(videoId + ':')) delete timedTextCache[key];
       }
@@ -183,7 +185,9 @@
       let resolved = false;
       let lastEntryCount = 0;
       let stableStartTime = 0;
+      // YouTubeのチャンク分割間隔は通常1秒未満のため、2秒の無通信で全チャンク到着と判定
       const STABLE_WAIT_MS = 2000;
+      // 長時間動画ではチャンク数が多くなるため、タイムアウトを15秒に設定
       const TIMEOUT_MS = 15000;
 
       const checkInterval = setInterval(() => {
