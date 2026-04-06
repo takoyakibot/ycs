@@ -74,6 +74,9 @@ const CHAT_MAX_AGE_DAYS = 30; // 30日以上前のデータは削除
 let subtitlePanel = null;
 let subtitlePanelVisible = false;
 
+// 字幕サーバー送信用（重複送信防止キャッシュ）
+const subtitleSentCache = new Set();
+
 /**
  * 埋め込みUI設定を読み込む
  */
@@ -2296,6 +2299,9 @@ async function fetchSubtitleContent(videoId) {
     }
 
     renderSubtitleResults(currentSubtitles);
+
+    // サーバーに自動送信
+    sendSubtitlesToServer(videoId, selectedLang, currentSubtitles);
   } catch (error) {
     console.error('字幕取得エラー:', error);
     if (statusEl) {
@@ -2304,6 +2310,57 @@ async function fetchSubtitleContent(videoId) {
     }
   } finally {
     if (fetchBtn) fetchBtn.disabled = false;
+  }
+}
+
+/**
+ * 字幕データをYCSサーバーに自動送信
+ * 失敗時はconsole.warnのみ（字幕表示自体は影響させない）
+ */
+async function sendSubtitlesToServer(videoId, lang, subtitles) {
+  if (!videoId || !subtitles || subtitles.length === 0) return;
+
+  // 選択中のトラックからkindを判定
+  const selectEl = subtitlePanel?.querySelector('#stp-lang-select');
+  const selectedOption = selectEl?.selectedOptions?.[0];
+  const selectedLang = selectedOption?.dataset?.lang || lang;
+  const selectedTrack = currentCaptionTracks.find(t => t.languageCode === selectedLang);
+  const kind = selectedTrack?.kind === 'asr' ? 'asr' : '';
+
+  // 重複送信防止
+  const cacheKey = `${videoId}_${selectedLang}_${kind}`;
+  if (subtitleSentCache.has(cacheKey)) return;
+
+  try {
+    const response = await fetch('http://localhost:8000/api/manage/archives/subtitles/store', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+      credentials: 'include',
+      body: JSON.stringify({
+        video_id: videoId,
+        language_code: selectedLang,
+        kind: kind,
+        subtitles: subtitles.map(s => ({
+          start: s.start,
+          duration: s.duration,
+          text: s.text,
+        })),
+      }),
+    });
+
+    if (response.ok) {
+      subtitleSentCache.add(cacheKey);
+      const data = await response.json();
+      console.log(`[YCS] 字幕データ送信成功: ${videoId} (${data.segment_count}セグメント, FP: ${data.fingerprints_generated}件)`);
+    } else {
+      console.warn(`[YCS] 字幕データ送信失敗: ${response.status}`);
+    }
+  } catch (error) {
+    console.warn('[YCS] 字幕データ送信エラー:', error.message);
   }
 }
 
