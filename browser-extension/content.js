@@ -2122,6 +2122,19 @@ function createSubtitlePanel() {
         padding: 20px;
         font-size: 12px;
       }
+      .stp-load-more {
+        text-align: center;
+        color: #aaa;
+        padding: 8px;
+        font-size: 12px;
+        cursor: pointer;
+        border-top: 1px solid #444;
+        margin-top: 4px;
+      }
+      .stp-load-more:hover {
+        color: #fff;
+        background: #444;
+      }
     </style>
     <div class="stp-header">
       <span class="stp-header-title">📝 字幕取得</span>
@@ -2416,28 +2429,56 @@ function renderSubtitleResults(subtitles) {
     return;
   }
 
-  const html = subtitles.slice(0, 500).map(sub => {
+  const CHUNK_SIZE = 500;
+  resultsEl.innerHTML = '';
+  resultsEl._subtitles = subtitles;
+  resultsEl._rendered = 0;
+
+  appendSubtitleChunk(resultsEl, CHUNK_SIZE);
+}
+
+/**
+ * 字幕アイテムを指定件数分追加描画
+ */
+function appendSubtitleChunk(resultsEl, chunkSize) {
+  const subtitles = resultsEl._subtitles;
+  const start = resultsEl._rendered;
+  const end = Math.min(start + chunkSize, subtitles.length);
+
+  const fragment = document.createDocumentFragment();
+  for (let i = start; i < end; i++) {
+    const sub = subtitles[i];
     const sec = Math.floor(sub.start);
-    const timeStr = formatSubtitleTime(sec);
-    return `
-      <div class="stp-result-item" data-time="${sec}">
-        <span class="stp-result-time">${timeStr}</span>
-        <span class="stp-result-text">${escapeHtml(sub.text)}</span>
-      </div>
-    `;
-  }).join('');
-
-  resultsEl.innerHTML = html;
-
-  // クリックでシーク
-  resultsEl.querySelectorAll('.stp-result-item').forEach(item => {
+    const item = document.createElement('div');
+    item.className = 'stp-result-item';
+    item.dataset.time = sec;
+    item.innerHTML = `<span class="stp-result-time">${formatSubtitleTime(sec)}</span><span class="stp-result-text">${escapeHtml(sub.text)}</span>`;
     item.addEventListener('click', () => {
-      const time = parseInt(item.dataset.time);
-      if (videoElement && !isNaN(time)) {
-        videoElement.currentTime = time;
+      if (videoElement && !isNaN(sec)) {
+        videoElement.currentTime = sec;
       }
     });
-  });
+    fragment.appendChild(item);
+  }
+  resultsEl._rendered = end;
+
+  // 既存の「もっと表示」ボタンがあれば削除
+  const oldBtn = resultsEl.querySelector('.stp-load-more');
+  if (oldBtn) oldBtn.remove();
+
+  resultsEl.appendChild(fragment);
+
+  // まだ残りがあれば「もっと表示」ボタンを追加
+  if (end < subtitles.length) {
+    const remaining = subtitles.length - end;
+    const btn = document.createElement('div');
+    btn.className = 'stp-load-more';
+    btn.textContent = `もっと表示（残り ${remaining} 件）`;
+    btn.addEventListener('click', () => {
+      appendSubtitleChunk(resultsEl, chunkSize);
+    });
+    resultsEl.appendChild(btn);
+  }
 }
 
 /**
