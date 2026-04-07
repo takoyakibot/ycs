@@ -55,13 +55,6 @@ class SubtitleApiController extends Controller
         }
 
         try {
-            $existing = VideoSubtitle::where('video_id', $videoId)
-                ->where('language_code', $languageCode)
-                ->where('kind', $kind)
-                ->first();
-
-            $isNew = ! $existing;
-
             $subtitle = VideoSubtitle::updateOrCreate(
                 [
                     'video_id' => $videoId,
@@ -73,6 +66,8 @@ class SubtitleApiController extends Controller
                     'segment_count' => count($subtitles),
                 ]
             );
+
+            $isNew = $subtitle->wasRecentlyCreated;
 
             // フィンガープリントを自動生成
             $fingerprintCount = $this->fingerprintService->generateFingerprintsForVideo($videoId);

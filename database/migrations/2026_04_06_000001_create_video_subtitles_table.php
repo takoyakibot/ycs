@@ -13,7 +13,7 @@ return new class extends Migration
             $table->string('video_id', 11)->index();
             $table->string('language_code', 20);
             $table->string('kind', 10)->default('');
-            $table->longText('subtitle_data');
+            $table->json('subtitle_data');
             $table->unsignedInteger('segment_count');
             $table->timestamps();
 

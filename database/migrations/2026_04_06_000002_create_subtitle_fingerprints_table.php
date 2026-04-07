@@ -15,7 +15,7 @@ return new class extends Migration
             $table->unsignedInteger('start_sec');
             $table->unsignedSmallInteger('duration_sec')->default(30);
             $table->text('fingerprint_text');
-            $table->text('trigrams');
+            $table->json('trigrams');
             $table->timestamps();
 
             $table->foreign('video_id')

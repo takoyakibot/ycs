@@ -79,16 +79,29 @@ class SubtitleMatchingService
      */
     private function findSimilarInChannel(SubtitleFingerprint $fp, string $channelId, float $threshold): Collection
     {
-        // 同一チャンネルの動画IDを取得
         $videoIds = Archive::where('channel_id', $channelId)
             ->pluck('video_id')
             ->toArray();
 
-        $others = SubtitleFingerprint::whereIn('video_id', $videoIds)
-            ->where('ts_item_id', '!=', $fp->ts_item_id)
-            ->get();
+        $targetTrigrams = $fp->trigrams;
+        $results = collect();
 
-        return $this->filterBySimilarity($fp, $others, $threshold, 'same_channel');
+        SubtitleFingerprint::whereIn('video_id', $videoIds)
+            ->where('ts_item_id', '!=', $fp->ts_item_id)
+            ->chunkById(500, function ($chunk) use ($targetTrigrams, $threshold, &$results) {
+                foreach ($chunk as $other) {
+                    $similarity = self::jaccardSimilarity($targetTrigrams, $other->trigrams);
+                    if ($similarity >= $threshold) {
+                        $results->push([
+                            'fingerprint' => $other,
+                            'similarity' => round($similarity, 4),
+                            'source' => 'same_channel',
+                        ]);
+                    }
+                }
+            });
+
+        return $results->sortByDesc('similarity');
     }
 
     /**
@@ -116,28 +129,6 @@ class SubtitleMatchingService
                 }
             }
         });
-
-        return $results->sortByDesc('similarity');
-    }
-
-    /**
-     * 類似度でフィルタリング
-     */
-    private function filterBySimilarity(SubtitleFingerprint $fp, Collection $others, float $threshold, string $source): Collection
-    {
-        $targetTrigrams = $fp->trigrams;
-        $results = collect();
-
-        foreach ($others as $other) {
-            $similarity = self::jaccardSimilarity($targetTrigrams, $other->trigrams);
-            if ($similarity >= $threshold) {
-                $results->push([
-                    'fingerprint' => $other,
-                    'similarity' => round($similarity, 4),
-                    'source' => $source,
-                ]);
-            }
-        }
 
         return $results->sortByDesc('similarity');
     }
