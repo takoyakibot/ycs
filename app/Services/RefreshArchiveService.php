@@ -296,12 +296,14 @@ class RefreshArchiveService
         }
         unset($ts_item);
 
-        TsItem::where('video_id', $videoId)
-            ->where('type', '2')
-            ->delete();
-        if ($ts_items) {
-            DB::table('ts_items')->insert($ts_items);
-        }
+        DB::transaction(function () use ($videoId, $ts_items) {
+            TsItem::where('video_id', $videoId)
+                ->where('type', '2')
+                ->delete();
+            if ($ts_items) {
+                DB::table('ts_items')->insert($ts_items);
+            }
+        });
     }
 
     public function getOldestUpdatedChannel(): Channel
