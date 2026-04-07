@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Note
+
+ユーザーは音声入力を使用していることがあるため、入力に誤変換・誤認識が含まれる場合があります。文脈から意図を汲み取って対応してください。
+
 ## Project Overview
 
 YouTubeアーカイブのタイムスタンプ管理システム「歌枠履歴er:D」。YouTubeの動画からタイムスタンプを抽出し、楽曲マスタと紐づけて正規化する機能を提供。
