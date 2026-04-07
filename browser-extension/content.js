@@ -2335,32 +2335,6 @@ function fetchTimedText(videoId, lang) {
 }
 
 /**
- * get_transcript APIで字幕を取得（フォールバック）
- */
-function fetchTranscriptApi(videoId) {
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      window.removeEventListener('message', handler);
-      reject(new Error('字幕データの取得がタイムアウトしました'));
-    }, 10000);
-
-    function handler(event) {
-      if (event.source !== window || event.data?.type !== 'YCS_TRANSCRIPT_RESPONSE') return;
-      window.removeEventListener('message', handler);
-      clearTimeout(timeout);
-      if (event.data.error) {
-        reject(new Error(event.data.error));
-      } else {
-        resolve(event.data.segments);
-      }
-    }
-
-    window.addEventListener('message', handler);
-    window.postMessage({ type: 'YCS_GET_TRANSCRIPT', videoId }, '*');
-  });
-}
-
-/**
  * 字幕検索フィルター
  */
 function filterSubtitleResults() {
