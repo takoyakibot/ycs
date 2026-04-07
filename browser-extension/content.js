@@ -74,6 +74,9 @@ const CHAT_MAX_AGE_DAYS = 30; // 30日以上前のデータは削除
 let subtitlePanel = null;
 let subtitlePanelVisible = false;
 
+// 字幕サーバー送信用（重複送信防止キャッシュ）
+const subtitleSentCache = new Set();
+
 /**
  * 埋め込みUI設定を読み込む
  */
@@ -2119,6 +2122,19 @@ function createSubtitlePanel() {
         padding: 20px;
         font-size: 12px;
       }
+      .stp-load-more {
+        text-align: center;
+        color: #aaa;
+        padding: 8px;
+        font-size: 12px;
+        cursor: pointer;
+        border-top: 1px solid #444;
+        margin-top: 4px;
+      }
+      .stp-load-more:hover {
+        color: #fff;
+        background: #444;
+      }
     </style>
     <div class="stp-header">
       <span class="stp-header-title">📝 字幕取得</span>
@@ -2296,6 +2312,9 @@ async function fetchSubtitleContent(videoId) {
     }
 
     renderSubtitleResults(currentSubtitles);
+
+    // サーバーに自動送信
+    sendSubtitlesToServer(videoId, selectedLang, currentSubtitles);
   } catch (error) {
     console.error('字幕取得エラー:', error);
     if (statusEl) {
@@ -2304,6 +2323,57 @@ async function fetchSubtitleContent(videoId) {
     }
   } finally {
     if (fetchBtn) fetchBtn.disabled = false;
+  }
+}
+
+/**
+ * 字幕データをYCSサーバーに自動送信
+ * 失敗時はconsole.warnのみ（字幕表示自体は影響させない）
+ */
+async function sendSubtitlesToServer(videoId, lang, subtitles) {
+  if (!videoId || !subtitles || subtitles.length === 0) return;
+
+  // 選択中のトラックからkindを判定
+  const selectEl = subtitlePanel?.querySelector('#stp-lang-select');
+  const selectedOption = selectEl?.selectedOptions?.[0];
+  const selectedLang = selectedOption?.dataset?.lang || lang;
+  const selectedTrack = currentCaptionTracks.find(t => t.languageCode === selectedLang);
+  const kind = selectedTrack?.kind === 'asr' ? 'asr' : '';
+
+  // 重複送信防止
+  const cacheKey = `${videoId}_${selectedLang}_${kind}`;
+  if (subtitleSentCache.has(cacheKey)) return;
+
+  try {
+    const response = await fetch('http://localhost:8000/api/manage/archives/subtitles/store', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+      credentials: 'include',
+      body: JSON.stringify({
+        video_id: videoId,
+        language_code: selectedLang,
+        kind: kind,
+        subtitles: subtitles.map(s => ({
+          start: s.start,
+          duration: s.duration,
+          text: s.text,
+        })),
+      }),
+    });
+
+    if (response.ok) {
+      subtitleSentCache.add(cacheKey);
+      const data = await response.json();
+      console.log(`[YCS] 字幕データ送信成功: ${videoId} (${data.segment_count}セグメント, FP: ${data.fingerprints_generated}件)`);
+    } else {
+      console.warn(`[YCS] 字幕データ送信失敗: ${response.status}`);
+    }
+  } catch (error) {
+    console.warn('[YCS] 字幕データ送信エラー:', error.message);
   }
 }
 
@@ -2359,28 +2429,56 @@ function renderSubtitleResults(subtitles) {
     return;
   }
 
-  const html = subtitles.slice(0, 500).map(sub => {
+  const CHUNK_SIZE = 500;
+  resultsEl.innerHTML = '';
+  resultsEl._subtitles = subtitles;
+  resultsEl._rendered = 0;
+
+  appendSubtitleChunk(resultsEl, CHUNK_SIZE);
+}
+
+/**
+ * 字幕アイテムを指定件数分追加描画
+ */
+function appendSubtitleChunk(resultsEl, chunkSize) {
+  const subtitles = resultsEl._subtitles;
+  const start = resultsEl._rendered;
+  const end = Math.min(start + chunkSize, subtitles.length);
+
+  const fragment = document.createDocumentFragment();
+  for (let i = start; i < end; i++) {
+    const sub = subtitles[i];
     const sec = Math.floor(sub.start);
-    const timeStr = formatSubtitleTime(sec);
-    return `
-      <div class="stp-result-item" data-time="${sec}">
-        <span class="stp-result-time">${timeStr}</span>
-        <span class="stp-result-text">${escapeHtml(sub.text)}</span>
-      </div>
-    `;
-  }).join('');
-
-  resultsEl.innerHTML = html;
-
-  // クリックでシーク
-  resultsEl.querySelectorAll('.stp-result-item').forEach(item => {
+    const item = document.createElement('div');
+    item.className = 'stp-result-item';
+    item.dataset.time = sec;
+    item.innerHTML = `<span class="stp-result-time">${formatSubtitleTime(sec)}</span><span class="stp-result-text">${escapeHtml(sub.text)}</span>`;
     item.addEventListener('click', () => {
-      const time = parseInt(item.dataset.time);
-      if (videoElement && !isNaN(time)) {
-        videoElement.currentTime = time;
+      if (videoElement && !isNaN(sec)) {
+        videoElement.currentTime = sec;
       }
     });
-  });
+    fragment.appendChild(item);
+  }
+  resultsEl._rendered = end;
+
+  // 既存の「もっと表示」ボタンがあれば削除
+  const oldBtn = resultsEl.querySelector('.stp-load-more');
+  if (oldBtn) oldBtn.remove();
+
+  resultsEl.appendChild(fragment);
+
+  // まだ残りがあれば「もっと表示」ボタンを追加
+  if (end < subtitles.length) {
+    const remaining = subtitles.length - end;
+    const btn = document.createElement('div');
+    btn.className = 'stp-load-more';
+    btn.textContent = `もっと表示（残り ${remaining} 件）`;
+    btn.addEventListener('click', () => {
+      appendSubtitleChunk(resultsEl, chunkSize);
+    });
+    resultsEl.appendChild(btn);
+  }
 }
 
 /**

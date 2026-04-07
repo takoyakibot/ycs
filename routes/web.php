@@ -8,6 +8,7 @@ use App\Http\Controllers\ManageArchiveApiController;
 use App\Http\Controllers\ManageChannelApiController;
 use App\Http\Controllers\ManageController;
 use App\Http\Controllers\ManageSettingsApiController;
+use App\Http\Controllers\SubtitleApiController;
 use App\Http\Controllers\MarkdownController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SongController;
@@ -83,6 +84,18 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::get('api/manage/archives/subtitles', [ManageController::class, 'fetchSubtitles'])
         ->name('manage.fetchSubtitles')
         ->middleware('throttle:5,1'); // 1分間に5回まで
+
+    // 字幕データ保存・取得API（Chrome拡張からの自動送信用）
+    Route::post('api/manage/archives/subtitles/store', [SubtitleApiController::class, 'store'])
+        ->name('manage.storeSubtitles')
+        ->middleware('throttle:30,1'); // 1分間に30回まで
+    Route::get('api/manage/archives/subtitles/stored', [SubtitleApiController::class, 'show'])
+        ->name('manage.showStoredSubtitles');
+
+    // 字幕フィンガープリントによる楽曲マッチングAPI
+    Route::get('api/manage/subtitle-matches/{tsItemId}', [SubtitleApiController::class, 'matchCandidates'])
+        ->name('manage.subtitleMatches')
+        ->middleware('throttle:30,1'); // 1分間に30回まで
 
     // 楽曲マスタAPI
     Route::get('api/songs/timestamps', [SongController::class, 'fetchTimestamps'])->name('songs.fetchTimestamps');
