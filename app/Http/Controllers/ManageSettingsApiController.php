@@ -171,7 +171,7 @@ class ManageSettingsApiController extends Controller
     }
 
     /**
-     * 除去パターンをすべてのts_itemsに再適用（normalized_textを再生成）
+     * 除去パターンをすべてのts_itemsに再適用（非同期ジョブとして実行）
      */
     public function reapplyStripPatterns(string $id)
     {
@@ -184,86 +184,11 @@ class ManageSettingsApiController extends Controller
 
         $stripPatterns = $channel->stripPatterns()->pluck('pattern')->toArray();
 
-        $updatedCount = 0;
+        \App\Jobs\ReapplyStripPatternsJob::dispatch($channel, $stripPatterns);
 
-        \Log::info('reapplyStripPatterns: 処理開始', [
-            'channel_id' => $channel->channel_id,
-            'strip_patterns_count' => count($stripPatterns),
+        return response()->json([
+            'message' => '除去パターンの再適用をバックグラウンドで開始しました。完了までしばらくお待ちください。',
         ]);
-
-        try {
-            DB::transaction(function () use ($channel, $stripPatterns, &$updatedCount) {
-                // 変更前のnormalized_textを収集（自動紐付けリセット用）
-                $oldNormalizedTexts = [];
-
-                // チャンネルのts_itemsをチャンクで処理
-                TsItem::whereHas('archive', function ($q) use ($channel) {
-                    $q->where('channel_id', $channel->channel_id);
-                })
-                    ->chunk(200, function ($tsItems) use ($stripPatterns, &$updatedCount, &$oldNormalizedTexts) {
-                        foreach ($tsItems as $tsItem) {
-                            // アクセサを経由せず生のtext値を使用（TsItem::savingと同じ）
-                            $rawText = $tsItem->attributes['text'] ?? null;
-                            if (! $rawText) {
-                                continue;
-                            }
-
-                            // 除去パターンを適用してからnormalize
-                            $textForNormalize = ! empty($stripPatterns)
-                                ? TimestampExtractorService::applyStripPatterns($rawText, $stripPatterns)
-                                : $rawText;
-                            $newNormalized = TextNormalizer::normalize($textForNormalize);
-
-                            // 正規化結果が空の場合のフォールバック（TsItem::savingと同じロジック）
-                            if ($newNormalized === '' && trim($textForNormalize) !== '') {
-                                $newNormalized = mb_strtolower(trim($textForNormalize), 'UTF-8');
-                            }
-
-                            if ($tsItem->normalized_text !== $newNormalized) {
-                                $oldNormalizedTexts[] = $tsItem->normalized_text;
-
-                                DB::table('ts_items')
-                                    ->where('id', $tsItem->id)
-                                    ->update([
-                                        'normalized_text' => $newNormalized,
-                                        'updated_at' => now(),
-                                    ]);
-                                $updatedCount++;
-                            }
-                        }
-                    });
-
-                // 自動紐付け（is_manual=false）をリセット
-                if (! empty($oldNormalizedTexts)) {
-                    $oldNormalizedTexts = array_unique($oldNormalizedTexts);
-                    TimestampSongMapping::whereIn('normalized_text', $oldNormalizedTexts)
-                        ->where('is_manual', false)
-                        ->delete();
-                }
-            });
-
-            \Log::info('reapplyStripPatterns: 処理完了', [
-                'channel_id' => $channel->channel_id,
-                'updated_count' => $updatedCount,
-            ]);
-
-            return response()->json([
-                'message' => sprintf('除去パターンを再適用しました（%d件更新）', $updatedCount),
-                'updated_count' => $updatedCount,
-            ]);
-        } catch (\Exception $e) {
-            \Log::error('reapplyStripPatterns: エラー発生', [
-                'channel_id' => $channel->channel_id,
-                'error_message' => $e->getMessage(),
-                'error_file' => $e->getFile(),
-                'error_line' => $e->getLine(),
-            ]);
-
-            return response()->json([
-                'message' => '処理中にエラーが発生しました。ログを確認してください。',
-                'error' => true,
-            ], 500);
-        }
     }
 
     /**
