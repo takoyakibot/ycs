@@ -28,4 +28,9 @@ class Channel extends Model
     {
         return $this->hasMany(ChannelExcludedWord::class, 'channel_id', 'channel_id');
     }
+
+    public function stripPatterns()
+    {
+        return $this->hasMany(ChannelStripPattern::class, 'channel_id', 'channel_id');
+    }
 }

@@ -7,7 +7,9 @@ use App\Http\Controllers\Concerns\ManageAccessControl;
 use App\Models\Archive;
 use App\Models\Channel;
 use App\Models\ChannelExcludedWord;
+use App\Models\ChannelStripPattern;
 use App\Models\TimestampSongMapping;
+use App\Services\TimestampExtractorService;
 use App\Models\TsItem;
 use App\Services\CoverSongTitleExtractorService;
 use App\Services\VideoAnalyzerService;
@@ -100,6 +102,168 @@ class ManageSettingsApiController extends Controller
         $excludedWord->delete();
 
         return response()->json(['message' => '削除しました']);
+    }
+
+    /**
+     * 除去パターン一覧を取得
+     */
+    public function fetchStripPatterns(string $id)
+    {
+        $handle = Crypt::decryptString($id);
+        $channel = Channel::where('handle', $handle)->firstOrFail();
+
+        if (! $this->canAccessChannel($channel)) {
+            abort(403, 'このチャンネルへのアクセス権限がありません');
+        }
+
+        $patterns = $channel->stripPatterns()->orderBy('pattern')->get();
+
+        return response()->json($patterns);
+    }
+
+    /**
+     * 除去パターンを追加
+     */
+    public function addStripPattern(Request $request, string $id)
+    {
+        $handle = Crypt::decryptString($id);
+        $channel = Channel::where('handle', $handle)->firstOrFail();
+
+        if (! $this->canAccessChannel($channel)) {
+            abort(403, 'このチャンネルへのアクセス権限がありません');
+        }
+
+        $validated = $request->validate([
+            'pattern' => ['required', 'string', 'max:255', 'regex:/\S/'],
+        ]);
+
+        try {
+            $pattern = ChannelStripPattern::create([
+                'channel_id' => $channel->channel_id,
+                'pattern' => $validated['pattern'],
+            ]);
+        } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+            return response()->json(['message' => '既に登録されています'], 422);
+        }
+
+        return response()->json($pattern, 201);
+    }
+
+    /**
+     * 除去パターンを削除
+     */
+    public function deleteStripPattern(string $id, string $patternId)
+    {
+        $handle = Crypt::decryptString($id);
+        $channel = Channel::where('handle', $handle)->firstOrFail();
+
+        if (! $this->canAccessChannel($channel)) {
+            abort(403, 'このチャンネルへのアクセス権限がありません');
+        }
+
+        $pattern = ChannelStripPattern::where('id', $patternId)
+            ->where('channel_id', $channel->channel_id)
+            ->firstOrFail();
+
+        $pattern->delete();
+
+        return response()->json(['message' => '削除しました']);
+    }
+
+    /**
+     * 除去パターンをすべてのts_itemsに再適用（normalized_textを再生成）
+     */
+    public function reapplyStripPatterns(string $id)
+    {
+        $handle = Crypt::decryptString($id);
+        $channel = Channel::where('handle', $handle)->firstOrFail();
+
+        if (! $this->canAccessChannel($channel)) {
+            abort(403, 'このチャンネルへのアクセス権限がありません');
+        }
+
+        $stripPatterns = $channel->stripPatterns()->pluck('pattern')->toArray();
+
+        $updatedCount = 0;
+
+        \Log::info('reapplyStripPatterns: 処理開始', [
+            'channel_id' => $channel->channel_id,
+            'strip_patterns_count' => count($stripPatterns),
+        ]);
+
+        try {
+            DB::transaction(function () use ($channel, $stripPatterns, &$updatedCount) {
+                // 変更前のnormalized_textを収集（自動紐付けリセット用）
+                $oldNormalizedTexts = [];
+
+                // チャンネルのts_itemsをチャンクで処理
+                TsItem::whereHas('archive', function ($q) use ($channel) {
+                    $q->where('channel_id', $channel->channel_id);
+                })
+                    ->chunk(200, function ($tsItems) use ($stripPatterns, &$updatedCount, &$oldNormalizedTexts) {
+                        foreach ($tsItems as $tsItem) {
+                            // アクセサを経由せず生のtext値を使用（TsItem::savingと同じ）
+                            $rawText = $tsItem->attributes['text'] ?? null;
+                            if (! $rawText) {
+                                continue;
+                            }
+
+                            // 除去パターンを適用してからnormalize
+                            $textForNormalize = ! empty($stripPatterns)
+                                ? TimestampExtractorService::applyStripPatterns($rawText, $stripPatterns)
+                                : $rawText;
+                            $newNormalized = TextNormalizer::normalize($textForNormalize);
+
+                            // 正規化結果が空の場合のフォールバック（TsItem::savingと同じロジック）
+                            if ($newNormalized === '' && trim($textForNormalize) !== '') {
+                                $newNormalized = mb_strtolower(trim($textForNormalize), 'UTF-8');
+                            }
+
+                            if ($tsItem->normalized_text !== $newNormalized) {
+                                $oldNormalizedTexts[] = $tsItem->normalized_text;
+
+                                DB::table('ts_items')
+                                    ->where('id', $tsItem->id)
+                                    ->update([
+                                        'normalized_text' => $newNormalized,
+                                        'updated_at' => now(),
+                                    ]);
+                                $updatedCount++;
+                            }
+                        }
+                    });
+
+                // 自動紐付け（is_manual=false）をリセット
+                if (! empty($oldNormalizedTexts)) {
+                    $oldNormalizedTexts = array_unique($oldNormalizedTexts);
+                    TimestampSongMapping::whereIn('normalized_text', $oldNormalizedTexts)
+                        ->where('is_manual', false)
+                        ->delete();
+                }
+            });
+
+            \Log::info('reapplyStripPatterns: 処理完了', [
+                'channel_id' => $channel->channel_id,
+                'updated_count' => $updatedCount,
+            ]);
+
+            return response()->json([
+                'message' => sprintf('除去パターンを再適用しました（%d件更新）', $updatedCount),
+                'updated_count' => $updatedCount,
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('reapplyStripPatterns: エラー発生', [
+                'channel_id' => $channel->channel_id,
+                'error_message' => $e->getMessage(),
+                'error_file' => $e->getFile(),
+                'error_line' => $e->getLine(),
+            ]);
+
+            return response()->json([
+                'message' => '処理中にエラーが発生しました。ログを確認してください。',
+                'error' => true,
+            ], 500);
+        }
     }
 
     /**

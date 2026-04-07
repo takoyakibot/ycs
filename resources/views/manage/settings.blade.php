@@ -59,6 +59,37 @@
                 </div>
             </div>
 
+            <!-- 除去パターン管理セクション -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                <h3 class="text-lg font-bold text-gray-800 dark:text-gray-200 mb-4">除去パターン管理</h3>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    タイムスタンプテキストから除去する文字列パターンを設定します。<br>
+                    装飾絵文字や記号など、楽曲名の一部ではない文字列を登録することで、紐付けの精度が向上します。<br>
+                    例: 🎵, ♪, ▶, 【, 】
+                </p>
+
+                <!-- 除去パターン追加フォーム -->
+                <div class="flex items-center gap-2 mb-4">
+                    <x-text-input type="text" id="newStripPattern" placeholder="除去する文字列を入力" class="flex-1" />
+                    <x-primary-button id="addStripPatternBtn" type="button">追加</x-primary-button>
+                </div>
+                <div id="stripPatternError" class="text-red-500 text-sm mb-4 hidden"></div>
+
+                <!-- 除去パターン一覧 -->
+                <div id="stripPatternsList" class="border dark:border-gray-700 rounded-lg overflow-hidden">
+                    <div class="text-center text-gray-500 dark:text-gray-400 py-4">読み込み中...</div>
+                </div>
+
+                <!-- 再適用ボタン -->
+                <div class="mt-4">
+                    <x-primary-button id="reapplyStripPatternsBtn" type="button" class="bg-orange-600 hover:bg-orange-700">
+                        既存タイムスタンプに再適用
+                    </x-primary-button>
+                    <span class="text-xs text-gray-500 dark:text-gray-400 ml-2">パターン変更後に実行すると、既存のタイムスタンプの照合テキストが再生成されます</span>
+                </div>
+                <div id="stripPatternMessage" class="text-sm mt-2 hidden"></div>
+            </div>
+
             <!-- カバー曲プレビューセクション -->
             <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
                 <h3 class="text-lg font-bold text-gray-800 dark:text-gray-200 mb-4">カバー曲抽出プレビュー</h3>

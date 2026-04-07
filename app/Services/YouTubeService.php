@@ -44,9 +44,10 @@ class YouTubeService
      * アーカイブとタイムスタンプを取得
      *
      * @param  string  $channelId  チャンネルID
+     * @param  array  $stripPatterns  除去パターン文字列の配列（チャンネル設定）
      * @return array アーカイブ配列（タイムスタンプ付き）
      */
-    public function getArchivesAndTsItems(string $channelId): array
+    public function getArchivesAndTsItems(string $channelId, array $stripPatterns = []): array
     {
         $archives = $this->youtubeApiService->getArchives($channelId);
         $rtnArchives = [];
@@ -60,6 +61,7 @@ class YouTubeService
                 '1', // description
                 $archive['description'],
                 $archive['video_id'],
+                $stripPatterns,
             );
 
             // 歌枠またはカバー曲の場合は一旦表示にする
@@ -72,7 +74,7 @@ class YouTubeService
             // 概要欄にタイムスタンプが1件以下（過去のコピペなどで0:00:00が残っている場合がある）
             // かつ、歌枠の場合（カバー曲は0:00タイムスタンプのみで十分なためコメント取得は不要）
             if ((empty($archive['ts_items']) || count($archive['ts_items']) <= 1) && $isSingingStream) {
-                $commentTsItems = $this->getTimeStampsFromComments($archive['video_id']);
+                $commentTsItems = $this->getTimeStampsFromComments($archive['video_id'], $stripPatterns);
                 foreach ($commentTsItems as $tsItem) {
                     $archive['ts_items'][] = $tsItem;
                 }
@@ -90,9 +92,10 @@ class YouTubeService
      * コメントからタイムスタンプを取得
      *
      * @param  string  $videoId  動画ID
+     * @param  array  $stripPatterns  除去パターン文字列の配列（チャンネル設定）
      * @return array タイムスタンプ配列
      */
-    public function getTimeStampsFromComments(string $videoId): array
+    public function getTimeStampsFromComments(string $videoId, array $stripPatterns = []): array
     {
         $comments = $this->youtubeApiService->getComments($videoId);
 
@@ -103,6 +106,7 @@ class YouTubeService
                 '2', // comment
                 $comment['description'],
                 $comment['id'],
+                $stripPatterns,
             );
             foreach ($tsItems as $tsItem) {
                 $rtnTsItems[] = $tsItem;
