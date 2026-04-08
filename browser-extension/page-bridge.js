@@ -137,11 +137,22 @@
     return unique;
   }
 
+  // 進行中の字幕取得Promiseを保持（並行呼び出し防止）
+  const pendingTimedTextRequests = {};
+
   /**
    * キャッシュまたはCCボタン経由でtimedtextを取得
+   * 同一videoId:langで既に取得中の場合は同じPromiseを返す
    */
   function getTimedTextViaPlayer(videoId, lang) {
-    return new Promise((resolve, reject) => {
+    const requestKey = videoId + ':' + lang;
+
+    // 既に取得中なら同じPromiseを返す（CCボタンの多重トグルを防止）
+    if (pendingTimedTextRequests[requestKey]) {
+      return pendingTimedTextRequests[requestKey];
+    }
+
+    const promise = new Promise((resolve, reject) => {
       // キャッシュを確認（言語完全一致→前方一致→任意の言語）
       function findCache() {
         const exact = timedTextCache[videoId + ':' + lang];
@@ -253,7 +264,12 @@
       } else {
         ccButton.click(); // ON
       }
+    }).finally(() => {
+      delete pendingTimedTextRequests[requestKey];
     });
+
+    pendingTimedTextRequests[requestKey] = promise;
+    return promise;
   }
 
   window.addEventListener('message', function (event) {
