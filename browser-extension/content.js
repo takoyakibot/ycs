@@ -77,6 +77,10 @@ let subtitlePanelVisible = false;
 // 字幕サーバー送信用（重複送信防止キャッシュ）
 const subtitleSentCache = new Set();
 
+// YCS APIトークン（chrome.storageから読み込み）
+let ycsApiToken = null;
+let ycsServerUrl = null;
+
 /**
  * 埋め込みUI設定を読み込む
  */
@@ -2327,11 +2331,33 @@ async function fetchSubtitleContent(videoId) {
 }
 
 /**
+ * YCS API設定をchrome.storageから読み込み
+ */
+async function loadYcsApiSettings() {
+  try {
+    const result = await chrome.storage.local.get(['ycsApiToken', 'ycsServerUrl']);
+    ycsApiToken = result.ycsApiToken || null;
+    ycsServerUrl = result.ycsServerUrl || 'http://localhost:8000';
+  } catch (error) {
+    console.warn('[YCS] API設定読み込みエラー:', error);
+  }
+}
+
+/**
  * 字幕データをYCSサーバーに自動送信
  * 失敗時はconsole.warnのみ（字幕表示自体は影響させない）
  */
 async function sendSubtitlesToServer(videoId, lang, subtitles) {
   if (!videoId || !subtitles || subtitles.length === 0) return;
+
+  // API設定が未読み込みなら読み込む
+  if (!ycsApiToken) {
+    await loadYcsApiSettings();
+  }
+  if (!ycsApiToken) {
+    console.warn('[YCS] APIトークンが未設定です。プロフィール画面でトークンを発行し、拡張の設定に登録してください。');
+    return;
+  }
 
   // 選択中のトラックからkindを判定
   const selectEl = subtitlePanel?.querySelector('#stp-lang-select');
@@ -2345,14 +2371,13 @@ async function sendSubtitlesToServer(videoId, lang, subtitles) {
   if (subtitleSentCache.has(cacheKey)) return;
 
   try {
-    const response = await fetch('http://localhost:8000/api/manage/archives/subtitles/store', {
+    const response = await fetch(`${ycsServerUrl}/api/manage/archives/subtitles/store`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        'X-Requested-With': 'XMLHttpRequest',
+        'Authorization': `Bearer ${ycsApiToken}`,
       },
-      credentials: 'include',
       body: JSON.stringify({
         video_id: videoId,
         language_code: selectedLang,

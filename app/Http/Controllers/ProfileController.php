@@ -42,6 +42,33 @@ class ProfileController extends Controller
     }
 
     /**
+     * APIトークンを発行
+     */
+    public function createApiToken(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'token_name' => ['required', 'string', 'max:255'],
+        ]);
+
+        // 既存トークンを全削除（1ユーザー1トークン）
+        $request->user()->tokens()->delete();
+
+        $token = $request->user()->createToken($request->input('token_name'));
+
+        return Redirect::route('profile.edit')->with('new_api_token', $token->plainTextToken);
+    }
+
+    /**
+     * APIトークンを失効
+     */
+    public function destroyApiToken(Request $request): RedirectResponse
+    {
+        $request->user()->tokens()->delete();
+
+        return Redirect::route('profile.edit')->with('status', 'api-token-deleted');
+    }
+
+    /**
      * Delete the user's API key.
      */
     public function destroyApiKey(Request $request): RedirectResponse

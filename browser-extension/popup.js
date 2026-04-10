@@ -10,6 +10,8 @@ const STORAGE_KEY_CHAT_DELAY_ENABLED = 'chatDelayEnabled';
 const STORAGE_KEY_CHAT_DELAY_SECONDS = 'chatDelaySeconds';
 const STORAGE_KEY_TOXICITY_CHECK = 'toxicityCheckEnabled';
 const STORAGE_KEY_CLAUDE_API_KEY = 'claudeApiKey';
+const STORAGE_KEY_YCS_SERVER_URL = 'ycsServerUrl';
+const STORAGE_KEY_YCS_API_TOKEN = 'ycsApiToken';
 
 // DOM要素
 const elements = {
@@ -30,7 +32,11 @@ const elements = {
   clearAllBtn: document.getElementById('clear-all-btn'),
   scanSection: document.getElementById('scan-section'),
   scanBtn: document.getElementById('scan-btn'),
-  scanStatus: document.getElementById('scan-status')
+  scanStatus: document.getElementById('scan-status'),
+  ycsServerUrl: document.getElementById('ycs-server-url'),
+  ycsApiToken: document.getElementById('ycs-api-token'),
+  saveYcsSettings: document.getElementById('save-ycs-settings'),
+  ycsSettingsStatus: document.getElementById('ycs-settings-status')
 };
 
 let isScanning = false;
@@ -57,7 +63,9 @@ async function init() {
     STORAGE_KEY_CHAT_DELAY_ENABLED,
     STORAGE_KEY_CHAT_DELAY_SECONDS,
     STORAGE_KEY_TOXICITY_CHECK,
-    STORAGE_KEY_CLAUDE_API_KEY
+    STORAGE_KEY_CLAUDE_API_KEY,
+    STORAGE_KEY_YCS_SERVER_URL,
+    STORAGE_KEY_YCS_API_TOKEN
   ]);
   const showUI = result[STORAGE_KEY_EMBEDDED_UI] !== false; // デフォルトはtrue
   const hideGoogleAI = result[STORAGE_KEY_HIDE_GOOGLE_AI] !== false; // デフォルトはtrue
@@ -80,6 +88,14 @@ async function init() {
     elements.apiKeyStatus.style.color = '#2e7d32';
   }
 
+  // YCS API設定を読み込み
+  elements.ycsServerUrl.value = result[STORAGE_KEY_YCS_SERVER_URL] || 'http://localhost:8000';
+  if (result[STORAGE_KEY_YCS_API_TOKEN]) {
+    elements.ycsApiToken.placeholder = '設定済み';
+    elements.ycsSettingsStatus.textContent = 'APIトークン設定済み';
+    elements.ycsSettingsStatus.style.color = '#2e7d32';
+  }
+
   // イベントリスナーを設定
   elements.showEmbeddedUI.addEventListener('change', toggleEmbeddedUI);
   elements.hideGoogleAI.addEventListener('change', toggleHideGoogleAI);
@@ -87,6 +103,7 @@ async function init() {
   elements.chatDelaySeconds.addEventListener('input', changeChatDelaySeconds);
   elements.toxicityCheckEnabled.addEventListener('change', toggleToxicityCheck);
   elements.saveApiKey.addEventListener('click', saveClaudeApiKey);
+  elements.saveYcsSettings.addEventListener('click', saveYcsSettings);
   elements.helpLink.addEventListener('click', showHelp);
   elements.clearAllBtn.addEventListener('click', clearAllScannedData);
 
@@ -193,6 +210,29 @@ async function saveClaudeApiKey() {
   elements.claudeApiKey.placeholder = '設定済み';
   elements.apiKeyStatus.textContent = 'APIキーを保存しました';
   elements.apiKeyStatus.style.color = '#2e7d32';
+}
+
+/**
+ * YCS API設定を保存
+ */
+async function saveYcsSettings() {
+  const serverUrl = elements.ycsServerUrl.value.trim() || 'http://localhost:8000';
+  const apiToken = elements.ycsApiToken.value.trim();
+
+  const settings = { [STORAGE_KEY_YCS_SERVER_URL]: serverUrl };
+  if (apiToken) {
+    settings[STORAGE_KEY_YCS_API_TOKEN] = apiToken;
+  }
+
+  await chrome.storage.local.set(settings);
+  elements.ycsServerUrl.value = serverUrl;
+
+  if (apiToken) {
+    elements.ycsApiToken.value = '';
+    elements.ycsApiToken.placeholder = '設定済み';
+  }
+  elements.ycsSettingsStatus.textContent = '設定を保存しました';
+  elements.ycsSettingsStatus.style.color = '#2e7d32';
 }
 
 /**
