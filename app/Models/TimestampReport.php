@@ -29,9 +29,14 @@ class TimestampReport extends Model
     /**
      * 対応するts_itemを取得（複合キーでの検索）
      * belongsToリレーションは複合キーに対応していないため、アクセサで実装
+     * プリロード済みの値がある場合はそれを返す
      */
-    public function getTsItemAttribute()
+    public function getTsItemAttribute($value)
     {
+        if ($value !== null) {
+            return $value;
+        }
+
         return TsItem::where('video_id', $this->video_id)
             ->where('ts_text', $this->ts_text)
             ->where('ts_num', $this->ts_num)

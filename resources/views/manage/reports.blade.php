@@ -71,6 +71,30 @@
                                                x-text="report.ts_item?.archive?.title || report.video_id"></a>
                                         </div>
 
+                                        <!-- 楽曲マッピング情報 -->
+                                        <div class="mb-2 text-sm" x-show="report.ts_item">
+                                            <span class="font-medium">YCS紐付け:</span>
+                                            <template x-if="report.song_mapping?.is_not_song">
+                                                <span class="text-gray-500 dark:text-gray-400">「楽曲ではない」に設定済み</span>
+                                            </template>
+                                            <template x-if="report.song_mapping && !report.song_mapping.is_not_song && report.song_mapping.song_title">
+                                                <span>
+                                                    <span class="text-green-600 dark:text-green-400" x-text="report.song_mapping.song_title"></span>
+                                                    <span x-show="report.song_mapping?.song_artist" class="text-gray-500 dark:text-gray-400">
+                                                        / <span x-text="report.song_mapping.song_artist"></span>
+                                                    </span>
+                                                    <span class="ml-1 text-xs px-1.5 py-0.5 rounded-full"
+                                                          :class="report.song_mapping?.is_manual ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' : 'bg-gray-100 text-gray-600 dark:bg-gray-600 dark:text-gray-300'"
+                                                          x-text="report.song_mapping?.is_manual ? '手動' : '自動'"></span>
+                                                    <span x-show="report.song_mapping?.status === 'pending'"
+                                                          class="ml-1 text-xs px-1.5 py-0.5 rounded-full bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">保留</span>
+                                                </span>
+                                            </template>
+                                            <template x-if="!report.song_mapping || (!report.song_mapping.is_not_song && !report.song_mapping.song_title)">
+                                                <span class="text-orange-500 dark:text-orange-400">未紐付け</span>
+                                            </template>
+                                        </div>
+
                                         <!-- コメント -->
                                         <div x-show="report.comment" class="mb-2">
                                             <span class="text-sm font-medium">コメント:</span>
