@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\ManageAccessControl;
 use App\Models\Archive;
-use App\Models\SubtitleFingerprint;
 use App\Models\VideoSubtitle;
 use App\Services\SubtitleFingerprintService;
 use App\Services\SubtitleMatchingService;
@@ -31,7 +30,7 @@ class SubtitleApiController extends Controller
         $request->validate([
             'video_id' => ['required', 'string', 'size:11', 'regex:/^[A-Za-z0-9_-]{11}$/'],
             'language_code' => ['required', 'string', 'regex:/^[a-zA-Z]{2,3}(-[a-zA-Z0-9]+)*$/', 'max:20'],
-            'kind' => ['present', 'string', Rule::in(['asr', ''])],
+            'kind' => ['present', 'nullable', 'string', Rule::in(['asr', ''])],
             'subtitles' => ['required', 'array', 'min:1', 'max:10000'],
             'subtitles.*.start' => ['required', 'numeric', 'min:0', 'max:86400'],
             'subtitles.*.duration' => ['required', 'numeric', 'min:0', 'max:60'],
@@ -40,7 +39,7 @@ class SubtitleApiController extends Controller
 
         $videoId = $request->input('video_id');
         $languageCode = $request->input('language_code');
-        $kind = $request->input('kind', '');
+        $kind = $request->input('kind') ?? '';
         $subtitles = $request->input('subtitles');
 
         // アーカイブの存在確認とアクセス権チェック
