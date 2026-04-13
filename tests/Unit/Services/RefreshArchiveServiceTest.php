@@ -67,7 +67,7 @@ class RefreshArchiveServiceTest extends TestCase
         $this->youtubeService
             ->shouldReceive('getArchivesAndTsItems')
             ->once()
-            ->with($channel->channel_id)
+            ->with($channel->channel_id, [])
             ->andReturn([
                 [
                     'id' => Str::uuid()->toString(),
@@ -684,7 +684,7 @@ class RefreshArchiveServiceTest extends TestCase
         $this->youtubeService
             ->shouldReceive('getTimeStampsFromComments')
             ->once()
-            ->with($videoId)
+            ->with($videoId, [])
             ->andReturn([
                 [
                     'id' => Str::uuid()->toString(),

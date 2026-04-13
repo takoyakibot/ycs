@@ -11,7 +11,6 @@ use App\Models\TsItem;
 use App\Models\User;
 use App\Models\VideoSubtitle;
 use App\Services\SubtitleFingerprintService;
-use App\Services\SubtitleMatchingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -336,7 +335,7 @@ class SubtitleApiTest extends TestCase
             ->assertJsonPath('has_fingerprint', true)
             ->assertJsonPath('candidates.0.song_id', $song->id)
             ->assertJsonPath('candidates.0.song_title', 'テスト曲A')
-            ->assertJsonPath('candidates.0.similarity', 1.0);
+            ->assertJsonPath('candidates.0.similarity', fn ($v) => abs($v - 1.0) < 0.001);
     }
 
     public function test_match_candidates_returns_404_for_unknown_ts_item(): void

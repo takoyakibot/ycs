@@ -119,10 +119,35 @@ class TimestampReportController extends Controller
             ->get()
             ->keyBy(fn ($item) => $item->video_id.'|'.$item->ts_text.'|'.$item->ts_num);
 
-        // 各報告にts_itemをセット
-        $reports->transform(function ($report) use ($tsItems) {
+        // マッピング情報を一括取得
+        $normalizedTexts = $tsItems->pluck('normalized_text')->filter()->unique()->values()->toArray();
+        $mappings = [];
+        if (! empty($normalizedTexts)) {
+            $mappings = \App\Models\TimestampSongMapping::with('song')
+                ->whereIn('normalized_text', $normalizedTexts)
+                ->get()
+                ->keyBy('normalized_text');
+        }
+
+        // 各報告にts_itemとマッピング情報をセット
+        $reports->transform(function ($report) use ($tsItems, $mappings) {
             $key = $report->video_id.'|'.$report->ts_text.'|'.$report->ts_num;
-            $report->ts_item = $tsItems->get($key);
+            $tsItem = $tsItems->get($key);
+            $report->ts_item = $tsItem;
+
+            // マッピング情報を別属性としてセット（アクセサ競合回避）
+            if ($tsItem && $tsItem->normalized_text) {
+                $mapping = $mappings[$tsItem->normalized_text] ?? null;
+                $report->song_mapping = $mapping ? [
+                    'song_title' => $mapping->song?->title,
+                    'song_artist' => $mapping->song?->artist,
+                    'is_not_song' => $mapping->is_not_song,
+                    'is_manual' => $mapping->is_manual,
+                    'status' => $mapping->status,
+                ] : null;
+            } else {
+                $report->song_mapping = null;
+            }
 
             return $report;
         });
@@ -150,6 +175,24 @@ class TimestampReportController extends Controller
         $report->ts_item = $report->tsItem;
         if ($report->ts_item) {
             $report->ts_item->load('archive');
+
+            // マッピング情報を付与
+            if ($report->ts_item->normalized_text) {
+                $mapping = \App\Models\TimestampSongMapping::with('song')
+                    ->where('normalized_text', $report->ts_item->normalized_text)
+                    ->first();
+                $report->song_mapping = $mapping ? [
+                    'song_title' => $mapping->song?->title,
+                    'song_artist' => $mapping->song?->artist,
+                    'is_not_song' => $mapping->is_not_song,
+                    'is_manual' => $mapping->is_manual,
+                    'status' => $mapping->status,
+                ] : null;
+            } else {
+                $report->song_mapping = null;
+            }
+        } else {
+            $report->song_mapping = null;
         }
 
         return response()->json($report);

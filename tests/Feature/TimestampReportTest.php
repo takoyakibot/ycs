@@ -4,7 +4,9 @@ namespace Tests\Feature;
 
 use App\Models\Archive;
 use App\Models\Channel;
+use App\Models\Song;
 use App\Models\TimestampReport;
+use App\Models\TimestampSongMapping;
 use App\Models\TsItem;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -533,6 +535,76 @@ class TimestampReportTest extends TestCase
         $this->assertNotNull($tsItem);
         $this->assertEquals($this->tsItem->id, $tsItem->id);
         $this->assertEquals('Test Song', $tsItem->text);
+    }
+
+    /**
+     * 報告一覧に楽曲マッピング情報が含まれることをテスト
+     */
+    public function test_reports_list_includes_song_mapping_info(): void
+    {
+        // 楽曲とマッピングを作成
+        $song = Song::create([
+            'id' => Str::ulid(),
+            'title' => 'テスト楽曲',
+            'artist' => 'テストアーティスト',
+        ]);
+
+        TimestampSongMapping::create([
+            'id' => Str::ulid(),
+            'normalized_text' => $this->tsItem->normalized_text,
+            'song_id' => $song->id,
+            'is_not_song' => false,
+            'is_manual' => true,
+            'status' => 'linked',
+        ]);
+
+        // 報告を作成
+        TimestampReport::create([
+            'video_id' => 'dQw4w9WgXcQ',
+            'ts_text' => '1:23',
+            'ts_num' => 83,
+            'report_type' => 'wrong_song',
+            'reporter_ip' => '127.0.0.1',
+        ]);
+
+        $response = $this->actingAs($this->user)
+            ->getJson('/api/manage/timestamp-reports');
+
+        $response->assertStatus(200);
+
+        $report = $response->json('data.0');
+        $this->assertNotNull($report['ts_item']);
+        $this->assertEquals('Test Archive', $report['ts_item']['archive']['title']);
+
+        $mapping = $report['song_mapping'];
+        $this->assertNotNull($mapping);
+        $this->assertEquals('テスト楽曲', $mapping['song_title']);
+        $this->assertEquals('テストアーティスト', $mapping['song_artist']);
+        $this->assertTrue($mapping['is_manual']);
+        $this->assertEquals('linked', $mapping['status']);
+    }
+
+    /**
+     * 未紐付けの場合はsong_titleがnullであることをテスト
+     */
+    public function test_reports_list_shows_null_when_no_mapping(): void
+    {
+        TimestampReport::create([
+            'video_id' => 'dQw4w9WgXcQ',
+            'ts_text' => '1:23',
+            'ts_num' => 83,
+            'report_type' => 'wrong_song',
+            'reporter_ip' => '127.0.0.1',
+        ]);
+
+        $response = $this->actingAs($this->user)
+            ->getJson('/api/manage/timestamp-reports');
+
+        $response->assertStatus(200);
+
+        $report = $response->json('data.0');
+        $this->assertNotNull($report['ts_item']);
+        $this->assertNull($report['song_mapping']);
     }
 
     /**
