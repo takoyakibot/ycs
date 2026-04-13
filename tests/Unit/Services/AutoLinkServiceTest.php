@@ -55,6 +55,22 @@ class AutoLinkServiceTest extends TestCase
     }
 
     /**
+     * Spotify無効時はDB照合のみで動作するテスト
+     */
+    public function test_auto_link_skips_spotify_when_disabled(): void
+    {
+        config(['services.spotify.enabled' => false]);
+
+        $this->createTsItem('Unknown Song / Unknown Artist');
+
+        $result = $this->service->autoLinkUnlinkedTimestamps(10);
+
+        $this->assertEquals(1, $result['processed']);
+        $this->assertEquals(0, $result['linked']);
+        Http::assertNothingSent();
+    }
+
+    /**
      * 未紐付けタイムスタンプがない場合のテスト
      */
     public function test_auto_link_with_no_unlinked_timestamps(): void
