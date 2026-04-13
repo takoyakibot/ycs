@@ -910,6 +910,7 @@ class SongControllerTest extends TestCase
      */
     public function test_search_spotify_success(): void
     {
+        Config::set('services.spotify.enabled', true);
         Config::set('services.spotify.client_id', 'test_client_id');
         Config::set('services.spotify.client_secret', 'test_client_secret');
 
@@ -941,10 +942,28 @@ class SongControllerTest extends TestCase
     }
 
     /**
+     * Spotify検索のテスト（無効時）
+     */
+    public function test_search_spotify_disabled(): void
+    {
+        Config::set('services.spotify.enabled', false);
+
+        $response = $this->actingAs($this->user)->getJson(route('songs.searchSpotify', [
+            'query' => 'test query',
+        ]));
+
+        $response->assertStatus(503);
+        $response->assertJson([
+            'error' => 'Spotify API連携は現在無効になっています。',
+        ]);
+    }
+
+    /**
      * Spotify検索のテスト（認証情報なし）
      */
     public function test_search_spotify_missing_credentials(): void
     {
+        Config::set('services.spotify.enabled', true);
         Config::set('services.spotify.client_id', null);
         Config::set('services.spotify.client_secret', null);
 

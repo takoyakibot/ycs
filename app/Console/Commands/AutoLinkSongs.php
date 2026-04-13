@@ -21,7 +21,7 @@ class AutoLinkSongs extends Command
      *
      * @var string
      */
-    protected $description = '未紐付けのタイムスタンプをSpotify APIで自動検索し、トップ結果を紐付けます。';
+    protected $description = '未紐付けのタイムスタンプを既存楽曲マスタ照合・Spotify検索で自動紐付けします。';
 
     /**
      * Execute the console command.

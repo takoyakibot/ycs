@@ -37,6 +37,7 @@ class AutoLinkServiceTest extends TestCase
             ], 200),
         ]);
 
+        config(['services.spotify.enabled' => true]);
         config(['services.spotify.client_id' => 'test_id']);
         config(['services.spotify.client_secret' => 'test_secret']);
     }
