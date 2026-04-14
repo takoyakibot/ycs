@@ -43,7 +43,7 @@ class AutoLinkService
      * @param  callable|null  $onProgress  進捗コールバック function(string $message): void
      * @return array{processed: int, linked: int, pending: int, failed: int, skipped: int}
      */
-    public function autoLinkUnlinkedTimestamps(int $limit = 100, ?callable $onProgress = null): array
+    public function autoLinkUnlinkedTimestamps(int $limit = 100, ?callable $onProgress = null, ?string $channelId = null): array
     {
         $result = [
             'processed' => 0,
@@ -54,7 +54,7 @@ class AutoLinkService
         ];
 
         // 未紐付けのタイムスタンプを取得（ユニークなnormalized_textのみ）
-        $unlinkedTexts = $this->getUnlinkedTexts($limit);
+        $unlinkedTexts = $this->getUnlinkedTexts($limit, $channelId);
 
         if (empty($unlinkedTexts)) {
             $onProgress && $onProgress('未紐付けのタイムスタンプが見つかりませんでした。');
@@ -144,7 +144,7 @@ class AutoLinkService
      * @param  int  $limit  取得件数上限
      * @return array<array{text: string, normalized_text: string}>
      */
-    protected function getUnlinkedTexts(int $limit): array
+    protected function getUnlinkedTexts(int $limit, ?string $channelId = null): array
     {
         // normalized_textのみでグループ化し、textはMIN()で代表値を取得
         // これにより同じnormalized_textで異なるtextを持つケースでも重複排除される
@@ -155,8 +155,11 @@ class AutoLinkService
             ->whereNotNull('ts_items.normalized_text')
             ->where('ts_items.is_display', 1)
             ->where('ts_items.type', '!=', '3') // 歌ってみた/カバー曲はノイズが多いため除外
-            ->whereHas('archive', function ($q) {
+            ->whereHas('archive', function ($q) use ($channelId) {
                 $q->where('is_display', 1);
+                if ($channelId !== null) {
+                    $q->where('channel_id', $channelId);
+                }
             })
             ->whereNull('timestamp_song_mappings.id')
             ->groupBy('ts_items.normalized_text')

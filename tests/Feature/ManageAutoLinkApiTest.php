@@ -29,7 +29,7 @@ class ManageAutoLinkApiTest extends TestCase
         $response->assertJson(['message' => '自動紐付けをバックグラウンドで開始しました。']);
 
         Bus::assertDispatched(AutoLinkChannelJob::class, function ($job) use ($channel) {
-            return $job->channel->id === $channel->id;
+            return $job->channel->channel_id === $channel->channel_id;
         });
     }
 
