@@ -18,7 +18,7 @@ class ManageAutoLinkApiTest extends TestCase
     {
         Bus::fake();
 
-        $user = User::factory()->create(['is_super_admin' => true]);
+        $user = User::factory()->create();
         $channel = Channel::factory()->create(['user_id' => $user->id]);
         $cryptHandle = Crypt::encryptString($channel->handle);
 
