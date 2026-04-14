@@ -203,8 +203,10 @@ class CoverSongTitleExtractorService
         // 連続するスペースを1つに
         $text = preg_replace('/\s+/u', ' ', $text);
 
-        // 前後のスペースと区切り文字をトリム
-        $text = trim($text, " \t\n\r\0\x0B/／-－―|｜");
+        // 前後のスペースと区切り文字をトリム（UTF-8安全な正規表現を使用）
+        // 注意: trim()はバイトレベルで動作するため、マルチバイト文字を引数に含めると
+        // 文字の一部バイトが個別に除去され、UTF-8バイト列が壊れる
+        $text = preg_replace('/^[\s\/／－―|｜-]+|[\s\/／－―|｜-]+$/u', '', $text);
 
         return $text;
     }
