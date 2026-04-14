@@ -58,7 +58,9 @@ class SongController extends Controller
      */
     public function index()
     {
-        return view('songs.index');
+        return view('songs.index', [
+            'spotifyEnabled' => $this->spotifyService->isEnabled(),
+        ]);
     }
 
     /**
@@ -613,6 +615,12 @@ class SongController extends Controller
      */
     public function searchSpotify(Request $request)
     {
+        if (! $this->spotifyService->isEnabled()) {
+            return response()->json([
+                'error' => 'Spotify API連携は現在無効になっています。',
+            ], 503);
+        }
+
         $validated = $request->validate([
             'query' => 'required|string',
             'limit' => 'integer|min:1|max:50',

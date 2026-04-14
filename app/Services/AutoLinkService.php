@@ -192,7 +192,11 @@ class AutoLinkService
             return 'linked';
         }
 
-        // ❷ Spotify検索 + 逆検証
+        // ❷ Spotify検索 + 逆検証（Spotify無効時はスキップ）
+        if (! $this->spotifyService->isEnabled()) {
+            return 'not_found';
+        }
+
         $tracks = $this->spotifyService->searchWithAuth($text, $this->spotifySearchLimit);
 
         if (empty($tracks)) {

@@ -30,10 +30,11 @@ class TimestampNormalization {
     }
 
     init() {
+        this.spotifyEnabled = window.spotifyEnabled ?? false;
         this.bindEvents();
         this.updateFilterButtons();
         this.loadTimestamps();
-        this.showTab('spotifyTab');
+        this.showTab(this.spotifyEnabled ? 'spotifyTab' : 'manualTab');
         this.updateSelectionDisplay();
         this.initHistoryPanel();
     }
@@ -392,8 +393,8 @@ class TimestampNormalization {
         this.updateSelectionDisplay();
         this.loadTimestamps(this.currentPage, this.currentSearchQuery);
 
-        // 最初のタイムスタンプが選択された時、Spotify検索窓に反映
-        if (this.selectedTimestamps.length === 1) {
+        // 最初のタイムスタンプが選択された時、Spotify検索窓に反映（Spotify有効時のみ）
+        if (this.spotifyEnabled && this.selectedTimestamps.length === 1) {
             document.getElementById('spotifySearch').value = this.selectedTimestamps[0].text;
         }
     }
@@ -627,6 +628,10 @@ class TimestampNormalization {
     }
 
     async searchSpotify() {
+        if (!this.spotifyEnabled) {
+            toast.warning('Spotify API連携は現在無効になっています。');
+            return;
+        }
         const query = document.getElementById('spotifySearch').value.trim();
         if (!query) {
             toast.warning('検索キーワードを入力してください。');
@@ -750,7 +755,7 @@ class TimestampNormalization {
             await this.linkTimestamps();
         }
 
-        if (songData.spotify_track_id) {
+        if (this.spotifyEnabled && songData.spotify_track_id) {
             this.searchSpotify();
         }
     }
@@ -780,7 +785,7 @@ class TimestampNormalization {
             await this.linkTimestamps();
         }
 
-        if (songData.spotify_track_id) {
+        if (this.spotifyEnabled && songData.spotify_track_id) {
             this.searchSpotify();
         }
     }
@@ -1359,6 +1364,11 @@ class TimestampNormalization {
     }
 
     showTab(tabId) {
+        // Spotify無効時はSpotifyタブへの切り替えを防止
+        if (tabId === 'spotifyTab' && !this.spotifyEnabled) {
+            return;
+        }
+
         document.querySelectorAll('.tab-button').forEach(btn => {
             btn.classList.remove('border-green-500', 'text-green-600', 'border-blue-500', 'text-blue-600', 'border-purple-500', 'text-purple-600');
             btn.classList.add('border-transparent', 'text-gray-500');

@@ -60,6 +60,14 @@ class SpotifyService
     }
 
     /**
+     * Spotify APIが有効かどうかを返す
+     */
+    public function isEnabled(): bool
+    {
+        return (bool) config('services.spotify.enabled', false);
+    }
+
+    /**
      * 認証してから楽曲を検索（一連の処理を統合）
      *
      * @param  string  $query  検索クエリ
@@ -70,6 +78,10 @@ class SpotifyService
      */
     public function searchWithAuth(string $query, int $limit = 10): array
     {
+        if (! $this->isEnabled()) {
+            throw new \Exception('Spotify API連携は現在無効になっています。');
+        }
+
         $clientId = config('services.spotify.client_id');
         $clientSecret = config('services.spotify.client_secret');
 

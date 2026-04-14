@@ -37,6 +37,7 @@ class AutoLinkServiceTest extends TestCase
             ], 200),
         ]);
 
+        config(['services.spotify.enabled' => true]);
         config(['services.spotify.client_id' => 'test_id']);
         config(['services.spotify.client_secret' => 'test_secret']);
     }
@@ -51,6 +52,22 @@ class AutoLinkServiceTest extends TestCase
             'text' => $text,
             'is_display' => 1,
         ], $overrides));
+    }
+
+    /**
+     * Spotify無効時はDB照合のみで動作するテスト
+     */
+    public function test_auto_link_skips_spotify_when_disabled(): void
+    {
+        config(['services.spotify.enabled' => false]);
+
+        $this->createTsItem('Unknown Song / Unknown Artist');
+
+        $result = $this->service->autoLinkUnlinkedTimestamps(10);
+
+        $this->assertEquals(1, $result['processed']);
+        $this->assertEquals(0, $result['linked']);
+        Http::assertNothingSent();
     }
 
     /**
