@@ -73,6 +73,10 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::post('api/manage/channels/{id}/strip-patterns/reapply', [ManageSettingsApiController::class, 'reapplyStripPatterns'])
         ->name('manage.reapplyStripPatterns')
         ->middleware('throttle:5,1'); // 1分間に5回まで
+    // 自動紐付け
+    Route::post('api/manage/channels/{id}/auto-link', [ManageSettingsApiController::class, 'autoLink'])
+        ->name('manage.autoLink')
+        ->middleware('throttle:5,1');
 
     Route::get('api/manage/channels/{id}/cover-songs/preview', [ManageSettingsApiController::class, 'previewCoverSongs'])->name('manage.previewCoverSongs');
     Route::post('api/manage/channels/{id}/cover-songs/reprocess', [ManageSettingsApiController::class, 'reprocessCoverSongs'])->name('manage.reprocessCoverSongs');
