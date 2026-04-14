@@ -19,8 +19,6 @@ document.addEventListener('DOMContentLoaded', function () {
     const previewList = document.getElementById('previewList');
     const previewTableBody = document.getElementById('previewTableBody');
     const noPreviewData = document.getElementById('noPreviewData');
-    const autoLinkBtn = document.getElementById('autoLinkBtn');
-    const autoLinkMessage = document.getElementById('autoLinkMessage');
 
     let isProcessing = false;
 
@@ -297,37 +295,6 @@ document.addEventListener('DOMContentLoaded', function () {
             });
     }
 
-    // 自動紐付け実行
-    function autoLinkChannel() {
-        if (isProcessing) return;
-        if (!confirm('このチャンネルの未紐付けタイムスタンプに対して自動紐付けを実行しますか？\nバックグラウンドで処理されます。')) return;
-
-        isProcessing = true;
-        toggleButtonDisabled(autoLinkBtn, true);
-
-        showAutoLinkMessage('自動紐付けを開始しています...', 'text-gray-600');
-
-        axios.post(`/api/manage/channels/${encodeURIComponent(cryptHandle)}/auto-link`)
-            .then(function (response) {
-                showAutoLinkMessage(response.data.message, 'text-green-600');
-            })
-            .catch(function (error) {
-                console.error("Error starting auto-link:", error);
-                showAutoLinkMessage('自動紐付けの開始に失敗しました', 'text-red-500');
-            })
-            .finally(function () {
-                isProcessing = false;
-                toggleButtonDisabled(autoLinkBtn, false);
-            });
-    }
-
-    // 自動紐付けメッセージ表示
-    function showAutoLinkMessage(message, colorClass) {
-        autoLinkMessage.textContent = message;
-        autoLinkMessage.className = `text-sm mt-2 ${colorClass}`;
-        autoLinkMessage.classList.remove('hidden');
-    }
-
     // 除去パターンエラー表示
     function showStripPatternError(message) {
         stripPatternError.textContent = message;
@@ -402,7 +369,6 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
     reapplyStripPatternsBtn.addEventListener('click', reapplyStripPatterns);
-    autoLinkBtn.addEventListener('click', autoLinkChannel);
     loadPreviewBtn.addEventListener('click', loadPreview);
     reprocessBtn.addEventListener('click', reprocessCoverSongs);
 

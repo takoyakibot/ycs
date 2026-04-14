@@ -192,25 +192,6 @@ class ManageSettingsApiController extends Controller
     }
 
     /**
-     * チャンネルの未紐付けタイムスタンプを自動紐付け（非同期ジョブとして実行）
-     */
-    public function autoLink(string $id)
-    {
-        $handle = Crypt::decryptString($id);
-        $channel = Channel::where('handle', $handle)->firstOrFail();
-
-        if (! $this->canAccessChannel($channel)) {
-            abort(403, 'このチャンネルへのアクセス権限がありません');
-        }
-
-        \App\Jobs\AutoLinkChannelJob::dispatch($channel);
-
-        return response()->json([
-            'message' => '自動紐付けをバックグラウンドで開始しました。',
-        ]);
-    }
-
-    /**
      * カバー曲抽出プレビュー
      * 現在の除外ワード設定で、カバー曲がどのように抽出されるかをプレビュー
      */
