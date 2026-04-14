@@ -44,7 +44,10 @@ class ManageSettingsApiController extends Controller
             abort(403, 'このチャンネルへのアクセス権限がありません');
         }
 
-        $excludedWords = $channel->excludedWords()->orderBy('word')->get();
+        $excludedWords = $channel->excludedWords()
+            ->orderByRaw('LENGTH(word) DESC')
+            ->orderBy('word')
+            ->get();
 
         return response()->json($excludedWords);
     }

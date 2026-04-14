@@ -176,6 +176,9 @@ class CoverSongTitleExtractorService
      */
     private function removeExcludedWords(string $text, array $excludedWords): string
     {
+        // 文字数降順でソート（包含関係がある場合に長い文字列を先に除去するため）
+        usort($excludedWords, fn ($a, $b) => mb_strlen($b) - mb_strlen($a));
+
         foreach ($excludedWords as $word) {
             if ($word === '') {
                 continue;
