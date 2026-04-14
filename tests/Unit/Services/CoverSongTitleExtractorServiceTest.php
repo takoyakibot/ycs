@@ -166,6 +166,21 @@ class CoverSongTitleExtractorServiceTest extends TestCase
         $this->assertEquals('アイドル', $result);
     }
 
+    public function test_excluded_words_applied_in_length_descending_order(): void
+    {
+        // 包含関係のある除外ワード: "/【hoge】" と "【hoge】"
+        // 長い方を先に適用しないと、短い方が部分マッチして残りが生じる
+        $excludedWords = ['【hoge】', '/【hoge】'];
+
+        $result = $this->service->extractWithExcludedWords('楽曲名 /【hoge】', $excludedWords);
+        $this->assertEquals('楽曲名', $result);
+
+        // 順序を入れ替えても同じ結果になること（内部でソートされるため）
+        $excludedWords = ['/【hoge】', '【hoge】'];
+        $result = $this->service->extractWithExcludedWords('楽曲名 /【hoge】', $excludedWords);
+        $this->assertEquals('楽曲名', $result);
+    }
+
     public function test_handles_special_characters_in_excluded_words(): void
     {
         $excludedWords = ['(テスト)', '[特殊]'];
