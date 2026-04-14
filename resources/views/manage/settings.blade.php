@@ -90,6 +90,22 @@
                 <div id="stripPatternMessage" class="text-sm mt-2 hidden"></div>
             </div>
 
+            <!-- 自動紐付け実行セクション -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                <h3 class="text-lg font-bold text-gray-800 dark:text-gray-200 mb-4">自動紐付け実行</h3>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    このチャンネルの未紐付けタイムスタンプに対して、楽曲の自動紐付けを実行します。<br>
+                    既存のDB照合とSpotify検索による紐付けが行われます。既に紐付け済みのものには影響しません。
+                </p>
+
+                <div class="mt-4">
+                    <x-primary-button id="autoLinkBtn" type="button" class="bg-green-600 hover:bg-green-700">
+                        自動紐付けを実行
+                    </x-primary-button>
+                </div>
+                <div id="autoLinkMessage" class="text-sm mt-2 hidden"></div>
+            </div>
+
             <!-- カバー曲プレビューセクション -->
             <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
                 <h3 class="text-lg font-bold text-gray-800 dark:text-gray-200 mb-4">カバー曲抽出プレビュー</h3>
