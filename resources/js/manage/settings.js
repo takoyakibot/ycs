@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const excludedWordError = document.getElementById('excludedWordError');
     const excludedWordsList = document.getElementById('excludedWordsList');
     const newStripPatternInput = document.getElementById('newStripPattern');
+    const newStripPatternIsRegex = document.getElementById('newStripPatternIsRegex');
     const addStripPatternBtn = document.getElementById('addStripPatternBtn');
     const stripPatternError = document.getElementById('stripPatternError');
     const stripPatternsList = document.getElementById('stripPatternsList');
@@ -196,9 +197,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 let html = '<ul class="divide-y dark:divide-gray-700">';
                 patterns.forEach(pattern => {
+                    const regexBadge = pattern.is_regex
+                        ? '<span class="ml-2 px-1.5 py-0.5 text-xs bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300 rounded">正規表現</span>'
+                        : '';
                     html += `
                         <li class="flex items-center justify-between px-4 py-3">
-                            <span class="text-gray-800 dark:text-gray-200">${escapeHTML(pattern.pattern)}</span>
+                            <span class="text-gray-800 dark:text-gray-200">${escapeHTML(pattern.pattern)}${regexBadge}</span>
                             <button type="button" class="delete-pattern-btn text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-sm" data-id="${escapeHTML(pattern.id)}">
                                 削除
                             </button>
@@ -232,9 +236,12 @@ document.addEventListener('DOMContentLoaded', function () {
         isProcessing = true;
         toggleButtonDisabled(addStripPatternBtn, true);
 
-        axios.post(`/api/manage/channels/${encodeURIComponent(cryptHandle)}/strip-patterns`, { pattern })
+        const isRegex = newStripPatternIsRegex.checked;
+
+        axios.post(`/api/manage/channels/${encodeURIComponent(cryptHandle)}/strip-patterns`, { pattern, is_regex: isRegex })
             .then(function () {
                 newStripPatternInput.value = '';
+                newStripPatternIsRegex.checked = false;
                 hideStripPatternError();
                 fetchStripPatterns();
             })

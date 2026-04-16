@@ -11,13 +11,28 @@ class TimestampExtractorService
      * 除去パターンを適用してテキストから装飾文字を除去する
      *
      * @param  string  $text  元テキスト
-     * @param  array  $stripPatterns  除去パターン文字列の配列
+     * @param  array  $stripPatterns  除去パターンの配列。各要素は ['pattern' => string, 'is_regex' => bool] または文字列
      * @return string 除去後のテキスト
      */
     public static function applyStripPatterns(string $text, array $stripPatterns): string
     {
-        foreach ($stripPatterns as $pattern) {
-            $text = str_replace($pattern, '', $text);
+        foreach ($stripPatterns as $item) {
+            if (is_array($item)) {
+                $pattern = $item['pattern'];
+                $isRegex = $item['is_regex'] ?? false;
+            } else {
+                $pattern = $item;
+                $isRegex = false;
+            }
+
+            if ($isRegex) {
+                $result = @preg_replace($pattern, '', $text);
+                if ($result !== null) {
+                    $text = $result;
+                }
+            } else {
+                $text = str_replace($pattern, '', $text);
+            }
         }
 
         return trim($text);
@@ -30,7 +45,7 @@ class TimestampExtractorService
      * @param  string  $type  タイプ（1: description, 2: comment）
      * @param  string  $description  抽出対象のテキスト
      * @param  string  $commentId  コメントID
-     * @param  array  $stripPatterns  除去パターン文字列の配列（チャンネル設定）
+     * @param  array  $stripPatterns  除去パターンの配列。各要素は ['pattern' => string, 'is_regex' => bool] または文字列
      * @return array タイムスタンプ配列
      */
     public function extractTimestamps(string $videoId, string $type, string $description, string $commentId, array $stripPatterns = []): array

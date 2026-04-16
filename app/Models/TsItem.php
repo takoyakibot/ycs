@@ -89,7 +89,10 @@ class TsItem extends Model
             return [];
         }
 
-        $patterns = $channel->stripPatterns()->pluck('pattern')->toArray();
+        $patterns = $channel->stripPatterns()
+            ->get(['pattern', 'is_regex'])
+            ->map(fn ($p) => ['pattern' => $p->pattern, 'is_regex' => $p->is_regex])
+            ->toArray();
         self::$stripPatternsCache[$videoId] = $patterns;
 
         return $patterns;

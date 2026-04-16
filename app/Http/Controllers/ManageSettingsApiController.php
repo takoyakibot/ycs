@@ -138,12 +138,24 @@ class ManageSettingsApiController extends Controller
 
         $validated = $request->validate([
             'pattern' => ['required', 'string', 'max:255', 'regex:/\S/'],
+            'is_regex' => ['sometimes', 'boolean'],
         ]);
+
+        $isRegex = $validated['is_regex'] ?? false;
+
+        // 正規表現パターンの場合、コンパイルチェック
+        if ($isRegex) {
+            $testResult = @preg_match($validated['pattern'], '');
+            if ($testResult === false) {
+                return response()->json(['message' => '無効な正規表現パターンです'], 422);
+            }
+        }
 
         try {
             $pattern = ChannelStripPattern::create([
                 'channel_id' => $channel->channel_id,
                 'pattern' => $validated['pattern'],
+                'is_regex' => $isRegex,
             ]);
         } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
             return response()->json(['message' => '既に登録されています'], 422);
@@ -185,7 +197,10 @@ class ManageSettingsApiController extends Controller
             abort(403, 'このチャンネルへのアクセス権限がありません');
         }
 
-        $stripPatterns = $channel->stripPatterns()->pluck('pattern')->toArray();
+        $stripPatterns = $channel->stripPatterns()
+            ->get(['pattern', 'is_regex'])
+            ->map(fn ($p) => ['pattern' => $p->pattern, 'is_regex' => $p->is_regex])
+            ->toArray();
 
         \App\Jobs\ReapplyStripPatternsJob::dispatch($channel, $stripPatterns);
 

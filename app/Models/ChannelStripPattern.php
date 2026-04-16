@@ -12,6 +12,11 @@ class ChannelStripPattern extends Model
     protected $fillable = [
         'channel_id',
         'pattern',
+        'is_regex',
+    ];
+
+    protected $casts = [
+        'is_regex' => 'boolean',
     ];
 
     public function channel()

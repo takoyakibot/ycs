@@ -55,7 +55,10 @@ class RefreshArchiveService
     public function refreshArchives(Channel $channel): int
     {
         // チャンネルの除去パターンをロード
-        $stripPatterns = $channel->stripPatterns()->pluck('pattern')->toArray();
+        $stripPatterns = $channel->stripPatterns()
+            ->get(['pattern', 'is_regex'])
+            ->map(fn ($p) => ['pattern' => $p->pattern, 'is_regex' => $p->is_regex])
+            ->toArray();
 
         // 外部API呼び出しを全てトランザクション外で事前に実行
         // 1. archivesとts_itemsの取得および整形

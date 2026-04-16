@@ -124,4 +124,105 @@ class TimestampExtractorServiceTest extends TestCase
         $this->assertEquals(TextNormalizer::normalize('テスト曲名'), $results[0]['normalized_text']);
         $this->assertEquals(TextNormalizer::normalize('アーティスト / 曲名'), $results[1]['normalized_text']);
     }
+
+    /**
+     * applyStripPatterns: 正規表現パターンで除去
+     */
+    public function test_apply_strip_patterns_with_regex(): void
+    {
+        $text = '【MV】テスト曲名（full ver.）';
+        $patterns = [
+            ['pattern' => '/【.*?】/u', 'is_regex' => true],
+            ['pattern' => '/（.*?）/u', 'is_regex' => true],
+        ];
+
+        $result = TimestampExtractorService::applyStripPatterns($text, $patterns);
+
+        $this->assertEquals('テスト曲名', $result);
+    }
+
+    /**
+     * applyStripPatterns: 正規表現と文字列パターンの混在
+     */
+    public function test_apply_strip_patterns_mixed_regex_and_string(): void
+    {
+        $text = '🎵 【リクエスト】テスト曲名 ♪';
+        $patterns = [
+            ['pattern' => '🎵', 'is_regex' => false],
+            ['pattern' => '/【.*?】/u', 'is_regex' => true],
+            '♪',  // 文字列としても後方互換
+        ];
+
+        $result = TimestampExtractorService::applyStripPatterns($text, $patterns);
+
+        $this->assertEquals('テスト曲名', $result);
+    }
+
+    /**
+     * applyStripPatterns: 構造化配列形式（is_regex=false）
+     */
+    public function test_apply_strip_patterns_with_structured_array_non_regex(): void
+    {
+        $text = '🎵 テスト曲名 ♪';
+        $patterns = [
+            ['pattern' => '🎵', 'is_regex' => false],
+            ['pattern' => '♪', 'is_regex' => false],
+        ];
+
+        $result = TimestampExtractorService::applyStripPatterns($text, $patterns);
+
+        $this->assertEquals('テスト曲名', $result);
+    }
+
+    /**
+     * applyStripPatterns: 無効な正規表現はスキップされる
+     */
+    public function test_apply_strip_patterns_invalid_regex_is_skipped(): void
+    {
+        $text = 'テスト曲名';
+        $patterns = [
+            ['pattern' => '/[invalid/', 'is_regex' => true],
+        ];
+
+        $result = TimestampExtractorService::applyStripPatterns($text, $patterns);
+
+        $this->assertEquals('テスト曲名', $result);
+    }
+
+    /**
+     * applyStripPatterns: 絵文字を正規表現で除去
+     */
+    public function test_apply_strip_patterns_regex_removes_emoji_range(): void
+    {
+        $text = '🎵🎶 テスト曲名 ✨';
+        $patterns = [
+            ['pattern' => '/[\x{1F3B5}\x{1F3B6}\x{2728}]/u', 'is_regex' => true],
+        ];
+
+        $result = TimestampExtractorService::applyStripPatterns($text, $patterns);
+
+        $this->assertEquals('テスト曲名', $result);
+    }
+
+    /**
+     * extractTimestamps: 正規表現パターン付きでnormalized_textに反映される
+     */
+    public function test_extract_timestamps_with_regex_strip_patterns(): void
+    {
+        $description = "0:00 【MV】テスト曲名\n1:30 （リクエスト）アーティスト / 曲名";
+        $stripPatterns = [
+            ['pattern' => '/【.*?】/u', 'is_regex' => true],
+            ['pattern' => '/（.*?）/u', 'is_regex' => true],
+        ];
+
+        $results = $this->service->extractTimestamps('test_video', '1', $description, 'dummy', $stripPatterns);
+
+        $this->assertCount(2, $results);
+        // textは元のまま保持
+        $this->assertEquals('【MV】テスト曲名', $results[0]['text']);
+        $this->assertEquals('（リクエスト）アーティスト / 曲名', $results[1]['text']);
+        // normalized_textには正規表現パターンが適用された上でnormalizeされた値が入る
+        $this->assertEquals(TextNormalizer::normalize('テスト曲名'), $results[0]['normalized_text']);
+        $this->assertEquals(TextNormalizer::normalize('アーティスト / 曲名'), $results[1]['normalized_text']);
+    }
 }
