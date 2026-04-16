@@ -80,6 +80,12 @@
                 </div>
                 <div id="stripPatternError" class="text-red-500 text-sm mb-4 hidden"></div>
 
+                <!-- テンプレートから追加 -->
+                <div id="stripPatternTemplates" class="mb-4 hidden">
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">テンプレートから追加:</p>
+                    <div id="stripPatternTemplateButtons" class="flex flex-wrap gap-2"></div>
+                </div>
+
                 <!-- 除去パターン一覧 -->
                 <div id="stripPatternsList" class="border dark:border-gray-700 rounded-lg overflow-hidden">
                     <div class="text-center text-gray-500 dark:text-gray-400 py-4">読み込み中...</div>
@@ -130,6 +136,9 @@
     </div>
 
     <x-text-input type="hidden" id="cryptHandle" value="{{ $crypt_handle }}" />
+    <script>
+        window.stripPatternTemplates = @json(config('strip_pattern_templates', []));
+    </script>
 </x-app-layout>
 
 @vite('resources/js/manage/settings.js')
