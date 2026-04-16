@@ -82,6 +82,23 @@ const savePlayHistory = (song, timestamp, channel) => {
     }
 };
 
+// PiPタイトル更新用: 元のページタイトルを保持
+const originalDocumentTitle = document.title;
+
+/**
+ * 再生中の楽曲名でdocument.titleを更新（PiPタイトルに反映される）
+ * @param {Object|null} song - 楽曲情報（nullの場合は元のタイトルに戻す）
+ */
+const updateDocumentTitle = (song) => {
+    if (song && song.title) {
+        const parts = [song.title];
+        if (song.artist) parts.push(song.artist);
+        document.title = `♪ ${parts.join(' / ')}`;
+    } else {
+        document.title = originalDocumentTitle;
+    }
+};
+
 /**
  * アーカイブ一覧とタイムスタンプ管理コンポーネント
  * Alpine.jsコンポーネント登録
@@ -571,8 +588,9 @@ function registerArchiveListComponent() {
                         tsNum: timestamp?.ts_num
                     });
 
-                    // 再生履歴に保存
+                    // 再生履歴に保存・PiPタイトル更新
                     savePlayHistory(song, timestamp, this.channel);
+                    updateDocumentTitle(song);
 
                     // 自動ガチャ中に手動で楽曲を選択した場合、自動再抽選をOFFにする
                     if (this.autoReshuffle) {
@@ -618,8 +636,9 @@ function registerArchiveListComponent() {
                         spotify_track_id: null
                     };
 
-                    // 再生履歴に保存
+                    // 再生履歴に保存・PiPタイトル更新
                     savePlayHistory(pseudoSong, timestamp, this.channel);
+                    updateDocumentTitle(pseudoSong);
 
                     this.selectedSong = pseudoSong;
                     this.selectedTimestamp = timestamp;
@@ -803,6 +822,7 @@ function registerArchiveListComponent() {
                 // 動画プレイヤーを閉じる
                 closeVideoPlayer() {
                     videoPlayerManager.close(() => this.resetPlayerPosition());
+                    updateDocumentTitle(null);
                 },
 
                 // プレイヤーの最小化トグル
@@ -856,7 +876,8 @@ function registerArchiveListComponent() {
                     try {
                         this.isPlaybackTransitioning = true;
 
-                        const timestamp = await ChannelApiService.fetchRandomTimestamp(this.channel.handle);
+                        const excludeVideoId = this.selectedTimestamp?.video_id || null;
+                        const timestamp = await ChannelApiService.fetchRandomTimestamp(this.channel.handle, excludeVideoId);
 
                         logUserAction('playRandomTimestamp', {
                             timestampId: timestamp.id,
@@ -905,6 +926,10 @@ function registerArchiveListComponent() {
                                 selectedElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
                             }
                         });
+
+                        // 再生履歴に保存・PiPタイトル更新
+                        savePlayHistory(this.selectedSong, timestamp, this.channel);
+                        updateDocumentTitle(this.selectedSong);
 
                         toast.success('ランダムで楽曲を選びました！');
 
@@ -1039,6 +1064,9 @@ function registerArchiveListComponent() {
                             }
                             this.selectedTimestamp = nextTimestamp;
 
+                            // PiPタイトル更新（表示更新のみで再生位置は変わらないため履歴は追加しない）
+                            updateDocumentTitle(this.selectedSong);
+
                             // 次のタイムスタンプまでの監視を再設定
                             const endTime = autoReshuffleManager.calculateEndTime(nextTimestamp);
                             autoReshuffleManager.setEndTime(endTime);
@@ -1097,6 +1125,10 @@ function registerArchiveListComponent() {
                         if (timestamp.video_id) {
                             this.loadAndPlayVideo(timestamp.video_id, timestamp.ts_num || 0);
                         }
+
+                        // 再生履歴に保存・PiPタイトル更新
+                        savePlayHistory(this.selectedSong, timestamp, this.channel);
+                        updateDocumentTitle(this.selectedSong);
 
                         if (showToast) {
                             toast.success('次の曲を再生します');

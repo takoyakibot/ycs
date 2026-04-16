@@ -179,11 +179,15 @@ class ChannelController extends Controller
     /**
      * チャンネルのタイムスタンプからランダムに1件取得
      */
-    public function fetchRandomTimestamp(string $id)
+    public function fetchRandomTimestamp(string $id, Request $request)
     {
         $channel = Channel::where('handle', $id)->firstOrFail();
 
-        $result = $this->timestampService->getRandomTimestamp($channel);
+        $excludeVideoId = $request->query('exclude_video_id');
+        if ($excludeVideoId !== null && ! preg_match('/^[A-Za-z0-9_-]{11}$/', $excludeVideoId)) {
+            $excludeVideoId = null;
+        }
+        $result = $this->timestampService->getRandomTimestamp($channel, 50, $excludeVideoId);
 
         if (! $result) {
             return response()->json([
