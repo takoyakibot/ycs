@@ -192,6 +192,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 const patterns = response.data;
                 if (patterns.length === 0) {
                     stripPatternsList.innerHTML = '<div class="text-center text-gray-500 dark:text-gray-400 py-4">除去パターンが登録されていません</div>';
+                    renderTemplateButtons(patterns);
                     return;
                 }
 
@@ -217,6 +218,8 @@ document.addEventListener('DOMContentLoaded', function () {
                         deleteStripPattern(this.dataset.id);
                     });
                 });
+
+                renderTemplateButtons(patterns);
             })
             .catch(function (error) {
                 console.error("Error fetching strip patterns:", error);
@@ -378,6 +381,59 @@ document.addEventListener('DOMContentLoaded', function () {
     reapplyStripPatternsBtn.addEventListener('click', reapplyStripPatterns);
     loadPreviewBtn.addEventListener('click', loadPreview);
     reprocessBtn.addEventListener('click', reprocessCoverSongs);
+
+    // テンプレートボタンの生成
+    const templates = window.stripPatternTemplates || [];
+    const templatesContainer = document.getElementById('stripPatternTemplates');
+    const templateButtonsContainer = document.getElementById('stripPatternTemplateButtons');
+
+    function renderTemplateButtons(registeredPatterns) {
+        const registeredSet = new Set(registeredPatterns.map(p => p.pattern));
+        templateButtonsContainer.innerHTML = '';
+        let visibleCount = 0;
+
+        templates.forEach(template => {
+            if (registeredSet.has(template.pattern)) return;
+            visibleCount++;
+
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded border border-gray-300 dark:border-gray-600 transition-colors';
+            btn.textContent = template.label;
+            btn.addEventListener('click', function () {
+                addTemplatePattern(template, btn);
+            });
+            templateButtonsContainer.appendChild(btn);
+        });
+
+        templatesContainer.classList.toggle('hidden', visibleCount === 0);
+    }
+
+    function addTemplatePattern(template, btn) {
+        if (isProcessing) return;
+        isProcessing = true;
+        toggleButtonDisabled(btn, true);
+
+        axios.post(`/api/manage/channels/${encodeURIComponent(cryptHandle)}/strip-patterns`, {
+            pattern: template.pattern,
+            is_regex: template.is_regex,
+        })
+            .then(function () {
+                hideStripPatternError();
+                fetchStripPatterns();
+            })
+            .catch(function (error) {
+                if (error.response && error.response.data && error.response.data.message) {
+                    showStripPatternError(error.response.data.message);
+                } else {
+                    showStripPatternError('エラーが発生しました');
+                }
+            })
+            .finally(function () {
+                isProcessing = false;
+                toggleButtonDisabled(btn, false);
+            });
+    }
 
     // 初期化
     fetchExcludedWords();
