@@ -69,8 +69,9 @@ export class ChannelApiService {
      * @param {string} channelHandle - チャンネルハンドル
      * @returns {Promise<Object>} ランダムなタイムスタンプデータ
      */
-    static async fetchRandomTimestamp(channelHandle) {
-        const response = await fetch(`/api/channels/${channelHandle}/timestamps/random`);
+    static async fetchRandomTimestamp(channelHandle, excludeVideoId = null) {
+        const params = excludeVideoId ? `?exclude_video_id=${encodeURIComponent(excludeVideoId)}` : '';
+        const response = await fetch(`/api/channels/${channelHandle}/timestamps/random${params}`);
         if (!response.ok) {
             if (response.status === 404) {
                 throw new Error('タイムスタンプが見つかりませんでした');

@@ -269,7 +269,7 @@ class TimestampService
      * @param  int  $perPage  1ページあたりの件数（ページ番号計算用）
      * @return array|null タイムスタンプデータ（見つからない場合はnull）
      */
-    public function getRandomTimestamp(Channel $channel, int $perPage = 50): ?array
+    public function getRandomTimestamp(Channel $channel, int $perPage = 50, ?string $excludeVideoId = null): ?array
     {
         // ベースクエリ: ts_itemsとtimestamp_song_mappings、songsをLEFT JOIN
         $query = TsItem::with(['archive'])
@@ -301,8 +301,17 @@ class TimestampService
                 ->orWhere('timestamp_song_mappings.is_not_song', false);
         });
 
-        // ランダムに1件取得
-        $item = $query->inRandomOrder()->first();
+        // 直前のアーカイブを除外してランダムに1件取得（同じアーカイブの連続再生を防止）
+        $item = null;
+        if ($excludeVideoId) {
+            $item = (clone $query)->where('ts_items.video_id', '!=', $excludeVideoId)
+                ->inRandomOrder()->first();
+        }
+
+        // 除外条件で見つからない場合（アーカイブが1つしかない等）はフォールバック
+        if (! $item) {
+            $item = $query->inRandomOrder()->first();
+        }
 
         if (! $item) {
             return null;
