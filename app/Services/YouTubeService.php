@@ -44,7 +44,7 @@ class YouTubeService
      * アーカイブとタイムスタンプを取得
      *
      * @param  string  $channelId  チャンネルID
-     * @param  array  $stripPatterns  除去パターン文字列の配列（チャンネル設定）
+     * @param  array  $stripPatterns  除去パターンの配列。各要素は ['pattern' => string, 'is_regex' => bool] または文字列
      * @return array アーカイブ配列（タイムスタンプ付き）
      */
     public function getArchivesAndTsItems(string $channelId, array $stripPatterns = []): array
@@ -92,7 +92,7 @@ class YouTubeService
      * コメントからタイムスタンプを取得
      *
      * @param  string  $videoId  動画ID
-     * @param  array  $stripPatterns  除去パターン文字列の配列（チャンネル設定）
+     * @param  array  $stripPatterns  除去パターンの配列。各要素は ['pattern' => string, 'is_regex' => bool] または文字列
      * @return array タイムスタンプ配列
      */
     public function getTimeStampsFromComments(string $videoId, array $stripPatterns = []): array

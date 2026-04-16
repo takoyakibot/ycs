@@ -72,6 +72,10 @@
                 <!-- 除去パターン追加フォーム -->
                 <div class="flex items-center gap-2 mb-4">
                     <x-text-input type="text" id="newStripPattern" placeholder="除去する文字列を入力" class="flex-1" />
+                    <label class="flex items-center gap-1 text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap cursor-pointer">
+                        <input type="checkbox" id="newStripPatternIsRegex" class="rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700">
+                        正規表現
+                    </label>
                     <x-primary-button id="addStripPatternBtn" type="button">追加</x-primary-button>
                 </div>
                 <div id="stripPatternError" class="text-red-500 text-sm mb-4 hidden"></div>
