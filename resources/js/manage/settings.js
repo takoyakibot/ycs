@@ -13,7 +13,16 @@ document.addEventListener('DOMContentLoaded', function () {
     const stripPatternError = document.getElementById('stripPatternError');
     const stripPatternsList = document.getElementById('stripPatternsList');
     const reapplyStripPatternsBtn = document.getElementById('reapplyStripPatternsBtn');
+    const previewStripPatternsBtn = document.getElementById('previewStripPatternsBtn');
     const stripPatternMessage = document.getElementById('stripPatternMessage');
+    const stripPatternPreview = document.getElementById('stripPatternPreview');
+    const stripPreviewTsItems = document.getElementById('stripPreviewTsItems');
+    const stripPreviewSongs = document.getElementById('stripPreviewSongs');
+    const stripPreviewNoHits = document.getElementById('stripPreviewNoHits');
+    const stripPreviewTsCount = document.getElementById('stripPreviewTsCount');
+    const stripPreviewSongCount = document.getElementById('stripPreviewSongCount');
+    const stripPreviewTsBody = document.getElementById('stripPreviewTsBody');
+    const stripPreviewSongBody = document.getElementById('stripPreviewSongBody');
     const loadPreviewBtn = document.getElementById('loadPreviewBtn');
     const reprocessBtn = document.getElementById('reprocessBtn');
     const previewMessage = document.getElementById('previewMessage');
@@ -305,6 +314,90 @@ document.addEventListener('DOMContentLoaded', function () {
             });
     }
 
+    // 除去パターンのプレビュー（検出モード）
+    function previewStripPatterns() {
+        if (isProcessing) return;
+        isProcessing = true;
+        toggleButtonDisabled(previewStripPatternsBtn, true);
+
+        showStripPatternMessage('プレビュー読み込み中...', 'text-gray-600');
+
+        axios.get(`/api/manage/channels/${encodeURIComponent(cryptHandle)}/strip-patterns/preview`)
+            .then(function (response) {
+                const data = response.data;
+                const tsItems = data.ts_items || [];
+                const songs = data.songs || [];
+                const truncated = data.truncated || false;
+
+                stripPatternPreview.classList.remove('hidden');
+
+                // ts_items プレビュー
+                if (tsItems.length > 0) {
+                    stripPreviewTsItems.classList.remove('hidden');
+                    stripPreviewTsCount.textContent = tsItems.length;
+
+                    let html = '';
+                    tsItems.forEach(item => {
+                        html += `
+                            <tr class="border-t dark:border-gray-700">
+                                <td class="px-3 py-1.5 text-gray-800 dark:text-gray-200">${escapeHTML(item.text)}</td>
+                                <td class="px-3 py-1.5 text-gray-500 dark:text-gray-400">${escapeHTML(item.current_normalized)}</td>
+                                <td class="px-3 py-1.5 text-blue-600 dark:text-blue-400 font-medium">${escapeHTML(item.new_normalized)}</td>
+                            </tr>
+                        `;
+                    });
+                    stripPreviewTsBody.innerHTML = html;
+                } else {
+                    stripPreviewTsItems.classList.add('hidden');
+                }
+
+                // songs プレビュー
+                if (songs.length > 0) {
+                    stripPreviewSongs.classList.remove('hidden');
+                    stripPreviewSongCount.textContent = songs.length;
+
+                    let html = '';
+                    songs.forEach(song => {
+                        const hitParts = [];
+                        if (song.title_after !== null) {
+                            hitParts.push(`タイトル: ${escapeHTML(song.title)} → ${escapeHTML(song.title_after)}`);
+                        }
+                        if (song.artist_after !== null) {
+                            hitParts.push(`アーティスト: ${escapeHTML(song.artist)} → ${escapeHTML(song.artist_after)}`);
+                        }
+                        html += `
+                            <tr class="border-t dark:border-gray-700">
+                                <td class="px-3 py-1.5 text-gray-800 dark:text-gray-200">${escapeHTML(song.title || '')}</td>
+                                <td class="px-3 py-1.5 text-gray-800 dark:text-gray-200">${escapeHTML(song.artist || '')}</td>
+                                <td class="px-3 py-1.5 text-orange-600 dark:text-orange-400">${hitParts.join('<br>')}</td>
+                            </tr>
+                        `;
+                    });
+                    stripPreviewSongBody.innerHTML = html;
+                } else {
+                    stripPreviewSongs.classList.add('hidden');
+                }
+
+                // ヒットなし
+                if (tsItems.length === 0 && songs.length === 0) {
+                    stripPreviewNoHits.classList.remove('hidden');
+                } else {
+                    stripPreviewNoHits.classList.add('hidden');
+                }
+
+                const truncatedMsg = truncated ? '（結果が多いため一部のみ表示）' : '';
+                showStripPatternMessage(`プレビュー完了（TS: ${tsItems.length}件、楽曲: ${songs.length}件）${truncatedMsg}`, 'text-green-600');
+            })
+            .catch(function (error) {
+                console.error("Error previewing strip patterns:", error);
+                showStripPatternMessage('プレビューの読み込みに失敗しました', 'text-red-500');
+            })
+            .finally(function () {
+                isProcessing = false;
+                toggleButtonDisabled(previewStripPatternsBtn, false);
+            });
+    }
+
     // 除去パターンエラー表示
     function showStripPatternError(message) {
         stripPatternError.textContent = message;
@@ -379,6 +472,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
     reapplyStripPatternsBtn.addEventListener('click', reapplyStripPatterns);
+    previewStripPatternsBtn.addEventListener('click', previewStripPatterns);
     loadPreviewBtn.addEventListener('click', loadPreview);
     reprocessBtn.addEventListener('click', reprocessCoverSongs);
 

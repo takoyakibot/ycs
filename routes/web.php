@@ -73,6 +73,9 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::post('api/manage/channels/{id}/strip-patterns/reapply', [ManageSettingsApiController::class, 'reapplyStripPatterns'])
         ->name('manage.reapplyStripPatterns')
         ->middleware('throttle:5,1'); // 1分間に5回まで
+    Route::get('api/manage/channels/{id}/strip-patterns/preview', [ManageSettingsApiController::class, 'previewStripPatterns'])
+        ->name('manage.previewStripPatterns')
+        ->middleware('throttle:5,1'); // 1分間に5回まで
     // 自動紐付け（Spotify API呼び出しを含む長時間ジョブのため、レート制限は保守的に設定）
     Route::post('api/manage/channels/{id}/auto-link', [ManageSettingsApiController::class, 'autoLink'])
         ->name('manage.autoLink')
