@@ -188,4 +188,29 @@ class CoverSongTitleExtractorServiceTest extends TestCase
         $result = $this->service->extractWithExcludedWords('アイドル (テスト)', $excludedWords);
         $this->assertEquals('アイドル', $result);
     }
+
+    public function test_preserves_wave_dash_in_cleanup(): void
+    {
+        // 波ダッシュ（U+301C）が cleanup() の trim で壊れないことを確認
+        $excludedWords = ['/《テスト Cover》'];
+
+        $result = $this->service->extractWithExcludedWords(
+            'フクロウ〜フクロウが知らせる客が来たと〜/《テスト Cover》',
+            $excludedWords
+        );
+        $this->assertEquals('フクロウ〜フクロウが知らせる客が来たと〜', $result);
+    }
+
+    public function test_cleanup_trims_separator_characters(): void
+    {
+        // 前後の区切り文字が正しく除去されること
+        $result = $this->service->extractWithExcludedWords('/【Cover】楽曲名/', []);
+        $this->assertEquals('楽曲名', $result);
+
+        $result = $this->service->extractWithExcludedWords('｜【Cover】楽曲名｜', []);
+        $this->assertEquals('楽曲名', $result);
+
+        $result = $this->service->extractWithExcludedWords('―【Cover】楽曲名―', []);
+        $this->assertEquals('楽曲名', $result);
+    }
 }

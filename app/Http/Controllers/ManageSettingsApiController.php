@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Helpers\TextNormalizer;
 use App\Http\Controllers\Concerns\ManageAccessControl;
+use App\Jobs\AutoLinkChannelJob;
 use App\Models\Archive;
 use App\Models\Channel;
 use App\Models\ChannelExcludedWord;
@@ -194,6 +195,25 @@ class ManageSettingsApiController extends Controller
     }
 
     /**
+     * チャンネルの自動紐付けをバックグラウンドで開始
+     */
+    public function autoLink(string $id)
+    {
+        $handle = Crypt::decryptString($id);
+        $channel = Channel::where('handle', $handle)->firstOrFail();
+
+        if (! $this->canAccessChannel($channel)) {
+            abort(403, 'このチャンネルへのアクセス権限がありません');
+        }
+
+        dispatch(new AutoLinkChannelJob($channel));
+
+        return response()->json([
+            'message' => '自動紐付けをバックグラウンドで開始しました。',
+        ]);
+    }
+
+    /**
      * カバー曲抽出プレビュー
      * 現在の除外ワード設定で、カバー曲がどのように抽出されるかをプレビュー
      */
@@ -210,15 +230,13 @@ class ManageSettingsApiController extends Controller
         $archives = Archive::where('channel_id', $channel->channel_id)
             ->get()
             ->filter(fn ($archive) => $this->videoAnalyzerService->isCoverSong(
-                mb_convert_encoding($archive->title ?? '', 'UTF-8', 'UTF-8')
+                $archive->title ?? ''
             ));
 
         // 各動画について、抽出結果をプレビュー
         $previews = $archives->map(function ($archive) use ($channel) {
-            // 不正なUTF-8文字を除去
-            $originalTitle = mb_convert_encoding($archive->title ?? '', 'UTF-8', 'UTF-8');
+            $originalTitle = $archive->title ?? '';
             $extractedText = $this->coverSongTitleExtractorService->extract($originalTitle, $channel->channel_id);
-            $extractedText = mb_convert_encoding($extractedText, 'UTF-8', 'UTF-8');
             $normalizedText = TextNormalizer::normalize($extractedText);
 
             // 現在のマッピング状態を取得
@@ -235,7 +253,7 @@ class ManageSettingsApiController extends Controller
             ];
         })->values();
 
-        return response()->json($previews, 200, [], JSON_INVALID_UTF8_SUBSTITUTE);
+        return response()->json($previews, 200, [], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
     }
 
     /**
@@ -281,11 +299,7 @@ class ManageSettingsApiController extends Controller
 
                     $currentVideoId = $archive->video_id;
 
-                    // 不正なUTF-8文字を除去してからタイトルを処理
-                    $sanitizedTitle = mb_convert_encoding($archive->title ?? '', 'UTF-8', 'UTF-8');
-                    $newText = $this->coverSongTitleExtractorService->extract($sanitizedTitle, $channel->channel_id);
-                    // 抽出結果もサニタイズ
-                    $newText = mb_convert_encoding($newText, 'UTF-8', 'UTF-8');
+                    $newText = $this->coverSongTitleExtractorService->extract($archive->title ?? '', $channel->channel_id);
                     $newNormalizedText = TextNormalizer::normalize($newText);
 
                     // 変更がある場合のみ更新
@@ -310,13 +324,13 @@ class ManageSettingsApiController extends Controller
             return response()->json([
                 'message' => "カバー曲紐付けを再処理しました（{$processedCount}件更新）",
                 'processed_count' => $processedCount,
-            ], 200, [], JSON_INVALID_UTF8_SUBSTITUTE);
+            ], 200, [], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         } catch (\Exception $e) {
             \Log::error('reprocessCoverSongs: エラー発生', [
                 'channel_id' => $channel->channel_id,
                 'current_video_id' => $currentVideoId,
                 'error_class' => get_class($e),
-                'error_message' => mb_convert_encoding($e->getMessage(), 'UTF-8', 'UTF-8'),
+                'error_message' => $e->getMessage(),
                 'error_file' => $e->getFile(),
                 'error_line' => $e->getLine(),
             ]);
@@ -324,7 +338,7 @@ class ManageSettingsApiController extends Controller
             return response()->json([
                 'message' => '処理中にエラーが発生しました。ログを確認してください。',
                 'error' => true,
-            ], 500, [], JSON_INVALID_UTF8_SUBSTITUTE);
+            ], 500, [], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         }
     }
 }
