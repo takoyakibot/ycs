@@ -226,8 +226,9 @@ class ManageSettingsApiController extends Controller
             abort(403, 'このチャンネルへのアクセス権限がありません');
         }
 
-        // カバー曲動画を取得
+        // カバー曲動画を取得（表示対象のみ）
         $archives = Archive::where('channel_id', $channel->channel_id)
+            ->where('is_display', 1)
             ->get()
             ->filter(fn ($archive) => $this->videoAnalyzerService->isCoverSong(
                 $archive->title ?? ''
