@@ -74,4 +74,35 @@ class ManageCoverSongPreviewTest extends TestCase
         // 全角チルダ（～）が保持されていること
         $this->assertStringContainsString('～', $previews[0]['extracted_text']);
     }
+
+    public function test_preview_excludes_hidden_archives(): void
+    {
+        $user = User::factory()->create();
+        $channel = Channel::factory()->create(['user_id' => $user->id]);
+
+        // 表示対象のカバー曲
+        Archive::factory()->create([
+            'channel_id' => $channel->channel_id,
+            'title' => '表示対象【歌ってみた】',
+            'is_display' => 1,
+        ]);
+
+        // 非表示のカバー曲
+        Archive::factory()->create([
+            'channel_id' => $channel->channel_id,
+            'title' => '非表示【Cover】',
+            'is_display' => 0,
+        ]);
+
+        $cryptHandle = Crypt::encryptString($channel->handle);
+
+        $response = $this->actingAs($user)
+            ->getJson("/api/manage/channels/{$cryptHandle}/cover-songs/preview");
+
+        $response->assertOk();
+
+        $previews = $response->json();
+        $this->assertCount(1, $previews);
+        $this->assertStringContainsString('表示対象', $previews[0]['original_title']);
+    }
 }
