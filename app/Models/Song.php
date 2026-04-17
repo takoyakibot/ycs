@@ -24,9 +24,14 @@ class Song extends Model
         'duration_ms',
         'normalized_title',
         'normalized_artist',
+        'review_status',
         'created_by',
         'updated_by',
     ];
+
+    public const REVIEW_STATUS_SAFE = 'safe';
+
+    public const REVIEW_STATUS_NEEDS_REVIEW = 'needs_review';
 
     protected $casts = [
         'spotify_data' => 'array',
