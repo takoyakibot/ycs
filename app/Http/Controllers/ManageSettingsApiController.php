@@ -9,9 +9,11 @@ use App\Models\Archive;
 use App\Models\Channel;
 use App\Models\ChannelExcludedWord;
 use App\Models\ChannelStripPattern;
+use App\Models\Song;
 use App\Models\TimestampSongMapping;
 use App\Models\TsItem;
 use App\Services\CoverSongTitleExtractorService;
+use App\Services\TimestampExtractorService;
 use App\Services\VideoAnalyzerService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
@@ -207,6 +209,128 @@ class ManageSettingsApiController extends Controller
         return response()->json([
             'message' => '除去パターンの再適用をバックグラウンドで開始しました。完了までしばらくお待ちください。',
         ]);
+    }
+
+    /**
+     * 除去パターンのプレビュー（検出モード）
+     * パターンを適用せず、ヒットする箇所を一覧表示する
+     */
+    public function previewStripPatterns(string $id)
+    {
+        $handle = Crypt::decryptString($id);
+        $channel = Channel::where('handle', $handle)->firstOrFail();
+
+        if (! $this->canAccessChannel($channel)) {
+            abort(403, 'このチャンネルへのアクセス権限がありません');
+        }
+
+        $stripPatterns = $channel->stripPatterns()
+            ->get(['pattern', 'is_regex'])
+            ->map(fn ($p) => ['pattern' => $p->pattern, 'is_regex' => $p->is_regex])
+            ->toArray();
+
+        if (empty($stripPatterns)) {
+            return response()->json(['ts_items' => [], 'songs' => []], 200, [], JSON_UNESCAPED_UNICODE);
+        }
+
+        $maxResults = 500;
+
+        // ts_items のプレビュー: チャンネルの表示対象ts_itemsに対してパターン適用結果を比較
+        $tsItemPreviews = [];
+        $tsItemTruncated = false;
+        TsItem::whereHas('archive', function ($q) use ($channel) {
+            $q->where('channel_id', $channel->channel_id)->where('is_display', 1);
+        })
+            ->where('is_display', 1)
+            ->chunk(200, function ($tsItems) use ($stripPatterns, &$tsItemPreviews, &$tsItemTruncated, $maxResults) {
+                if ($tsItemTruncated) {
+                    return false;
+                }
+
+                foreach ($tsItems as $tsItem) {
+                    if (count($tsItemPreviews) >= $maxResults) {
+                        $tsItemTruncated = true;
+
+                        return false;
+                    }
+
+                    $rawText = $tsItem->attributes['text'] ?? null;
+                    if (! $rawText) {
+                        continue;
+                    }
+
+                    $afterStrip = TimestampExtractorService::applyStripPatterns($rawText, $stripPatterns);
+                    $newNormalized = TextNormalizer::normalize($afterStrip);
+
+                    if ($newNormalized === '' && trim($afterStrip) !== '') {
+                        $newNormalized = mb_strtolower(trim($afterStrip), 'UTF-8');
+                    }
+
+                    $currentNormalized = $tsItem->attributes['normalized_text'] ?? '';
+
+                    // パターン適用で変化がある場合のみ返す
+                    if ($currentNormalized !== $newNormalized) {
+                        $tsItemPreviews[] = [
+                            'video_id' => $tsItem->video_id,
+                            'text' => $rawText,
+                            'current_normalized' => $currentNormalized,
+                            'new_normalized' => $newNormalized,
+                        ];
+                    }
+                }
+            });
+
+        // songs のプレビュー: チャンネルに紐づくsong（表示対象ts_items経由）のtitle/artistにパターンがヒットするか
+        $songPreviews = [];
+        $songTruncated = false;
+        $songIds = TimestampSongMapping::whereIn(
+            'normalized_text',
+            TsItem::whereHas('archive', function ($q) use ($channel) {
+                $q->where('channel_id', $channel->channel_id)->where('is_display', 1);
+            })->where('is_display', 1)->select('normalized_text')
+        )->whereNotNull('song_id')->pluck('song_id')->unique();
+
+        if ($songIds->isNotEmpty()) {
+            Song::whereIn('id', $songIds)->chunk(200, function ($songs) use ($stripPatterns, &$songPreviews, &$songTruncated, $maxResults) {
+                if ($songTruncated) {
+                    return false;
+                }
+
+                foreach ($songs as $song) {
+                    if (count($songPreviews) >= $maxResults) {
+                        $songTruncated = true;
+
+                        return false;
+                    }
+
+                    $titleAfter = $song->title
+                        ? TimestampExtractorService::applyStripPatterns($song->title, $stripPatterns)
+                        : null;
+                    $artistAfter = $song->artist
+                        ? TimestampExtractorService::applyStripPatterns($song->artist, $stripPatterns)
+                        : null;
+
+                    $titleChanged = $titleAfter !== null && $titleAfter !== $song->title;
+                    $artistChanged = $artistAfter !== null && $artistAfter !== $song->artist;
+
+                    if ($titleChanged || $artistChanged) {
+                        $songPreviews[] = [
+                            'song_id' => $song->id,
+                            'title' => $song->title,
+                            'artist' => $song->artist,
+                            'title_after' => $titleChanged ? $titleAfter : null,
+                            'artist_after' => $artistChanged ? $artistAfter : null,
+                        ];
+                    }
+                }
+            });
+        }
+
+        return response()->json([
+            'ts_items' => $tsItemPreviews,
+            'songs' => $songPreviews,
+            'truncated' => $tsItemTruncated || $songTruncated,
+        ], 200, [], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
     }
 
     /**

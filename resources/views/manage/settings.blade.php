@@ -91,14 +91,60 @@
                     <div class="text-center text-gray-500 dark:text-gray-400 py-4">読み込み中...</div>
                 </div>
 
-                <!-- 再適用ボタン -->
-                <div class="mt-4">
+                <!-- プレビュー・再適用ボタン -->
+                <div class="mt-4 flex items-center gap-2 flex-wrap">
+                    <x-primary-button id="previewStripPatternsBtn" type="button">
+                        プレビュー
+                    </x-primary-button>
                     <x-primary-button id="reapplyStripPatternsBtn" type="button" class="bg-orange-600 hover:bg-orange-700">
                         既存タイムスタンプに再適用
                     </x-primary-button>
-                    <span class="text-xs text-gray-500 dark:text-gray-400 ml-2">パターン変更後に実行すると、既存のタイムスタンプの照合テキストが再生成されます</span>
+                    <span class="text-xs text-gray-500 dark:text-gray-400">パターン変更後にプレビューで確認し、問題なければ再適用してください</span>
                 </div>
                 <div id="stripPatternMessage" class="text-sm mt-2 hidden"></div>
+
+                <!-- プレビュー結果 -->
+                <div id="stripPatternPreview" class="mt-4 hidden">
+                    <h4 class="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">プレビュー結果</h4>
+
+                    <!-- ts_items プレビュー -->
+                    <div id="stripPreviewTsItems" class="mb-4 hidden">
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">タイムスタンプ（<span id="stripPreviewTsCount">0</span>件変化）</p>
+                        <div class="border dark:border-gray-700 rounded-lg overflow-x-auto">
+                            <table class="w-full text-xs">
+                                <thead class="bg-gray-100 dark:bg-gray-700">
+                                    <tr>
+                                        <th class="px-3 py-1.5 text-left">元テキスト</th>
+                                        <th class="px-3 py-1.5 text-left">現在の照合テキスト</th>
+                                        <th class="px-3 py-1.5 text-left">適用後の照合テキスト</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="stripPreviewTsBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- songs プレビュー -->
+                    <div id="stripPreviewSongs" class="mb-4 hidden">
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">楽曲マスタ（<span id="stripPreviewSongCount">0</span>件ヒット）</p>
+                        <div class="border dark:border-gray-700 rounded-lg overflow-x-auto">
+                            <table class="w-full text-xs">
+                                <thead class="bg-gray-100 dark:bg-gray-700">
+                                    <tr>
+                                        <th class="px-3 py-1.5 text-left">タイトル</th>
+                                        <th class="px-3 py-1.5 text-left">アーティスト</th>
+                                        <th class="px-3 py-1.5 text-left">パターンヒット箇所</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="stripPreviewSongBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div id="stripPreviewNoHits" class="text-center text-gray-500 dark:text-gray-400 py-3 text-sm hidden">
+                        パターンにヒットする箇所はありません
+                    </div>
+                </div>
             </div>
 
             <!-- カバー曲プレビューセクション -->
