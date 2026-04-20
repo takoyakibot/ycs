@@ -194,4 +194,72 @@ class SongMergeTest extends TestCase
         $response->assertStatus(200)
             ->assertJsonCount(0);
     }
+
+    public function test_merge_songs_handles_duplicate_mappings(): void
+    {
+        $targetSong = Song::factory()->create(['title' => 'Target Song', 'artist' => 'Artist']);
+        $sourceSong = Song::factory()->create(['title' => 'Source Song', 'artist' => 'Artist']);
+
+        // 同じnormalized_textのマッピングが両方に存在
+        TimestampSongMapping::factory()
+            ->withSong($targetSong)
+            ->withText('shared text')
+            ->create();
+        TimestampSongMapping::factory()
+            ->withSong($sourceSong)
+            ->withText('shared text duplicate')
+            ->create();
+
+        // sourceのみのマッピング → これはtargetに付け替えられるべき
+        TimestampSongMapping::factory()
+            ->withSong($sourceSong)
+            ->withText('source only text')
+            ->create();
+
+        // normalized_textを手動で重複させる
+        \DB::table('timestamp_song_mappings')
+            ->where('normalized_text', 'shared text duplicate')
+            ->update(['normalized_text' => 'shared text']);
+
+        $response = $this->actingAs($this->user)
+            ->postJson('/api/songs/merge', [
+                'source_song_id' => $sourceSong->id,
+                'target_song_id' => $targetSong->id,
+            ]);
+
+        $response->assertStatus(200);
+
+        // sourceSongが削除されていること
+        $this->assertDatabaseMissing('songs', ['id' => $sourceSong->id]);
+
+        // targetにマッピングが移行され、重複が解消されていること
+        $targetMappings = TimestampSongMapping::where('song_id', $targetSong->id)->get();
+        $this->assertEquals(2, $targetMappings->count());
+        $this->assertTrue($targetMappings->pluck('normalized_text')->contains('shared text'));
+        $this->assertTrue($targetMappings->pluck('normalized_text')->contains('source only text'));
+    }
+
+    public function test_delete_song_clears_ts_item_song_id(): void
+    {
+        $song = Song::factory()->create(['title' => 'Delete Me', 'artist' => 'Artist']);
+
+        $channel = Channel::factory()->create();
+        $archive = Archive::factory()->create(['channel_id' => $channel->channel_id]);
+        $tsItem = TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'song_id' => $song->id,
+        ]);
+
+        $response = $this->actingAs($this->user)
+            ->deleteJson("/api/songs/{$song->id}");
+
+        $response->assertStatus(200);
+
+        // songが削除されていること
+        $this->assertDatabaseMissing('songs', ['id' => $song->id]);
+
+        // ts_item.song_idがnullにクリアされていること
+        $tsItem->refresh();
+        $this->assertNull($tsItem->song_id);
+    }
 }
