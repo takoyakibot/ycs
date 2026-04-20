@@ -15,8 +15,8 @@ class AutoLinkChannelJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    /** ジョブのタイムアウト（10分：Spotify API呼び出しのため長め） */
-    public int $timeout = 600;
+    /** ジョブのタイムアウト（5分：外部API呼び出しなしのためDB照合のみ） */
+    public int $timeout = 300;
 
     /** リトライ回数 */
     public int $tries = 1;

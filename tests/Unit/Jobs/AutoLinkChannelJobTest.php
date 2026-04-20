@@ -32,9 +32,8 @@ class AutoLinkChannelJobTest extends TestCase
             ->andReturn([
                 'processed' => 5,
                 'linked' => 3,
-                'pending' => 1,
                 'failed' => 0,
-                'skipped' => 1,
+                'skipped' => 2,
             ]);
 
         $job = new AutoLinkChannelJob($channel);
@@ -66,7 +65,6 @@ class AutoLinkChannelJobTest extends TestCase
             ->andReturn([
                 'processed' => 0,
                 'linked' => 0,
-                'pending' => 0,
                 'failed' => 0,
                 'skipped' => 0,
             ]);
