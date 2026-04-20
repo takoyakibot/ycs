@@ -196,7 +196,7 @@
 
                         <!-- 楽曲マスタ一覧 -->
                         <div id="songsList" class="tab-content hidden">
-                            <div class="flex gap-2 mb-3">
+                            <div class="flex gap-2 mb-2">
                                 <input type="text" id="songsSearch" placeholder="楽曲名やアーティスト名で検索..." class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
                                 <button id="clearSongsSearchBtn" class="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600">
                                     クリア
@@ -204,6 +204,11 @@
                                 <div id="songsCount" class="text-sm text-gray-600 dark:text-gray-400 flex items-center">
                                     <!-- JavaScriptで動的に更新 -->
                                 </div>
+                            </div>
+                            <div class="flex gap-1 mb-3">
+                                <button type="button" data-review-status="" class="song-review-filter px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-600 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300">全て</button>
+                                <button type="button" data-review-status="needs_review" class="song-review-filter px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700">要確認</button>
+                                <button type="button" data-review-status="safe" class="song-review-filter px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700">安全</button>
                             </div>
                             <div id="songsResults" class="space-y-2 max-h-64 overflow-y-auto">
                                 <!-- 楽曲マスタリストがここに表示される -->

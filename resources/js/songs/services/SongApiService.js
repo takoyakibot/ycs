@@ -7,12 +7,15 @@ export class SongApiService {
     /**
      * 楽曲マスタ一覧を取得
      * @param {string} search - 検索クエリ
+     * @param {string|null} reviewStatus - review_statusフィルタ (safe/needs_review/null)
      * @returns {Promise<Object>} 楽曲一覧データ
      */
-    async fetchSongs(search = '') {
-        const response = await axios.get('/api/songs', {
-            params: { search }
-        });
+    async fetchSongs(search = '', reviewStatus = null) {
+        const params = { search };
+        if (reviewStatus) {
+            params.review_status = reviewStatus;
+        }
+        const response = await axios.get('/api/songs', { params });
         return response.data;
     }
 
