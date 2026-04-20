@@ -295,11 +295,18 @@ class SongController extends Controller
         // バリデーション
         $validated = $request->validate([
             'search' => 'nullable|string|max:255',
+            'review_status' => 'nullable|string|in:safe,needs_review',
         ]);
 
         $search = $validated['search'] ?? '';
+        $reviewStatus = $validated['review_status'] ?? null;
 
         $query = Song::query();
+
+        // review_statusフィルタ
+        if ($reviewStatus !== null) {
+            $query->where('review_status', $reviewStatus);
+        }
 
         // 検索条件（スペース区切りでAND検索）
         // 各キーワードがtitleまたはartistのいずれかに含まれる

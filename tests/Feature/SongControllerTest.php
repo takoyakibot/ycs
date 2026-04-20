@@ -412,6 +412,56 @@ class SongControllerTest extends TestCase
     }
 
     /**
+     * 楽曲マスタ一覧取得のテスト（review_statusフィルタ: needs_review）
+     */
+    public function test_fetch_songs_filter_by_needs_review(): void
+    {
+        Song::factory()->create(['title' => 'Safe Song', 'artist' => 'A', 'review_status' => 'safe']);
+        Song::factory()->create(['title' => 'Review Song', 'artist' => 'B', 'review_status' => 'needs_review']);
+        Song::factory()->create(['title' => 'No Status', 'artist' => 'C', 'review_status' => null]);
+
+        $response = $this->actingAs($this->user)->getJson(route('songs.fetchSongs', ['review_status' => 'needs_review']));
+
+        $response->assertOk();
+        $this->assertEquals(1, $response->json('total'));
+        $this->assertEquals('Review Song', $response->json('data.0.title'));
+    }
+
+    /**
+     * 楽曲マスタ一覧取得のテスト（review_statusフィルタ: safe）
+     */
+    public function test_fetch_songs_filter_by_safe(): void
+    {
+        Song::factory()->create(['title' => 'Safe Song', 'artist' => 'A', 'review_status' => 'safe']);
+        Song::factory()->create(['title' => 'Review Song', 'artist' => 'B', 'review_status' => 'needs_review']);
+
+        $response = $this->actingAs($this->user)->getJson(route('songs.fetchSongs', ['review_status' => 'safe']));
+
+        $response->assertOk();
+        $this->assertEquals(1, $response->json('total'));
+        $this->assertEquals('Safe Song', $response->json('data.0.title'));
+    }
+
+    /**
+     * 楽曲マスタ一覧取得のテスト（review_statusフィルタとsearch併用）
+     */
+    public function test_fetch_songs_filter_with_search(): void
+    {
+        Song::factory()->create(['title' => 'Good Song', 'artist' => 'A', 'review_status' => 'needs_review']);
+        Song::factory()->create(['title' => 'Bad Song', 'artist' => 'A', 'review_status' => 'needs_review']);
+        Song::factory()->create(['title' => 'Good Song', 'artist' => 'B', 'review_status' => 'safe']);
+
+        $response = $this->actingAs($this->user)->getJson(route('songs.fetchSongs', [
+            'review_status' => 'needs_review',
+            'search' => 'Good',
+        ]));
+
+        $response->assertOk();
+        $this->assertEquals(1, $response->json('total'));
+        $this->assertEquals('Good Song', $response->json('data.0.title'));
+    }
+
+    /**
      * 楽曲マスタ登録のテスト（新規作成）
      */
     public function test_store_song_creates_new(): void

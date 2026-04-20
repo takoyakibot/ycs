@@ -25,6 +25,7 @@ class TimestampNormalization {
         this.currentSongFilter = null; // 楽曲による絞り込み（楽曲オブジェクト）
         this.operationHistory = []; // 操作履歴
         this.maxHistoryItems = 20; // 最大履歴保持数
+        this.songReviewStatus = null; // 楽曲マスタのreview_statusフィルタ
 
         this.init();
     }
@@ -105,6 +106,21 @@ class TimestampNormalization {
         document.getElementById('clearSongsSearchBtn').addEventListener('click', () => {
             document.getElementById('songsSearch').value = '';
             this.loadSongs('');
+        });
+
+        // 楽曲マスタ review_status フィルタ
+        document.querySelectorAll('.song-review-filter').forEach(btn => {
+            btn.addEventListener('click', () => {
+                this.songReviewStatus = btn.dataset.reviewStatus || null;
+                // ボタンのアクティブ状態を更新
+                document.querySelectorAll('.song-review-filter').forEach(b => {
+                    b.classList.remove('bg-blue-100', 'dark:bg-blue-900', 'text-blue-700', 'dark:text-blue-300');
+                    b.classList.add('text-gray-600', 'dark:text-gray-400', 'hover:bg-gray-100', 'dark:hover:bg-gray-700');
+                });
+                btn.classList.add('bg-blue-100', 'dark:bg-blue-900', 'text-blue-700', 'dark:text-blue-300');
+                btn.classList.remove('text-gray-600', 'dark:text-gray-400', 'hover:bg-gray-100', 'dark:hover:bg-gray-700');
+                this.loadSongs(document.getElementById('songsSearch').value);
+            });
         });
 
         // タブ切り替え
@@ -792,7 +808,7 @@ class TimestampNormalization {
 
     async loadSongs(search = '') {
         try {
-            const response = await songApiService.fetchSongs(search);
+            const response = await songApiService.fetchSongs(search, this.songReviewStatus);
 
             if (response.data) {
                 this.displaySongs(response.data, response.total);
