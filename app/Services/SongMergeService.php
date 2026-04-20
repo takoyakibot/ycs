@@ -131,7 +131,20 @@ class SongMergeService
         $targetSong = Song::findOrFail($targetSongId);
 
         return DB::transaction(function () use ($sourceSong, $targetSong, $userId) {
-            // マッピングを付け替え
+            // targetに既存のマッピングのnormalized_textを取得
+            $targetNormalizedTexts = TimestampSongMapping::where('song_id', $targetSong->id)
+                ->pluck('normalized_text')
+                ->toArray();
+
+            // sourceのマッピングのうち、targetと重複するものは削除（unique制約違反を回避）
+            $deletedDuplicates = 0;
+            if (! empty($targetNormalizedTexts)) {
+                $deletedDuplicates = TimestampSongMapping::where('song_id', $sourceSong->id)
+                    ->whereIn('normalized_text', $targetNormalizedTexts)
+                    ->delete();
+            }
+
+            // 残りのマッピングを付け替え
             $affectedMappings = TimestampSongMapping::where('song_id', $sourceSong->id)
                 ->update(['song_id' => $targetSong->id]);
 
@@ -152,6 +165,7 @@ class SongMergeService
                     'target_title' => $targetSong->title,
                     'target_artist' => $targetSong->artist,
                     'affected_mappings' => $affectedMappings,
+                    'deleted_duplicate_mappings' => $deletedDuplicates,
                     'affected_ts_items' => $affectedTsItems,
                 ]
             );

@@ -658,6 +658,9 @@ class SongController extends Controller
         // この楽曲に紐づいているマッピングを削除（ログ記録含む）
         $this->songMappingService->deleteMappingsBySongId($id, $userId);
 
+        // 個別紐付け（ts_items.song_id）をクリア
+        TsItem::where('song_id', $id)->update(['song_id' => null]);
+
         // 操作ログを記録
         if ($userId) {
             NormalizationLog::log(
