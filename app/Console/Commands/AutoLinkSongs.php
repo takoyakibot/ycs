@@ -21,7 +21,7 @@ class AutoLinkSongs extends Command
      *
      * @var string
      */
-    protected $description = '未紐付けのタイムスタンプを既存楽曲マスタ照合・Spotify検索で自動紐付けします。';
+    protected $description = '未紐付けのタイムスタンプを既存楽曲マスタと照合して自動紐付けします。';
 
     /**
      * Execute the console command.
@@ -89,8 +89,8 @@ class AutoLinkSongs extends Command
             [
                 ['処理件数', $result['processed']],
                 ['紐付け成功', $result['linked']],
-                ['検索結果なし/エラー', $result['failed']],
-                ['スキップ（類似曲あり）', $result['skipped']],
+                ['一致なし', $result['skipped']],
+                ['エラー', $result['failed']],
             ]
         );
         $this->info(sprintf('処理時間: %s秒', $duration));

@@ -76,10 +76,10 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::get('api/manage/channels/{id}/strip-patterns/preview', [ManageSettingsApiController::class, 'previewStripPatterns'])
         ->name('manage.previewStripPatterns')
         ->middleware('throttle:5,1'); // 1分間に5回まで
-    // 自動紐付け（Spotify API呼び出しを含む長時間ジョブのため、レート制限は保守的に設定）
+    // 自動紐付け（DB照合のみ）
     Route::post('api/manage/channels/{id}/auto-link', [ManageSettingsApiController::class, 'autoLink'])
         ->name('manage.autoLink')
-        ->middleware('throttle:1,10'); // 10分間に1回まで
+        ->middleware('throttle:3,1'); // 1分間に3回まで
 
     Route::get('api/manage/channels/{id}/cover-songs/preview', [ManageSettingsApiController::class, 'previewCoverSongs'])->name('manage.previewCoverSongs');
     Route::post('api/manage/channels/{id}/cover-songs/reprocess', [ManageSettingsApiController::class, 'reprocessCoverSongs'])->name('manage.reprocessCoverSongs');

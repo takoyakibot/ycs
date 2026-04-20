@@ -31,34 +31,5 @@ return [
     | 自動紐付け機能の設定です。
     |
     */
-    'auto_link' => [
-        // 1リクエストあたりの遅延時間（ミリ秒）
-        'delay_ms' => env('AUTO_LINK_DELAY_MS', 500),
-
-        // レート制限エラー時の待機時間（秒）
-        'rate_limit_wait_seconds' => env('AUTO_LINK_RATE_LIMIT_WAIT_SECONDS', 60),
-
-        // 類似度しきい値（将来の類似度チェック拡張用に保持）
-        'similarity_threshold' => env('AUTO_LINK_SIMILARITY_THRESHOLD', 0.95),
-
-        // 保留時の類似度しきい値（将来の類似度チェック拡張用に保持）
-        'pending_threshold' => env('AUTO_LINK_PENDING_THRESHOLD', 0.85),
-
-        // Spotify検索時の取得件数（逆検証用に複数件取得）
-        'spotify_search_limit' => env('AUTO_LINK_SPOTIFY_SEARCH_LIMIT', 3),
-    ],
-
-    /*
-    |--------------------------------------------------------------------------
-    | Spotify Search Excluded Artists
-    |--------------------------------------------------------------------------
-    |
-    | Spotify検索結果から除外するアーティスト名のリストです。
-    | 着メロやカバーシリーズなど、紐付けに不適切な楽曲を除外するために使用します。
-    | 部分一致で判定されます（大文字小文字を区別しません）。
-    |
-    */
-    'spotify_excluded_artists' => [
-        'Mobile Melody Series',
-    ],
+    'auto_link' => [],
 ];
