@@ -194,5 +194,4 @@ class SpotifyService
 
         throw new \Exception('Spotify get track request failed with status '.$response->status());
     }
-
 }

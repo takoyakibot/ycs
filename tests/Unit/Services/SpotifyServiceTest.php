@@ -350,5 +350,4 @@ class SpotifyServiceTest extends TestCase
                 && $request['market'] === 'JP';
         });
     }
-
 }

@@ -195,31 +195,26 @@ class SongMergeTest extends TestCase
             ->assertJsonCount(0);
     }
 
-    public function test_merge_songs_handles_duplicate_mappings(): void
+    public function test_merge_songs_handles_multiple_mappings(): void
     {
         $targetSong = Song::factory()->create(['title' => 'Target Song', 'artist' => 'Artist']);
         $sourceSong = Song::factory()->create(['title' => 'Source Song', 'artist' => 'Artist']);
 
-        // 同じnormalized_textのマッピングが両方に存在
+        // targetにマッピングを作成
         TimestampSongMapping::factory()
             ->withSong($targetSong)
-            ->withText('shared text')
+            ->withText('target text')
+            ->create();
+
+        // sourceにマッピングを複数作成
+        TimestampSongMapping::factory()
+            ->withSong($sourceSong)
+            ->withText('source text 1')
             ->create();
         TimestampSongMapping::factory()
             ->withSong($sourceSong)
-            ->withText('shared text duplicate')
+            ->withText('source text 2')
             ->create();
-
-        // sourceのみのマッピング → これはtargetに付け替えられるべき
-        TimestampSongMapping::factory()
-            ->withSong($sourceSong)
-            ->withText('source only text')
-            ->create();
-
-        // normalized_textを手動で重複させる
-        \DB::table('timestamp_song_mappings')
-            ->where('normalized_text', 'shared text duplicate')
-            ->update(['normalized_text' => 'shared text']);
 
         $response = $this->actingAs($this->user)
             ->postJson('/api/songs/merge', [
@@ -232,11 +227,12 @@ class SongMergeTest extends TestCase
         // sourceSongが削除されていること
         $this->assertDatabaseMissing('songs', ['id' => $sourceSong->id]);
 
-        // targetにマッピングが移行され、重複が解消されていること
+        // sourceのマッピングがtargetに付け替えられていること
         $targetMappings = TimestampSongMapping::where('song_id', $targetSong->id)->get();
-        $this->assertEquals(2, $targetMappings->count());
-        $this->assertTrue($targetMappings->pluck('normalized_text')->contains('shared text'));
-        $this->assertTrue($targetMappings->pluck('normalized_text')->contains('source only text'));
+        $this->assertEquals(3, $targetMappings->count());
+        $this->assertTrue($targetMappings->pluck('normalized_text')->contains('target text'));
+        $this->assertTrue($targetMappings->pluck('normalized_text')->contains('source text 1'));
+        $this->assertTrue($targetMappings->pluck('normalized_text')->contains('source text 2'));
     }
 
     public function test_delete_song_clears_ts_item_song_id(): void
