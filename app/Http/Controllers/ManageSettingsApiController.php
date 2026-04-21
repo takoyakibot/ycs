@@ -145,11 +145,21 @@ class ManageSettingsApiController extends Controller
 
         $isRegex = $validated['is_regex'] ?? false;
 
-        // 正規表現パターンの場合、コンパイルチェック
+        // 正規表現パターンの場合、コンパイルチェック + ReDoS安全性検証
         if ($isRegex) {
             $testResult = @preg_match($validated['pattern'], '');
             if ($testResult === false) {
                 return response()->json(['message' => '無効な正規表現パターンです'], 422);
+            }
+
+            // ReDoS対策: テスト文字列で実行時間を検証
+            $testString = str_repeat('aあ', 500);
+            $startTime = microtime(true);
+            @preg_replace($validated['pattern'], '', $testString);
+            $elapsed = microtime(true) - $startTime;
+
+            if ($elapsed > 1.0) {
+                return response()->json(['message' => '正規表現パターンの実行に時間がかかりすぎます。パターンを簡素化してください'], 422);
             }
         }
 
