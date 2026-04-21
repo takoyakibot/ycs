@@ -21,6 +21,7 @@ use App\Services\VideoUrlService;
 use App\Services\YouTubeApiService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class SongController extends Controller
@@ -655,24 +656,26 @@ class SongController extends Controller
         $song = Song::findOrFail($id);
         $userId = Auth::id();
 
-        // この楽曲に紐づいているマッピングを削除（ログ記録含む）
-        $this->songMappingService->deleteMappingsBySongId($id, $userId);
+        DB::transaction(function () use ($song, $id, $userId) {
+            // この楽曲に紐づいているマッピングを削除（ログ記録含む）
+            $this->songMappingService->deleteMappingsBySongId($id, $userId);
 
-        // 個別紐付け（ts_items.song_id）をクリア
-        TsItem::where('song_id', $id)->update(['song_id' => null]);
+            // 個別紐付け（ts_items.song_id）をクリア
+            TsItem::where('song_id', $id)->update(['song_id' => null]);
 
-        // 操作ログを記録
-        if ($userId) {
-            NormalizationLog::log(
-                $userId,
-                NormalizationLog::ACTION_DELETE_SONG,
-                NormalizationLog::TARGET_SONG,
-                $song->id,
-                ['title' => $song->title, 'artist' => $song->artist]
-            );
-        }
+            // 操作ログを記録
+            if ($userId) {
+                NormalizationLog::log(
+                    $userId,
+                    NormalizationLog::ACTION_DELETE_SONG,
+                    NormalizationLog::TARGET_SONG,
+                    $song->id,
+                    ['title' => $song->title, 'artist' => $song->artist]
+                );
+            }
 
-        $song->delete();
+            $song->delete();
+        });
 
         return response()->json(['message' => '楽曲マスタを削除しました。']);
     }
