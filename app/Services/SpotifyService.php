@@ -109,7 +109,7 @@ class SpotifyService
         try {
             $tracks = $this->searchTracks($query, $limit);
 
-            return $this->filterExcludedArtists($tracks);
+            return $tracks;
         } catch (\Exception $e) {
             Log::error('Spotify search failed', [
                 'query' => $query,
@@ -195,36 +195,4 @@ class SpotifyService
         throw new \Exception('Spotify get track request failed with status '.$response->status());
     }
 
-    /**
-     * 除外アーティストリストに基づいてトラックをフィルタリング
-     *
-     * @param  array  $tracks  Spotifyトラック配列
-     * @return array フィルタリング後のトラック配列
-     */
-    public function filterExcludedArtists(array $tracks): array
-    {
-        $excludedArtists = config('songs.spotify_excluded_artists', []);
-
-        if (empty($excludedArtists)) {
-            return $tracks;
-        }
-
-        return array_values(array_filter($tracks, function ($track) use ($excludedArtists) {
-            // トラックのアーティスト名を取得
-            $artistNames = array_map(function ($artist) {
-                return $artist['name'] ?? '';
-            }, $track['artists'] ?? []);
-
-            // いずれかのアーティスト名が除外リストに部分一致するかチェック
-            foreach ($artistNames as $artistName) {
-                foreach ($excludedArtists as $excludedArtist) {
-                    if (stripos($artistName, $excludedArtist) !== false) {
-                        return false;
-                    }
-                }
-            }
-
-            return true;
-        }));
-    }
 }
