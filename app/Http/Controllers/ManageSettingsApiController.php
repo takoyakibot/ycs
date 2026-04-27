@@ -264,7 +264,7 @@ class ManageSettingsApiController extends Controller
                         return false;
                     }
 
-                    $rawText = $tsItem->attributes['text'] ?? null;
+                    $rawText = $tsItem->getRawOriginal('text');
                     if (! $rawText) {
                         continue;
                     }
@@ -276,7 +276,7 @@ class ManageSettingsApiController extends Controller
                         $newNormalized = mb_strtolower(trim($afterStrip), 'UTF-8');
                     }
 
-                    $currentNormalized = $tsItem->attributes['normalized_text'] ?? '';
+                    $currentNormalized = $tsItem->getRawOriginal('normalized_text') ?? '';
 
                     // パターン適用で変化がある場合のみ返す
                     if ($currentNormalized !== $newNormalized) {
