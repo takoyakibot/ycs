@@ -34,7 +34,7 @@
                             <div class="channel-card-avatar">
                                 <img :src="escapeHTML(channel.thumbnail || '')"
                                      alt=""
-                                     class="w-16 h-16 sm:w-18 sm:h-18 rounded-full object-cover ring-2 ring-white/80 shadow-md
+                                     class="w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover ring-2 ring-white/80 shadow-md
                                             group-hover:ring-amber-400/60 transition-all duration-300" />
                             </div>
                             {{-- Info --}}

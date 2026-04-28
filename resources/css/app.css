@@ -93,6 +93,18 @@
     transform: translateY(-1px);
 }
 
+.channel-card:focus-visible {
+    outline: none;
+    transform: translateY(-4px);
+    box-shadow:
+        0 8px 24px rgba(0, 0, 0, 0.08),
+        0 0 0 3px rgba(251, 191, 36, 0.4);
+}
+
+.channel-card:focus-visible::before {
+    border-color: rgba(251, 191, 36, 0.5);
+}
+
 .channel-card-inner {
     display: flex;
     align-items: center;
@@ -129,6 +141,11 @@
 .channel-card:hover .channel-card-arrow {
     color: #fbbf24;
     transform: translateX(3px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .channel-card { animation: none; }
+    .channel-hero-note { animation: none; }
 }
 
 @keyframes card-enter {
