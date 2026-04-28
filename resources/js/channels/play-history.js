@@ -86,7 +86,11 @@ class PlayHistory {
      */
     togglePanel() {
         const panel = document.getElementById('playHistoryPanel');
+        const isOpening = panel.classList.contains('hidden');
         panel.classList.toggle('hidden');
+        if (isOpening) {
+            this.updateDisplay();
+        }
     }
 
     /**

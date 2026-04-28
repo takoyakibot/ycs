@@ -879,7 +879,12 @@ function registerArchiveListComponent() {
                         const excludeVideoId = this.selectedTimestamp?.video_id || null;
                         const timestamp = await ChannelApiService.fetchRandomTimestamp(this.channel.handle, excludeVideoId);
 
+                        if (excludeVideoId && timestamp.video_id === excludeVideoId) {
+                            console.warn('同じアーカイブが再選択されました', { excludeVideoId, selectedVideoId: timestamp.video_id });
+                        }
+
                         logUserAction('playRandomTimestamp', {
+                            excludeVideoId: excludeVideoId,
                             timestampId: timestamp.id,
                             videoId: timestamp.video_id,
                             tsNum: timestamp.ts_num,
