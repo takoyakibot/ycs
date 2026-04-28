@@ -30,6 +30,9 @@
             @include('channels.partials.timestamps-tab')
         </div>
 
+        {{-- ガチャシェアポップアップ --}}
+        @include('channels.partials.gacha-share-popup')
+
         {{-- 報告モーダル --}}
         @include('channels.partials.report-modal')
 

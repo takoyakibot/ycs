@@ -1137,6 +1137,96 @@
 .channel-player-service-line { background: rgba(6, 199, 85, 0.2); color: #06c755; }
 .channel-player-service-line:hover { background: rgba(6, 199, 85, 0.35); color: #06c755; transform: scale(1.04); }
 
+/* Gacha Share Popup */
+.gacha-share-popup {
+    position: relative;
+    background: linear-gradient(135deg, #1e1b2e 0%, #2d2444 50%, #3b2f4a 100%);
+    border-radius: 1rem;
+    padding: 1.5rem 2rem;
+    max-width: 340px;
+    width: calc(100vw - 2rem);
+    text-align: center;
+    box-shadow:
+        0 20px 60px rgba(0, 0, 0, 0.3),
+        0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.gacha-share-popup::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 1rem;
+    background:
+        radial-gradient(ellipse 80% 60% at 30% 90%, rgba(251, 191, 36, 0.1) 0%, transparent 50%),
+        radial-gradient(ellipse 60% 50% at 80% 20%, rgba(139, 92, 246, 0.08) 0%, transparent 50%);
+    pointer-events: none;
+}
+
+.gacha-share-close {
+    position: absolute;
+    top: 0.625rem;
+    right: 0.625rem;
+    padding: 0.375rem;
+    border-radius: 0.375rem;
+    color: rgba(255, 255, 255, 0.3);
+    transition: all 0.2s ease;
+    z-index: 1;
+}
+
+.gacha-share-close:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.gacha-share-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 50%;
+    background: linear-gradient(135deg, rgba(251, 191, 36, 0.2), rgba(139, 92, 246, 0.2));
+    color: #fbbf24;
+    margin-bottom: 0.75rem;
+}
+
+.gacha-share-text {
+    font-family: 'Zen Maru Gothic', sans-serif;
+    font-size: 0.925rem;
+    font-weight: 600;
+    color: #f8f4f0;
+    line-height: 1.6;
+    margin-bottom: 1rem;
+    position: relative;
+}
+
+.gacha-share-actions {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    position: relative;
+}
+
+.gacha-share-twitter-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1.25rem;
+    border-radius: 2rem;
+    background: rgba(29, 161, 242, 0.2);
+    color: #1da1f2;
+    font-family: 'Zen Maru Gothic', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    text-decoration: none;
+}
+
+.gacha-share-twitter-btn:hover {
+    background: rgba(29, 161, 242, 0.35);
+    transform: scale(1.04);
+}
+
 /* Dark mode overrides - Channel Detail */
 @media (prefers-color-scheme: dark) {
     .channel-sticky-bar {

@@ -174,6 +174,12 @@ function registerArchiveListComponent() {
                 // 音量設定
                 volume: 100,
 
+                // ガチャシェアポップアップ
+                showGachaShare: false,
+                gachaShareData: null,
+                gachaShareTimer: null,
+                gachaShareHovered: false,
+
                 // computed property
                 get maxPage() {
                     if (!this.archives.total || !this.archives.per_page) return 1;
@@ -938,6 +944,16 @@ function registerArchiveListComponent() {
 
                         toast.success('ランダムで楽曲を選びました！');
 
+                        // ガチャシェアポップアップを表示
+                        this.gachaShareData = {
+                            songTitle: this.selectedSong.title,
+                            channelTitle: this.channel.title,
+                            channelHandle: this.channel.handle,
+                            publishedAt: timestamp.archive?.published_at,
+                        };
+                        this.showGachaShare = true;
+                        this.startGachaShareTimer();
+
                         // 次のタイムスタンプがある場合は表示更新用の監視を開始
                         if (endTime !== null) {
                             autoReshuffleManager.startMonitor();
@@ -948,6 +964,48 @@ function registerArchiveListComponent() {
                     } finally {
                         this.isPlaybackTransitioning = false;
                     }
+                },
+
+                // --- ガチャシェアポップアップ ---
+                startGachaShareTimer() {
+                    clearTimeout(this.gachaShareTimer);
+                    this.gachaShareTimer = setTimeout(() => {
+                        if (!this.gachaShareHovered) {
+                            this.showGachaShare = false;
+                        }
+                    }, 5500);
+                },
+                pauseGachaShareTimer() {
+                    this.gachaShareHovered = true;
+                    clearTimeout(this.gachaShareTimer);
+                },
+                resumeGachaShareTimer() {
+                    this.gachaShareHovered = false;
+                    this.startGachaShareTimer();
+                },
+                closeGachaShare() {
+                    this.showGachaShare = false;
+                    clearTimeout(this.gachaShareTimer);
+                },
+                getGachaShareUrl() {
+                    const data = this.gachaShareData;
+                    if (!data) return '';
+                    const date = data.publishedAt
+                        ? new Date(data.publishedAt).toLocaleDateString('ja-JP')
+                        : '';
+                    const siteUrl = window.location.origin + '/channels/' + encodeURIComponent(data.channelHandle);
+                    const dateText = date ? data.channelTitle + 'が' + date + 'に歌った' : data.channelTitle + 'が歌った';
+                    const text = '🎵 ' + dateText + data.songTitle + '！\n\n歌枠履歴er:D で探す👇';
+                    return 'https://twitter.com/intent/tweet?text=' + encodeURIComponent(text) + '&url=' + encodeURIComponent(siteUrl);
+                },
+                getGachaShareText() {
+                    const data = this.gachaShareData;
+                    if (!data) return '';
+                    const date = data.publishedAt
+                        ? new Date(data.publishedAt).toLocaleDateString('ja-JP')
+                        : '';
+                    const dateText = date ? date + 'に歌った' : '';
+                    return data.channelTitle + 'が' + dateText + data.songTitle + '！';
                 },
 
                 /**
