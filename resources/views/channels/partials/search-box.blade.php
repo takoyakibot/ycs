@@ -4,16 +4,28 @@
         <div class="flex gap-2 w-full sm:flex-grow flex-col sm:flex-row">
             {{-- アーカイブタブ用の検索ボックス --}}
             <template x-if="activeTab === 'archives'">
-                <input
-                    type="text"
-                    x-model="archiveQuery"
-                    placeholder="タイムスタンプを検索"
-                    aria-label="タイムスタンプを検索"
-                    class="channel-search-input" />
+                <div class="relative w-full">
+                    <div class="channel-search-icon">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                    </div>
+                    <input
+                        type="text"
+                        x-model="archiveQuery"
+                        placeholder="タイムスタンプを検索"
+                        aria-label="タイムスタンプを検索"
+                        class="channel-search-input channel-search-input-with-icon" />
+                </div>
             </template>
             {{-- タイムスタンプタブ用の検索ボックス（サジェスト機能付き） --}}
             <template x-if="activeTab === 'timestamps'">
                 <div class="relative w-full">
+                    <div class="channel-search-icon">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                    </div>
                     <input
                         type="text"
                         x-model="searchQuery"
@@ -25,7 +37,7 @@
                         aria-label="楽曲名・アーティスト名・タイムスタンプで検索"
                         maxlength="255"
                         autocomplete="off"
-                        class="channel-search-input" />
+                        class="channel-search-input channel-search-input-with-icon" />
                     {{-- サジェストドロップダウン --}}
                     <div x-show="showSuggestions && filteredSuggestionsList.length > 0"
                          x-transition:enter="transition ease-out duration-100"

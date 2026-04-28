@@ -196,14 +196,46 @@
 }
 
 /* ========================================
-   Channel Detail Page
+   Channel Detail Page - Bold Redesign
    ======================================== */
+
+.channel-detail-font {
+    font-family: 'Zen Maru Gothic', sans-serif;
+}
+
+/* Detail Hero (Channel Banner) */
+.channel-detail-hero {
+    position: relative;
+    background: linear-gradient(135deg, #1e1b2e 0%, #2d2444 40%, #3b2f4a 70%, #4a3352 100%);
+    overflow: hidden;
+}
+
+.channel-detail-hero-bg {
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(ellipse 60% 80% at 10% 90%, rgba(251, 191, 36, 0.1) 0%, transparent 50%),
+        radial-gradient(ellipse 40% 60% at 90% 30%, rgba(236, 72, 153, 0.08) 0%, transparent 50%);
+    pointer-events: none;
+}
+
+.channel-detail-hero-name {
+    font-family: 'Outfit', 'Zen Maru Gothic', sans-serif;
+    color: #f8f4f0;
+    text-shadow: 0 1px 8px rgba(0, 0, 0, 0.3);
+}
+
+.channel-detail-hero-handle {
+    font-family: 'Zen Maru Gothic', sans-serif;
+    color: rgba(248, 244, 240, 0.5);
+}
 
 /* Sticky Bar */
 .channel-sticky-bar {
-    background: linear-gradient(180deg, rgba(255,255,255,0.97) 0%, rgba(255,255,255,0.92) 100%);
-    backdrop-filter: blur(12px);
+    background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(249,250,251,0.95) 100%);
+    backdrop-filter: blur(16px);
     border-color: rgba(0, 0, 0, 0.06);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
 }
 
 .channel-sticky-name {
@@ -215,28 +247,30 @@
 .channel-tab {
     font-family: 'Zen Maru Gothic', sans-serif;
     padding: 0.375rem 0.75rem;
-    border-radius: 0.5rem;
-    font-weight: 500;
+    border-radius: 2rem;
+    font-weight: 600;
     font-size: 0.875rem;
-    transition: all 0.2s ease;
+    transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 @media (min-width: 640px) {
     .channel-tab {
-        padding: 0.5rem 1rem;
+        padding: 0.5rem 1.25rem;
     }
 }
 
 .channel-tab-active-ts {
     background: linear-gradient(135deg, #059669 0%, #10b981 100%);
     color: #fff;
-    box-shadow: 0 2px 8px rgba(5, 150, 105, 0.3);
+    box-shadow: 0 3px 12px rgba(5, 150, 105, 0.35);
+    transform: scale(1.02);
 }
 
 .channel-tab-active-ar {
     background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
     color: #fff;
-    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
+    box-shadow: 0 3px 12px rgba(37, 99, 235, 0.35);
+    transform: scale(1.02);
 }
 
 .channel-tab-inactive {
@@ -247,6 +281,7 @@
 .channel-tab-inactive:hover {
     background: #e5e7eb;
     color: #374151;
+    transform: scale(1.01);
 }
 
 /* Gacha Button */
@@ -255,26 +290,42 @@
     align-items: center;
     gap: 0.25rem;
     padding: 0.375rem 0.75rem;
-    background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%);
+    background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 50%, #6366f1 100%);
     color: #fff;
     font-family: 'Zen Maru Gothic', sans-serif;
     font-weight: 700;
     font-size: 0.875rem;
-    border-radius: 0.5rem;
-    box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3);
-    transition: all 0.2s ease;
+    border-radius: 2rem;
+    box-shadow: 0 3px 12px rgba(139, 92, 246, 0.35);
+    transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.channel-gacha-btn::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, transparent 40%, rgba(255,255,255,0.15) 50%, transparent 60%);
+    background-size: 200% 200%;
+    animation: gacha-shimmer 3s ease-in-out infinite;
+}
+
+@keyframes gacha-shimmer {
+    0%, 100% { background-position: -100% 0; }
+    50% { background-position: 200% 0; }
 }
 
 @media (min-width: 640px) {
     .channel-gacha-btn {
         gap: 0.5rem;
-        padding: 0.5rem 1rem;
+        padding: 0.5rem 1.25rem;
     }
 }
 
 .channel-gacha-btn:hover:not(:disabled) {
-    transform: scale(1.05);
-    box-shadow: 0 4px 16px rgba(139, 92, 246, 0.4);
+    transform: scale(1.08);
+    box-shadow: 0 6px 20px rgba(139, 92, 246, 0.45);
 }
 
 /* Auto-reshuffle */
@@ -283,7 +334,7 @@
     align-items: center;
     gap: 0.25rem;
     padding: 0.375rem 0.5rem;
-    border-radius: 0.5rem;
+    border-radius: 2rem;
     font-family: 'Zen Maru Gothic', sans-serif;
     font-weight: 500;
     font-size: 0.875rem;
@@ -297,45 +348,46 @@
     }
 }
 
-.channel-auto-on {
-    background: #059669;
-    color: #fff;
-}
-
-.channel-auto-on:hover {
-    background: #047857;
-}
-
-.channel-auto-off {
-    background: #f3f4f6;
-    color: #6b7280;
-}
-
-.channel-auto-off:hover {
-    background: #e5e7eb;
-    color: #374151;
-}
+.channel-auto-on { background: #059669; color: #fff; }
+.channel-auto-on:hover { background: #047857; }
+.channel-auto-off { background: #f3f4f6; color: #6b7280; }
+.channel-auto-off:hover { background: #e5e7eb; color: #374151; }
 
 /* Search Box */
 .channel-search-wrapper {
-    margin-bottom: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.channel-search-icon {
+    position: absolute;
+    left: 0.875rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #9ca3af;
+    pointer-events: none;
+    z-index: 1;
 }
 
 .channel-search-input {
     width: 100%;
-    padding: 0.625rem 0.875rem;
-    border: 1.5px solid #e5e7eb;
-    border-radius: 0.625rem;
+    padding: 0.75rem 0.875rem;
+    border: 2px solid #e5e7eb;
+    border-radius: 0.75rem;
     font-family: 'Zen Maru Gothic', sans-serif;
-    font-size: 0.875rem;
+    font-size: 0.9rem;
     background: #fff;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.channel-search-input-with-icon {
+    padding-left: 2.5rem;
 }
 
 .channel-search-input:focus {
     outline: none;
     border-color: #fbbf24;
-    box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.15);
+    box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.12);
+    background: #fffef5;
 }
 
 .channel-search-input::placeholder {
@@ -344,8 +396,8 @@
 
 .channel-search-select {
     padding: 0.5rem 2rem 0.5rem 0.75rem;
-    border: 1.5px solid #e5e7eb;
-    border-radius: 0.625rem;
+    border: 2px solid #e5e7eb;
+    border-radius: 0.75rem;
     font-size: 0.875rem;
     background: #fff;
     transition: border-color 0.2s ease;
@@ -354,30 +406,34 @@
 .channel-search-select:focus {
     outline: none;
     border-color: #fbbf24;
-    box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.15);
+    box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.12);
 }
 
 .channel-search-btn {
-    padding: 0.5rem 1rem;
+    padding: 0.625rem 1.25rem;
     background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
     color: #fff;
-    border-radius: 0.625rem;
-    font-weight: 500;
+    border-radius: 0.75rem;
+    font-family: 'Zen Maru Gothic', sans-serif;
+    font-weight: 600;
     min-width: 80px;
     transition: all 0.2s ease;
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.2);
 }
 
 .channel-search-btn:hover {
-    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+    transform: translateY(-1px);
 }
 
 .channel-search-clear {
-    padding: 0.5rem 1rem;
+    padding: 0.625rem 1.25rem;
     background: #6b7280;
     color: #fff;
-    border-radius: 0.625rem;
+    border-radius: 0.75rem;
     white-space: nowrap;
-    transition: background 0.2s ease;
+    font-family: 'Zen Maru Gothic', sans-serif;
+    transition: all 0.2s ease;
 }
 
 .channel-search-clear:hover {
@@ -391,31 +447,100 @@
     right: 0;
     margin-top: 0.25rem;
     background: #fff;
-    border: 1.5px solid #e5e7eb;
-    border-radius: 0.625rem;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+    border: 2px solid #e5e7eb;
+    border-radius: 0.75rem;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.1);
     z-index: 50;
     max-height: 15rem;
     overflow-y: auto;
 }
 
-/* Archive Cards */
+/* Archive Cards - Bold Redesign */
 .channel-archive-card {
     background: #fff;
-    border: 1px solid rgba(0, 0, 0, 0.06);
-    border-radius: 0.875rem;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-    padding: 1rem;
-    transition: box-shadow 0.2s ease;
+    border-radius: 1rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04), 0 0 0 1px rgba(0, 0, 0, 0.04);
+    overflow: hidden;
+    transition: all 0.25s ease;
 }
 
 .channel-archive-card:hover {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.06);
+    transform: translateY(-2px);
+}
+
+.channel-archive-header {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 1rem 1rem 0.75rem;
+}
+
+.channel-archive-header-compact {
+    flex-direction: row;
+    align-items: flex-start;
+}
+
+.channel-archive-thumb-wrap {
+    position: relative;
+    display: block;
+    border-radius: 0.625rem;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.channel-archive-thumb-compact {
+    width: 120px;
+}
+
+.channel-archive-thumb {
+    width: 100%;
+    object-fit: cover;
+    display: block;
+    transition: transform 0.3s ease;
+}
+
+.channel-archive-thumb-wrap:hover .channel-archive-thumb {
+    transform: scale(1.03);
+}
+
+.channel-archive-thumb-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0);
+    transition: background 0.2s ease;
+}
+
+.channel-archive-thumb-overlay svg {
+    opacity: 0;
+    transform: scale(0.8);
+    transition: all 0.2s ease;
+}
+
+.channel-archive-thumb-wrap:hover .channel-archive-thumb-overlay {
+    background: rgba(0, 0, 0, 0.35);
+}
+
+.channel-archive-thumb-wrap:hover .channel-archive-thumb-overlay svg {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.channel-archive-info {
+    min-width: 0;
 }
 
 .channel-archive-title {
     font-family: 'Zen Maru Gothic', sans-serif;
+    font-weight: 600;
+    font-size: 0.925rem;
     color: #1f2937;
+    cursor: pointer;
+    transition: color 0.2s ease;
+    line-height: 1.4;
 }
 
 .channel-archive-title:hover {
@@ -423,65 +548,248 @@
 }
 
 .channel-archive-date {
+    font-size: 0.8rem;
     color: #9ca3af;
+    margin-top: 0.25rem;
 }
 
-.channel-ts-link {
+/* Archive Timestamp List */
+.channel-archive-ts-list {
+    padding: 0 1rem 0.75rem;
+    display: flex;
+    flex-direction: column;
+}
+
+.channel-archive-ts-row {
+    display: flex;
+    align-items: baseline;
+    gap: 0.625rem;
+    padding: 0.3rem 0.5rem;
+    border-radius: 0.375rem;
+    transition: background 0.15s ease;
+}
+
+.channel-archive-ts-row:hover {
+    background: rgba(251, 191, 36, 0.06);
+}
+
+.channel-archive-ts-time {
+    font-family: 'Outfit', monospace;
+    font-size: 0.8rem;
     color: #2563eb;
-    font-size: 0.875rem;
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+    text-decoration: none;
 }
 
-.channel-ts-link:hover {
+.channel-archive-ts-time:hover {
     text-decoration: underline;
 }
 
-/* Timestamp Items */
-.channel-ts-item {
-    border: 1px solid transparent;
-    border-radius: 0.625rem;
+.channel-archive-ts-text {
+    font-size: 0.85rem;
+    color: #4b5563;
+    cursor: pointer;
+    transition: color 0.15s ease;
+    min-width: 0;
     overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.channel-archive-ts-text:hover {
+    color: #d97706;
+}
+
+/* Playlist-style Timestamp Items */
+.channel-playlist {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+}
+
+.channel-playlist-item {
+    display: flex;
+    border-radius: 0.75rem;
+    overflow: hidden;
+    transition: all 0.2s ease;
+}
+
+.channel-playlist-accent {
+    width: 4px;
+    flex-shrink: 0;
+    border-radius: 4px 0 0 4px;
+    transition: all 0.2s ease;
+}
+
+.channel-playlist-accent-selected {
+    background: linear-gradient(180deg, #fbbf24, #f59e0b);
+    width: 5px;
+}
+
+.channel-playlist-accent-mapped {
+    background: linear-gradient(180deg, #10b981, #059669);
+}
+
+.channel-playlist-accent-unmapped {
+    background: #e5e7eb;
+}
+
+.channel-playlist-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.channel-playlist-selected {
+    background: #fffbeb;
+    box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.3), 0 2px 8px rgba(251, 191, 36, 0.1);
+}
+
+.channel-playlist-reported {
+    background: #f9fafb;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.04);
+}
+
+.channel-playlist-normal {
+    background: #fff;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.04);
+}
+
+.channel-playlist-normal:hover {
+    background: #fefce8;
+    box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.2), 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+.channel-playlist-song {
+    padding: 0.5rem 0.75rem 0.25rem;
+    cursor: pointer;
+    transition: color 0.15s ease;
+}
+
+.channel-playlist-song:hover {
+    color: #d97706;
+}
+
+.channel-playlist-title {
+    font-family: 'Zen Maru Gothic', sans-serif;
+    font-weight: 700;
+    font-size: 0.925rem;
+    color: #1f2937;
+}
+
+.channel-playlist-artist {
+    font-family: 'Zen Maru Gothic', sans-serif;
+    font-size: 0.8rem;
+    color: #6b7280;
+}
+
+.channel-playlist-auto-tag {
+    font-size: 0.7rem;
+    color: #d97706;
+    margin-top: 0.125rem;
+}
+
+.channel-playlist-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0.75rem 0.5rem;
+}
+
+.channel-playlist-ts-text {
+    font-family: 'Outfit', monospace;
+    font-size: 0.75rem;
+    color: #9ca3af;
+    font-variant-numeric: tabular-nums;
+    width: 4.5rem;
+    flex-shrink: 0;
+}
+
+.channel-playlist-date {
+    font-size: 0.7rem;
+    color: #9ca3af;
+    width: 7rem;
+    flex-shrink: 0;
+}
+
+.channel-playlist-archive-title {
+    font-size: 0.7rem;
+    color: #9ca3af;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.channel-playlist-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    flex-shrink: 0;
+}
+
+.channel-playlist-yt-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.375rem;
+    color: #fff;
+    background: #dc2626;
+    border-radius: 0.375rem;
     transition: all 0.15s ease;
 }
 
-.channel-ts-selected {
-    border-color: #fbbf24;
-    background: #fffbeb;
+.channel-playlist-yt-btn:hover {
+    background: #b91c1c;
+    transform: scale(1.1);
 }
 
-.channel-ts-reported {
-    background: #f3f4f6;
-    border-color: #d1d5db;
+.channel-playlist-share-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.375rem;
+    color: #fff;
+    background: #6b7280;
+    border-radius: 0.375rem;
+    transition: all 0.15s ease;
 }
 
-.channel-ts-normal {
-    border-color: #e5e7eb;
+.channel-playlist-share-btn:hover {
+    background: #4b5563;
+    transform: scale(1.1);
 }
 
-.channel-ts-normal:hover {
-    background: #fefce8;
-    border-color: #fde68a;
+/* Loading Spinner */
+.channel-loading-spinner {
+    width: 2.5rem;
+    height: 2.5rem;
+    border: 3px solid #e5e7eb;
+    border-top-color: #fbbf24;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
 }
 
-.channel-ts-meta {
-    padding: 0.375rem 0.5rem;
-    background: #f9fafb;
-    border-top: 1px solid #f3f4f6;
+@keyframes spin {
+    to { transform: rotate(360deg); }
 }
 
 /* Pagination */
 .channel-pagination {
     display: flex;
     justify-content: center;
-    gap: 0.5rem;
+    gap: 0.375rem;
     margin-bottom: 1rem;
 }
 
 .channel-page-btn {
     font-family: 'Zen Maru Gothic', sans-serif;
-    padding: 0.25rem 0.75rem;
-    border-radius: 0.5rem;
-    font-size: 0.875rem;
-    transition: all 0.15s ease;
+    padding: 0.375rem 0.875rem;
+    border-radius: 2rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
 }
 
 .channel-page-enabled {
@@ -490,8 +798,10 @@
 }
 
 .channel-page-enabled:hover {
-    background: #fef3c7;
+    background: linear-gradient(135deg, #fef3c7, #fde68a);
     color: #92400e;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(251, 191, 36, 0.2);
 }
 
 .channel-page-disabled {
@@ -501,11 +811,13 @@
 }
 
 .channel-page-indicator {
-    padding: 0.25rem 0.75rem;
-    font-size: 0.875rem;
-    font-weight: 500;
-    font-family: 'Zen Maru Gothic', sans-serif;
+    padding: 0.375rem 0.875rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    font-family: 'Outfit', 'Zen Maru Gothic', sans-serif;
     color: #374151;
+    background: #f3f4f6;
+    border-radius: 2rem;
 }
 
 /* Filter Buttons */
@@ -545,141 +857,56 @@
 /* Dark mode overrides - Channel Detail */
 @media (prefers-color-scheme: dark) {
     .channel-sticky-bar {
-        background: linear-gradient(180deg, rgba(17,24,39,0.97) 0%, rgba(17,24,39,0.92) 100%);
+        background: linear-gradient(180deg, rgba(17,24,39,0.98) 0%, rgba(17,24,39,0.93) 100%);
         border-color: rgba(255, 255, 255, 0.06);
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
     }
 
-    .channel-sticky-name {
-        color: #e5e7eb;
-    }
+    .channel-sticky-name { color: #e5e7eb; }
+    .channel-tab-inactive { background: #374151; color: #9ca3af; }
+    .channel-tab-inactive:hover { background: #4b5563; color: #e5e7eb; }
+    .channel-auto-off { background: #374151; color: #9ca3af; }
+    .channel-auto-off:hover { background: #4b5563; color: #e5e7eb; }
 
-    .channel-tab-inactive {
-        background: #374151;
-        color: #9ca3af;
-    }
+    .channel-search-input { background: #1f2937; border-color: #374151; color: #f3f4f6; }
+    .channel-search-input:focus { border-color: #fbbf24; box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.08); background: #1a1f2e; }
+    .channel-search-input::placeholder { color: #6b7280; }
+    .channel-search-icon { color: #6b7280; }
+    .channel-search-select { background: #1f2937; border-color: #374151; color: #f3f4f6; }
+    .channel-suggest-dropdown { background: #1f2937; border-color: #374151; }
 
-    .channel-tab-inactive:hover {
-        background: #4b5563;
-        color: #e5e7eb;
-    }
+    .channel-archive-card { background: #1f2937; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255,255,255,0.04); }
+    .channel-archive-card:hover { box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255,255,255,0.06); }
+    .channel-archive-title { color: #f3f4f6; }
+    .channel-archive-title:hover { color: #fbbf24; }
+    .channel-archive-date { color: #6b7280; }
+    .channel-archive-ts-time { color: #60a5fa; }
+    .channel-archive-ts-text { color: #d1d5db; }
+    .channel-archive-ts-text:hover { color: #fbbf24; }
+    .channel-archive-ts-row:hover { background: rgba(251, 191, 36, 0.05); }
 
-    .channel-auto-off {
-        background: #374151;
-        color: #9ca3af;
-    }
+    .channel-playlist-normal { background: #1f2937; box-shadow: 0 0 0 1px rgba(255,255,255,0.04); }
+    .channel-playlist-normal:hover { background: rgba(251, 191, 36, 0.05); box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.15); }
+    .channel-playlist-selected { background: rgba(251, 191, 36, 0.08); box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.25); }
+    .channel-playlist-reported { background: #374151; box-shadow: 0 0 0 1px rgba(255,255,255,0.04); }
+    .channel-playlist-accent-unmapped { background: #374151; }
+    .channel-playlist-title { color: #f3f4f6; }
+    .channel-playlist-artist { color: #9ca3af; }
+    .channel-playlist-auto-tag { color: #fbbf24; }
+    .channel-playlist-ts-text { color: #6b7280; }
+    .channel-playlist-date { color: #6b7280; }
+    .channel-playlist-archive-title { color: #6b7280; }
 
-    .channel-auto-off:hover {
-        background: #4b5563;
-        color: #e5e7eb;
-    }
+    .channel-loading-spinner { border-color: #374151; border-top-color: #fbbf24; }
 
-    .channel-search-input {
-        background: #1f2937;
-        border-color: #374151;
-        color: #f3f4f6;
-    }
+    .channel-page-enabled { background: #374151; color: #e5e7eb; }
+    .channel-page-enabled:hover { background: linear-gradient(135deg, rgba(251,191,36,0.15), rgba(251,191,36,0.1)); color: #fbbf24; box-shadow: none; }
+    .channel-page-disabled { background: #1f2937; color: #4b5563; }
+    .channel-page-indicator { color: #e5e7eb; background: #374151; }
 
-    .channel-search-input:focus {
-        border-color: #fbbf24;
-        box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.1);
-    }
-
-    .channel-search-input::placeholder {
-        color: #6b7280;
-    }
-
-    .channel-search-select {
-        background: #1f2937;
-        border-color: #374151;
-        color: #f3f4f6;
-    }
-
-    .channel-suggest-dropdown {
-        background: #1f2937;
-        border-color: #374151;
-    }
-
-    .channel-archive-card {
-        background: #1f2937;
-        border-color: rgba(255, 255, 255, 0.06);
-    }
-
-    .channel-archive-card:hover {
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-    }
-
-    .channel-archive-title {
-        color: #f3f4f6;
-    }
-
-    .channel-archive-title:hover {
-        color: #fbbf24;
-    }
-
-    .channel-archive-date {
-        color: #6b7280;
-    }
-
-    .channel-ts-link {
-        color: #60a5fa;
-    }
-
-    .channel-ts-selected {
-        border-color: #fbbf24;
-        background: rgba(251, 191, 36, 0.1);
-    }
-
-    .channel-ts-reported {
-        background: #374151;
-        border-color: #4b5563;
-    }
-
-    .channel-ts-normal {
-        border-color: #374151;
-    }
-
-    .channel-ts-normal:hover {
-        background: rgba(251, 191, 36, 0.05);
-        border-color: rgba(251, 191, 36, 0.2);
-    }
-
-    .channel-ts-meta {
-        background: rgba(17, 24, 39, 0.5);
-        border-color: #1f2937;
-    }
-
-    .channel-page-enabled {
-        background: #374151;
-        color: #e5e7eb;
-    }
-
-    .channel-page-enabled:hover {
-        background: rgba(251, 191, 36, 0.15);
-        color: #fbbf24;
-    }
-
-    .channel-page-disabled {
-        background: #1f2937;
-        color: #4b5563;
-    }
-
-    .channel-page-indicator {
-        color: #e5e7eb;
-    }
-
-    .channel-filter-inactive {
-        background: #374151;
-        color: #9ca3af;
-    }
-
-    .channel-filter-inactive:hover {
-        background: #4b5563;
-    }
-
-    .channel-filter-disabled {
-        background: #1f2937;
-        color: #4b5563;
-    }
+    .channel-filter-inactive { background: #374151; color: #9ca3af; }
+    .channel-filter-inactive:hover { background: #4b5563; }
+    .channel-filter-disabled { background: #1f2937; color: #4b5563; }
 }
 
 .pagination-button {

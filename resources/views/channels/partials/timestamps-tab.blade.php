@@ -32,7 +32,6 @@
     {{-- 頭文字フィルタナビゲーション --}}
     <div x-show="timestamps.available_indexes && timestamps.available_indexes.length > 0" class="mb-4 hidden sm:block">
         <div class="flex flex-wrap items-center gap-1">
-            {{-- 折りたたみトグル --}}
             <button
                 @click="toggleFilterExpanded()"
                 class="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 mr-1 flex items-center gap-1">
@@ -41,7 +40,6 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                 </svg>
             </button>
-            {{-- すべて --}}
             <button
                 @click="clearIndexFilter()"
                 :class="!selectedIndex
@@ -50,7 +48,6 @@
                 class="channel-filter-btn">
                 すべて
             </button>
-            {{-- 最近使用したフィルタ（常に表示） --}}
             <template x-if="recentFilters.length > 0 && !filterExpanded">
                 <span class="flex items-center gap-1">
                     <span class="text-gray-300 dark:text-gray-600 mx-1">|</span>
@@ -70,11 +67,9 @@
                     </template>
                 </span>
             </template>
-            {{-- フィルタ本体（展開時のみ表示） --}}
             <template x-if="filterExpanded">
                 <span class="flex flex-wrap items-center gap-1">
                     <span class="text-gray-300 dark:text-gray-600 mx-1">|</span>
-                    {{-- 数字 --}}
                     <button
                         @click="filterByIndex('0-9')"
                         :disabled="!timestamps.available_indexes?.includes('0-9')"
@@ -87,7 +82,6 @@
                         0-9
                     </button>
                     <span class="text-gray-300 dark:text-gray-600 mx-1">|</span>
-                    {{-- アルファベット --}}
                     <template x-for="group in ['ABCDE','FGHIJ','KLMNO','PQRST','UVWXYZ']" :key="group">
                         <button
                             @click="filterByIndex(group)"
@@ -102,7 +96,6 @@
                         </button>
                     </template>
                     <span class="text-gray-300 dark:text-gray-600 mx-1">|</span>
-                    {{-- 五十音 --}}
                     <template x-for="kana in ['あ','か','さ','た','な','は','ま','や','ら','わ']" :key="kana">
                         <button
                             @click="filterByIndex(kana)"
@@ -117,7 +110,6 @@
                         </button>
                     </template>
                     <span class="text-gray-300 dark:text-gray-600 mx-1">|</span>
-                    {{-- 漢字・その他 --}}
                     <button
                         @click="filterByIndex('その他')"
                         :disabled="!timestamps.available_indexes?.includes('その他')"
@@ -140,16 +132,19 @@
     </div>
 
     {{-- ローディング表示 --}}
-    <div x-show="loading" class="flex justify-center items-center py-8">
-        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-500"></div>
-        <span class="ml-2 text-gray-500 dark:text-gray-400">読み込み中...</span>
+    <div x-show="loading" class="flex justify-center items-center py-12">
+        <div class="channel-loading-spinner"></div>
+        <span class="ml-3 text-gray-500 dark:text-gray-400 channel-detail-font">読み込み中...</span>
     </div>
 
-    {{-- タイムスタンプ一覧 --}}
-    <div x-show="!loading" class="flex flex-col gap-2">
+    {{-- タイムスタンプ一覧（プレイリスト風） --}}
+    <div x-show="!loading" class="channel-playlist">
         {{-- 空状態メッセージ --}}
         <template x-if="timestamps.data && timestamps.data.length === 0">
-            <div class="text-center py-8 text-gray-400 dark:text-gray-500">
+            <div class="text-center py-12 text-gray-400 dark:text-gray-500">
+                <svg class="w-12 h-12 mx-auto mb-3 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                </svg>
                 <template x-if="searchQuery">
                     <p>「<span x-text="searchQuery"></span>」に一致するタイムスタンプが見つかりませんでした</p>
                 </template>
@@ -160,67 +155,64 @@
         </template>
 
         <template x-for="ts in (timestamps.data || [])" :key="ts.id">
-            <div class="channel-ts-item"
+            <div class="channel-playlist-item"
                  :data-timestamp-id="ts.id"
                  x-data="{ expanded: false }"
                  :class="{
-                     'channel-ts-selected': selectedSong && ((ts.mapping?.song && ts.mapping.song.title === selectedSong.title && ts.mapping.song.artist === selectedSong.artist) || (!ts.mapping?.song && ts.text === selectedSong.title)),
-                     'channel-ts-reported': ts.has_pending_report && !(selectedSong && ((ts.mapping?.song && ts.mapping.song.title === selectedSong.title && ts.mapping.song.artist === selectedSong.artist) || (!ts.mapping?.song && ts.text === selectedSong.title))),
-                     'channel-ts-normal': !ts.has_pending_report && !(selectedSong && ((ts.mapping?.song && ts.mapping.song.title === selectedSong.title && ts.mapping.song.artist === selectedSong.artist) || (!ts.mapping?.song && ts.text === selectedSong.title)))
+                     'channel-playlist-selected': selectedSong && ((ts.mapping?.song && ts.mapping.song.title === selectedSong.title && ts.mapping.song.artist === selectedSong.artist) || (!ts.mapping?.song && ts.text === selectedSong.title)),
+                     'channel-playlist-reported': ts.has_pending_report && !(selectedSong && ((ts.mapping?.song && ts.mapping.song.title === selectedSong.title && ts.mapping.song.artist === selectedSong.artist) || (!ts.mapping?.song && ts.text === selectedSong.title))),
+                     'channel-playlist-normal': !ts.has_pending_report && !(selectedSong && ((ts.mapping?.song && ts.mapping.song.title === selectedSong.title && ts.mapping.song.artist === selectedSong.artist) || (!ts.mapping?.song && ts.text === selectedSong.title)))
                  }">
-                {{-- 上部: 楽曲情報 --}}
-                <div class="p-2 cursor-pointer transition-colors"
-                     :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : 'hover:text-amber-600 dark:hover:text-amber-400'"
-                     @click="ts.mapping?.song ? selectSong(ts.mapping.song, ts) : (ts.text ? selectText(ts.text, ts) : null); expanded = !expanded">
-                    <div :class="expanded ? '' : 'line-clamp-2'">
-                        <template x-if="ts.mapping?.song">
-                            <div>
-                                <div>
-                                    <span class="font-bold text-sm sm:text-base" :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : ''" x-text="ts.mapping.song.title"></span>
-                                    <span class="text-xs sm:text-sm" :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : 'text-gray-500 dark:text-gray-400'"> / </span>
-                                    <span class="text-xs sm:text-sm" :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : 'text-gray-500 dark:text-gray-400'" x-text="ts.mapping.song.artist"></span>
-                                </div>
-                                <template x-if="ts.mapping.is_manual === false && ts.text && ts.text !== ts.mapping.song.title">
-                                    <div class="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
-                                        <span class="opacity-75">[自動]</span> <span x-text="ts.text"></span>
-                                    </div>
-                                </template>
-                            </div>
-                        </template>
-                        <template x-if="!ts.mapping?.song && ts.text">
-                            <span class="font-bold text-sm sm:text-base"
-                                  :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-300'"
-                                  x-text="ts.text"></span>
-                        </template>
-                        <template x-if="!ts.mapping?.song && !ts.text">
-                            <span class="text-sm" :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-300'">-</span>
-                        </template>
-                    </div>
-                </div>
+                {{-- 左アクセントバー --}}
+                <div class="channel-playlist-accent"
+                     :class="{
+                         'channel-playlist-accent-selected': selectedSong && ((ts.mapping?.song && ts.mapping.song.title === selectedSong.title && ts.mapping.song.artist === selectedSong.artist) || (!ts.mapping?.song && ts.text === selectedSong.title)),
+                         'channel-playlist-accent-mapped': !selectedSong && ts.mapping?.song,
+                         'channel-playlist-accent-unmapped': !selectedSong && !ts.mapping?.song
+                     }"></div>
 
-                {{-- 下部: メタ情報グレー帯 --}}
-                <div class="channel-ts-meta">
-                    <div class="flex items-center gap-2">
-                        {{-- タイムスタンプ --}}
-                        <span class="text-xs font-mono w-20 flex-shrink-0"
-                              :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : 'text-gray-600 dark:text-gray-400'"
-                              x-text="ts.ts_text"></span>
-                        {{-- 公開日 --}}
-                        <span class="text-xs hidden sm:inline w-32 flex-shrink-0"
-                              :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : 'text-gray-500 dark:text-gray-500'"
+                {{-- メインコンテンツ --}}
+                <div class="channel-playlist-content">
+                    {{-- 上段: 楽曲情報 --}}
+                    <div class="channel-playlist-song cursor-pointer"
+                         :class="ts.has_pending_report ? 'opacity-40' : ''"
+                         @click="ts.mapping?.song ? selectSong(ts.mapping.song, ts) : (ts.text ? selectText(ts.text, ts) : null); expanded = !expanded">
+                        <div :class="expanded ? '' : 'line-clamp-2'">
+                            <template x-if="ts.mapping?.song">
+                                <div>
+                                    <span class="channel-playlist-title" x-text="ts.mapping.song.title"></span>
+                                    <span class="channel-playlist-artist" x-text="' / ' + ts.mapping.song.artist"></span>
+                                    <template x-if="ts.mapping.is_manual === false && ts.text && ts.text !== ts.mapping.song.title">
+                                        <div class="channel-playlist-auto-tag">
+                                            <span class="opacity-75">[自動]</span> <span x-text="ts.text"></span>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                            <template x-if="!ts.mapping?.song && ts.text">
+                                <span class="channel-playlist-title" x-text="ts.text"></span>
+                            </template>
+                            <template x-if="!ts.mapping?.song && !ts.text">
+                                <span class="channel-playlist-title opacity-40">-</span>
+                            </template>
+                        </div>
+                    </div>
+
+                    {{-- 下段: メタ情報 --}}
+                    <div class="channel-playlist-meta">
+                        <span class="channel-playlist-ts-text" x-text="ts.ts_text"></span>
+                        <span class="channel-playlist-date hidden sm:inline"
                               x-text="ts.archive.published_at ? formatPublishedDate(ts.archive.published_at) : ''"></span>
-                        {{-- 配信タイトル（デスクトップのみ） --}}
-                        <span class="hidden sm:inline text-xs truncate flex-1 min-w-0"
-                              :class="ts.has_pending_report ? 'text-gray-400 dark:text-gray-500' : 'text-gray-500 dark:text-gray-500'"
+                        <span class="channel-playlist-archive-title hidden sm:inline"
                               :title="ts.archive.title"
                               x-text="ts.archive.title"></span>
-                        {{-- スペーサー（モバイル時に右寄せ用） --}}
                         <span class="flex-1 sm:hidden"></span>
-                        {{-- YouTubeボタン & 共有メニュー --}}
-                        <div class="flex items-center gap-2 flex-shrink-0">
+
+                        {{-- アクションボタン --}}
+                        <div class="channel-playlist-actions">
                             <a :href="getYoutubeUrl(ts.video_id, ts.ts_num)"
-                               class="inline-flex items-center justify-center p-1.5 text-white rounded-md transition-colors"
-                               :class="ts.has_pending_report ? 'bg-red-800 hover:bg-red-900' : 'bg-red-600 hover:bg-red-700'"
+                               class="channel-playlist-yt-btn"
+                               :class="ts.has_pending_report ? 'opacity-50' : ''"
                                target="_blank"
                                title="YouTubeで再生">
                                 <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
@@ -230,14 +222,13 @@
                             {{-- 共有メニュー --}}
                             <div class="relative" x-data="{ shareOpen: false, menuPos: { top: 0, left: 0 } }" x-ref="shareContainer">
                                 <button @click="shareOpen = !shareOpen; if(shareOpen) { const rect = $refs.shareContainer.getBoundingClientRect(); menuPos = { top: rect.bottom + 4, left: rect.right - 144 }; }"
-                                    class="inline-flex items-center justify-center p-1.5 text-white rounded-md transition-colors"
-                                    :class="ts.has_pending_report ? 'bg-gray-500 hover:bg-gray-600' : 'bg-gray-600 hover:bg-gray-700'"
+                                    class="channel-playlist-share-btn"
+                                    :class="ts.has_pending_report ? 'opacity-50' : ''"
                                     title="共有">
                                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
                                 </svg>
                             </button>
-                            {{-- ドロップダウンメニュー（bodyにテレポート） --}}
                             <template x-teleport="body">
                                 <div x-show="shareOpen"
                                      @click.away="shareOpen = false"
@@ -250,7 +241,6 @@
                                      class="fixed w-36 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-[9999]"
                                      :style="'top: ' + menuPos.top + 'px; left: ' + menuPos.left + 'px;'"
                                      @click="shareOpen = false">
-                                    {{-- Twitter --}}
                                     <a :href="getTwitterShareUrl(ts.ts_text || '', ts.mapping?.song ? ts.mapping.song.title + (ts.mapping.song.artist ? ' / ' + ts.mapping.song.artist : '') : (ts.text || ''), ts.archive?.title || '', ts.video_id, ts.ts_num || 0)"
                                        target="_blank"
                                        class="block w-full">
@@ -261,7 +251,6 @@
                                             <span>Twitter</span>
                                         </span>
                                     </a>
-                                    {{-- URLコピー --}}
                                     <button @click="copyToClipboard(getArchiveUrl(ts.video_id, ts.ts_num)); $dispatch('show-toast', { message: 'URLをコピーしました', type: 'success' })"
                                             class="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-amber-50 dark:hover:bg-gray-700 rounded-b-lg w-full text-left transition-colors">
                                         <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
