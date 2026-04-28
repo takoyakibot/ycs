@@ -446,6 +446,8 @@ function registerArchiveListComponent() {
                     const view = params.get('view');
                     const search = params.get('search');
                     const page = Math.max(1, parseInt(params.get('page')) || 1);
+                    const playVideoId = params.get('play');
+                    const playTime = parseInt(params.get('t')) || 0;
 
                     if (view === 'archives') {
                         this.activeTab = 'archives';
@@ -465,6 +467,14 @@ function registerArchiveListComponent() {
                         this.selectedIndex = params.get('index') || '';
                         this.currentTimestampPage = page;
                         this.fetchTimestamps(page, this.searchQuery, this.selectedIndex);
+                    }
+
+                    // シェアリンクからの自動再生
+                    if (playVideoId && isValidVideoId(playVideoId)) {
+                        this.$nextTick(() => {
+                            this.loadAndPlayVideo(playVideoId, playTime);
+                            this.showVideoPlayer = true;
+                        });
                     }
                 },
 
@@ -950,6 +960,8 @@ function registerArchiveListComponent() {
                             channelTitle: this.channel.title,
                             channelHandle: this.channel.handle,
                             publishedAt: timestamp.archive?.published_at,
+                            videoId: timestamp.video_id,
+                            tsNum: timestamp.ts_num,
                         };
                         this.showGachaShare = true;
                         this.startGachaShareTimer();
@@ -993,7 +1005,8 @@ function registerArchiveListComponent() {
                     const date = data.publishedAt
                         ? new Date(data.publishedAt).toLocaleDateString('ja-JP')
                         : '';
-                    const siteUrl = window.location.origin + '/channels/' + encodeURIComponent(data.channelHandle);
+                    const siteUrl = window.location.origin + '/channels/' + encodeURIComponent(data.channelHandle)
+                        + '?play=' + encodeURIComponent(data.videoId) + '&t=' + (data.tsNum || 0);
                     const dateText = date ? data.channelTitle + 'が' + date + 'に歌った' : data.channelTitle + 'が歌った';
                     const text = '🎵 ' + dateText + data.songTitle + '！\n\n歌枠履歴er:D で探す👇';
                     return 'https://twitter.com/intent/tweet?text=' + encodeURIComponent(text) + '&url=' + encodeURIComponent(siteUrl);

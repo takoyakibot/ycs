@@ -7,6 +7,17 @@
 
         <title>{{ config('app.name', 'Laravel') }}</title>
 
+        <!-- OGP -->
+        <meta property="og:type" content="website">
+        <meta property="og:site_name" content="{{ config('app.name') }}">
+        {!! $ogp ?? '' !!}
+        @if(!isset($ogp))
+        <meta property="og:title" content="{{ config('app.name') }}">
+        <meta property="og:description" content="歌枠アーカイブのタイムスタンプを検索・共有">
+        <meta property="og:image" content="{{ asset('images/ogp-default.png') }}">
+        @endif
+        <meta name="twitter:card" content="summary_large_image">
+
         <!-- Fonts -->
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />

@@ -1,4 +1,10 @@
 <x-app-layout>
+    <x-slot name="ogp">
+        <meta property="og:title" content="{{ $channel->title }} - {{ config('app.name') }}">
+        <meta property="og:description" content="{{ $channel->title }}の歌枠アーカイブを検索・共有">
+        <meta property="og:image" content="{{ asset('images/ogp-default.png') }}">
+        <meta property="og:url" content="{{ url('/channels/' . $channel->handle) }}">
+    </x-slot>
     <x-slot name="alpine_script">
         <script>
             window.channel = @json($channel ?? []);
