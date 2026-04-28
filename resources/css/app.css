@@ -27,10 +27,12 @@
 }
 
 .channel-hero-title {
-    font-family: 'Outfit', 'Zen Maru Gothic', sans-serif;
+    font-family: 'Outfit', 'Zen Maru Gothic', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Yu Gothic', 'Meiryo', sans-serif;
     color: #f8f4f0;
     letter-spacing: -0.02em;
     text-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+    font-feature-settings: "palt" 1;
+    line-height: 1.3;
 }
 
 .channel-hero-note {
@@ -42,9 +44,10 @@
 }
 
 .channel-hero-subtitle {
-    font-family: 'Zen Maru Gothic', sans-serif;
+    font-family: 'Zen Maru Gothic', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Yu Gothic', 'Meiryo', sans-serif;
     color: rgba(248, 244, 240, 0.65);
     letter-spacing: 0.04em;
+    line-height: 1.5;
 }
 
 @keyframes note-float {
@@ -55,7 +58,7 @@
 /* Channel Cards */
 .channel-card {
     display: block;
-    background: #ffffff;
+    background: #fafafa;
     border-radius: 14px;
     box-shadow:
         0 1px 3px rgba(0, 0, 0, 0.06),
@@ -117,19 +120,21 @@
 }
 
 .channel-card-name {
-    font-family: 'Zen Maru Gothic', sans-serif;
+    font-family: 'Zen Maru Gothic', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Yu Gothic', 'Meiryo', sans-serif;
     font-weight: 700;
     font-size: 0.975rem;
     color: #1e1b2e;
     line-height: 1.3;
+    font-feature-settings: "palt" 1;
 }
 
 .channel-card-meta {
-    font-family: 'Zen Maru Gothic', sans-serif;
+    font-family: 'Zen Maru Gothic', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Yu Gothic', 'Meiryo', sans-serif;
     font-size: 0.75rem;
     color: #9ca3af;
     margin-top: 0.25rem;
     letter-spacing: 0.02em;
+    line-height: 1.5;
 }
 
 .channel-card-arrow {
@@ -144,8 +149,17 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .channel-card { animation: none; }
+    .channel-card { animation: none; transition: none; }
+    .channel-card::before { transition: none; }
+    .channel-card-arrow { transition: none; }
     .channel-hero-note { animation: none; }
+    .channel-gacha-btn { transition: none; }
+    .channel-gacha-btn::after { animation: none; }
+    .channel-tab { transition: none; }
+    .channel-auto-btn { transition: none; }
+    .channel-player-ctrl-btn { transition: none; }
+    .channel-player-service { transition: none; }
+    .channel-loading-spinner { animation: none; }
 }
 
 @keyframes card-enter {
@@ -157,6 +171,24 @@
         opacity: 1;
         transform: translateY(0);
     }
+}
+
+/* Common focus-visible for interactive elements */
+.channel-tab:focus-visible,
+.channel-gacha-btn:focus-visible,
+.channel-auto-btn:focus-visible,
+.channel-filter-btn:focus-visible,
+.channel-page-btn:focus-visible,
+.channel-player-ctrl-btn:focus-visible,
+.channel-player-service:focus-visible,
+.channel-player-close:focus-visible,
+.channel-player-report-btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.4);
+}
+
+.channel-search-input:focus-visible {
+    outline: none;
 }
 
 /* Dark mode overrides - Channel List */
@@ -200,7 +232,12 @@
    ======================================== */
 
 .channel-detail-font {
-    font-family: 'Zen Maru Gothic', sans-serif;
+    font-family: 'Zen Maru Gothic', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Yu Gothic', 'Meiryo', sans-serif;
+    line-height: 1.7;
+    letter-spacing: 0.02em;
+    word-break: break-all;
+    overflow-wrap: break-word;
+    line-break: strict;
 }
 
 /* Detail Hero (Channel Banner) */
@@ -220,13 +257,16 @@
 }
 
 .channel-detail-hero-name {
-    font-family: 'Outfit', 'Zen Maru Gothic', sans-serif;
+    font-family: 'Outfit', 'Zen Maru Gothic', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Yu Gothic', 'Meiryo', sans-serif;
     color: #f8f4f0;
     text-shadow: 0 1px 8px rgba(0, 0, 0, 0.3);
+    font-feature-settings: "palt" 1;
+    letter-spacing: -0.02em;
+    line-height: 1.3;
 }
 
 .channel-detail-hero-handle {
-    font-family: 'Zen Maru Gothic', sans-serif;
+    font-family: 'Zen Maru Gothic', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Yu Gothic', 'Meiryo', sans-serif;
     color: rgba(248, 244, 240, 0.5);
 }
 
@@ -239,23 +279,29 @@
 }
 
 .channel-sticky-name {
-    font-family: 'Zen Maru Gothic', sans-serif;
+    font-family: 'Zen Maru Gothic', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Yu Gothic', 'Meiryo', sans-serif;
     color: #374151;
 }
 
 /* Tabs */
 .channel-tab {
-    font-family: 'Zen Maru Gothic', sans-serif;
-    padding: 0.375rem 0.75rem;
+    font-family: 'Zen Maru Gothic', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Yu Gothic', 'Meiryo', sans-serif;
+    padding: 0.5rem 1rem;
     border-radius: 2rem;
     font-weight: 600;
     font-size: 0.875rem;
     transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    font-feature-settings: "palt" 1;
+    line-height: 1.4;
+    min-height: 2.75rem;
+    display: inline-flex;
+    align-items: center;
 }
 
 @media (min-width: 640px) {
     .channel-tab {
         padding: 0.5rem 1.25rem;
+        min-height: 2.75rem;
     }
 }
 
@@ -289,10 +335,11 @@
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
-    padding: 0.375rem 0.75rem;
+    padding: 0.5rem 1rem;
+    min-height: 2.75rem;
     background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 50%, #6366f1 100%);
     color: #fff;
-    font-family: 'Zen Maru Gothic', sans-serif;
+    font-family: 'Zen Maru Gothic', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Yu Gothic', 'Meiryo', sans-serif;
     font-weight: 700;
     font-size: 0.875rem;
     border-radius: 2rem;
@@ -300,6 +347,7 @@
     transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
     position: relative;
     overflow: hidden;
+    font-feature-settings: "palt" 1;
 }
 
 .channel-gacha-btn::after {
@@ -333,13 +381,15 @@
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
-    padding: 0.375rem 0.5rem;
+    padding: 0.5rem 0.625rem;
+    min-height: 2.75rem;
     border-radius: 2rem;
-    font-family: 'Zen Maru Gothic', sans-serif;
+    font-family: 'Zen Maru Gothic', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Yu Gothic', 'Meiryo', sans-serif;
     font-weight: 500;
     font-size: 0.875rem;
     transition: all 0.2s ease;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    font-feature-settings: "palt" 1;
 }
 
 @media (min-width: 640px) {
@@ -373,7 +423,7 @@
     padding: 0.75rem 0.875rem;
     border: 2px solid #e5e7eb;
     border-radius: 0.75rem;
-    font-family: 'Zen Maru Gothic', sans-serif;
+    font-family: 'Zen Maru Gothic', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Yu Gothic', 'Meiryo', sans-serif;
     font-size: 0.9rem;
     background: #fff;
     transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
@@ -414,7 +464,7 @@
     background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
     color: #fff;
     border-radius: 0.75rem;
-    font-family: 'Zen Maru Gothic', sans-serif;
+    font-family: 'Zen Maru Gothic', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Yu Gothic', 'Meiryo', sans-serif;
     font-weight: 600;
     min-width: 80px;
     transition: all 0.2s ease;
@@ -432,7 +482,7 @@
     color: #fff;
     border-radius: 0.75rem;
     white-space: nowrap;
-    font-family: 'Zen Maru Gothic', sans-serif;
+    font-family: 'Zen Maru Gothic', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Yu Gothic', 'Meiryo', sans-serif;
     transition: all 0.2s ease;
 }
 
@@ -534,7 +584,7 @@
 }
 
 .channel-archive-title {
-    font-family: 'Zen Maru Gothic', sans-serif;
+    font-family: 'Zen Maru Gothic', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Yu Gothic', 'Meiryo', sans-serif;
     font-weight: 600;
     font-size: 0.925rem;
     color: #1f2937;
@@ -671,14 +721,14 @@
 }
 
 .channel-playlist-title {
-    font-family: 'Zen Maru Gothic', sans-serif;
+    font-family: 'Zen Maru Gothic', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Yu Gothic', 'Meiryo', sans-serif;
     font-weight: 700;
     font-size: 0.925rem;
     color: #1f2937;
 }
 
 .channel-playlist-artist {
-    font-family: 'Zen Maru Gothic', sans-serif;
+    font-family: 'Zen Maru Gothic', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Yu Gothic', 'Meiryo', sans-serif;
     font-size: 0.8rem;
     color: #6b7280;
 }
@@ -784,7 +834,7 @@
 }
 
 .channel-page-btn {
-    font-family: 'Zen Maru Gothic', sans-serif;
+    font-family: 'Zen Maru Gothic', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Yu Gothic', 'Meiryo', sans-serif;
     padding: 0.375rem 0.875rem;
     border-radius: 2rem;
     font-size: 0.8rem;
@@ -814,7 +864,7 @@
     padding: 0.375rem 0.875rem;
     font-size: 0.8rem;
     font-weight: 600;
-    font-family: 'Outfit', 'Zen Maru Gothic', sans-serif;
+    font-family: 'Outfit', 'Zen Maru Gothic', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Yu Gothic', 'Meiryo', sans-serif;
     color: #374151;
     background: #f3f4f6;
     border-radius: 2rem;
@@ -890,7 +940,7 @@
 }
 
 .channel-player-title {
-    font-family: 'Zen Maru Gothic', sans-serif;
+    font-family: 'Zen Maru Gothic', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Yu Gothic', 'Meiryo', sans-serif;
     font-size: 0.875rem;
     font-weight: 600;
     color: #f8f4f0;
@@ -898,7 +948,7 @@
 }
 
 .channel-player-subtitle {
-    font-family: 'Zen Maru Gothic', sans-serif;
+    font-family: 'Zen Maru Gothic', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Yu Gothic', 'Meiryo', sans-serif;
     font-size: 0.75rem;
     color: rgba(248, 244, 240, 0.45);
     margin-top: 1px;
@@ -930,8 +980,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 2rem;
-    height: 2rem;
+    width: 2.5rem;
+    height: 2.5rem;
     border-radius: 50%;
     background: rgba(255, 255, 255, 0.1);
     color: rgba(255, 255, 255, 0.85);
@@ -1012,7 +1062,7 @@
     gap: 0.375rem;
     padding: 0.375rem 0.625rem;
     border-radius: 2rem;
-    font-family: 'Zen Maru Gothic', sans-serif;
+    font-family: 'Zen Maru Gothic', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Yu Gothic', 'Meiryo', sans-serif;
     font-size: 0.75rem;
     font-weight: 500;
     transition: all 0.2s ease;
