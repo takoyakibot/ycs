@@ -854,6 +854,186 @@
 .channel-filter-other { background: #f59e0b; color: #fff; }
 .channel-filter-other:hover { background: #d97706; }
 
+/* Player Panel (Distribution Panel) */
+.channel-player-panel {
+    position: relative;
+    overflow: hidden;
+}
+
+.channel-player-panel-bg {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, #1e1b2e 0%, #2d2444 50%, #3b2f4a 100%);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.channel-player-panel-bg::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(ellipse 80% 120% at 20% 100%, rgba(139, 92, 246, 0.12) 0%, transparent 50%),
+        radial-gradient(ellipse 60% 100% at 80% 0%, rgba(236, 72, 153, 0.08) 0%, transparent 50%);
+    pointer-events: none;
+}
+
+.channel-player-icon {
+    width: 2.25rem;
+    height: 2.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.625rem;
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.25), rgba(236, 72, 153, 0.2));
+    color: rgba(255, 255, 255, 0.85);
+    flex-shrink: 0;
+}
+
+.channel-player-title {
+    font-family: 'Zen Maru Gothic', sans-serif;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #f8f4f0;
+    line-height: 1.3;
+}
+
+.channel-player-subtitle {
+    font-family: 'Zen Maru Gothic', sans-serif;
+    font-size: 0.75rem;
+    color: rgba(248, 244, 240, 0.45);
+    margin-top: 1px;
+}
+
+.channel-player-close {
+    padding: 0.375rem;
+    border-radius: 0.5rem;
+    color: rgba(255, 255, 255, 0.4);
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+.channel-player-close:hover { color: #fff; background: rgba(255, 255, 255, 0.1); }
+
+.channel-player-report-btn {
+    padding: 0.375rem;
+    border-radius: 0.5rem;
+    color: rgba(255, 255, 255, 0.35);
+    transition: all 0.2s ease;
+}
+.channel-player-report-btn:hover { color: #fbbf24; background: rgba(251, 191, 36, 0.1); }
+
+.channel-player-report-done {
+    padding: 0.375rem;
+    color: rgba(16, 185, 129, 0.6);
+}
+
+.channel-player-ctrl-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.85);
+    transition: all 0.2s ease;
+}
+.channel-player-ctrl-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.2); color: #fff; transform: scale(1.08); }
+
+.channel-player-vol-btn {
+    padding: 0.25rem;
+    color: rgba(255, 255, 255, 0.5);
+    transition: color 0.2s ease;
+}
+.channel-player-vol-btn:hover { color: rgba(255, 255, 255, 0.85); }
+
+.channel-player-volume-slider {
+    width: 4rem;
+    height: 3px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.15);
+    appearance: none;
+    cursor: pointer;
+    accent-color: #a78bfa;
+}
+@media (min-width: 640px) {
+    .channel-player-volume-slider { width: 5rem; }
+}
+
+.channel-player-checkbox {
+    width: 0.875rem;
+    height: 0.875rem;
+    border-radius: 0.25rem;
+    border: 1.5px solid rgba(255, 255, 255, 0.3);
+    background: transparent;
+    accent-color: #8b5cf6;
+}
+
+.channel-player-label-text {
+    font-size: 0.7rem;
+    color: rgba(255, 255, 255, 0.45);
+    white-space: nowrap;
+}
+
+.channel-player-pip-group {
+    border-radius: 0.375rem;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.channel-player-pip-btn {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.7rem;
+    transition: all 0.15s ease;
+    border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+.channel-player-pip-btn:last-child { border-right: none; }
+
+.channel-player-pip-active {
+    background: rgba(139, 92, 246, 0.5);
+    color: #fff;
+}
+
+.channel-player-pip-inactive {
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.45);
+}
+.channel-player-pip-inactive:hover { background: rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.7); }
+
+.channel-player-separator {
+    width: 1px;
+    height: 1.5rem;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* Music service link pills */
+.channel-player-service {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.625rem;
+    border-radius: 2rem;
+    font-family: 'Zen Maru Gothic', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    color: #fff;
+}
+
+.channel-player-service-spotify { background: rgba(30, 215, 96, 0.2); color: #1ed760; }
+.channel-player-service-spotify:hover { background: rgba(30, 215, 96, 0.35); color: #1ed760; transform: scale(1.04); }
+
+.channel-player-service-apple { background: rgba(252, 60, 68, 0.2); color: #fc3c44; }
+.channel-player-service-apple:hover { background: rgba(252, 60, 68, 0.35); color: #fc3c44; transform: scale(1.04); }
+
+.channel-player-service-youtube { background: rgba(255, 0, 0, 0.18); color: #ff4444; }
+.channel-player-service-youtube:hover { background: rgba(255, 0, 0, 0.32); color: #ff4444; transform: scale(1.04); }
+
+.channel-player-service-amazon { background: rgba(0, 168, 225, 0.2); color: #25d1da; }
+.channel-player-service-amazon:hover { background: rgba(0, 168, 225, 0.35); color: #25d1da; transform: scale(1.04); }
+
+.channel-player-service-line { background: rgba(6, 199, 85, 0.2); color: #06c755; }
+.channel-player-service-line:hover { background: rgba(6, 199, 85, 0.35); color: #06c755; transform: scale(1.04); }
+
 /* Dark mode overrides - Channel Detail */
 @media (prefers-color-scheme: dark) {
     .channel-sticky-bar {
