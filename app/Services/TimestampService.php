@@ -306,10 +306,19 @@ class TimestampService
         if ($excludeVideoId) {
             $item = (clone $query)->where('ts_items.video_id', '!=', $excludeVideoId)
                 ->inRandomOrder()->first();
+
+            \Log::debug('getRandomTimestamp', [
+                'excludeVideoId' => $excludeVideoId,
+                'excludeQueryFound' => $item !== null,
+                'selectedVideoId' => $item?->video_id,
+            ]);
         }
 
         // 除外条件で見つからない場合（アーカイブが1つしかない等）はフォールバック
         if (! $item) {
+            \Log::debug('getRandomTimestamp fallback executed', [
+                'excludeVideoId' => $excludeVideoId,
+            ]);
             $item = $query->inRandomOrder()->first();
         }
 

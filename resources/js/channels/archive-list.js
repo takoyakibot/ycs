@@ -174,6 +174,12 @@ function registerArchiveListComponent() {
                 // 音量設定
                 volume: 100,
 
+                // ガチャシェアポップアップ
+                showGachaShare: false,
+                gachaShareData: null,
+                gachaShareTimer: null,
+                gachaShareHovered: false,
+
                 // computed property
                 get maxPage() {
                     if (!this.archives.total || !this.archives.per_page) return 1;
@@ -440,6 +446,8 @@ function registerArchiveListComponent() {
                     const view = params.get('view');
                     const search = params.get('search');
                     const page = Math.max(1, parseInt(params.get('page')) || 1);
+                    const playVideoId = params.get('play');
+                    const playTime = parseInt(params.get('t')) || 0;
 
                     if (view === 'archives') {
                         this.activeTab = 'archives';
@@ -459,6 +467,14 @@ function registerArchiveListComponent() {
                         this.selectedIndex = params.get('index') || '';
                         this.currentTimestampPage = page;
                         this.fetchTimestamps(page, this.searchQuery, this.selectedIndex);
+                    }
+
+                    // シェアリンクからの自動再生
+                    if (playVideoId && isValidVideoId(playVideoId)) {
+                        this.$nextTick(() => {
+                            this.loadAndPlayVideo(playVideoId, playTime);
+                            this.showVideoPlayer = true;
+                        });
                     }
                 },
 
@@ -609,6 +625,15 @@ function registerArchiveListComponent() {
                     if (this.autoPlay && timestamp && timestamp.video_id) {
                         this.loadAndPlayVideo(timestamp.video_id, timestamp.ts_num || 0);
                     }
+
+                    // 次のタイムスタンプがある場合は表示更新用の監視を開始
+                    if (timestamp) {
+                        const endTime = autoReshuffleManager.calculateEndTime(timestamp);
+                        autoReshuffleManager.setEndTime(endTime);
+                        if (endTime !== null) {
+                            autoReshuffleManager.startMonitor();
+                        }
+                    }
                 },
 
                 selectText(text, timestamp = null) {
@@ -648,6 +673,15 @@ function registerArchiveListComponent() {
 
                     if (this.autoPlay && timestamp && timestamp.video_id) {
                         this.loadAndPlayVideo(timestamp.video_id, timestamp.ts_num || 0);
+                    }
+
+                    // 次のタイムスタンプがある場合は表示更新用の監視を開始
+                    if (timestamp) {
+                        const endTime = autoReshuffleManager.calculateEndTime(timestamp);
+                        autoReshuffleManager.setEndTime(endTime);
+                        if (endTime !== null) {
+                            autoReshuffleManager.startMonitor();
+                        }
                     }
                 },
 
@@ -879,7 +913,12 @@ function registerArchiveListComponent() {
                         const excludeVideoId = this.selectedTimestamp?.video_id || null;
                         const timestamp = await ChannelApiService.fetchRandomTimestamp(this.channel.handle, excludeVideoId);
 
+                        if (excludeVideoId && timestamp.video_id === excludeVideoId) {
+                            console.warn('同じアーカイブが再選択されました', { excludeVideoId, selectedVideoId: timestamp.video_id });
+                        }
+
                         logUserAction('playRandomTimestamp', {
+                            excludeVideoId: excludeVideoId,
                             timestampId: timestamp.id,
                             videoId: timestamp.video_id,
                             tsNum: timestamp.ts_num,
@@ -933,6 +972,18 @@ function registerArchiveListComponent() {
 
                         toast.success('ランダムで楽曲を選びました！');
 
+                        // ガチャシェアポップアップを表示
+                        this.gachaShareData = {
+                            songTitle: this.selectedSong.title,
+                            channelTitle: this.channel.title,
+                            channelHandle: this.channel.handle,
+                            publishedAt: timestamp.archive?.published_at,
+                            videoId: timestamp.video_id,
+                            tsNum: timestamp.ts_num,
+                        };
+                        this.showGachaShare = true;
+                        this.startGachaShareTimer();
+
                         // 次のタイムスタンプがある場合は表示更新用の監視を開始
                         if (endTime !== null) {
                             autoReshuffleManager.startMonitor();
@@ -943,6 +994,49 @@ function registerArchiveListComponent() {
                     } finally {
                         this.isPlaybackTransitioning = false;
                     }
+                },
+
+                // --- ガチャシェアポップアップ ---
+                startGachaShareTimer() {
+                    clearTimeout(this.gachaShareTimer);
+                    this.gachaShareTimer = setTimeout(() => {
+                        if (!this.gachaShareHovered) {
+                            this.showGachaShare = false;
+                        }
+                    }, 5500);
+                },
+                pauseGachaShareTimer() {
+                    this.gachaShareHovered = true;
+                    clearTimeout(this.gachaShareTimer);
+                },
+                resumeGachaShareTimer() {
+                    this.gachaShareHovered = false;
+                    this.startGachaShareTimer();
+                },
+                closeGachaShare() {
+                    this.showGachaShare = false;
+                    clearTimeout(this.gachaShareTimer);
+                },
+                getGachaShareUrl() {
+                    const data = this.gachaShareData;
+                    if (!data) return '';
+                    const date = data.publishedAt
+                        ? new Date(data.publishedAt).toLocaleDateString('ja-JP')
+                        : '';
+                    const siteUrl = window.location.origin + '/channels/' + encodeURIComponent(data.channelHandle)
+                        + '?play=' + encodeURIComponent(data.videoId) + '&t=' + (data.tsNum || 0);
+                    const dateText = date ? data.channelTitle + 'が' + date + 'に歌った' : data.channelTitle + 'が歌った';
+                    const text = '🎵 ' + dateText + data.songTitle + '！\n\n歌枠履歴er:D で探す👇';
+                    return 'https://twitter.com/intent/tweet?text=' + encodeURIComponent(text) + '&url=' + encodeURIComponent(siteUrl);
+                },
+                getGachaShareText() {
+                    const data = this.gachaShareData;
+                    if (!data) return '';
+                    const date = data.publishedAt
+                        ? new Date(data.publishedAt).toLocaleDateString('ja-JP')
+                        : '';
+                    const dateText = date ? date + 'に歌った' : '';
+                    return data.channelTitle + 'が' + dateText + data.songTitle + '！';
                 },
 
                 /**

@@ -324,6 +324,10 @@ export class AutoReshuffleManager {
             if (this.needsFadeIn) {
                 this.startFadeIn();
             }
+            // 一時停止から再開した場合、表示更新用の監視を再開
+            if (this.currentSongEndTime !== null && !this.reshuffleMonitorId) {
+                this.startMonitor();
+            }
         }
 
         // バッファリング状態の監視（自動再抽選中のみ）
