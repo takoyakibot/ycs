@@ -778,6 +778,12 @@
     margin-top: 0.125rem;
 }
 
+.channel-playlist-original-text {
+    font-size: 0.7rem;
+    color: #9ca3af;
+    margin-top: 0.125rem;
+}
+
 .channel-playlist-meta {
     display: flex;
     align-items: center;
@@ -1271,6 +1277,7 @@
     .channel-playlist-title { color: #f3f4f6; }
     .channel-playlist-artist { color: #9ca3af; }
     .channel-playlist-auto-tag { color: #fbbf24; }
+    .channel-playlist-original-text { color: #6b7280; }
     .channel-playlist-ts-text { color: #6b7280; }
     .channel-playlist-date { color: #6b7280; }
     .channel-playlist-archive-title { color: #6b7280; }

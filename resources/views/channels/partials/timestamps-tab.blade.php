@@ -182,9 +182,9 @@
                                 <div>
                                     <span class="channel-playlist-title" x-text="ts.mapping.song.title"></span>
                                     <span class="channel-playlist-artist" x-text="' / ' + ts.mapping.song.artist"></span>
-                                    <template x-if="ts.mapping.is_manual === false && ts.text && ts.text !== ts.mapping.song.title">
-                                        <div class="channel-playlist-auto-tag">
-                                            <span class="opacity-75">[自動]</span> <span x-text="ts.text"></span>
+                                    <template x-if="ts.text && ts.text !== ts.mapping.song.title">
+                                        <div class="channel-playlist-original-text">
+                                            <span x-text="ts.text"></span>
                                         </div>
                                     </template>
                                 </div>
