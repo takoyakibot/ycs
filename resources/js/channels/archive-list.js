@@ -471,8 +471,9 @@ function registerArchiveListComponent() {
 
                     // シェアリンクからの自動再生
                     if (playVideoId && isValidVideoId(playVideoId)) {
+                        this.autoPlay = true;
                         this.$nextTick(() => {
-                            this.loadAndPlayVideo(playVideoId, playTime);
+                            this.loadAndPlayVideo(playVideoId, playTime, { muteAutoplay: true });
                             this.showVideoPlayer = true;
                         });
                     }
@@ -814,8 +815,8 @@ function registerArchiveListComponent() {
                 },
 
                 // 動画を読み込んで再生
-                loadAndPlayVideo(videoId, time = 0) {
-                    const result = videoPlayerManager.loadAndPlay(videoId, time);
+                loadAndPlayVideo(videoId, time = 0, options = {}) {
+                    const result = videoPlayerManager.loadAndPlay(videoId, time, options);
                     if (result) {
                         this.currentVideoId = videoId;
                         this.currentVideoTime = time;
