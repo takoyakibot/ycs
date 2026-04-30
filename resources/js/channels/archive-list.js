@@ -625,6 +625,15 @@ function registerArchiveListComponent() {
                     if (this.autoPlay && timestamp && timestamp.video_id) {
                         this.loadAndPlayVideo(timestamp.video_id, timestamp.ts_num || 0);
                     }
+
+                    // 次のタイムスタンプがある場合は表示更新用の監視を開始
+                    if (timestamp) {
+                        const endTime = autoReshuffleManager.calculateEndTime(timestamp);
+                        autoReshuffleManager.setEndTime(endTime);
+                        if (endTime !== null) {
+                            autoReshuffleManager.startMonitor();
+                        }
+                    }
                 },
 
                 selectText(text, timestamp = null) {
@@ -664,6 +673,15 @@ function registerArchiveListComponent() {
 
                     if (this.autoPlay && timestamp && timestamp.video_id) {
                         this.loadAndPlayVideo(timestamp.video_id, timestamp.ts_num || 0);
+                    }
+
+                    // 次のタイムスタンプがある場合は表示更新用の監視を開始
+                    if (timestamp) {
+                        const endTime = autoReshuffleManager.calculateEndTime(timestamp);
+                        autoReshuffleManager.setEndTime(endTime);
+                        if (endTime !== null) {
+                            autoReshuffleManager.startMonitor();
+                        }
                     }
                 },
 
