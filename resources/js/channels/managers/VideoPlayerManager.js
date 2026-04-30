@@ -129,10 +129,6 @@ export class VideoPlayerManager {
                     }
                     // 待機中の動画があれば再生
                     if (this.pendingVideo) {
-                        // ブラウザのAutoplay Policy対策: ミュートで再生開始
-                        if (this.pendingVideo.muteAutoplay && typeof this.player.mute === 'function') {
-                            this.player.mute();
-                        }
                         this.player.loadVideoById({
                             videoId: this.pendingVideo.videoId,
                             startSeconds: this.pendingVideo.time,
@@ -179,7 +175,7 @@ export class VideoPlayerManager {
      * @param {number} time - 開始秒数
      * @returns {boolean} 読み込み成功/失敗
      */
-    loadAndPlay(videoId, time = 0, options = {}) {
+    loadAndPlay(videoId, time = 0) {
         if (!isValidVideoId(videoId)) {
             console.error('Invalid video ID:', videoId);
             return false;
@@ -197,9 +193,6 @@ export class VideoPlayerManager {
         this._setShowVideoPlayer(true);
 
         if (this.player && this.playerInitialized) {
-            if (options.muteAutoplay && typeof this.player.mute === 'function') {
-                this.player.mute();
-            }
             this.player.loadVideoById({
                 videoId: videoId,
                 startSeconds: time,
@@ -209,7 +202,7 @@ export class VideoPlayerManager {
         }
 
         // 初期化が完了していない場合、待機動画として保存
-        this.pendingVideo = { videoId, time, muteAutoplay: !!options.muteAutoplay };
+        this.pendingVideo = { videoId, time };
         return true;
     }
 
