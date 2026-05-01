@@ -44,6 +44,13 @@ let scanInterval = null;
 const SAMPLING_INTERVAL_SEC = 2; // サンプリング間隔（秒）
 const LEGACY_GRAPH_RESOLUTION = 500; // 旧形式との互換用
 
+// タイムスタンプエディタ: マーカー管理
+let tsMarkers = []; // { id, time, text }
+let selectedMarkerId = null;
+let nextMarkerId = 1;
+const MARKER_SNAP_THRESHOLD_SEC = 3; // マーカー選択の判定距離（秒）
+let tsZeroPad = false; // タイムスタンプのゼロ埋め設定
+
 /**
  * 動画の長さに応じたグラフ解像度を計算
  * @param {number} duration - 動画の長さ（秒）
@@ -3651,6 +3658,130 @@ function createVolumeGraph() {
         color: #4caf50;
       }
 
+      /* タイムスタンプエディタ */
+      .vdg-ts-editor {
+        border-top: 1px solid #333;
+        margin-top: 4px;
+      }
+
+      .vdg-ts-editor-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 4px 8px;
+        font-size: 11px;
+        color: #888;
+      }
+
+      .vdg-ts-editor-actions {
+        display: flex;
+        gap: 4px;
+      }
+
+      .vdg-btn-copy {
+        background: #1565c0 !important;
+      }
+
+      .vdg-btn-copy:hover {
+        background: #1976d2 !important;
+      }
+
+      .vdg-btn-clear-markers {
+        background: #555 !important;
+      }
+
+      .vdg-btn-clear-markers:hover {
+        background: #666 !important;
+      }
+
+      .vdg-ts-list {
+        max-height: 200px;
+        overflow-y: auto;
+        padding: 0 4px;
+      }
+
+      .vdg-ts-empty {
+        text-align: center;
+        color: #555;
+        font-size: 11px;
+        padding: 12px 0;
+      }
+
+      .vdg-ts-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 4px;
+        border-radius: 3px;
+        cursor: pointer;
+        transition: background 0.15s;
+      }
+
+      .vdg-ts-row:hover {
+        background: #2a2a2a;
+      }
+
+      .vdg-ts-row.selected {
+        background: #1b3a1b;
+        outline: 1px solid #4caf50;
+      }
+
+      .vdg-ts-time {
+        font-family: monospace;
+        font-size: 12px;
+        color: #4fc3f7;
+        flex-shrink: 0;
+        min-width: 50px;
+      }
+
+      .vdg-ts-text-input {
+        flex: 1;
+        background: transparent;
+        border: none;
+        border-bottom: 1px solid #333;
+        color: #ddd;
+        font-size: 12px;
+        padding: 2px 4px;
+        outline: none;
+        min-width: 0;
+      }
+
+      .vdg-ts-text-input:focus {
+        border-bottom-color: #4fc3f7;
+      }
+
+      .vdg-ts-text-input::placeholder {
+        color: #555;
+      }
+
+      .vdg-ts-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 4px 8px;
+        border-top: 1px solid #2a2a2a;
+      }
+
+      .vdg-ts-help {
+        font-size: 10px;
+        color: #555;
+      }
+
+      .vdg-ts-format-toggle {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 10px;
+        color: #666;
+        cursor: pointer;
+      }
+
+      .vdg-ts-format-toggle input {
+        width: 12px;
+        height: 12px;
+        cursor: pointer;
+      }
+
     </style>
     <div class="vdg-header">
       <span class="vdg-title">音量ダイナミクス</span>
@@ -3675,7 +3806,27 @@ function createVolumeGraph() {
       <span id="vdg-start-time">0:00</span>
       <span id="vdg-end-time">--:--</span>
     </div>
-    <!-- 検出パラメータパネルは削除済み（#549 Step 1） -->
+    <div class="vdg-ts-editor" id="vdg-ts-editor">
+      <div class="vdg-ts-editor-header">
+        <span>タイムスタンプ</span>
+        <div class="vdg-ts-editor-actions">
+          <button class="vdg-btn vdg-btn-copy" id="vdg-ts-copy-btn" title="テキストとしてコピー">コピー</button>
+          <button class="vdg-btn vdg-btn-clear-markers" id="vdg-ts-clear-btn" title="すべてのマーカーを削除">クリア</button>
+        </div>
+      </div>
+      <div class="vdg-ts-list" id="vdg-ts-list">
+        <div class="vdg-ts-empty">波形グラフをクリックしてタイムスタンプを追加</div>
+      </div>
+      <div class="vdg-ts-footer">
+        <div class="vdg-ts-help">
+          クリック: マーカー追加 | Del: 削除 | ←→: 1秒移動(2度押し5秒) | Space: 再生/停止
+        </div>
+        <label class="vdg-ts-format-toggle">
+          <input type="checkbox" id="vdg-ts-zeropad">
+          <span>ゼロ埋め (00:03:45)</span>
+        </label>
+      </div>
+    </div>
   `;
 
   // Canvas設定（コンテナ内から取得）
@@ -3826,8 +3977,23 @@ function setupVolumeGraphEvents() {
       const x = e.clientX - containerRect.left + scrollLeft;
       const totalWidth = containerRect.width * getZoomLevel();
       const ratio = x / totalWidth;
-      const seekTime = ratio * videoDuration;
-      videoElement.currentTime = seekTime;
+      const clickTime = ratio * videoDuration;
+
+      // 既存マーカーの近くをクリックした場合は選択
+      const nearMarker = tsMarkers.find(m => Math.abs(m.time - clickTime) < MARKER_SNAP_THRESHOLD_SEC);
+      if (nearMarker) {
+        selectedMarkerId = nearMarker.id;
+        videoElement.currentTime = nearMarker.time;
+      } else {
+        // 新しいマーカーを追加
+        const marker = { id: nextMarkerId++, time: Math.floor(clickTime), text: '' };
+        tsMarkers.push(marker);
+        tsMarkers.sort((a, b) => a.time - b.time);
+        selectedMarkerId = marker.id;
+        videoElement.currentTime = marker.time;
+        updateTimestampList();
+      }
+      drawVolumeGraph();
     });
 
     // ホバーで時間表示（ズーム対応）
@@ -3921,7 +4087,77 @@ function setupVolumeGraphEvents() {
     resizeCanvas();
   });
 
+  // タイムスタンプエディタ: コピーボタン
+  const tsCopyBtn = volumeGraphContainer.querySelector('#vdg-ts-copy-btn');
+  if (tsCopyBtn) {
+    tsCopyBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      copyTimestamps();
+    });
+  }
 
+  // タイムスタンプエディタ: クリアボタン
+  const tsClearBtn = volumeGraphContainer.querySelector('#vdg-ts-clear-btn');
+  if (tsClearBtn) {
+    tsClearBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      tsMarkers = [];
+      selectedMarkerId = null;
+      updateTimestampList();
+      drawVolumeGraph();
+    });
+  }
+
+  // タイムスタンプエディタ: ゼロ埋め設定
+  const zeroPadCheckbox = volumeGraphContainer.querySelector('#vdg-ts-zeropad');
+  if (zeroPadCheckbox) {
+    // 保存された設定を復元
+    chrome.storage.local.get('tsZeroPad', (result) => {
+      tsZeroPad = result.tsZeroPad === true;
+      zeroPadCheckbox.checked = tsZeroPad;
+    });
+    zeroPadCheckbox.addEventListener('change', () => {
+      tsZeroPad = zeroPadCheckbox.checked;
+      chrome.storage.local.set({ tsZeroPad });
+      updateTimestampList();
+    });
+  }
+
+  // タイムスタンプエディタ: キーボード操作
+  let lastArrowTime = 0;
+  document.addEventListener('keydown', (e) => {
+    // テキスト入力中はスキップ（矢印キーとDel以外）
+    if (e.target.classList.contains('vdg-ts-text-input') && e.key !== 'Delete') return;
+    // グラフが非表示またはマーカー未選択なら何もしない
+    if (!isGraphVisible || selectedMarkerId === null) return;
+
+    const now = Date.now();
+
+    if (e.key === 'Delete') {
+      e.preventDefault();
+      deleteSelectedMarker();
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      e.preventDefault();
+      const direction = e.key === 'ArrowLeft' ? -1 : 1;
+      // 200ms以内の連続押下で5秒移動
+      const delta = (now - lastArrowTime < 200) ? 5 : 1;
+      lastArrowTime = now;
+      moveSelectedMarker(direction * delta);
+    } else if (e.key === ' ') {
+      e.preventDefault();
+      if (videoElement) {
+        if (videoElement.paused) {
+          const marker = tsMarkers.find(m => m.id === selectedMarkerId);
+          if (marker) {
+            videoElement.currentTime = marker.time;
+          }
+          videoElement.play();
+        } else {
+          videoElement.pause();
+        }
+      }
+    }
+  });
 }
 
 /**
@@ -4320,32 +4556,171 @@ function drawVolumeGraph() {
  * タイムスタンプマーカーを描画
  */
 function drawTimestampMarkers(width, height) {
-  if (!volumeCtx || !videoDuration || detectedTimestamps.length === 0) return;
+  if (!volumeCtx || !videoDuration) return;
 
-  volumeCtx.strokeStyle = '#ff5722'; // オレンジ色
-  volumeCtx.lineWidth = 2;
-  volumeCtx.setLineDash([4, 2]); // 破線
+  // 自動検出マーカー（旧機能、破線オレンジ）
+  if (detectedTimestamps.length > 0) {
+    volumeCtx.strokeStyle = '#ff5722';
+    volumeCtx.lineWidth = 1;
+    volumeCtx.setLineDash([4, 2]);
 
-  for (const ts of detectedTimestamps) {
-    const x = (ts.time / videoDuration) * width;
+    for (const ts of detectedTimestamps) {
+      const x = (ts.time / videoDuration) * width;
+      volumeCtx.beginPath();
+      volumeCtx.moveTo(x, 0);
+      volumeCtx.lineTo(x, height);
+      volumeCtx.stroke();
+    }
 
-    // 縦線を描画
+    volumeCtx.setLineDash([]);
+  }
+
+  // 手動マーカー（タイムスタンプエディタ）
+  for (const marker of tsMarkers) {
+    const x = (marker.time / videoDuration) * width;
+    const isSelected = marker.id === selectedMarkerId;
+
+    // 縦線
+    volumeCtx.strokeStyle = isSelected ? '#4caf50' : '#ffd54f';
+    volumeCtx.lineWidth = isSelected ? 2.5 : 1.5;
+    volumeCtx.setLineDash([]);
     volumeCtx.beginPath();
     volumeCtx.moveTo(x, 0);
     volumeCtx.lineTo(x, height);
     volumeCtx.stroke();
 
-    // 三角マーカーを上部に描画
-    volumeCtx.fillStyle = '#ff5722';
+    // 三角マーカー（上部）
+    volumeCtx.fillStyle = isSelected ? '#4caf50' : '#ffd54f';
     volumeCtx.beginPath();
     volumeCtx.moveTo(x, 0);
-    volumeCtx.lineTo(x - 4, 8);
-    volumeCtx.lineTo(x + 4, 8);
+    volumeCtx.lineTo(x - 5, 10);
+    volumeCtx.lineTo(x + 5, 10);
     volumeCtx.closePath();
     volumeCtx.fill();
   }
+}
 
-  volumeCtx.setLineDash([]); // 破線をリセット
+/**
+ * タイムスタンプ一覧UIを更新
+ */
+function updateTimestampList() {
+  const listEl = volumeGraphContainer?.querySelector('#vdg-ts-list');
+  if (!listEl) return;
+
+  if (tsMarkers.length === 0) {
+    listEl.innerHTML = '<div class="vdg-ts-empty">波形グラフをクリックしてタイムスタンプを追加</div>';
+    return;
+  }
+
+  listEl.innerHTML = tsMarkers.map(marker => `
+    <div class="vdg-ts-row ${marker.id === selectedMarkerId ? 'selected' : ''}" data-marker-id="${marker.id}">
+      <span class="vdg-ts-time">${formatTimestamp(marker.time)}</span>
+      <input type="text" class="vdg-ts-text-input" value="${marker.text}" placeholder="曲名を入力..." data-marker-id="${marker.id}">
+    </div>
+  `).join('');
+
+  // イベントリスナー
+  listEl.querySelectorAll('.vdg-ts-row').forEach(row => {
+    row.addEventListener('click', (e) => {
+      if (e.target.classList.contains('vdg-ts-text-input')) return;
+      const id = parseInt(row.dataset.markerId);
+      selectedMarkerId = id;
+      const marker = tsMarkers.find(m => m.id === id);
+      if (marker && videoElement) {
+        videoElement.currentTime = marker.time;
+      }
+      updateTimestampList();
+      drawVolumeGraph();
+    });
+  });
+
+  listEl.querySelectorAll('.vdg-ts-text-input').forEach(input => {
+    input.addEventListener('input', (e) => {
+      const id = parseInt(input.dataset.markerId);
+      const marker = tsMarkers.find(m => m.id === id);
+      if (marker) {
+        marker.text = e.target.value;
+      }
+    });
+    input.addEventListener('focus', () => {
+      const id = parseInt(input.dataset.markerId);
+      selectedMarkerId = id;
+      updateTimestampList();
+      drawVolumeGraph();
+    });
+  });
+}
+
+/**
+ * マーカーを削除
+ */
+function deleteSelectedMarker() {
+  if (selectedMarkerId === null) return;
+  tsMarkers = tsMarkers.filter(m => m.id !== selectedMarkerId);
+  selectedMarkerId = tsMarkers.length > 0 ? tsMarkers[tsMarkers.length - 1].id : null;
+  updateTimestampList();
+  drawVolumeGraph();
+}
+
+/**
+ * 選択中のマーカーを移動
+ * @param {number} deltaSec - 移動量（秒）
+ */
+function moveSelectedMarker(deltaSec) {
+  if (selectedMarkerId === null) return;
+  const marker = tsMarkers.find(m => m.id === selectedMarkerId);
+  if (!marker || !videoElement) return;
+
+  marker.time = Math.max(0, Math.min(videoDuration, marker.time + deltaSec));
+  tsMarkers.sort((a, b) => a.time - b.time);
+  videoElement.currentTime = marker.time;
+  updateTimestampList();
+  drawVolumeGraph();
+}
+
+/**
+ * タイムスタンプをフォーマット（ゼロ埋め設定考慮）
+ * @param {number} seconds - 秒数
+ * @returns {string} フォーマットされた時刻文字列
+ */
+function formatTimestamp(seconds) {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+
+  const needsHour = videoDuration >= 3600;
+
+  if (tsZeroPad) {
+    if (needsHour) {
+      return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    }
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  } else {
+    if (needsHour) {
+      return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    }
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  }
+}
+
+/**
+ * タイムスタンプをテキストとしてコピー
+ */
+function copyTimestamps() {
+  if (tsMarkers.length === 0) return;
+
+  const text = tsMarkers
+    .map(m => `${formatTimestamp(m.time)} ${m.text}`)
+    .join('\n');
+
+  navigator.clipboard.writeText(text).then(() => {
+    const copyBtn = volumeGraphContainer?.querySelector('#vdg-ts-copy-btn');
+    if (copyBtn) {
+      const original = copyBtn.textContent;
+      copyBtn.textContent = 'コピー済み';
+      setTimeout(() => { copyBtn.textContent = original; }, 1500);
+    }
+  });
 }
 
 /**
