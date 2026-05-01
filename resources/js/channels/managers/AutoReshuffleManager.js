@@ -117,6 +117,7 @@ export class AutoReshuffleManager {
      * @param {number|null} endTime
      */
     setEndTime(endTime) {
+        console.debug('[Monitor] setEndTime:', endTime);
         this.currentSongEndTime = endTime;
     }
 
@@ -135,7 +136,11 @@ export class AutoReshuffleManager {
         // 既存の監視を停止
         this.stopMonitor();
 
-        if (!videoPlayerManager.isInitialized() || this.currentSongEndTime === null) return;
+        if (!videoPlayerManager.isInitialized() || this.currentSongEndTime === null) {
+            console.debug('[Monitor] startMonitor aborted: initialized=%s, endTime=%s',
+                videoPlayerManager.isInitialized(), this.currentSongEndTime);
+            return;
+        }
 
         const CHECK_INTERVAL = 500; // チェック間隔（ミリ秒）
         const MAX_STALL_COUNT = 6; // 3秒間（500ms × 6回）進まなければスタックと判定
@@ -143,6 +148,9 @@ export class AutoReshuffleManager {
         // スタック検知用の初期化
         this.lastPlaybackTime = videoPlayerManager.getCurrentTime();
         this.stallCount = 0;
+
+        console.debug('[Monitor] startMonitor: currentTime=%s, endTime=%s',
+            this.lastPlaybackTime, this.currentSongEndTime);
 
         this.reshuffleMonitorId = setInterval(() => {
             if (!videoPlayerManager.isInitialized()) {
@@ -175,6 +183,8 @@ export class AutoReshuffleManager {
             // 次のタイムスタンプに到達（表示更新のみ、動画は継続再生）
             // フェードアウトは行わない
             if (currentTime >= this.currentSongEndTime) {
+                console.debug('[Monitor] nextTimestampReached: currentTime=%s, endTime=%s',
+                    currentTime, this.currentSongEndTime);
                 this.stopMonitor();
                 if (this.onNextTimestampReached) {
                     this.onNextTimestampReached();
@@ -188,6 +198,7 @@ export class AutoReshuffleManager {
      */
     stopMonitor() {
         if (this.reshuffleMonitorId) {
+            console.debug('[Monitor] stopMonitor: clearing interval');
             clearInterval(this.reshuffleMonitorId);
             this.reshuffleMonitorId = null;
         }
@@ -313,6 +324,10 @@ export class AutoReshuffleManager {
      * @param {Object} event - YouTube Player State Change Event
      */
     handlePlayerStateChange(event) {
+        const stateNames = { [-1]: 'UNSTARTED', 0: 'ENDED', 1: 'PLAYING', 2: 'PAUSED', 3: 'BUFFERING', 5: 'CUED' };
+        console.debug('[Monitor] playerStateChange: %s (%d), endTime=%s, monitorActive=%s',
+            stateNames[event.data] || 'UNKNOWN', event.data, this.currentSongEndTime, !!this.reshuffleMonitorId);
+
         // 再生開始時の処理
         if (event.data === YT.PlayerState.PLAYING) {
             // バッファリングタイムアウトをクリア
