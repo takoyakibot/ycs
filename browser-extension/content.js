@@ -28,11 +28,6 @@ const LIST_SCAN_AUTO_CLICK_DELAY = 3000; // 3秒後に自動クリック
 // 検出されたタイムスタンプ候補
 let detectedTimestamps = [];
 
-// 文字起こし機能用
-let speechRecognition = null;
-let isTranscribing = false;
-let currentTranscriptIndex = 0;
-const TRANSCRIPT_DURATION = 4; // 各タイムスタンプで再生する秒数
 
 // 直接音声解析用（tabCaptureを使わない方式）
 let audioContext = null;
@@ -50,6 +45,7 @@ let selectedMarkerId = null;
 let nextMarkerId = 1;
 const MARKER_SNAP_THRESHOLD_SEC = 3; // マーカー選択の判定距離（秒）
 let tsZeroPad = false; // タイムスタンプのゼロ埋め設定
+let tsEditorMode = 'marker'; // 'marker': マーカー追加, 'seek': シーク
 
 /**
  * 動画の長さに応じたグラフ解像度を計算
@@ -3001,10 +2997,6 @@ function hideWatchPageUI() {
     chrome.runtime.sendMessage({ type: 'STOP_SCAN' });
   }
 
-  // 文字起こし中なら停止
-  if (isTranscribing) {
-    stopTranscription();
-  }
 }
 
 // 初期化
@@ -3673,6 +3665,33 @@ function createVolumeGraph() {
         color: #888;
       }
 
+      .vdg-ts-mode-toggle {
+        display: flex;
+        border-radius: 4px;
+        overflow: hidden;
+        border: 1px solid #444;
+      }
+
+      .vdg-mode-btn {
+        padding: 2px 8px;
+        font-size: 10px;
+        background: #222;
+        color: #888;
+        border: none;
+        cursor: pointer;
+        transition: all 0.15s;
+      }
+
+      .vdg-mode-btn:hover {
+        background: #333;
+        color: #ccc;
+      }
+
+      .vdg-mode-btn.active {
+        background: #1565c0;
+        color: #fff;
+      }
+
       .vdg-ts-editor-actions {
         display: flex;
         gap: 4px;
@@ -3791,7 +3810,6 @@ function createVolumeGraph() {
         <span class="vdg-zoom-info" id="vdg-zoom-info">1x</span>
         <button class="vdg-volume-mode" id="vdg-volume-mode-btn" title="固定スケールでの絶対値表示中（クリックで相対表示に切替）">絶対</button>
         <button class="vdg-btn" id="vdg-scan-btn" title="動画全体をスキャンしてグラフを生成">スキャン</button>
-        <button class="vdg-btn" id="vdg-transcribe-btn" title="検出された候補を順番に文字起こし">文字起こし</button>
         <button class="vdg-btn" id="vdg-auto-scan-btn" title="再生リスト内の動画を順番にスキャン">自動</button>
       </div>
     </div>
@@ -3808,7 +3826,10 @@ function createVolumeGraph() {
     </div>
     <div class="vdg-ts-editor" id="vdg-ts-editor">
       <div class="vdg-ts-editor-header">
-        <span>タイムスタンプ</span>
+        <div class="vdg-ts-mode-toggle">
+          <button class="vdg-mode-btn active" id="vdg-mode-marker" title="クリックでマーカーを追加">+ マーカー</button>
+          <button class="vdg-mode-btn" id="vdg-mode-seek" title="クリックで再生位置を移動">シーク</button>
+        </div>
         <div class="vdg-ts-editor-actions">
           <button class="vdg-btn vdg-btn-copy" id="vdg-ts-copy-btn" title="テキストとしてコピー">コピー</button>
           <button class="vdg-btn vdg-btn-clear-markers" id="vdg-ts-clear-btn" title="すべてのマーカーを削除">クリア</button>
@@ -3819,7 +3840,7 @@ function createVolumeGraph() {
       </div>
       <div class="vdg-ts-footer">
         <div class="vdg-ts-help">
-          クリック: マーカー追加 | Del: 削除 | ←→: 1秒移動(2度押し5秒) | Space: 再生/停止
+          クリック: マーカー追加 | Del: 削除 | ←→: 1秒移動(2度押し5秒) | ↑↓: マーカー移動 | Space: 再生/停止
         </div>
         <label class="vdg-ts-format-toggle">
           <input type="checkbox" id="vdg-ts-zeropad">
@@ -3950,15 +3971,13 @@ function setupVolumeGraphEvents() {
   const hoverTime = volumeGraphContainer.querySelector('#vdg-hover-time');
   const scanBtn = volumeGraphContainer.querySelector('#vdg-scan-btn');
   const autoScanBtn = volumeGraphContainer.querySelector('#vdg-auto-scan-btn');
-  const transcribeBtn = volumeGraphContainer.querySelector('#vdg-transcribe-btn');
   const playlistInfo = volumeGraphContainer.querySelector('#vdg-playlist-info');
 
   console.log('setupVolumeGraphEvents: ', {
     container: !!container,
     hoverTime: !!hoverTime,
     scanBtn: !!scanBtn,
-    autoScanBtn: !!autoScanBtn,
-    transcribeBtn: !!transcribeBtn
+    autoScanBtn: !!autoScanBtn
   });
 
   // 再生リスト情報を更新
@@ -3979,19 +3998,24 @@ function setupVolumeGraphEvents() {
       const ratio = x / totalWidth;
       const clickTime = ratio * videoDuration;
 
-      // 既存マーカーの近くをクリックした場合は選択
-      const nearMarker = tsMarkers.find(m => Math.abs(m.time - clickTime) < MARKER_SNAP_THRESHOLD_SEC);
-      if (nearMarker) {
-        selectedMarkerId = nearMarker.id;
-        videoElement.currentTime = nearMarker.time;
+      if (tsEditorMode === 'seek') {
+        // シークモード: 再生位置を移動するだけ
+        videoElement.currentTime = clickTime;
       } else {
-        // 新しいマーカーを追加
-        const marker = { id: nextMarkerId++, time: Math.floor(clickTime), text: '' };
-        tsMarkers.push(marker);
-        tsMarkers.sort((a, b) => a.time - b.time);
-        selectedMarkerId = marker.id;
-        videoElement.currentTime = marker.time;
-        updateTimestampList();
+        // マーカーモード: 既存マーカーの近くは選択、それ以外は追加
+        const nearMarker = tsMarkers.find(m => Math.abs(m.time - clickTime) < MARKER_SNAP_THRESHOLD_SEC);
+        if (nearMarker) {
+          selectedMarkerId = nearMarker.id;
+          videoElement.currentTime = nearMarker.time;
+        } else {
+          const marker = { id: nextMarkerId++, time: Math.floor(clickTime), text: '' };
+          tsMarkers.push(marker);
+          tsMarkers.sort((a, b) => a.time - b.time);
+          selectedMarkerId = marker.id;
+          videoElement.currentTime = marker.time;
+          updateTimestampList();
+          saveMarkersToStorage();
+        }
       }
       drawVolumeGraph();
     });
@@ -4058,17 +4082,7 @@ function setupVolumeGraphEvents() {
     });
   }
 
-  // 文字起こしボタン
-  if (transcribeBtn) {
-    transcribeBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (isTranscribing) {
-        stopTranscription();
-      } else {
-        startTranscription();
-      }
-    });
-  }
+
 
   // 自動スキャンボタン（再生リスト用）
   if (autoScanBtn) {
@@ -4107,8 +4121,32 @@ function setupVolumeGraphEvents() {
       selectedMarkerId = null;
       updateTimestampList();
       drawVolumeGraph();
+      saveMarkersToStorage();
     });
   }
+
+  // タイムスタンプエディタ: モード切替
+  const modeMarkerBtn = volumeGraphContainer.querySelector('#vdg-mode-marker');
+  const modeSeekBtn = volumeGraphContainer.querySelector('#vdg-mode-seek');
+  if (modeMarkerBtn && modeSeekBtn) {
+    const updateModeUI = () => {
+      modeMarkerBtn.classList.toggle('active', tsEditorMode === 'marker');
+      modeSeekBtn.classList.toggle('active', tsEditorMode === 'seek');
+    };
+    modeMarkerBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      tsEditorMode = 'marker';
+      updateModeUI();
+    });
+    modeSeekBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      tsEditorMode = 'seek';
+      updateModeUI();
+    });
+  }
+
+  // タイムスタンプエディタ: 保存済みマーカーを復元
+  loadMarkersFromStorage();
 
   // タイムスタンプエディタ: ゼロ埋め設定
   const zeroPadCheckbox = volumeGraphContainer.querySelector('#vdg-ts-zeropad');
@@ -4128,16 +4166,33 @@ function setupVolumeGraphEvents() {
   // タイムスタンプエディタ: キーボード操作
   let lastArrowTime = 0;
   document.addEventListener('keydown', (e) => {
-    // テキスト入力中はスキップ（矢印キーとDel以外）
-    if (e.target.classList.contains('vdg-ts-text-input') && e.key !== 'Delete') return;
+    const isTextInput = e.target.classList.contains('vdg-ts-text-input');
+    // テキスト入力中は基本的にスキップ（入力を妨げない）
+    if (isTextInput && !['Delete', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
     // グラフが非表示またはマーカー未選択なら何もしない
     if (!isGraphVisible || selectedMarkerId === null) return;
 
     const now = Date.now();
 
-    if (e.key === 'Delete') {
+    if (e.key === 'Delete' && !isTextInput) {
       e.preventDefault();
       deleteSelectedMarker();
+    } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      // 上下キーで前後のマーカーに移動
+      const currentIndex = tsMarkers.findIndex(m => m.id === selectedMarkerId);
+      if (currentIndex < 0) return;
+      const nextIndex = e.key === 'ArrowUp'
+        ? Math.max(0, currentIndex - 1)
+        : Math.min(tsMarkers.length - 1, currentIndex + 1);
+      if (nextIndex !== currentIndex) {
+        selectedMarkerId = tsMarkers[nextIndex].id;
+        if (videoElement) {
+          videoElement.currentTime = tsMarkers[nextIndex].time;
+        }
+        updateTimestampList();
+        drawVolumeGraph();
+      }
     } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
       e.preventDefault();
       const direction = e.key === 'ArrowLeft' ? -1 : 1;
@@ -4147,6 +4202,7 @@ function setupVolumeGraphEvents() {
       moveSelectedMarker(direction * delta);
     } else if (e.key === ' ') {
       e.preventDefault();
+      e.stopPropagation();
       if (videoElement) {
         if (videoElement.paused) {
           const marker = tsMarkers.find(m => m.id === selectedMarkerId);
@@ -4642,6 +4698,7 @@ function updateTimestampList() {
       const marker = tsMarkers.find(m => m.id === id);
       if (marker) {
         marker.text = e.target.value;
+        saveMarkersToStorage();
       }
     });
     input.addEventListener('focus', () => {
@@ -4662,6 +4719,7 @@ function deleteSelectedMarker() {
   selectedMarkerId = tsMarkers.length > 0 ? tsMarkers[tsMarkers.length - 1].id : null;
   updateTimestampList();
   drawVolumeGraph();
+  saveMarkersToStorage();
 }
 
 /**
@@ -4678,6 +4736,7 @@ function moveSelectedMarker(deltaSec) {
   videoElement.currentTime = marker.time;
   updateTimestampList();
   drawVolumeGraph();
+  saveMarkersToStorage();
 }
 
 /**
@@ -4726,277 +4785,32 @@ function copyTimestamps() {
 }
 
 /**
- * Web Speech APIを初期化
+ * マーカーをストレージに保存
  */
-function initSpeechRecognition() {
-  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-    console.error('このブラウザはWeb Speech APIに対応していません');
-    return null;
-  }
-
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const recognition = new SpeechRecognition();
-
-  recognition.lang = 'ja-JP';
-  recognition.interimResults = true;
-  recognition.continuous = true;
-  recognition.maxAlternatives = 1;
-
-  return recognition;
+function saveMarkersToStorage() {
+  const videoId = getVideoId();
+  if (!videoId) return;
+  const key = `tsMarkers_${videoId}`;
+  chrome.storage.local.set({ [key]: { markers: tsMarkers, nextId: nextMarkerId } });
 }
 
 /**
- * 文字起こしを開始
+ * マーカーをストレージから復元
  */
-function startTranscription() {
-  if (detectedTimestamps.length === 0) {
-    console.log('文字起こし: 検出されたタイムスタンプがありません');
-    alert('先にスキャンを実行してタイムスタンプ候補を検出してください');
-    return;
-  }
-
-  if (!videoElement) {
-    console.error('文字起こし: Video要素が見つかりません');
-    return;
-  }
-
-  // Speech Recognition初期化
-  speechRecognition = initSpeechRecognition();
-  if (!speechRecognition) {
-    alert('このブラウザはWeb Speech APIに対応していません');
-    return;
-  }
-
-  isTranscribing = true;
-  currentTranscriptIndex = 0;
-
-  // UIを更新
-  updateTranscribeButtonUI(true);
-
-  console.log(`文字起こし開始: ${detectedTimestamps.length}件の候補`);
-
-  // 最初のタイムスタンプから開始
-  transcribeNextTimestamp();
-}
-
-/**
- * 文字起こしを停止
- */
-function stopTranscription() {
-  isTranscribing = false;
-
-  if (speechRecognition) {
-    speechRecognition.stop();
-    speechRecognition = null;
-  }
-
-  if (videoElement) {
-    videoElement.pause();
-  }
-
-  updateTranscribeButtonUI(false);
-
-  // ハイライトを解除
-  clearTranscribingHighlight();
-
-  // 進捗表示をリセット
-  getScanStatus().then(status => {
-    updateProgress(status.progress);
-  });
-
-  console.log('文字起こし停止');
-}
-
-/**
- * 次のタイムスタンプを文字起こし
- */
-function transcribeNextTimestamp() {
-  if (!isTranscribing || currentTranscriptIndex >= detectedTimestamps.length) {
-    // 完了
-    stopTranscription();
-    console.log('文字起こし完了');
-    return;
-  }
-
-  const timestamp = detectedTimestamps[currentTranscriptIndex];
-  console.log(`文字起こし中: ${currentTranscriptIndex + 1}/${detectedTimestamps.length} - ${timestamp.formattedTime}`);
-
-  // 進捗を表示
-  updateTranscribeProgress(currentTranscriptIndex + 1, detectedTimestamps.length);
-
-  // 現在処理中のアイテムをハイライト
-  highlightTranscribingItem(currentTranscriptIndex);
-
-  // 動画をシーク
-  videoElement.currentTime = timestamp.time;
-  videoElement.muted = false; // 音声ON（文字起こしに必要）
-
-  // 少し待ってから再生開始（シーク完了を待つ）
-  setTimeout(() => {
-    if (!isTranscribing) return;
-
-    videoElement.play();
-
-    // 音声認識開始
-    let transcriptText = '';
-    let recognitionEnded = false;
-
-    speechRecognition.onresult = (event) => {
-      let interim = '';
-      let final = '';
-
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          final += transcript;
-        } else {
-          interim += transcript;
-        }
-      }
-
-      transcriptText = final || interim;
-      // リアルタイムで表示を更新
-      updateTimestampTranscript(currentTranscriptIndex, transcriptText, !event.results[event.results.length - 1].isFinal);
-    };
-
-    speechRecognition.onerror = (event) => {
-      console.error('音声認識エラー:', event.error);
-      if (event.error !== 'no-speech') {
-        // no-speech以外のエラーは記録
-        updateTimestampTranscript(currentTranscriptIndex, `(認識エラー: ${event.error})`, false);
-      }
-    };
-
-    speechRecognition.onend = () => {
-      if (recognitionEnded) return;
-      recognitionEnded = true;
-
-      // 認識結果がなかった場合
-      if (!transcriptText) {
-        updateTimestampTranscript(currentTranscriptIndex, '(音声なし)', false);
-      }
-    };
-
-    try {
-      speechRecognition.start();
-    } catch (e) {
-      console.error('音声認識開始エラー:', e);
+function loadMarkersFromStorage() {
+  const videoId = getVideoId();
+  if (!videoId) return;
+  const key = `tsMarkers_${videoId}`;
+  chrome.storage.local.get(key, (result) => {
+    const saved = result[key];
+    if (saved && saved.markers) {
+      tsMarkers = saved.markers;
+      nextMarkerId = saved.nextId || tsMarkers.length + 1;
+      selectedMarkerId = null;
+      updateTimestampList();
+      drawVolumeGraph();
     }
-
-    // 指定秒数後に停止して次へ
-    setTimeout(() => {
-      if (!isTranscribing) return;
-
-      recognitionEnded = true;
-      speechRecognition.stop();
-      videoElement.pause();
-
-      // 最終結果を保存
-      if (transcriptText) {
-        detectedTimestamps[currentTranscriptIndex].transcript = transcriptText;
-      } else {
-        detectedTimestamps[currentTranscriptIndex].transcript = '(音声なし)';
-      }
-
-      // データを保存
-      saveVolumeData();
-
-      // 次のタイムスタンプへ
-      currentTranscriptIndex++;
-
-      // 少し待ってから次へ
-      setTimeout(() => {
-        // 新しいrecognitionインスタンスを作成
-        speechRecognition = initSpeechRecognition();
-        transcribeNextTimestamp();
-      }, 500);
-    }, TRANSCRIPT_DURATION * 1000);
-  }, 500);
-}
-
-/**
- * タイムスタンプの文字起こし結果を更新
- */
-function updateTimestampTranscript(index, text, isInterim) {
-  const timestamp = detectedTimestamps[index];
-  if (!timestamp) return;
-
-  // オーバーレイのリストアイテムを更新
-  const list = document.getElementById('tsd-timestamp-list');
-  if (!list) return;
-
-  const items = list.querySelectorAll('.tsd-timestamp-item');
-  const item = items[index];
-  if (!item) return;
-
-  // 既存のラベルを更新
-  let label = item.querySelector('.tsd-label');
-  if (label) {
-    label.textContent = text;
-    label.style.color = isInterim ? '#888' : '#fff';
-  }
-
-  // グラフも再描画
-  drawVolumeGraph();
-}
-
-/**
- * 文字起こしボタンのUIを更新
- */
-function updateTranscribeButtonUI(transcribing) {
-  if (!volumeGraphContainer) return;
-  const transcribeBtn = volumeGraphContainer.querySelector('#vdg-transcribe-btn');
-  if (!transcribeBtn) return;
-
-  if (transcribing) {
-    transcribeBtn.classList.add('scanning');
-    transcribeBtn.textContent = '停止';
-    transcribeBtn.style.background = '#c62828';
-  } else {
-    transcribeBtn.classList.remove('scanning');
-    transcribeBtn.textContent = '文字起こし';
-    transcribeBtn.style.background = '#333';
-  }
-}
-
-/**
- * 文字起こし進捗を更新
- */
-function updateTranscribeProgress(current, total) {
-  if (!volumeGraphContainer) return;
-  const progress = volumeGraphContainer.querySelector('#vdg-progress');
-  if (progress) {
-    progress.textContent = `文字起こし ${current}/${total}`;
-  }
-}
-
-/**
- * 現在文字起こし中のアイテムをハイライト
- */
-function highlightTranscribingItem(index) {
-  const list = document.getElementById('tsd-timestamp-list');
-  if (!list) return;
-
-  // 全てのハイライトを解除
-  const items = list.querySelectorAll('.tsd-timestamp-item');
-  items.forEach(item => item.classList.remove('transcribing'));
-
-  // 現在のアイテムをハイライト
-  if (items[index]) {
-    items[index].classList.add('transcribing');
-    // スクロールして見えるようにする
-    items[index].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }
-}
-
-/**
- * 全てのハイライトを解除
- */
-function clearTranscribingHighlight() {
-  const list = document.getElementById('tsd-timestamp-list');
-  if (!list) return;
-  const items = list.querySelectorAll('.tsd-timestamp-item');
-  items.forEach(item => item.classList.remove('transcribing'));
+  });
 }
 
 /**
@@ -5081,10 +4895,6 @@ function observePageChanges() {
       currentSubtitles = [];
       currentCaptionTracks = [];
       pageBridgeReady = null;
-      if (isTranscribing) {
-        stopTranscription();
-      }
-      currentTranscriptIndex = 0;
       if (mediaElementSource) {
         mediaElementSource.disconnect();
         mediaElementSource = null;
@@ -5105,12 +4915,6 @@ function observePageChanges() {
       currentSubtitles = []; // 字幕データをクリア
       currentCaptionTracks = [];
       pageBridgeReady = null;
-
-      // 文字起こし状態をリセット
-      if (isTranscribing) {
-        stopTranscription();
-      }
-      currentTranscriptIndex = 0;
 
       // 音声解析の状態をリセット（新しいVideo要素用）
       if (mediaElementSource) {
