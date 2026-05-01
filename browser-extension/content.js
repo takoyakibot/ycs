@@ -2528,21 +2528,73 @@ function getVideoId() {
 }
 
 /**
+ * ストレージの容量を確認し、上限に近い場合は古いデータを削除
+ * @returns {Promise<void>}
+ */
+async function ensureStorageCapacity() {
+  const STORAGE_LIMIT = 10 * 1024 * 1024; // 10MB
+  const THRESHOLD = 0.8; // 80%で削除開始
+
+  return new Promise((resolve) => {
+    chrome.storage.local.getBytesInUse(null, (bytesInUse) => {
+      if (bytesInUse < STORAGE_LIMIT * THRESHOLD) {
+        resolve();
+        return;
+      }
+
+      console.warn(`ストレージ使用量が上限の${Math.round(bytesInUse / STORAGE_LIMIT * 100)}%に達しています。古いデータを削除します。`);
+
+      chrome.storage.local.get(null, (allData) => {
+        const volumeEntries = [];
+        for (const key in allData) {
+          if (key.startsWith('volumeData_') && allData[key]?.savedAt) {
+            volumeEntries.push({ key, savedAt: allData[key].savedAt });
+          }
+        }
+
+        // 古い順にソート
+        volumeEntries.sort((a, b) => a.savedAt - b.savedAt);
+
+        // 古いものから1/4を削除
+        const deleteCount = Math.max(1, Math.floor(volumeEntries.length / 4));
+        const keysToDelete = volumeEntries.slice(0, deleteCount).map(e => e.key);
+
+        if (keysToDelete.length > 0) {
+          chrome.storage.local.remove(keysToDelete, () => {
+            console.log(`ストレージ容量確保のため${keysToDelete.length}件の古い波形データを削除しました`);
+            resolve();
+          });
+        } else {
+          resolve();
+        }
+      });
+    });
+  });
+}
+
+/**
  * 音量データをストレージに保存
  */
-function saveVolumeData() {
+async function saveVolumeData() {
   const videoId = getVideoId();
   if (!videoId || volumeData.length === 0) return;
+
+  // 容量チェック・古いデータの自動削除
+  await ensureStorageCapacity();
 
   const storageKey = `volumeData_${videoId}`;
   const dataToSave = {
     data: volumeData,
     duration: videoDuration,
-    timestamps: detectedTimestamps, // タイムスタンプも保存
+    timestamps: detectedTimestamps,
     savedAt: Date.now()
   };
 
   chrome.storage.local.set({ [storageKey]: dataToSave }, () => {
+    if (chrome.runtime.lastError) {
+      console.error(`音量データの保存に失敗しました: ${chrome.runtime.lastError.message}`);
+      return;
+    }
     console.log(`音量データを保存しました: ${videoId} (${volumeData.length}サンプル, ${detectedTimestamps.length}候補)`);
   });
 }

@@ -295,6 +295,15 @@ async function getScannedVideosList() {
 async function loadScannedList() {
   const videos = await getScannedVideosList();
 
+  // ストレージ使用量を表示
+  chrome.storage.local.getBytesInUse(null, (bytes) => {
+    const usageEl = document.getElementById('storage-usage');
+    if (usageEl) {
+      const mb = (bytes / 1024 / 1024).toFixed(1);
+      usageEl.textContent = `(${mb} MB / 10 MB)`;
+    }
+  });
+
   if (videos.length === 0) {
     elements.scannedList.innerHTML = '<div class="empty-message">スキャン済みの動画はありません</div>';
     elements.clearAllBtn.style.display = 'none';
