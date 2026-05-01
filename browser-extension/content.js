@@ -4101,6 +4101,8 @@ function setupVolumeGraphEvents() {
   if (tsClearBtn) {
     tsClearBtn.addEventListener('click', (e) => {
       e.stopPropagation();
+      if (tsMarkers.length === 0) return;
+      if (!confirm(`${tsMarkers.length}件のマーカーをすべて削除しますか？`)) return;
       tsMarkers = [];
       selectedMarkerId = null;
       updateTimestampList();
