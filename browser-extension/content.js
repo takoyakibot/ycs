@@ -3636,81 +3636,6 @@ function createVolumeGraph() {
         color: #4caf50;
       }
 
-      .vdg-params-panel {
-        border-top: 1px solid #333;
-        margin-top: 4px;
-      }
-
-      .vdg-params-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 4px 8px;
-        cursor: pointer;
-        font-size: 11px;
-        color: #888;
-      }
-
-      .vdg-params-header:hover {
-        color: #fff;
-      }
-
-      .vdg-params-header.expanded span:first-child::before {
-        content: '▼ ';
-      }
-
-      .vdg-params-header span:first-child::before {
-        content: '▶ ';
-      }
-
-      .vdg-params-header span:first-child {
-        margin-left: -12px;
-        padding-left: 12px;
-      }
-
-      .vdg-btn-small {
-        padding: 2px 8px !important;
-        font-size: 10px !important;
-      }
-
-      .vdg-params-content {
-        padding: 8px;
-        background: #1a1a1a;
-      }
-
-      .vdg-param-row {
-        display: flex;
-        flex-direction: column;
-        margin-bottom: 8px;
-      }
-
-      .vdg-param-row:last-child {
-        margin-bottom: 0;
-      }
-
-      .vdg-param-row label {
-        font-size: 10px;
-        color: #aaa;
-        margin-bottom: 2px;
-      }
-
-      .vdg-param-row input[type="range"] {
-        width: 100%;
-        height: 4px;
-        -webkit-appearance: none;
-        background: #333;
-        border-radius: 2px;
-        outline: none;
-      }
-
-      .vdg-param-row input[type="range"]::-webkit-slider-thumb {
-        -webkit-appearance: none;
-        width: 12px;
-        height: 12px;
-        background: #4fc3f7;
-        border-radius: 50%;
-        cursor: pointer;
-      }
     </style>
     <div class="vdg-header">
       <span class="vdg-title">音量ダイナミクス</span>
@@ -3735,30 +3660,7 @@ function createVolumeGraph() {
       <span id="vdg-start-time">0:00</span>
       <span id="vdg-end-time">--:--</span>
     </div>
-    <div class="vdg-params-panel" id="vdg-params-panel">
-      <div class="vdg-params-header" id="vdg-params-toggle">
-        <span>検出パラメータ</span>
-        <button class="vdg-btn vdg-btn-small" id="vdg-redetect-btn" title="現在のパラメータでタイムスタンプを再検出">再検出</button>
-      </div>
-      <div class="vdg-params-content" id="vdg-params-content" style="display: none;">
-        <div class="vdg-param-row">
-          <label>音量しきい値: <span id="vdg-volume-threshold-val">0.15</span></label>
-          <input type="range" id="vdg-volume-threshold" min="0.05" max="0.5" step="0.01" value="0.15">
-        </div>
-        <div class="vdg-param-row">
-          <label>静音しきい値: <span id="vdg-quiet-threshold-val">0.05</span></label>
-          <input type="range" id="vdg-quiet-threshold" min="0.01" max="0.2" step="0.01" value="0.05">
-        </div>
-        <div class="vdg-param-row">
-          <label>静音最小時間(秒): <span id="vdg-quiet-duration-val">1.0</span></label>
-          <input type="range" id="vdg-quiet-duration" min="0.5" max="5.0" step="0.1" value="1.0">
-        </div>
-        <div class="vdg-param-row">
-          <label>クールダウン(秒): <span id="vdg-cooldown-val">3.0</span></label>
-          <input type="range" id="vdg-cooldown" min="1.0" max="10.0" step="0.5" value="3.0">
-        </div>
-      </div>
-    </div>
+    <!-- 検出パラメータパネルは削除済み（#549 Step 1） -->
   `;
 
   // Canvas設定（コンテナ内から取得）
@@ -4004,63 +3906,7 @@ function setupVolumeGraphEvents() {
     resizeCanvas();
   });
 
-  // パラメータパネルのトグル
-  const paramsToggle = volumeGraphContainer.querySelector('#vdg-params-toggle');
-  const paramsContent = volumeGraphContainer.querySelector('#vdg-params-content');
-  const redetectBtn = volumeGraphContainer.querySelector('#vdg-redetect-btn');
 
-  if (paramsToggle && paramsContent) {
-    paramsToggle.addEventListener('click', (e) => {
-      // 再検出ボタンのクリックは除外
-      if (e.target.id === 'vdg-redetect-btn') return;
-
-      const isExpanded = paramsContent.style.display !== 'none';
-      paramsContent.style.display = isExpanded ? 'none' : 'block';
-      paramsToggle.classList.toggle('expanded', !isExpanded);
-    });
-  }
-
-  // 再検出ボタン
-  if (redetectBtn) {
-    redetectBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      redetectTimestamps();
-    });
-  }
-
-  // パラメータスライダー
-  const volumeThresholdSlider = volumeGraphContainer.querySelector('#vdg-volume-threshold');
-  const quietThresholdSlider = volumeGraphContainer.querySelector('#vdg-quiet-threshold');
-  const quietDurationSlider = volumeGraphContainer.querySelector('#vdg-quiet-duration');
-  const cooldownSlider = volumeGraphContainer.querySelector('#vdg-cooldown');
-
-  if (volumeThresholdSlider) {
-    volumeThresholdSlider.addEventListener('input', (e) => {
-      detectParams.volumeThreshold = parseFloat(e.target.value);
-      volumeGraphContainer.querySelector('#vdg-volume-threshold-val').textContent = detectParams.volumeThreshold.toFixed(2);
-    });
-  }
-
-  if (quietThresholdSlider) {
-    quietThresholdSlider.addEventListener('input', (e) => {
-      detectParams.quietThreshold = parseFloat(e.target.value);
-      volumeGraphContainer.querySelector('#vdg-quiet-threshold-val').textContent = detectParams.quietThreshold.toFixed(2);
-    });
-  }
-
-  if (quietDurationSlider) {
-    quietDurationSlider.addEventListener('input', (e) => {
-      detectParams.quietMinDuration = parseFloat(e.target.value);
-      volumeGraphContainer.querySelector('#vdg-quiet-duration-val').textContent = detectParams.quietMinDuration.toFixed(1);
-    });
-  }
-
-  if (cooldownSlider) {
-    cooldownSlider.addEventListener('input', (e) => {
-      detectParams.cooldown = parseFloat(e.target.value);
-      volumeGraphContainer.querySelector('#vdg-cooldown-val').textContent = detectParams.cooldown.toFixed(1);
-    });
-  }
 }
 
 /**
