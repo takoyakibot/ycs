@@ -49,6 +49,7 @@ let tsMarkers = []; // { id, time, text }
 let selectedMarkerId = null;
 let nextMarkerId = 1;
 const MARKER_SNAP_THRESHOLD_SEC = 3; // マーカー選択の判定距離（秒）
+let tsZeroPad = false; // タイムスタンプのゼロ埋め設定
 
 /**
  * 動画の長さに応じたグラフ解像度を計算
@@ -3753,12 +3754,32 @@ function createVolumeGraph() {
         color: #555;
       }
 
-      .vdg-ts-help {
+      .vdg-ts-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
         padding: 4px 8px;
+        border-top: 1px solid #2a2a2a;
+      }
+
+      .vdg-ts-help {
         font-size: 10px;
         color: #555;
-        text-align: center;
-        border-top: 1px solid #2a2a2a;
+      }
+
+      .vdg-ts-format-toggle {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 10px;
+        color: #666;
+        cursor: pointer;
+      }
+
+      .vdg-ts-format-toggle input {
+        width: 12px;
+        height: 12px;
+        cursor: pointer;
       }
 
     </style>
@@ -3796,8 +3817,14 @@ function createVolumeGraph() {
       <div class="vdg-ts-list" id="vdg-ts-list">
         <div class="vdg-ts-empty">波形グラフをクリックしてタイムスタンプを追加</div>
       </div>
-      <div class="vdg-ts-help" id="vdg-ts-help">
-        クリック: マーカー追加 | Del: 削除 | ←→: 1秒移動(2度押し5秒) | Space: 再生/停止
+      <div class="vdg-ts-footer">
+        <div class="vdg-ts-help">
+          クリック: マーカー追加 | Del: 削除 | ←→: 1秒移動(2度押し5秒) | Space: 再生/停止
+        </div>
+        <label class="vdg-ts-format-toggle">
+          <input type="checkbox" id="vdg-ts-zeropad">
+          <span>ゼロ埋め (00:03:45)</span>
+        </label>
       </div>
     </div>
   `;
@@ -4078,6 +4105,21 @@ function setupVolumeGraphEvents() {
       selectedMarkerId = null;
       updateTimestampList();
       drawVolumeGraph();
+    });
+  }
+
+  // タイムスタンプエディタ: ゼロ埋め設定
+  const zeroPadCheckbox = volumeGraphContainer.querySelector('#vdg-ts-zeropad');
+  if (zeroPadCheckbox) {
+    // 保存された設定を復元
+    chrome.storage.local.get('tsZeroPad', (result) => {
+      tsZeroPad = result.tsZeroPad === true;
+      zeroPadCheckbox.checked = tsZeroPad;
+    });
+    zeroPadCheckbox.addEventListener('change', () => {
+      tsZeroPad = zeroPadCheckbox.checked;
+      chrome.storage.local.set({ tsZeroPad });
+      updateTimestampList();
     });
   }
 
@@ -4572,7 +4614,7 @@ function updateTimestampList() {
 
   listEl.innerHTML = tsMarkers.map(marker => `
     <div class="vdg-ts-row ${marker.id === selectedMarkerId ? 'selected' : ''}" data-marker-id="${marker.id}">
-      <span class="vdg-ts-time">${formatTimeDisplay(marker.time)}</span>
+      <span class="vdg-ts-time">${formatTimestamp(marker.time)}</span>
       <input type="text" class="vdg-ts-text-input" value="${marker.text}" placeholder="曲名を入力..." data-marker-id="${marker.id}">
     </div>
   `).join('');
@@ -4637,13 +4679,38 @@ function moveSelectedMarker(deltaSec) {
 }
 
 /**
+ * タイムスタンプをフォーマット（ゼロ埋め設定考慮）
+ * @param {number} seconds - 秒数
+ * @returns {string} フォーマットされた時刻文字列
+ */
+function formatTimestamp(seconds) {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+
+  const needsHour = videoDuration >= 3600;
+
+  if (tsZeroPad) {
+    if (needsHour) {
+      return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    }
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  } else {
+    if (needsHour) {
+      return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    }
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  }
+}
+
+/**
  * タイムスタンプをテキストとしてコピー
  */
 function copyTimestamps() {
   if (tsMarkers.length === 0) return;
 
   const text = tsMarkers
-    .map(m => `${formatTimeDisplay(m.time)} ${m.text}`)
+    .map(m => `${formatTimestamp(m.time)} ${m.text}`)
     .join('\n');
 
   navigator.clipboard.writeText(text).then(() => {
