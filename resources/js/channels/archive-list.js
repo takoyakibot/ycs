@@ -1126,10 +1126,15 @@ function registerArchiveListComponent() {
                     if (!this.channel?.handle ||
                         !this.selectedTimestamp?.video_id ||
                         this.selectedTimestamp?.ts_num === undefined) {
+                        console.debug('[DisplayUpdate] aborted: handle=%s, videoId=%s, tsNum=%s',
+                            this.channel?.handle, this.selectedTimestamp?.video_id, this.selectedTimestamp?.ts_num);
                         return;
                     }
 
                     try {
+                        console.debug('[DisplayUpdate] fetching next: videoId=%s, currentTsNum=%d',
+                            this.selectedTimestamp.video_id, this.selectedTimestamp.ts_num);
+
                         // 同じアーカイブ内の次の楽曲情報を取得
                         const nextTimestamp = await ChannelApiService.fetchNextTimestampInArchive(
                             this.channel.handle,
@@ -1138,6 +1143,9 @@ function registerArchiveListComponent() {
                         );
 
                         if (nextTimestamp) {
+                            console.debug('[DisplayUpdate] got next: tsNum=%d, text=%s, next_ts_num=%s, song=%s',
+                                nextTimestamp.ts_num, nextTimestamp.text, nextTimestamp.next_ts_num,
+                                nextTimestamp.mapping?.song?.title || '(なし)');
                             logUserAction('autoDisplayUpdate', {
                                 timestampId: nextTimestamp.id,
                                 videoId: nextTimestamp.video_id,
@@ -1167,10 +1175,11 @@ function registerArchiveListComponent() {
                             if (endTime !== null) {
                                 autoReshuffleManager.startMonitor();
                             }
+                        } else {
+                            console.debug('[DisplayUpdate] no next timestamp found (last in archive)');
                         }
-                        // 次のタイムスタンプがない場合は何もしない（動画終了まで現在の表示を維持）
                     } catch (error) {
-                        console.error('次の楽曲情報の取得に失敗しました:', error);
+                        console.error('[DisplayUpdate] API error:', error);
                     }
                 },
 
