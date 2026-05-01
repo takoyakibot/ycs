@@ -15,7 +15,9 @@ let currentTabId = null;
 let volumeGraphData = [];
 let videoDuration = 0;
 let isScanning = false;
-const GRAPH_RESOLUTION = 500; // グラフのデータポイント数
+const SAMPLING_INTERVAL_SEC = 2; // サンプリング間隔（秒）
+const LEGACY_GRAPH_RESOLUTION = 500; // 旧形式との互換用
+let currentGraphResolution = LEGACY_GRAPH_RESOLUTION;
 let lastVolumeUpdateTime = 0; // 最後にUI更新した時刻
 
 // デフォルト設定
@@ -111,7 +113,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case 'VOLUME_DATA_FROM_OFFSCREEN':
       // Offscreen Documentからの音量データ
       console.log('音量データ受信(raw)', { index: message.index, volume: message.volume });
-      if (message.index >= 0 && message.index < GRAPH_RESOLUTION) {
+      if (message.index >= 0 && message.index < currentGraphResolution) {
         const oldValue = volumeGraphData[message.index] || 0;
         if (message.volume > oldValue) {
           volumeGraphData[message.index] = message.volume;
@@ -232,7 +234,7 @@ async function startCapture(tabId) {
       type: 'START_AUDIO_PROCESSING',
       streamId: streamId,
       config: CONFIG,
-      graphResolution: GRAPH_RESOLUTION
+      graphResolution: currentGraphResolution
     });
 
     console.log('START_AUDIO_PROCESSING応答:', response);
@@ -302,11 +304,11 @@ async function sendVolumeDataToContent() {
     if (tab?.id) {
       // スパース配列を埋める
       const filledData = [];
-      for (let i = 0; i < GRAPH_RESOLUTION; i++) {
+      for (let i = 0; i < currentGraphResolution; i++) {
         filledData[i] = volumeGraphData[i] || 0;
       }
 
-      const progress = (filledData.filter(v => v > 0).length / GRAPH_RESOLUTION) * 100;
+      const progress = (filledData.filter(v => v > 0).length / currentGraphResolution) * 100;
 
       // デバッグ: 送信データを確認（毎回出力）
       console.log('音量データ送信', {
@@ -361,6 +363,9 @@ async function startScan() {
       return { success: false, error: 'NO_VIDEO_DURATION' };
     }
 
+    // 動画の長さに応じてグラフ解像度を計算
+    currentGraphResolution = Math.ceil(videoDuration / SAMPLING_INTERVAL_SEC);
+
     // キャプチャを開始（既存のキャプチャは停止してから再開始）
     if (isCapturing) {
       await stopCapture();
@@ -381,7 +386,7 @@ async function startScan() {
     if (scanStatus.hasData && scanStatus.data) {
       volumeGraphData = [...scanStatus.data];
       // 配列の長さが足りなければ埋める
-      while (volumeGraphData.length < GRAPH_RESOLUTION) {
+      while (volumeGraphData.length < currentGraphResolution) {
         volumeGraphData.push(0);
       }
       // デバッグ: データの状態を確認
@@ -395,16 +400,16 @@ async function startScan() {
         last10: volumeGraphData.slice(-10)
       });
     } else {
-      volumeGraphData = new Array(GRAPH_RESOLUTION).fill(0);
+      volumeGraphData = new Array(currentGraphResolution).fill(0);
       console.log('新規スキャン開始');
     }
 
     // Offscreen Documentにスキャン開始を通知
-    console.log('START_VOLUME_SCAN送信中...', { duration: videoDuration, graphResolution: GRAPH_RESOLUTION });
+    console.log('START_VOLUME_SCAN送信中...', { duration: videoDuration, graphResolution: currentGraphResolution });
     chrome.runtime.sendMessage({
       type: 'START_VOLUME_SCAN',
       duration: videoDuration,
-      graphResolution: GRAPH_RESOLUTION
+      graphResolution: currentGraphResolution
     }).then(res => {
       console.log('START_VOLUME_SCAN応答:', res);
     }).catch(err => {

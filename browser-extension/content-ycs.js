@@ -4,7 +4,7 @@
  * ycs管理画面でスキャン済みアーカイブを表示するための機能を提供
  */
 
-const GRAPH_RESOLUTION = 500;
+// 旧形式互換: 解像度はデータの長さから取得
 
 /**
  * スキャン済みvideoIdリストを取得してページに通知
@@ -24,7 +24,7 @@ async function notifyScannedVideoIds() {
         }
 
         const filledCount = data.data.filter(v => v > 0).length;
-        const progress = Math.round((filledCount / GRAPH_RESOLUTION) * 100);
+        const progress = Math.round((filledCount / data.data.length) * 100);
 
         scannedIds.push({
           videoId,

@@ -41,7 +41,18 @@ let gainNode = null; // 音量制御用
 let mediaElementSource = null;
 let isScanning = false;
 let scanInterval = null;
-const GRAPH_RESOLUTION = 500; // グラフのデータポイント数
+const SAMPLING_INTERVAL_SEC = 2; // サンプリング間隔（秒）
+const LEGACY_GRAPH_RESOLUTION = 500; // 旧形式との互換用
+
+/**
+ * 動画の長さに応じたグラフ解像度を計算
+ * @param {number} duration - 動画の長さ（秒）
+ * @returns {number} データポイント数
+ */
+function calcGraphResolution(duration) {
+  if (!duration || duration <= 0) return LEGACY_GRAPH_RESOLUTION;
+  return Math.ceil(duration / SAMPLING_INTERVAL_SEC);
+}
 let originalPlaybackRate = 1;
 let audioInitialized = false; // 音声解析が初期化済みか
 
@@ -768,7 +779,7 @@ async function getVideoScanStatus(videoId) {
 
   const data = result[key].data;
   const filledCount = data.filter(v => v > 0).length;
-  const progress = Math.round((filledCount / GRAPH_RESOLUTION) * 100);
+  const progress = Math.round((filledCount / data.length) * 100);
 
   if (progress >= 95) {
     return { status: 'completed', progress: 100 };
@@ -907,7 +918,7 @@ async function loadScannedVideosList() {
         if (!data || !data.data) continue;
 
         const filledCount = data.data.filter(v => v > 0).length;
-        const progress = Math.round((filledCount / GRAPH_RESOLUTION) * 100);
+        const progress = Math.round((filledCount / data.data.length) * 100);
 
         videos.push({
           videoId,
@@ -2584,6 +2595,8 @@ async function saveVolumeData() {
 
   const storageKey = `volumeData_${videoId}`;
   const dataToSave = {
+    version: 2, // v2: 等間隔サンプリング（v1/未指定: 固定500ポイント）
+    samplingInterval: SAMPLING_INTERVAL_SEC,
     data: volumeData,
     duration: videoDuration,
     timestamps: detectedTimestamps,
@@ -2894,7 +2907,7 @@ function getScanStatus() {
 
       const data = saved.data;
       const duration = saved.duration || 0;
-      const GRAPH_RESOLUTION = 500;
+      const resolution = data.length;
 
       // 進捗を計算（データがある部分の割合）
       let lastFilledIndex = -1;
@@ -2906,7 +2919,7 @@ function getScanStatus() {
       }
 
       const progress = lastFilledIndex >= 0
-        ? ((lastFilledIndex + 1) / GRAPH_RESOLUTION) * 100
+        ? ((lastFilledIndex + 1) / resolution) * 100
         : 0;
 
       // 95%以上なら完了とみなす
@@ -2914,7 +2927,7 @@ function getScanStatus() {
 
       // 再開時刻を計算
       const resumeTime = duration > 0 && lastFilledIndex >= 0
-        ? (lastFilledIndex / GRAPH_RESOLUTION) * duration
+        ? (lastFilledIndex / resolution) * duration
         : 0;
 
       resolve({
@@ -3058,7 +3071,9 @@ function handleStorageChange(changes, areaName) {
       // 進捗表示を更新
       const progress = volumeGraphContainer?.querySelector('#vdg-progress');
       if (progress && videoDuration > 0) {
-        const coverage = (volumeData.length / GRAPH_RESOLUTION) * 100;
+        const coverage = volumeData.length > 0
+          ? (volumeData.filter(v => v > 0).length / volumeData.length) * 100
+          : 0;
         progress.textContent = `${Math.round(coverage)}%`;
       }
     }
@@ -4108,7 +4123,8 @@ async function startDirectScan() {
   }
 
   isScanning = true;
-  volumeData = new Array(GRAPH_RESOLUTION).fill(0);
+  const resolution = calcGraphResolution(videoDuration);
+  volumeData = new Array(resolution).fill(0);
 
   // 現在の状態を保存
   originalPlaybackRate = videoElement.playbackRate;
@@ -4153,16 +4169,17 @@ async function startDirectScan() {
     const normalizedVolume = Math.min(1, rms * 5);
 
     // データポイントのインデックスを計算
-    const index = Math.floor((videoElement.currentTime / videoDuration) * GRAPH_RESOLUTION);
+    const currentResolution = volumeData.length;
+    const index = Math.floor((videoElement.currentTime / videoDuration) * currentResolution);
 
-    if (index >= 0 && index < GRAPH_RESOLUTION) {
+    if (index >= 0 && index < currentResolution) {
       if (normalizedVolume > volumeData[index]) {
         volumeData[index] = normalizedVolume;
       }
     }
 
     // 進捗を更新
-    const progress = (volumeData.filter(v => v > 0).length / GRAPH_RESOLUTION) * 100;
+    const progress = (volumeData.filter(v => v > 0).length / currentResolution) * 100;
     updateProgress(progress);
     drawVolumeGraph();
 
