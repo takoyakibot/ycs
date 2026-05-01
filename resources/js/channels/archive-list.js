@@ -1026,7 +1026,7 @@ function registerArchiveListComponent() {
                     const siteUrl = window.location.origin + '/channels/' + encodeURIComponent(data.channelHandle)
                         + '?play=' + encodeURIComponent(data.videoId) + '&t=' + (data.tsNum || 0);
                     const dateText = date ? data.channelTitle + 'が' + date + 'に歌った' : data.channelTitle + 'が歌った';
-                    const text = '🎵 ' + dateText + data.songTitle + '！\n\n歌枠履歴er:D で探す👇';
+                    const text = '🎵 ' + dateText + data.songTitle + '！\n\n#歌枠履歴er:D で探す👇';
                     return 'https://twitter.com/intent/tweet?text=' + encodeURIComponent(text) + '&url=' + encodeURIComponent(siteUrl);
                 },
                 getGachaShareText() {
