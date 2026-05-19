@@ -1080,9 +1080,12 @@ function toggleChatSearchPanel() {
  * チャット検索パネルを表示
  */
 async function showChatSearchPanel() {
-  // 字幕パネルと排他（同一位置のため）
+  // 同一位置の他パネルと排他
   if (subtitlePanelVisible) {
     hideSubtitlePanel();
+  }
+  if (highlightPanelVisible) {
+    hideHighlightPanel();
   }
 
   if (!chatSearchPanel) {
@@ -1962,9 +1965,12 @@ function toggleSubtitlePanel() {
  * 字幕パネルを表示
  */
 async function showSubtitlePanel() {
-  // チャット検索パネルと排他（同一位置のため）
+  // 同一位置の他パネルと排他
   if (chatSearchPanelVisible) {
     hideChatSearchPanel();
+  }
+  if (highlightPanelVisible) {
+    hideHighlightPanel();
   }
 
   if (!subtitlePanel) {
@@ -2775,28 +2781,29 @@ function createHighlightPanel() {
  */
 function updateHighlightDataStatus() {
   if (!highlightPanel) return;
-  const setStatus = (id, ok, text) => {
+  // state: 'ok' | 'ng' | 'neutral'
+  const setStatus = (id, state, text) => {
     const el = highlightPanel.querySelector(`#${id}`);
     if (!el) return;
     el.textContent = text;
-    el.className = ok ? 'ok' : 'ng';
+    el.className = state === 'ok' ? 'ok' : state === 'ng' ? 'ng' : '';
   };
 
   setStatus(
     'hlp-status-volumes',
-    volumeData.length > 0,
+    volumeData.length > 0 ? 'ok' : 'ng',
     volumeData.length > 0 ? `${volumeData.length}サンプル` : '未取得（スキャン実行が必要）'
   );
   setStatus(
     'hlp-status-subtitles',
-    currentSubtitles.length > 0,
+    currentSubtitles.length > 0 ? 'ok' : 'ng',
     currentSubtitles.length > 0 ? `${currentSubtitles.length}件` : '未取得（字幕パネルで取得）'
   );
-  // コメント件数は IndexedDB を見ないと正確には分からないので、概算ステータスのみ
-  setStatus('hlp-status-chats', true, '取得時に確認');
+  // コメント件数は IndexedDB を非同期で読まないと正確には分からないため、中立表示とする
+  setStatus('hlp-status-chats', 'neutral', '検出実行時に取得');
   setStatus(
     'hlp-status-duration',
-    videoDuration > 0,
+    videoDuration > 0 ? 'ok' : 'ng',
     videoDuration > 0 ? `${Math.round(videoDuration)}秒` : '不明'
   );
 
@@ -2855,10 +2862,10 @@ async function detectHighlights() {
     })).filter(c => Number.isFinite(c.offsetMs) && typeof c.message === 'string' && c.message.length > 0);
 
     const subtitlesPayload = (currentSubtitles || []).map(s => ({
-      start: s.start,
-      duration: s.duration,
-      text: s.text,
-    }));
+      start: Number(s.start) || 0,
+      duration: Number(s.duration) || 0,
+      text: String(s.text ?? ''),
+    })).filter(s => s.text.length > 0);
 
     const volumesPayload = (volumeData || []).map(v => {
       if (typeof v === 'number') return v;
@@ -5353,6 +5360,8 @@ function observePageChanges() {
       currentCaptionTracks = [];
       lastHighlightResults = null;
       pageBridgeReady = null;
+      // ハイライトパネルが開いていれば閉じる（前動画の結果が残らないよう）
+      if (highlightPanelVisible) hideHighlightPanel();
       if (mediaElementSource) {
         mediaElementSource.disconnect();
         mediaElementSource = null;
@@ -5374,6 +5383,8 @@ function observePageChanges() {
       currentCaptionTracks = [];
       lastHighlightResults = null; // ハイライト検出結果をクリア
       pageBridgeReady = null;
+      // ハイライトパネルが開いていれば閉じる（前動画の結果が残らないよう）
+      if (highlightPanelVisible) hideHighlightPanel();
 
       // 音声解析の状態をリセット（新しいVideo要素用）
       if (mediaElementSource) {
