@@ -88,6 +88,11 @@ const CHAT_MAX_AGE_DAYS = 30; // 30日以上前のデータは削除
 let subtitlePanel = null;
 let subtitlePanelVisible = false;
 
+// ハイライト検出用
+let highlightPanel = null;
+let highlightPanelVisible = false;
+let lastHighlightResults = null;
+
 // 字幕サーバー送信用（重複送信防止キャッシュ）
 const subtitleSentCache = new Set();
 
@@ -164,11 +169,15 @@ function createEmbeddedTriggerButton() {
       #ycs-subtitle-btn {
         font-size: 14px;
       }
+      #ycs-highlight-btn {
+        font-size: 14px;
+      }
     </style>
     <button class="ycs-btn" id="ycs-trigger-btn" title="タイムスタンプ検出グラフを表示/非表示">YCS</button>
     <button class="ycs-btn" id="ycs-list-btn" title="リストスキャンパネルを開く">☰</button>
     <button class="ycs-btn" id="ycs-chat-btn" title="チャット検索パネルを開く">💬</button>
     <button class="ycs-btn" id="ycs-subtitle-btn" title="字幕取得パネルを開く">📝</button>
+    <button class="ycs-btn" id="ycs-highlight-btn" title="ハイライト検出パネルを開く">✨</button>
   `;
 
   document.body.appendChild(buttonContainer);
@@ -192,6 +201,11 @@ function createEmbeddedTriggerButton() {
   // 字幕取得ボタンのイベント
   buttonContainer.querySelector('#ycs-subtitle-btn').addEventListener('click', () => {
     toggleSubtitlePanel();
+  });
+
+  // ハイライト検出ボタンのイベント
+  buttonContainer.querySelector('#ycs-highlight-btn').addEventListener('click', () => {
+    toggleHighlightPanel();
   });
 
   updateTriggerButtonState();
@@ -248,6 +262,11 @@ function updateTriggerButtonState() {
   const subtitleBtn = embeddedTriggerButton.querySelector('#ycs-subtitle-btn');
   if (subtitleBtn) {
     subtitleBtn.classList.toggle('active', subtitlePanelVisible);
+  }
+
+  const highlightBtn = embeddedTriggerButton.querySelector('#ycs-highlight-btn');
+  if (highlightBtn) {
+    highlightBtn.classList.toggle('active', highlightPanelVisible);
   }
 }
 
@@ -2531,6 +2550,444 @@ function formatSubtitleTime(totalSeconds) {
     return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   }
   return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+/* =========================================================================
+ * ハイライト検出パネル
+ *
+ * 音量・字幕・コメントの3シグナルをサーバーAPI
+ * (POST /api/extension/highlights/detect) に送信し、AIがラベル付けした
+ * 候補をリスト表示する。各候補クリックでその時刻にシークできる。
+ * =======================================================================*/
+
+function toggleHighlightPanel() {
+  if (highlightPanelVisible) {
+    hideHighlightPanel();
+  } else {
+    showHighlightPanel();
+  }
+}
+
+function showHighlightPanel() {
+  if (chatSearchPanelVisible) hideChatSearchPanel();
+  if (subtitlePanelVisible) hideSubtitlePanel();
+
+  if (!highlightPanel) {
+    createHighlightPanel();
+  }
+  highlightPanel.classList.add('visible');
+  highlightPanelVisible = true;
+  updateTriggerButtonState();
+  updateHighlightDataStatus();
+}
+
+function hideHighlightPanel() {
+  if (highlightPanel) {
+    highlightPanel.classList.remove('visible');
+  }
+  highlightPanelVisible = false;
+  updateTriggerButtonState();
+}
+
+function createHighlightPanel() {
+  if (highlightPanel) return;
+
+  highlightPanel = document.createElement('div');
+  highlightPanel.id = 'ycs-highlight-panel';
+  highlightPanel.innerHTML = `
+    <style>
+      #ycs-highlight-panel {
+        position: fixed;
+        bottom: 140px;
+        right: 70px;
+        z-index: 9997;
+        width: 420px;
+        max-height: 600px;
+        background: rgba(20, 20, 20, 0.95);
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+        font-family: 'Segoe UI', 'Hiragino Sans', sans-serif;
+        font-size: 13px;
+        color: #fff;
+        display: none;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      #ycs-highlight-panel.visible {
+        display: flex !important;
+      }
+      .hlp-header {
+        padding: 12px 16px;
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .hlp-header-title {
+        font-weight: 600;
+        font-size: 14px;
+      }
+      .hlp-close-btn {
+        background: rgba(255,255,255,0.2);
+        border: none;
+        color: white;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        cursor: pointer;
+        font-size: 14px;
+      }
+      .hlp-close-btn:hover { background: rgba(255,255,255,0.35); }
+      .hlp-body {
+        padding: 12px 16px;
+        overflow-y: auto;
+        flex: 1;
+      }
+      .hlp-data-status {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px 12px;
+        font-size: 12px;
+        background: rgba(255,255,255,0.05);
+        padding: 8px 12px;
+        border-radius: 6px;
+        margin-bottom: 12px;
+      }
+      .hlp-data-status .label { color: #aaa; }
+      .hlp-data-status .ok { color: #4ade80; }
+      .hlp-data-status .ng { color: #f87171; }
+      .hlp-detect-btn {
+        width: 100%;
+        padding: 10px;
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+        margin-bottom: 12px;
+      }
+      .hlp-detect-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .hlp-detect-btn:not(:disabled):hover { filter: brightness(1.1); }
+      .hlp-status {
+        font-size: 12px;
+        color: #aaa;
+        min-height: 16px;
+        margin-bottom: 8px;
+      }
+      .hlp-status.error { color: #f87171; }
+      .hlp-status.loading::after {
+        content: '...';
+        animation: hlp-blink 1s infinite;
+      }
+      @keyframes hlp-blink {
+        0%, 50% { opacity: 1; }
+        51%, 100% { opacity: 0.3; }
+      }
+      .hlp-results {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .hlp-result-item {
+        background: rgba(255,255,255,0.06);
+        border-radius: 6px;
+        padding: 8px 10px;
+        cursor: pointer;
+        border-left: 3px solid #f59e0b;
+        transition: background 0.15s;
+      }
+      .hlp-result-item:hover { background: rgba(255,255,255,0.12); }
+      .hlp-result-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 4px;
+      }
+      .hlp-result-time {
+        color: #fbbf24;
+        font-family: monospace;
+        font-weight: 600;
+      }
+      .hlp-result-type {
+        font-size: 11px;
+        padding: 2px 6px;
+        border-radius: 4px;
+        background: rgba(255,255,255,0.1);
+        color: #ddd;
+      }
+      .hlp-result-confidence {
+        font-size: 11px;
+        color: #a3e635;
+      }
+      .hlp-result-label {
+        font-size: 13px;
+        color: #fff;
+        margin-bottom: 3px;
+        word-break: break-word;
+      }
+      .hlp-result-reason {
+        font-size: 11px;
+        color: #aaa;
+        word-break: break-word;
+      }
+      .hlp-empty {
+        color: #888;
+        text-align: center;
+        padding: 20px 0;
+        font-size: 12px;
+      }
+    </style>
+    <div class="hlp-header">
+      <span class="hlp-header-title">✨ ハイライト検出 (AI)</span>
+      <button class="hlp-close-btn" title="閉じる">×</button>
+    </div>
+    <div class="hlp-body">
+      <div class="hlp-data-status" id="hlp-data-status">
+        <span class="label">音量:</span><span id="hlp-status-volumes" class="ng">未取得</span>
+        <span class="label">字幕:</span><span id="hlp-status-subtitles" class="ng">未取得</span>
+        <span class="label">コメント:</span><span id="hlp-status-chats" class="ng">未取得</span>
+        <span class="label">動画長:</span><span id="hlp-status-duration" class="ng">不明</span>
+      </div>
+      <button class="hlp-detect-btn" id="hlp-detect-btn">AIに送信してハイライトを検出</button>
+      <div class="hlp-status" id="hlp-status"></div>
+      <div class="hlp-results" id="hlp-results">
+        <div class="hlp-empty">まだ検出していません</div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(highlightPanel);
+
+  highlightPanel.querySelector('.hlp-close-btn').addEventListener('click', () => {
+    hideHighlightPanel();
+  });
+  highlightPanel.querySelector('#hlp-detect-btn').addEventListener('click', () => {
+    detectHighlights();
+  });
+}
+
+/**
+ * パネル上部のデータ状況表示を更新
+ */
+function updateHighlightDataStatus() {
+  if (!highlightPanel) return;
+  const setStatus = (id, ok, text) => {
+    const el = highlightPanel.querySelector(`#${id}`);
+    if (!el) return;
+    el.textContent = text;
+    el.className = ok ? 'ok' : 'ng';
+  };
+
+  setStatus(
+    'hlp-status-volumes',
+    volumeData.length > 0,
+    volumeData.length > 0 ? `${volumeData.length}サンプル` : '未取得（スキャン実行が必要）'
+  );
+  setStatus(
+    'hlp-status-subtitles',
+    currentSubtitles.length > 0,
+    currentSubtitles.length > 0 ? `${currentSubtitles.length}件` : '未取得（字幕パネルで取得）'
+  );
+  // コメント件数は IndexedDB を見ないと正確には分からないので、概算ステータスのみ
+  setStatus('hlp-status-chats', true, '取得時に確認');
+  setStatus(
+    'hlp-status-duration',
+    videoDuration > 0,
+    videoDuration > 0 ? `${Math.round(videoDuration)}秒` : '不明'
+  );
+
+  // 検出ボタンの活性化条件: 動画長 > 0 かつ 音量データ or 字幕 or（コメントは取得時に確認）どれかある
+  const detectBtn = highlightPanel.querySelector('#hlp-detect-btn');
+  if (detectBtn) {
+    detectBtn.disabled = !(videoDuration > 0);
+  }
+}
+
+/**
+ * ハイライト検出APIを呼び出す
+ */
+async function detectHighlights() {
+  const statusEl = highlightPanel?.querySelector('#hlp-status');
+  const detectBtn = highlightPanel?.querySelector('#hlp-detect-btn');
+  const resultsEl = highlightPanel?.querySelector('#hlp-results');
+
+  if (!statusEl || !detectBtn || !resultsEl) return;
+
+  const videoId = getVideoId();
+  if (!videoId) {
+    setHighlightStatus('動画IDが取得できません', true);
+    return;
+  }
+  if (!videoDuration || videoDuration <= 0) {
+    setHighlightStatus('動画長が取得できていません。動画を少し再生してください', true);
+    return;
+  }
+
+  // API設定を読み込み
+  if (!ycsApiToken) {
+    await loadYcsApiSettings();
+  }
+  if (!ycsApiToken) {
+    setHighlightStatus('APIトークンが未設定です。拡張ポップアップで設定してください', true);
+    return;
+  }
+
+  detectBtn.disabled = true;
+  setHighlightStatus('データを収集中', false, true);
+
+  try {
+    // チャットデータをIndexedDBから取得
+    let rawChats = [];
+    try {
+      await initChatDB();
+      rawChats = await loadChatDataForVideo(videoId);
+    } catch (e) {
+      console.warn('[YCS Highlight] チャットDB読込失敗:', e);
+    }
+    const chats = (rawChats || []).map(c => ({
+      offsetMs: c.timestamp,
+      message: c.message,
+      isSuperchat: !!c.isSuperchat,
+    })).filter(c => Number.isFinite(c.offsetMs) && typeof c.message === 'string' && c.message.length > 0);
+
+    const subtitlesPayload = (currentSubtitles || []).map(s => ({
+      start: s.start,
+      duration: s.duration,
+      text: s.text,
+    }));
+
+    const volumesPayload = (volumeData || []).map(v => {
+      if (typeof v === 'number') return v;
+      // 万一オブジェクトで保存されていた場合のフォールバック
+      return Number.isFinite(v?.value) ? v.value : 0;
+    });
+
+    if (volumesPayload.length === 0 && subtitlesPayload.length === 0 && chats.length === 0) {
+      setHighlightStatus('音量・字幕・コメントのいずれも未取得です', true);
+      return;
+    }
+
+    setHighlightStatus(
+      `送信中 (音量${volumesPayload.length} / 字幕${subtitlesPayload.length} / コメント${chats.length})`,
+      false,
+      true
+    );
+
+    const response = await fetch(`${ycsServerUrl}/api/extension/highlights/detect`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${ycsApiToken}`,
+      },
+      body: JSON.stringify({
+        video_id: videoId,
+        duration: videoDuration,
+        volumes: volumesPayload,
+        subtitles: subtitlesPayload,
+        chats: chats,
+      }),
+    });
+
+    if (!response.ok) {
+      let errorMsg = `HTTP ${response.status}`;
+      try {
+        const errBody = await response.json();
+        if (errBody?.message) errorMsg += `: ${errBody.message}`;
+      } catch (_) { /* ignore */ }
+      throw new Error(errorMsg);
+    }
+
+    const data = await response.json();
+    lastHighlightResults = data;
+
+    const candidates = data?.candidates || [];
+    renderHighlightResults(candidates);
+    setHighlightStatus(`${candidates.length}件の候補を検出しました`, false);
+  } catch (error) {
+    console.error('[YCS Highlight] 検出エラー:', error);
+    setHighlightStatus(`検出に失敗しました: ${error.message}`, true);
+  } finally {
+    detectBtn.disabled = false;
+  }
+}
+
+function setHighlightStatus(text, isError, isLoading) {
+  const statusEl = highlightPanel?.querySelector('#hlp-status');
+  if (!statusEl) return;
+  statusEl.textContent = text;
+  statusEl.classList.toggle('error', !!isError);
+  statusEl.classList.toggle('loading', !!isLoading);
+}
+
+function renderHighlightResults(candidates) {
+  const resultsEl = highlightPanel?.querySelector('#hlp-results');
+  if (!resultsEl) return;
+  resultsEl.innerHTML = '';
+
+  if (!candidates || candidates.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'hlp-empty';
+    empty.textContent = '候補が見つかりませんでした';
+    resultsEl.appendChild(empty);
+    return;
+  }
+
+  // 時刻順（既にサーバー側でソート済みのはずだが念のため）
+  const sorted = [...candidates].sort((a, b) => (a.time || 0) - (b.time || 0));
+
+  const fragment = document.createDocumentFragment();
+  for (const c of sorted) {
+    const item = document.createElement('div');
+    item.className = 'hlp-result-item';
+
+    const head = document.createElement('div');
+    head.className = 'hlp-result-head';
+
+    const time = document.createElement('span');
+    time.className = 'hlp-result-time';
+    time.textContent = formatSubtitleTime(Math.floor(c.time || 0));
+
+    const type = document.createElement('span');
+    type.className = 'hlp-result-type';
+    type.textContent = c.type || 'other';
+
+    const conf = document.createElement('span');
+    conf.className = 'hlp-result-confidence';
+    const confValue = Number.isFinite(c.confidence) ? c.confidence : 0;
+    conf.textContent = `score ${(confValue * 100).toFixed(0)}%`;
+
+    head.appendChild(time);
+    head.appendChild(type);
+    head.appendChild(conf);
+
+    const label = document.createElement('div');
+    label.className = 'hlp-result-label';
+    label.textContent = c.label || '(ラベルなし)';
+
+    const reason = document.createElement('div');
+    reason.className = 'hlp-result-reason';
+    reason.textContent = c.reason || '';
+
+    item.appendChild(head);
+    item.appendChild(label);
+    if (reason.textContent) {
+      item.appendChild(reason);
+    }
+
+    item.addEventListener('click', () => {
+      if (videoElement && Number.isFinite(c.time)) {
+        videoElement.currentTime = c.time;
+      }
+    });
+
+    fragment.appendChild(item);
+  }
+  resultsEl.appendChild(fragment);
 }
 
 /**
@@ -4894,6 +5351,7 @@ function observePageChanges() {
       zoomIndex = 0;
       currentSubtitles = [];
       currentCaptionTracks = [];
+      lastHighlightResults = null;
       pageBridgeReady = null;
       if (mediaElementSource) {
         mediaElementSource.disconnect();
@@ -4914,6 +5372,7 @@ function observePageChanges() {
       zoomIndex = 0; // ズームレベルをリセット
       currentSubtitles = []; // 字幕データをクリア
       currentCaptionTracks = [];
+      lastHighlightResults = null; // ハイライト検出結果をクリア
       pageBridgeReady = null;
 
       // 音声解析の状態をリセット（新しいVideo要素用）
