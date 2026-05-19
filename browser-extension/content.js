@@ -91,7 +91,6 @@ let subtitlePanelVisible = false;
 // ハイライト検出用
 let highlightPanel = null;
 let highlightPanelVisible = false;
-let lastHighlightResults = null;
 
 // 字幕サーバー送信用（重複送信防止キャッシュ）
 const subtitleSentCache = new Set();
@@ -2823,30 +2822,32 @@ async function detectHighlights() {
   const resultsEl = highlightPanel?.querySelector('#hlp-results');
 
   if (!statusEl || !detectBtn || !resultsEl) return;
-
-  const videoId = getVideoId();
-  if (!videoId) {
-    setHighlightStatus('動画IDが取得できません', true);
-    return;
-  }
-  if (!videoDuration || videoDuration <= 0) {
-    setHighlightStatus('動画長が取得できていません。動画を少し再生してください', true);
-    return;
-  }
-
-  // API設定を読み込み
-  if (!ycsApiToken) {
-    await loadYcsApiSettings();
-  }
-  if (!ycsApiToken) {
-    setHighlightStatus('APIトークンが未設定です。拡張ポップアップで設定してください', true);
-    return;
-  }
-
+  // ダブルクリック・連打による多重実行を防止
+  if (detectBtn.disabled) return;
   detectBtn.disabled = true;
-  setHighlightStatus('データを収集中', false, true);
 
   try {
+    const videoId = getVideoId();
+    if (!videoId) {
+      setHighlightStatus('動画IDが取得できません', true);
+      return;
+    }
+    if (!videoDuration || videoDuration <= 0) {
+      setHighlightStatus('動画長が取得できていません。動画を少し再生してください', true);
+      return;
+    }
+
+    // API設定を読み込み
+    if (!ycsApiToken) {
+      await loadYcsApiSettings();
+    }
+    if (!ycsApiToken) {
+      setHighlightStatus('APIトークンが未設定です。拡張ポップアップで設定してください', true);
+      return;
+    }
+
+    setHighlightStatus('データを収集中', false, true);
+
     // チャットデータをIndexedDBから取得
     let rawChats = [];
     try {
@@ -2863,7 +2864,8 @@ async function detectHighlights() {
 
     const subtitlesPayload = (currentSubtitles || []).map(s => ({
       start: Number(s.start) || 0,
-      duration: Number(s.duration) || 0,
+      // サーバーバリデーション (max:120) に合わせてクランプ
+      duration: Math.min(120, Math.max(0, Number(s.duration) || 0)),
       text: String(s.text ?? ''),
     })).filter(s => s.text.length > 0);
 
@@ -2910,8 +2912,6 @@ async function detectHighlights() {
     }
 
     const data = await response.json();
-    lastHighlightResults = data;
-
     const candidates = data?.candidates || [];
     renderHighlightResults(candidates);
     setHighlightStatus(`${candidates.length}件の候補を検出しました`, false);
@@ -5358,7 +5358,6 @@ function observePageChanges() {
       zoomIndex = 0;
       currentSubtitles = [];
       currentCaptionTracks = [];
-      lastHighlightResults = null;
       pageBridgeReady = null;
       // ハイライトパネルが開いていれば閉じる（前動画の結果が残らないよう）
       if (highlightPanelVisible) hideHighlightPanel();
@@ -5381,7 +5380,6 @@ function observePageChanges() {
       zoomIndex = 0; // ズームレベルをリセット
       currentSubtitles = []; // 字幕データをクリア
       currentCaptionTracks = [];
-      lastHighlightResults = null; // ハイライト検出結果をクリア
       pageBridgeReady = null;
       // ハイライトパネルが開いていれば閉じる（前動画の結果が残らないよう）
       if (highlightPanelVisible) hideHighlightPanel();
