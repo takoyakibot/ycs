@@ -2769,8 +2769,25 @@ function updateHighlightDataStatus() {
     currentSubtitles.length > 0 ? 'ok' : 'ng',
     currentSubtitles.length > 0 ? `${currentSubtitles.length}件` : '未取得（字幕パネルで取得）'
   );
-  // コメント件数は IndexedDB を非同期で読まないと正確には分からないため、中立表示とする
-  setStatus('hlp-status-chats', 'neutral', '検出実行時に取得');
+  // コメント件数をIndexedDBから非同期で取得して表示
+  (async () => {
+    try {
+      const videoId = getVideoId();
+      if (videoId) {
+        await initChatDB();
+        const chats = await loadChatDataForVideo(videoId);
+        if (chats && chats.length > 0) {
+          setStatus('hlp-status-chats', 'ok', `${chats.length}件（取得済み）`);
+        } else {
+          setStatus('hlp-status-chats', 'ng', '未取得（💬ボタンで取得）');
+        }
+      } else {
+        setStatus('hlp-status-chats', 'ng', '動画ID不明');
+      }
+    } catch (e) {
+      setStatus('hlp-status-chats', 'ng', '確認失敗');
+    }
+  })();
   setStatus(
     'hlp-status-duration',
     videoDuration > 0 ? 'ok' : 'ng',
@@ -2835,8 +2852,8 @@ async function detectHighlights() {
 
     const subtitlesPayload = (currentSubtitles || []).map(s => ({
       start: Number(s.start) || 0,
-      // サーバーバリデーション (max:120) に合わせてクランプ
-      duration: Math.min(120, Math.max(0, Number(s.duration) || 0)),
+      // サーバーバリデーション (max:60) に合わせてクランプ
+      duration: Math.min(60, Math.max(0, Number(s.duration) || 0)),
       text: String(s.text ?? ''),
     })).filter(s => s.text.length > 0);
 
