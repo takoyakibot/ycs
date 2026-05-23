@@ -1448,7 +1448,7 @@ async function fetchChatData() {
     const continuation = await getChatContinuation();
     if (!continuation) {
       if (statusEl) {
-        statusEl.textContent = 'チャットリプレイがありません（ライブ配信のアーカイブのみ対応）';
+        statusEl.textContent = 'チャットリプレイが見つかりません（チャットが無い動画、またはチャットリプレイが無効な動画です）';
         statusEl.classList.remove('loading');
       }
       return;
@@ -1474,62 +1474,30 @@ async function fetchChatData() {
 }
 
 /**
- * ytInitialDataからチャットのcontinuationトークンを取得
+ * page-bridge.js経由でチャットリプレイのcontinuationトークンを取得
+ * Content ScriptからはページコンテキストのytInitialDataに直接アクセスできないため、
+ * page-bridge.jsにメッセージを送って取得する
  */
 async function getChatContinuation() {
-  try {
-    // ページのスクリプトからytInitialDataを取得
-    const scripts = document.querySelectorAll('script');
-    for (const script of scripts) {
-      const text = script.textContent || '';
-      if (text.includes('ytInitialData')) {
-        const match = text.match(/var ytInitialData = ({.+?});/);
-        if (match) {
-          const data = JSON.parse(match[1]);
-          // チャットリプレイのcontinuationを探す
-          const continuation = findChatContinuation(data);
-          return continuation;
-        }
+  return new Promise((resolve) => {
+    const timeout = setTimeout(() => {
+      window.removeEventListener('message', handler);
+      console.warn('[YCS] チャットcontinuation取得タイムアウト');
+      resolve(null);
+    }, 5000);
+
+    function handler(event) {
+      if (event.source !== window) return;
+      if (event.data?.type === 'YCS_CHAT_CONTINUATION_RESPONSE') {
+        window.removeEventListener('message', handler);
+        clearTimeout(timeout);
+        resolve(event.data.continuation || null);
       }
     }
 
-    // window.ytInitialDataを試す
-    if (typeof window !== 'undefined' && window.ytInitialData) {
-      return findChatContinuation(window.ytInitialData);
-    }
-
-    return null;
-  } catch (error) {
-    console.error('Continuation取得エラー:', error);
-    return null;
-  }
-}
-
-/**
- * ytInitialData内からチャットcontinuationを探す
- */
-function findChatContinuation(data) {
-  try {
-    // conversationBar内のliveChatRendererを探す
-    const contents = data?.contents?.twoColumnWatchNextResults?.conversationBar?.liveChatRenderer;
-    if (contents?.continuations?.[0]?.reloadContinuationData?.continuation) {
-      return contents.continuations[0].reloadContinuationData.continuation;
-    }
-
-    // subMenuItemsから探す（リプレイの場合）
-    const subMenu = contents?.header?.liveChatHeaderRenderer?.viewSelector?.sortFilterSubMenuRenderer?.subMenuItems;
-    if (subMenu) {
-      for (const item of subMenu) {
-        if (item?.continuation?.reloadContinuationData?.continuation) {
-          return item.continuation.reloadContinuationData.continuation;
-        }
-      }
-    }
-
-    return null;
-  } catch (error) {
-    return null;
-  }
+    window.addEventListener('message', handler);
+    window.postMessage({ type: 'YCS_GET_CHAT_CONTINUATION' }, '*');
+  });
 }
 
 /**

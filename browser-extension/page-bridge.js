@@ -275,6 +275,38 @@
   window.addEventListener('message', function (event) {
     if (event.source !== window) return;
 
+    // チャットリプレイのcontinuationトークンを取得
+    if (event.data?.type === 'YCS_GET_CHAT_CONTINUATION') {
+      let continuation = null;
+      try {
+        const data = window.ytInitialData;
+        if (data) {
+          const liveChatRenderer = data?.contents?.twoColumnWatchNextResults?.conversationBar?.liveChatRenderer;
+          if (liveChatRenderer) {
+            // reloadContinuationDataから取得
+            const reloadCont = liveChatRenderer?.continuations?.[0]?.reloadContinuationData?.continuation;
+            if (reloadCont) {
+              continuation = reloadCont;
+            } else {
+              // subMenuItemsから探す（リプレイの場合）
+              const subMenu = liveChatRenderer?.header?.liveChatHeaderRenderer?.viewSelector?.sortFilterSubMenuRenderer?.subMenuItems;
+              if (subMenu) {
+                for (const item of subMenu) {
+                  if (item?.continuation?.reloadContinuationData?.continuation) {
+                    continuation = item.continuation.reloadContinuationData.continuation;
+                    break;
+                  }
+                }
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error('[YCS] チャットcontinuation取得エラー:', e);
+      }
+      window.postMessage({ type: 'YCS_CHAT_CONTINUATION_RESPONSE', continuation }, '*');
+    }
+
     // 字幕トラック一覧の取得
     if (event.data?.type === 'YCS_GET_CAPTION_TRACKS') {
       const playerResponse = getPlayerResponse();
