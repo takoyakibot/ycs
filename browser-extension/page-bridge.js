@@ -281,8 +281,14 @@
       try {
         const data = window.ytInitialData;
         if (data) {
-          const liveChatRenderer = data?.contents?.twoColumnWatchNextResults?.conversationBar?.liveChatRenderer;
+          const conversationBar = data?.contents?.twoColumnWatchNextResults?.conversationBar;
+          console.debug('[YCS] conversationBar keys:', conversationBar ? Object.keys(conversationBar) : 'null');
+
+          const liveChatRenderer = conversationBar?.liveChatRenderer;
           if (liveChatRenderer) {
+            console.debug('[YCS] liveChatRenderer keys:', Object.keys(liveChatRenderer));
+            console.debug('[YCS] continuations:', JSON.stringify(liveChatRenderer?.continuations)?.substring(0, 200));
+
             // reloadContinuationDataから取得
             const reloadCont = liveChatRenderer?.continuations?.[0]?.reloadContinuationData?.continuation;
             if (reloadCont) {
@@ -299,11 +305,17 @@
                 }
               }
             }
+          } else {
+            // liveChatRenderer以外のキーも確認
+            console.debug('[YCS] conversationBar全体:', JSON.stringify(conversationBar)?.substring(0, 500));
           }
+        } else {
+          console.debug('[YCS] ytInitialData が存在しません');
         }
       } catch (e) {
         console.error('[YCS] チャットcontinuation取得エラー:', e);
       }
+      console.debug('[YCS] continuation結果:', continuation ? '取得成功' : 'null');
       window.postMessage({ type: 'YCS_CHAT_CONTINUATION_RESPONSE', continuation }, '*');
     }
 

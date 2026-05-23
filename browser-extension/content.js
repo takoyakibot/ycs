@@ -1479,6 +1479,9 @@ async function fetchChatData() {
  * page-bridge.jsにメッセージを送って取得する
  */
 async function getChatContinuation() {
+  // page-bridge.jsが注入されていることを保証
+  await ensurePageBridge();
+
   return new Promise((resolve) => {
     const timeout = setTimeout(() => {
       window.removeEventListener('message', handler);
