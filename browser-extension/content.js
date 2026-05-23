@@ -3773,6 +3773,23 @@ function createVolumeGraph() {
         color: #555;
       }
 
+      .vdg-ts-offset-btn {
+        background: #333;
+        border: 1px solid #555;
+        color: #ccc;
+        font-size: 10px;
+        padding: 1px 4px;
+        border-radius: 3px;
+        cursor: pointer;
+        flex-shrink: 0;
+        line-height: 1.2;
+      }
+
+      .vdg-ts-offset-btn:hover {
+        background: #444;
+        color: #fff;
+      }
+
       .vdg-ts-footer {
         display: flex;
         justify-content: space-between;
@@ -4672,15 +4689,27 @@ function updateTimestampList() {
 
   listEl.innerHTML = tsMarkers.map(marker => `
     <div class="vdg-ts-row ${marker.id === selectedMarkerId ? 'selected' : ''}" data-marker-id="${marker.id}">
+      <button type="button" class="vdg-ts-offset-btn" data-marker-id="${marker.id}" data-delta="-1" title="-1秒" tabindex="-1">-1s</button>
       <span class="vdg-ts-time">${formatTimestamp(marker.time)}</span>
+      <button type="button" class="vdg-ts-offset-btn" data-marker-id="${marker.id}" data-delta="1" title="+1秒" tabindex="-1">+1s</button>
       <input type="text" class="vdg-ts-text-input" value="${escapeHtml(marker.text)}" placeholder="曲名を入力..." data-marker-id="${marker.id}">
     </div>
   `).join('');
 
   // イベントリスナー
+  listEl.querySelectorAll('.vdg-ts-offset-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = parseInt(btn.dataset.markerId);
+      const delta = parseInt(btn.dataset.delta);
+      selectedMarkerId = id;
+      moveSelectedMarker(delta);
+    });
+  });
+
   listEl.querySelectorAll('.vdg-ts-row').forEach(row => {
     row.addEventListener('click', (e) => {
-      if (e.target.classList.contains('vdg-ts-text-input')) return;
+      if (e.target.classList.contains('vdg-ts-text-input') || e.target.classList.contains('vdg-ts-offset-btn')) return;
       const id = parseInt(row.dataset.markerId);
       selectedMarkerId = id;
       const marker = tsMarkers.find(m => m.id === id);
