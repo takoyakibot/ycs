@@ -2197,7 +2197,12 @@ function ensurePageBridge() {
     const script = document.createElement('script');
     script.src = chrome.runtime.getURL('page-bridge.js');
     script.onload = () => { script.remove(); resolve(); };
-    script.onerror = () => { script.remove(); reject(new Error('page-bridge.jsのロードに失敗しました')); };
+    script.onerror = () => {
+      script.remove();
+      // 失敗時はキャッシュをクリアして次回呼び出しで再試行可能にする
+      pageBridgeReady = null;
+      reject(new Error('page-bridge.jsのロードに失敗しました'));
+    };
     document.documentElement.appendChild(script);
   });
   return pageBridgeReady;
@@ -2770,19 +2775,26 @@ function updateHighlightDataStatus() {
     currentSubtitles.length > 0 ? `${currentSubtitles.length}件` : '未取得（字幕パネルで取得）'
   );
   // コメント件数をIndexedDBから非同期で取得して表示
+  // loadChatDataForVideo()はチャット検索パネルのステータスを副作用で更新するため、
+  // ここでは件数のカウントのみを行う専用処理を使う
   (async () => {
     try {
       const videoId = getVideoId();
-      if (videoId) {
-        await initChatDB();
-        const chats = await loadChatDataForVideo(videoId);
-        if (chats && chats.length > 0) {
-          setStatus('hlp-status-chats', 'ok', `${chats.length}件（取得済み）`);
-        } else {
-          setStatus('hlp-status-chats', 'ng', '未取得（💬ボタンで取得）');
-        }
-      } else {
+      if (!videoId) {
         setStatus('hlp-status-chats', 'ng', '動画ID不明');
+        return;
+      }
+      await initChatDB();
+      const count = await new Promise((resolve, reject) => {
+        const tx = chatSearchDB.transaction([CHAT_STORE_NAME], 'readonly');
+        const req = tx.objectStore(CHAT_STORE_NAME).index('videoId').count(videoId);
+        req.onsuccess = () => resolve(req.result || 0);
+        req.onerror = () => reject(req.error);
+      });
+      if (count > 0) {
+        setStatus('hlp-status-chats', 'ok', `${count}件（取得済み）`);
+      } else {
+        setStatus('hlp-status-chats', 'ng', '未取得（💬ボタンで取得）');
       }
     } catch (e) {
       setStatus('hlp-status-chats', 'ng', '確認失敗');
