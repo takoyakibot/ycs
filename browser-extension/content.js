@@ -1780,7 +1780,7 @@ function renderChatResults(chats) {
   }
 
   const html = chats.slice(0, 200).map(chat => {
-    const timeStr = formatTimestamp(chat.timestamp);
+    const timeStr = formatTimestampMsec(chat.timestamp);
     const badge = chat.isSuperchat
       ? `<span class="csp-result-badge csp-badge-superchat">${chat.amount || 'SC'}</span>`
       : '';
@@ -1808,9 +1808,13 @@ function renderChatResults(chats) {
 }
 
 /**
- * タイムスタンプをフォーマット
+ * ミリ秒値をタイムスタンプ表記にフォーマット（チャットのoffsetMs用）
+ * NOTE: 5573行に同名で別実装(秒用、vdg/マーカー用)があったため、
+ * 名前を formatTimestampMsec に変更して衝突を解消した。
+ * 後勝ち定義により旧名 formatTimestamp はチャット用には機能していなかった
+ * （表示時刻が実際と全く異なる不具合の原因）。
  */
-function formatTimestamp(msec) {
+function formatTimestampMsec(msec) {
   const totalSeconds = Math.floor(msec / 1000);
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
