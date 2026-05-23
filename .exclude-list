@@ -6,7 +6,12 @@ tests
 .git
 .gitattributes
 .gitignore
+.claude
+.github
 phpunit.xml
 README.md
 storage/logs
 browser-extension
+deploy.sh
+pre-commit-check.sh
+setup-git-hooks.sh
