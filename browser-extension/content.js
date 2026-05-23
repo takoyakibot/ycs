@@ -1448,7 +1448,7 @@ async function fetchChatData() {
     const continuation = await getChatContinuation();
     if (!continuation) {
       if (statusEl) {
-        statusEl.textContent = 'チャットリプレイがありません（ライブ配信のアーカイブのみ対応）';
+        statusEl.textContent = 'チャットリプレイが見つかりません（チャットが無い動画、またはチャットリプレイが無効な動画です）';
         statusEl.classList.remove('loading');
       }
       return;
@@ -1474,62 +1474,33 @@ async function fetchChatData() {
 }
 
 /**
- * ytInitialDataからチャットのcontinuationトークンを取得
+ * page-bridge.js経由でチャットリプレイのcontinuationトークンを取得
+ * Content ScriptからはページコンテキストのytInitialDataに直接アクセスできないため、
+ * page-bridge.jsにメッセージを送って取得する
  */
 async function getChatContinuation() {
-  try {
-    // ページのスクリプトからytInitialDataを取得
-    const scripts = document.querySelectorAll('script');
-    for (const script of scripts) {
-      const text = script.textContent || '';
-      if (text.includes('ytInitialData')) {
-        const match = text.match(/var ytInitialData = ({.+?});/);
-        if (match) {
-          const data = JSON.parse(match[1]);
-          // チャットリプレイのcontinuationを探す
-          const continuation = findChatContinuation(data);
-          return continuation;
-        }
+  // page-bridge.jsが注入されていることを保証
+  await ensurePageBridge();
+
+  return new Promise((resolve) => {
+    const timeout = setTimeout(() => {
+      window.removeEventListener('message', handler);
+      console.warn('[YCS] チャットcontinuation取得タイムアウト');
+      resolve(null);
+    }, 5000);
+
+    function handler(event) {
+      if (event.source !== window) return;
+      if (event.data?.type === 'YCS_CHAT_CONTINUATION_RESPONSE') {
+        window.removeEventListener('message', handler);
+        clearTimeout(timeout);
+        resolve(event.data.continuation || null);
       }
     }
 
-    // window.ytInitialDataを試す
-    if (typeof window !== 'undefined' && window.ytInitialData) {
-      return findChatContinuation(window.ytInitialData);
-    }
-
-    return null;
-  } catch (error) {
-    console.error('Continuation取得エラー:', error);
-    return null;
-  }
-}
-
-/**
- * ytInitialData内からチャットcontinuationを探す
- */
-function findChatContinuation(data) {
-  try {
-    // conversationBar内のliveChatRendererを探す
-    const contents = data?.contents?.twoColumnWatchNextResults?.conversationBar?.liveChatRenderer;
-    if (contents?.continuations?.[0]?.reloadContinuationData?.continuation) {
-      return contents.continuations[0].reloadContinuationData.continuation;
-    }
-
-    // subMenuItemsから探す（リプレイの場合）
-    const subMenu = contents?.header?.liveChatHeaderRenderer?.viewSelector?.sortFilterSubMenuRenderer?.subMenuItems;
-    if (subMenu) {
-      for (const item of subMenu) {
-        if (item?.continuation?.reloadContinuationData?.continuation) {
-          return item.continuation.reloadContinuationData.continuation;
-        }
-      }
-    }
-
-    return null;
-  } catch (error) {
-    return null;
-  }
+    window.addEventListener('message', handler);
+    window.postMessage({ type: 'YCS_GET_CHAT_CONTINUATION' }, '*');
+  });
 }
 
 /**
@@ -2226,7 +2197,12 @@ function ensurePageBridge() {
     const script = document.createElement('script');
     script.src = chrome.runtime.getURL('page-bridge.js');
     script.onload = () => { script.remove(); resolve(); };
-    script.onerror = () => { script.remove(); reject(new Error('page-bridge.jsのロードに失敗しました')); };
+    script.onerror = () => {
+      script.remove();
+      // 失敗時はキャッシュをクリアして次回呼び出しで再試行可能にする
+      pageBridgeReady = null;
+      reject(new Error('page-bridge.jsのロードに失敗しました'));
+    };
     document.documentElement.appendChild(script);
   });
   return pageBridgeReady;
@@ -2798,8 +2774,32 @@ function updateHighlightDataStatus() {
     currentSubtitles.length > 0 ? 'ok' : 'ng',
     currentSubtitles.length > 0 ? `${currentSubtitles.length}件` : '未取得（字幕パネルで取得）'
   );
-  // コメント件数は IndexedDB を非同期で読まないと正確には分からないため、中立表示とする
-  setStatus('hlp-status-chats', 'neutral', '検出実行時に取得');
+  // コメント件数をIndexedDBから非同期で取得して表示
+  // loadChatDataForVideo()はチャット検索パネルのステータスを副作用で更新するため、
+  // ここでは件数のカウントのみを行う専用処理を使う
+  (async () => {
+    try {
+      const videoId = getVideoId();
+      if (!videoId) {
+        setStatus('hlp-status-chats', 'ng', '動画ID不明');
+        return;
+      }
+      await initChatDB();
+      const count = await new Promise((resolve, reject) => {
+        const tx = chatSearchDB.transaction([CHAT_STORE_NAME], 'readonly');
+        const req = tx.objectStore(CHAT_STORE_NAME).index('videoId').count(videoId);
+        req.onsuccess = () => resolve(req.result || 0);
+        req.onerror = () => reject(req.error);
+      });
+      if (count > 0) {
+        setStatus('hlp-status-chats', 'ok', `${count}件（取得済み）`);
+      } else {
+        setStatus('hlp-status-chats', 'ng', '未取得（💬ボタンで取得）');
+      }
+    } catch (e) {
+      setStatus('hlp-status-chats', 'ng', '確認失敗');
+    }
+  })();
   setStatus(
     'hlp-status-duration',
     videoDuration > 0 ? 'ok' : 'ng',
@@ -2864,8 +2864,8 @@ async function detectHighlights() {
 
     const subtitlesPayload = (currentSubtitles || []).map(s => ({
       start: Number(s.start) || 0,
-      // サーバーバリデーション (max:120) に合わせてクランプ
-      duration: Math.min(120, Math.max(0, Number(s.duration) || 0)),
+      // サーバーバリデーション (max:60) に合わせてクランプ
+      duration: Math.min(60, Math.max(0, Number(s.duration) || 0)),
       text: String(s.text ?? ''),
     })).filter(s => s.text.length > 0);
 
