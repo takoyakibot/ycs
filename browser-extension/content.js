@@ -2566,6 +2566,7 @@ function hideHighlightPanel() {
   if (highlightPanel) {
     highlightPanel.classList.remove('visible');
   }
+  hideHighlightSubtitleTooltip();
   highlightPanelVisible = false;
   updateTriggerButtonState();
 }
@@ -2721,6 +2722,54 @@ function createHighlightPanel() {
         text-align: center;
         padding: 20px 0;
         font-size: 12px;
+      }
+      #ycs-highlight-subtitle-tooltip {
+        position: fixed;
+        z-index: 9998;
+        max-width: 360px;
+        max-height: 320px;
+        overflow-y: auto;
+        background: rgba(15, 15, 15, 0.96);
+        border: 1px solid #444;
+        border-radius: 8px;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+        padding: 8px 10px;
+        font-size: 11px;
+        color: #ddd;
+        pointer-events: none;
+        display: none;
+        font-family: 'Segoe UI', 'Hiragino Sans', sans-serif;
+      }
+      #ycs-highlight-subtitle-tooltip.visible { display: block; }
+      .hlp-tooltip-title {
+        font-size: 11px;
+        color: #aaa;
+        margin-bottom: 6px;
+        padding-bottom: 4px;
+        border-bottom: 1px solid #333;
+      }
+      .hlp-tooltip-line {
+        display: flex;
+        gap: 6px;
+        padding: 2px 0;
+        line-height: 1.4;
+      }
+      .hlp-tooltip-line.in-range {
+        color: #fff;
+      }
+      .hlp-tooltip-time {
+        flex-shrink: 0;
+        color: #4fc3f7;
+        font-family: monospace;
+        min-width: 44px;
+      }
+      .hlp-tooltip-text {
+        word-break: break-word;
+      }
+      .hlp-tooltip-empty {
+        color: #777;
+        font-style: italic;
+        padding: 4px 0;
       }
     </style>
     <div class="hlp-header">
@@ -2931,6 +2980,105 @@ function setHighlightStatus(text, isError, isLoading) {
   statusEl.classList.toggle('loading', !!isLoading);
 }
 
+/**
+ * ハイライト候補ホバー時の字幕ツールチップを取得（無ければ作成）
+ */
+function getOrCreateHighlightTooltip() {
+  let tooltip = document.getElementById('ycs-highlight-subtitle-tooltip');
+  if (!tooltip) {
+    tooltip = document.createElement('div');
+    tooltip.id = 'ycs-highlight-subtitle-tooltip';
+    document.body.appendChild(tooltip);
+  }
+  return tooltip;
+}
+
+/**
+ * 指定時刻範囲（前後30秒の余白付き）に含まれる字幕を抽出
+ * @param {number} startSec - 区間の開始秒
+ * @param {number} endSec - 区間の終了秒
+ * @param {number} marginSec - 前後の余白秒
+ * @returns {Array<{start:number, duration:number, text:string, inRange:boolean}>}
+ */
+function getSubtitlesAround(startSec, endSec, marginSec = 30) {
+  if (!Array.isArray(currentSubtitles) || currentSubtitles.length === 0) return [];
+  const fromSec = Math.max(0, startSec - marginSec);
+  const toSec = endSec + marginSec;
+  const result = [];
+  for (const sub of currentSubtitles) {
+    const subStart = Number(sub.start) || 0;
+    const subEnd = subStart + (Number(sub.duration) || 0);
+    // 字幕区間が表示範囲と重なるか
+    if (subEnd >= fromSec && subStart <= toSec) {
+      const inRange = subStart <= endSec && subEnd >= startSec;
+      result.push({
+        start: subStart,
+        duration: Number(sub.duration) || 0,
+        text: String(sub.text || ''),
+        inRange,
+      });
+    }
+  }
+  return result;
+}
+
+/**
+ * ハイライト候補にホバーした時のツールチップ表示
+ */
+function showHighlightSubtitleTooltip(candidate, anchorEl) {
+  const tooltip = getOrCreateHighlightTooltip();
+  const startSec = Number(candidate.time) || 0;
+  const endSec = Number.isFinite(candidate.end_time) ? Number(candidate.end_time) : startSec;
+
+  if (!Array.isArray(currentSubtitles) || currentSubtitles.length === 0) {
+    tooltip.innerHTML = `
+      <div class="hlp-tooltip-title">前後30秒の字幕</div>
+      <div class="hlp-tooltip-empty">字幕が未取得です（📝ボタンで取得してください）</div>
+    `;
+  } else {
+    const subs = getSubtitlesAround(startSec, endSec, 30);
+    if (subs.length === 0) {
+      tooltip.innerHTML = `
+        <div class="hlp-tooltip-title">前後30秒の字幕</div>
+        <div class="hlp-tooltip-empty">この区間に字幕はありません</div>
+      `;
+    } else {
+      const lines = subs.map(s => {
+        const timeStr = formatSubtitleTime(Math.floor(s.start));
+        return `<div class="hlp-tooltip-line ${s.inRange ? 'in-range' : ''}">
+          <span class="hlp-tooltip-time">${timeStr}</span>
+          <span class="hlp-tooltip-text">${escapeHtml(s.text)}</span>
+        </div>`;
+      }).join('');
+      tooltip.innerHTML = `
+        <div class="hlp-tooltip-title">字幕（区間±30秒、太字は区間内）</div>
+        ${lines}
+      `;
+    }
+  }
+
+  // 位置決め: カードの右側に配置、右が画面外ならカードの左側に
+  const rect = anchorEl.getBoundingClientRect();
+  const tooltipWidth = 360; // max-widthと一致
+  const margin = 8;
+  let left = rect.right + margin;
+  if (left + tooltipWidth > window.innerWidth) {
+    left = Math.max(8, rect.left - tooltipWidth - margin);
+  }
+  const top = Math.min(
+    window.innerHeight - 340,
+    Math.max(8, rect.top)
+  );
+  tooltip.style.left = `${left}px`;
+  tooltip.style.top = `${top}px`;
+  tooltip.classList.add('visible');
+}
+
+function hideHighlightSubtitleTooltip() {
+  const tooltip = document.getElementById('ycs-highlight-subtitle-tooltip');
+  if (tooltip) tooltip.classList.remove('visible');
+}
+
 function renderHighlightResults(candidates) {
   const resultsEl = highlightPanel?.querySelector('#hlp-results');
   if (!resultsEl) return;
@@ -2990,6 +3138,14 @@ function renderHighlightResults(candidates) {
       if (videoElement && Number.isFinite(c.time)) {
         videoElement.currentTime = c.time;
       }
+    });
+
+    // ホバー時に区間前後の字幕をツールチップ表示
+    item.addEventListener('mouseenter', () => {
+      showHighlightSubtitleTooltip(c, item);
+    });
+    item.addEventListener('mouseleave', () => {
+      hideHighlightSubtitleTooltip();
     });
 
     fragment.appendChild(item);
