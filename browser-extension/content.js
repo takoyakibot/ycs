@@ -2756,6 +2756,7 @@ function createHighlightPanel() {
       }
       .hlp-tooltip-line.in-range {
         color: #fff;
+        font-weight: 600;
       }
       .hlp-tooltip-time {
         flex-shrink: 0;
@@ -3065,13 +3066,17 @@ function showHighlightSubtitleTooltip(candidate, anchorEl) {
   if (left + tooltipWidth > window.innerWidth) {
     left = Math.max(8, rect.left - tooltipWidth - margin);
   }
+  tooltip.style.left = `${left}px`;
+  // 一旦表示してから実高さを取得して縦位置を補正
+  // （字幕件数によって高さが大きく変わるため固定値だと上に寄りすぎる）
+  tooltip.style.top = '0px';
+  tooltip.classList.add('visible');
+  const tooltipHeight = tooltip.offsetHeight;
   const top = Math.min(
-    window.innerHeight - 340,
+    Math.max(8, window.innerHeight - tooltipHeight - 8),
     Math.max(8, rect.top)
   );
-  tooltip.style.left = `${left}px`;
   tooltip.style.top = `${top}px`;
-  tooltip.classList.add('visible');
 }
 
 function hideHighlightSubtitleTooltip() {
