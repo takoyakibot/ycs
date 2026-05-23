@@ -84,6 +84,12 @@ const CHAT_DB_VERSION = 1;
 const CHAT_STORE_NAME = 'chats';
 const CHAT_MAX_AGE_DAYS = 30; // 30日以上前のデータは削除
 
+// ハイライト検出結果保存用
+let highlightDB = null;
+const HIGHLIGHT_DB_NAME = 'YCSHighlightDB';
+const HIGHLIGHT_DB_VERSION = 1;
+const HIGHLIGHT_STORE_NAME = 'highlights';
+
 // 字幕取得用
 let subtitlePanel = null;
 let subtitlePanelVisible = false;
@@ -2560,6 +2566,28 @@ function showHighlightPanel() {
   highlightPanelVisible = true;
   updateTriggerButtonState();
   updateHighlightDataStatus();
+  // 保存済みのハイライト検出結果を自動復元
+  restoreSavedHighlightResult();
+}
+
+/**
+ * IndexedDBから保存済みのハイライト検出結果を読み込んで表示
+ * 既に結果が表示中の場合は上書きしない（再検出ボタン前提）
+ */
+async function restoreSavedHighlightResult() {
+  const videoId = getVideoId();
+  if (!videoId) return;
+  const resultsEl = highlightPanel?.querySelector('#hlp-results');
+  if (!resultsEl) return;
+  // 既に結果カードが表示されている場合はスキップ（再検出後の状態を維持）
+  if (resultsEl.querySelector('.hlp-result-item')) return;
+
+  const saved = await loadHighlightResult(videoId);
+  if (saved && Array.isArray(saved.candidates) && saved.candidates.length > 0) {
+    renderHighlightResults(saved.candidates);
+    const savedDate = new Date(saved.savedAt).toLocaleString('ja-JP');
+    setHighlightStatus(`保存済みの検出結果を表示中（${savedDate}）`, false);
+  }
 }
 
 function hideHighlightPanel() {
@@ -2736,7 +2764,6 @@ function createHighlightPanel() {
         padding: 8px 10px;
         font-size: 11px;
         color: #ddd;
-        pointer-events: none;
         display: none;
         font-family: 'Segoe UI', 'Hiragino Sans', sans-serif;
       }
@@ -2965,6 +2992,8 @@ async function detectHighlights() {
     const candidates = data?.candidates || [];
     renderHighlightResults(candidates);
     setHighlightStatus(`${candidates.length}件の候補を検出しました`, false);
+    // 自動保存（次回パネルを開いた時に自動復元される）
+    saveHighlightResult(videoId, candidates);
   } catch (error) {
     console.error('[YCS Highlight] 検出エラー:', error);
     setHighlightStatus(`検出に失敗しました: ${error.message}`, true);
@@ -2981,8 +3010,13 @@ function setHighlightStatus(text, isError, isLoading) {
   statusEl.classList.toggle('loading', !!isLoading);
 }
 
+// ツールチップ消失の遅延タイマー（カード→ツールチップへの移動時の取りこぼし防止）
+let highlightTooltipHideTimer = null;
+
 /**
  * ハイライト候補ホバー時の字幕ツールチップを取得（無ければ作成）
+ * ツールチップ自体にもmouseenter/mouseleaveを付けて、スクロールバー操作中に
+ * 消えないようにする
  */
 function getOrCreateHighlightTooltip() {
   let tooltip = document.getElementById('ycs-highlight-subtitle-tooltip');
@@ -2990,6 +3024,17 @@ function getOrCreateHighlightTooltip() {
     tooltip = document.createElement('div');
     tooltip.id = 'ycs-highlight-subtitle-tooltip';
     document.body.appendChild(tooltip);
+    // ツールチップ上にマウスがある間は非表示タイマーをキャンセル
+    tooltip.addEventListener('mouseenter', () => {
+      if (highlightTooltipHideTimer) {
+        clearTimeout(highlightTooltipHideTimer);
+        highlightTooltipHideTimer = null;
+      }
+    });
+    // ツールチップから離れたら非表示
+    tooltip.addEventListener('mouseleave', () => {
+      hideHighlightSubtitleTooltip();
+    });
   }
   return tooltip;
 }
@@ -3028,6 +3073,11 @@ function getSubtitlesAround(startSec, endSec, marginSec = 30) {
  */
 function showHighlightSubtitleTooltip(candidate, anchorEl) {
   const tooltip = getOrCreateHighlightTooltip();
+  // 表示要求が来たら消失タイマーはキャンセル
+  if (highlightTooltipHideTimer) {
+    clearTimeout(highlightTooltipHideTimer);
+    highlightTooltipHideTimer = null;
+  }
   const startSec = Number(candidate.time) || 0;
   const endSec = Number.isFinite(candidate.end_time) ? Number(candidate.end_time) : startSec;
 
@@ -3080,8 +3130,90 @@ function showHighlightSubtitleTooltip(candidate, anchorEl) {
 }
 
 function hideHighlightSubtitleTooltip() {
+  if (highlightTooltipHideTimer) {
+    clearTimeout(highlightTooltipHideTimer);
+    highlightTooltipHideTimer = null;
+  }
   const tooltip = document.getElementById('ycs-highlight-subtitle-tooltip');
   if (tooltip) tooltip.classList.remove('visible');
+}
+
+/**
+ * カードから離れた時に少し待ってからツールチップを非表示にする
+ * （ツールチップ上にマウスが移動した場合は mouseenter でキャンセルされる）
+ */
+function scheduleHideHighlightSubtitleTooltip() {
+  if (highlightTooltipHideTimer) {
+    clearTimeout(highlightTooltipHideTimer);
+  }
+  highlightTooltipHideTimer = setTimeout(() => {
+    hideHighlightSubtitleTooltip();
+  }, 200);
+}
+
+/**
+ * ハイライト保存用IndexedDBを初期化
+ * keyPath: 'videoId' なので、同じ動画で再検出すると自動的に上書き保存される
+ */
+function initHighlightDB() {
+  return new Promise((resolve, reject) => {
+    if (highlightDB) {
+      resolve(highlightDB);
+      return;
+    }
+    const request = indexedDB.open(HIGHLIGHT_DB_NAME, HIGHLIGHT_DB_VERSION);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      highlightDB = request.result;
+      resolve(highlightDB);
+    };
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains(HIGHLIGHT_STORE_NAME)) {
+        const store = db.createObjectStore(HIGHLIGHT_STORE_NAME, { keyPath: 'videoId' });
+        store.createIndex('savedAt', 'savedAt', { unique: false });
+      }
+    };
+  });
+}
+
+/**
+ * ハイライト検出結果をIndexedDBに保存（最新1件で上書き）
+ */
+async function saveHighlightResult(videoId, candidates) {
+  if (!videoId || !Array.isArray(candidates)) return;
+  try {
+    await initHighlightDB();
+    const tx = highlightDB.transaction([HIGHLIGHT_STORE_NAME], 'readwrite');
+    const store = tx.objectStore(HIGHLIGHT_STORE_NAME);
+    store.put({
+      videoId,
+      candidates,
+      savedAt: Date.now(),
+    });
+  } catch (e) {
+    console.warn('[YCS Highlight] 保存に失敗:', e);
+  }
+}
+
+/**
+ * IndexedDBから指定videoIdのハイライト検出結果を取得
+ * @returns {Promise<{videoId, candidates, savedAt}|null>}
+ */
+async function loadHighlightResult(videoId) {
+  if (!videoId) return null;
+  try {
+    await initHighlightDB();
+    return await new Promise((resolve, reject) => {
+      const tx = highlightDB.transaction([HIGHLIGHT_STORE_NAME], 'readonly');
+      const req = tx.objectStore(HIGHLIGHT_STORE_NAME).get(videoId);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error);
+    });
+  } catch (e) {
+    console.warn('[YCS Highlight] 読込に失敗:', e);
+    return null;
+  }
 }
 
 function renderHighlightResults(candidates) {
@@ -3146,11 +3278,12 @@ function renderHighlightResults(candidates) {
     });
 
     // ホバー時に区間前後の字幕をツールチップ表示
+    // mouseleave時は遅延付きで非表示にし、その間にツールチップ上に移動すれば消えない
     item.addEventListener('mouseenter', () => {
       showHighlightSubtitleTooltip(c, item);
     });
     item.addEventListener('mouseleave', () => {
-      hideHighlightSubtitleTooltip();
+      scheduleHideHighlightSubtitleTooltip();
     });
 
     fragment.appendChild(item);
