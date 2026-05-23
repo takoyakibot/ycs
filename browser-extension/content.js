@@ -4692,7 +4692,7 @@ function updateTimestampList() {
       <button type="button" class="vdg-ts-offset-btn" data-marker-id="${marker.id}" data-delta="-1" title="-1秒" tabindex="-1">-1s</button>
       <span class="vdg-ts-time">${formatTimestamp(marker.time)}</span>
       <button type="button" class="vdg-ts-offset-btn" data-marker-id="${marker.id}" data-delta="1" title="+1秒" tabindex="-1">+1s</button>
-      <input type="text" class="vdg-ts-text-input" value="${marker.text}" placeholder="曲名を入力..." data-marker-id="${marker.id}">
+      <input type="text" class="vdg-ts-text-input" value="${escapeHtml(marker.text)}" placeholder="曲名を入力..." data-marker-id="${marker.id}">
     </div>
   `).join('');
 
