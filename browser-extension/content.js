@@ -89,6 +89,7 @@ let highlightDB = null;
 const HIGHLIGHT_DB_NAME = 'YCSHighlightDB';
 const HIGHLIGHT_DB_VERSION = 1;
 const HIGHLIGHT_STORE_NAME = 'highlights';
+const HIGHLIGHT_MAX_AGE_DAYS = 90; // 90日以上前のデータは削除
 
 // 字幕取得用
 let subtitlePanel = null;
@@ -1921,6 +1922,7 @@ async function cleanupOldChatData() {
 
 // 起動時に古いデータをクリーンアップ
 setTimeout(cleanupOldChatData, 5000);
+setTimeout(cleanupOldHighlightData, 6000);
 
 // ==========================================
 // 字幕取得機能
@@ -3117,8 +3119,9 @@ function showHighlightSubtitleTooltip(candidate, anchorEl) {
     left = Math.max(8, rect.left - tooltipWidth - margin);
   }
   tooltip.style.left = `${left}px`;
-  // 一旦表示してから実高さを取得して縦位置を補正
-  // （字幕件数によって高さが大きく変わるため固定値だと上に寄りすぎる）
+  // 縦位置決定のために実高さが必要だが、ユーザーに位置決定途中が見えないよう
+  // 一時的に visibility: hidden にしてレイアウトのみ走らせる
+  tooltip.style.visibility = 'hidden';
   tooltip.style.top = '0px';
   tooltip.classList.add('visible');
   const tooltipHeight = tooltip.offsetHeight;
@@ -3127,6 +3130,7 @@ function showHighlightSubtitleTooltip(candidate, anchorEl) {
     Math.max(8, rect.top)
   );
   tooltip.style.top = `${top}px`;
+  tooltip.style.visibility = '';
 }
 
 function hideHighlightSubtitleTooltip() {
@@ -3181,7 +3185,7 @@ function initHighlightDB() {
  * ハイライト検出結果をIndexedDBに保存（最新1件で上書き）
  */
 async function saveHighlightResult(videoId, candidates) {
-  if (!videoId || !Array.isArray(candidates)) return;
+  if (!videoId || !Array.isArray(candidates) || candidates.length === 0) return;
   try {
     await initHighlightDB();
     const tx = highlightDB.transaction([HIGHLIGHT_STORE_NAME], 'readwrite');
@@ -3193,6 +3197,41 @@ async function saveHighlightResult(videoId, candidates) {
     });
   } catch (e) {
     console.warn('[YCS Highlight] 保存に失敗:', e);
+  }
+}
+
+/**
+ * 古いハイライト検出結果を削除（HIGHLIGHT_MAX_AGE_DAYS日以上前のレコード）
+ * 起動時に1回だけ実行される
+ */
+async function cleanupOldHighlightData() {
+  try {
+    await initHighlightDB();
+    const cutoffMs = Date.now() - HIGHLIGHT_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+    const tx = highlightDB.transaction([HIGHLIGHT_STORE_NAME], 'readwrite');
+    const store = tx.objectStore(HIGHLIGHT_STORE_NAME);
+    const index = store.index('savedAt');
+    const range = IDBKeyRange.upperBound(cutoffMs);
+    const request = index.openCursor(range);
+    let deletedCount = 0;
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (cursor) {
+        cursor.delete();
+        deletedCount++;
+        cursor.continue();
+      }
+    };
+    await new Promise((resolve) => {
+      tx.oncomplete = () => {
+        if (deletedCount > 0) {
+          console.log(`[YCS] ${deletedCount}件の古いハイライト結果を削除しました`);
+        }
+        resolve();
+      };
+    });
+  } catch (e) {
+    console.error('[YCS Highlight] クリーンアップエラー:', e);
   }
 }
 
