@@ -38,7 +38,7 @@ class HighlightDetectionApiController extends Controller
             'volumes.*' => ['numeric', 'min:0', 'max:1'],
             'subtitles' => ['present', 'array', 'max:10000'],
             'subtitles.*.start' => ['required', 'numeric', 'min:0', 'max:86400'],
-            'subtitles.*.duration' => ['required', 'numeric', 'min:0', 'max:120'],
+            'subtitles.*.duration' => ['required', 'numeric', 'min:0', 'max:60'],
             'subtitles.*.text' => ['required', 'string', 'max:500'],
             'chats' => ['present', 'array', 'max:30000'],
             'chats.*.offsetMs' => ['required', 'integer', 'min:0', 'max:86400000'],
@@ -61,9 +61,9 @@ class HighlightDetectionApiController extends Controller
         try {
             $candidates = $this->extractor->extract(
                 duration: (float) $validated['duration'],
-                volumes: $validated['volumes'] ?? [],
-                subtitles: $validated['subtitles'] ?? [],
-                chats: $validated['chats'] ?? [],
+                volumes: $validated['volumes'],
+                subtitles: $validated['subtitles'],
+                chats: $validated['chats'],
             );
 
             $analyzed = $this->analyzer->analyze($candidates);
@@ -71,9 +71,9 @@ class HighlightDetectionApiController extends Controller
             Log::info('ハイライト検出完了', [
                 'video_id' => $videoId,
                 'duration' => $validated['duration'],
-                'volumes_count' => count($validated['volumes'] ?? []),
-                'subtitles_count' => count($validated['subtitles'] ?? []),
-                'chats_count' => count($validated['chats'] ?? []),
+                'volumes_count' => count($validated['volumes']),
+                'subtitles_count' => count($validated['subtitles']),
+                'chats_count' => count($validated['chats']),
                 'candidates_count' => count($analyzed),
             ]);
 

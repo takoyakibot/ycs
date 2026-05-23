@@ -118,7 +118,7 @@ class HighlightCandidateExtractor
             $rawCandidates[] = [
                 'window_index' => $i,
                 'time' => $i * self::WINDOW_SEC,
-                'end_time' => min($duration, ($i + 1) * self::WINDOW_SEC),
+                'end_time' => (int) min($duration, ($i + 1) * self::WINDOW_SEC),
                 'score' => $score,
                 'volume_score' => $volumeScore,
                 'chat_score' => $chatScore,
