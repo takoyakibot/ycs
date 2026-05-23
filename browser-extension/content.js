@@ -4673,7 +4673,7 @@ function updateTimestampList() {
   listEl.innerHTML = tsMarkers.map(marker => `
     <div class="vdg-ts-row ${marker.id === selectedMarkerId ? 'selected' : ''}" data-marker-id="${marker.id}">
       <span class="vdg-ts-time">${formatTimestamp(marker.time)}</span>
-      <input type="text" class="vdg-ts-text-input" value="${marker.text}" placeholder="曲名を入力..." data-marker-id="${marker.id}">
+      <input type="text" class="vdg-ts-text-input" value="${escapeHtml(marker.text)}" placeholder="曲名を入力..." data-marker-id="${marker.id}">
     </div>
   `).join('');
 
