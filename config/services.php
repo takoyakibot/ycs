@@ -47,4 +47,10 @@ return [
         'site_key' => env('RECAPTCHA_SITE_KEY'),
         'secret_key' => env('RECAPTCHA_SECRET_KEY'),
     ],
+
+    'anthropic' => [
+        'api_key' => env('ANTHROPIC_API_KEY'),
+        'highlight_model' => env('ANTHROPIC_HIGHLIGHT_MODEL', 'claude-haiku-4-5-20251001'),
+        'timeout' => (int) env('ANTHROPIC_TIMEOUT', 60),
+    ],
 ];
