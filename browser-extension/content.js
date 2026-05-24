@@ -84,6 +84,13 @@ const CHAT_DB_VERSION = 1;
 const CHAT_STORE_NAME = 'chats';
 const CHAT_MAX_AGE_DAYS = 30; // 30日以上前のデータは削除
 
+// ハイライト検出結果保存用
+let highlightDB = null;
+const HIGHLIGHT_DB_NAME = 'YCSHighlightDB';
+const HIGHLIGHT_DB_VERSION = 1;
+const HIGHLIGHT_STORE_NAME = 'highlights';
+const HIGHLIGHT_MAX_AGE_DAYS = 90; // 90日以上前のデータは削除
+
 // 字幕取得用
 let subtitlePanel = null;
 let subtitlePanelVisible = false;
@@ -1773,7 +1780,7 @@ function renderChatResults(chats) {
   }
 
   const html = chats.slice(0, 200).map(chat => {
-    const timeStr = formatTimestamp(chat.timestamp);
+    const timeStr = formatTimestampMsec(chat.timestamp);
     const badge = chat.isSuperchat
       ? `<span class="csp-result-badge csp-badge-superchat">${chat.amount || 'SC'}</span>`
       : '';
@@ -1801,9 +1808,13 @@ function renderChatResults(chats) {
 }
 
 /**
- * タイムスタンプをフォーマット
+ * ミリ秒値をタイムスタンプ表記にフォーマット（チャットのoffsetMs用）
+ * NOTE: 5573行に同名で別実装(秒用、vdg/マーカー用)があったため、
+ * 名前を formatTimestampMsec に変更して衝突を解消した。
+ * 後勝ち定義により旧名 formatTimestamp はチャット用には機能していなかった
+ * （表示時刻が実際と全く異なる不具合の原因）。
  */
-function formatTimestamp(msec) {
+function formatTimestampMsec(msec) {
   const totalSeconds = Math.floor(msec / 1000);
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
@@ -1915,6 +1926,7 @@ async function cleanupOldChatData() {
 
 // 起動時に古いデータをクリーンアップ
 setTimeout(cleanupOldChatData, 5000);
+setTimeout(cleanupOldHighlightData, 6000);
 
 // ==========================================
 // 字幕取得機能
@@ -2560,12 +2572,35 @@ function showHighlightPanel() {
   highlightPanelVisible = true;
   updateTriggerButtonState();
   updateHighlightDataStatus();
+  // 保存済みのハイライト検出結果を自動復元
+  restoreSavedHighlightResult();
+}
+
+/**
+ * IndexedDBから保存済みのハイライト検出結果を読み込んで表示
+ * 既に結果が表示中の場合は上書きしない（再検出ボタン前提）
+ */
+async function restoreSavedHighlightResult() {
+  const videoId = getVideoId();
+  if (!videoId) return;
+  const resultsEl = highlightPanel?.querySelector('#hlp-results');
+  if (!resultsEl) return;
+  // 既に結果カードが表示されている場合はスキップ（再検出後の状態を維持）
+  if (resultsEl.querySelector('.hlp-result-item')) return;
+
+  const saved = await loadHighlightResult(videoId);
+  if (saved && Array.isArray(saved.candidates) && saved.candidates.length > 0) {
+    renderHighlightResults(saved.candidates);
+    const savedDate = new Date(saved.savedAt).toLocaleString('ja-JP');
+    setHighlightStatus(`保存済みの検出結果を表示中（${savedDate}）`, false);
+  }
 }
 
 function hideHighlightPanel() {
   if (highlightPanel) {
     highlightPanel.classList.remove('visible');
   }
+  hideHighlightSubtitleTooltip();
   highlightPanelVisible = false;
   updateTriggerButtonState();
 }
@@ -2721,6 +2756,54 @@ function createHighlightPanel() {
         text-align: center;
         padding: 20px 0;
         font-size: 12px;
+      }
+      #ycs-highlight-subtitle-tooltip {
+        position: fixed;
+        z-index: 9998;
+        max-width: 360px;
+        max-height: 320px;
+        overflow-y: auto;
+        background: rgba(15, 15, 15, 0.96);
+        border: 1px solid #444;
+        border-radius: 8px;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+        padding: 8px 10px;
+        font-size: 11px;
+        color: #ddd;
+        display: none;
+        font-family: 'Segoe UI', 'Hiragino Sans', sans-serif;
+      }
+      #ycs-highlight-subtitle-tooltip.visible { display: block; }
+      .hlp-tooltip-title {
+        font-size: 11px;
+        color: #aaa;
+        margin-bottom: 6px;
+        padding-bottom: 4px;
+        border-bottom: 1px solid #333;
+      }
+      .hlp-tooltip-line {
+        display: flex;
+        gap: 6px;
+        padding: 2px 0;
+        line-height: 1.4;
+      }
+      .hlp-tooltip-line.in-range {
+        color: #fff;
+        font-weight: 600;
+      }
+      .hlp-tooltip-time {
+        flex-shrink: 0;
+        color: #4fc3f7;
+        font-family: monospace;
+        min-width: 44px;
+      }
+      .hlp-tooltip-text {
+        word-break: break-word;
+      }
+      .hlp-tooltip-empty {
+        color: #777;
+        font-style: italic;
+        padding: 4px 0;
       }
     </style>
     <div class="hlp-header">
@@ -2915,6 +2998,8 @@ async function detectHighlights() {
     const candidates = data?.candidates || [];
     renderHighlightResults(candidates);
     setHighlightStatus(`${candidates.length}件の候補を検出しました`, false);
+    // 自動保存（次回パネルを開いた時に自動復元される）
+    saveHighlightResult(videoId, candidates);
   } catch (error) {
     console.error('[YCS Highlight] 検出エラー:', error);
     setHighlightStatus(`検出に失敗しました: ${error.message}`, true);
@@ -2929,6 +3014,249 @@ function setHighlightStatus(text, isError, isLoading) {
   statusEl.textContent = text;
   statusEl.classList.toggle('error', !!isError);
   statusEl.classList.toggle('loading', !!isLoading);
+}
+
+// ツールチップ消失の遅延タイマー（カード→ツールチップへの移動時の取りこぼし防止）
+let highlightTooltipHideTimer = null;
+
+/**
+ * ハイライト候補ホバー時の字幕ツールチップを取得（無ければ作成）
+ * ツールチップ自体にもmouseenter/mouseleaveを付けて、スクロールバー操作中に
+ * 消えないようにする
+ */
+function getOrCreateHighlightTooltip() {
+  let tooltip = document.getElementById('ycs-highlight-subtitle-tooltip');
+  if (!tooltip) {
+    tooltip = document.createElement('div');
+    tooltip.id = 'ycs-highlight-subtitle-tooltip';
+    document.body.appendChild(tooltip);
+    // ツールチップ上にマウスがある間は非表示タイマーをキャンセル
+    tooltip.addEventListener('mouseenter', () => {
+      if (highlightTooltipHideTimer) {
+        clearTimeout(highlightTooltipHideTimer);
+        highlightTooltipHideTimer = null;
+      }
+    });
+    // ツールチップから離れたら非表示
+    tooltip.addEventListener('mouseleave', () => {
+      hideHighlightSubtitleTooltip();
+    });
+  }
+  return tooltip;
+}
+
+/**
+ * 指定時刻範囲（前後30秒の余白付き）に含まれる字幕を抽出
+ * @param {number} startSec - 区間の開始秒
+ * @param {number} endSec - 区間の終了秒
+ * @param {number} marginSec - 前後の余白秒
+ * @returns {Array<{start:number, duration:number, text:string, inRange:boolean}>}
+ */
+function getSubtitlesAround(startSec, endSec, marginSec = 30) {
+  if (!Array.isArray(currentSubtitles) || currentSubtitles.length === 0) return [];
+  const fromSec = Math.max(0, startSec - marginSec);
+  const toSec = endSec + marginSec;
+  const result = [];
+  for (const sub of currentSubtitles) {
+    const subStart = Number(sub.start) || 0;
+    const subEnd = subStart + (Number(sub.duration) || 0);
+    // 字幕区間が表示範囲と重なるか
+    if (subEnd >= fromSec && subStart <= toSec) {
+      const inRange = subStart <= endSec && subEnd >= startSec;
+      result.push({
+        start: subStart,
+        duration: Number(sub.duration) || 0,
+        text: String(sub.text || ''),
+        inRange,
+      });
+    }
+  }
+  return result;
+}
+
+/**
+ * ハイライト候補にホバーした時のツールチップ表示
+ */
+function showHighlightSubtitleTooltip(candidate, anchorEl) {
+  const tooltip = getOrCreateHighlightTooltip();
+  // 表示要求が来たら消失タイマーはキャンセル
+  if (highlightTooltipHideTimer) {
+    clearTimeout(highlightTooltipHideTimer);
+    highlightTooltipHideTimer = null;
+  }
+  const startSec = Number(candidate.time) || 0;
+  const endSec = Number.isFinite(candidate.end_time) ? Number(candidate.end_time) : startSec;
+
+  if (!Array.isArray(currentSubtitles) || currentSubtitles.length === 0) {
+    tooltip.innerHTML = `
+      <div class="hlp-tooltip-title">前後30秒の字幕</div>
+      <div class="hlp-tooltip-empty">字幕が未取得です（📝ボタンで取得してください）</div>
+    `;
+  } else {
+    const subs = getSubtitlesAround(startSec, endSec, 30);
+    if (subs.length === 0) {
+      tooltip.innerHTML = `
+        <div class="hlp-tooltip-title">前後30秒の字幕</div>
+        <div class="hlp-tooltip-empty">この区間に字幕はありません</div>
+      `;
+    } else {
+      const lines = subs.map(s => {
+        const timeStr = formatSubtitleTime(Math.floor(s.start));
+        return `<div class="hlp-tooltip-line ${s.inRange ? 'in-range' : ''}">
+          <span class="hlp-tooltip-time">${timeStr}</span>
+          <span class="hlp-tooltip-text">${escapeHtml(s.text)}</span>
+        </div>`;
+      }).join('');
+      tooltip.innerHTML = `
+        <div class="hlp-tooltip-title">字幕（区間±30秒、太字は区間内）</div>
+        ${lines}
+      `;
+    }
+  }
+
+  // 位置決め: カードの右側に配置、右が画面外ならカードの左側に
+  const rect = anchorEl.getBoundingClientRect();
+  const tooltipWidth = 360; // max-widthと一致
+  const margin = 8;
+  let left = rect.right + margin;
+  if (left + tooltipWidth > window.innerWidth) {
+    left = Math.max(8, rect.left - tooltipWidth - margin);
+  }
+  tooltip.style.left = `${left}px`;
+  // 縦位置決定のために実高さが必要だが、ユーザーに位置決定途中が見えないよう
+  // 一時的に visibility: hidden にしてレイアウトのみ走らせる
+  tooltip.style.visibility = 'hidden';
+  tooltip.style.top = '0px';
+  tooltip.classList.add('visible');
+  const tooltipHeight = tooltip.offsetHeight;
+  const top = Math.min(
+    Math.max(8, window.innerHeight - tooltipHeight - 8),
+    Math.max(8, rect.top)
+  );
+  tooltip.style.top = `${top}px`;
+  tooltip.style.visibility = '';
+}
+
+function hideHighlightSubtitleTooltip() {
+  if (highlightTooltipHideTimer) {
+    clearTimeout(highlightTooltipHideTimer);
+    highlightTooltipHideTimer = null;
+  }
+  const tooltip = document.getElementById('ycs-highlight-subtitle-tooltip');
+  if (tooltip) tooltip.classList.remove('visible');
+}
+
+/**
+ * カードから離れた時に少し待ってからツールチップを非表示にする
+ * （ツールチップ上にマウスが移動した場合は mouseenter でキャンセルされる）
+ */
+function scheduleHideHighlightSubtitleTooltip() {
+  if (highlightTooltipHideTimer) {
+    clearTimeout(highlightTooltipHideTimer);
+  }
+  highlightTooltipHideTimer = setTimeout(() => {
+    hideHighlightSubtitleTooltip();
+  }, 200);
+}
+
+/**
+ * ハイライト保存用IndexedDBを初期化
+ * keyPath: 'videoId' なので、同じ動画で再検出すると自動的に上書き保存される
+ */
+function initHighlightDB() {
+  return new Promise((resolve, reject) => {
+    if (highlightDB) {
+      resolve(highlightDB);
+      return;
+    }
+    const request = indexedDB.open(HIGHLIGHT_DB_NAME, HIGHLIGHT_DB_VERSION);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      highlightDB = request.result;
+      resolve(highlightDB);
+    };
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains(HIGHLIGHT_STORE_NAME)) {
+        const store = db.createObjectStore(HIGHLIGHT_STORE_NAME, { keyPath: 'videoId' });
+        store.createIndex('savedAt', 'savedAt', { unique: false });
+      }
+    };
+  });
+}
+
+/**
+ * ハイライト検出結果をIndexedDBに保存（最新1件で上書き）
+ */
+async function saveHighlightResult(videoId, candidates) {
+  if (!videoId || !Array.isArray(candidates) || candidates.length === 0) return;
+  try {
+    await initHighlightDB();
+    const tx = highlightDB.transaction([HIGHLIGHT_STORE_NAME], 'readwrite');
+    const store = tx.objectStore(HIGHLIGHT_STORE_NAME);
+    store.put({
+      videoId,
+      candidates,
+      savedAt: Date.now(),
+    });
+  } catch (e) {
+    console.warn('[YCS Highlight] 保存に失敗:', e);
+  }
+}
+
+/**
+ * 古いハイライト検出結果を削除（HIGHLIGHT_MAX_AGE_DAYS日以上前のレコード）
+ * 起動時に1回だけ実行される
+ */
+async function cleanupOldHighlightData() {
+  try {
+    await initHighlightDB();
+    const cutoffMs = Date.now() - HIGHLIGHT_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+    const tx = highlightDB.transaction([HIGHLIGHT_STORE_NAME], 'readwrite');
+    const store = tx.objectStore(HIGHLIGHT_STORE_NAME);
+    const index = store.index('savedAt');
+    const range = IDBKeyRange.upperBound(cutoffMs);
+    const request = index.openCursor(range);
+    let deletedCount = 0;
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (cursor) {
+        cursor.delete();
+        deletedCount++;
+        cursor.continue();
+      }
+    };
+    await new Promise((resolve) => {
+      tx.oncomplete = () => {
+        if (deletedCount > 0) {
+          console.log(`[YCS] ${deletedCount}件の古いハイライト結果を削除しました`);
+        }
+        resolve();
+      };
+    });
+  } catch (e) {
+    console.error('[YCS Highlight] クリーンアップエラー:', e);
+  }
+}
+
+/**
+ * IndexedDBから指定videoIdのハイライト検出結果を取得
+ * @returns {Promise<{videoId, candidates, savedAt}|null>}
+ */
+async function loadHighlightResult(videoId) {
+  if (!videoId) return null;
+  try {
+    await initHighlightDB();
+    return await new Promise((resolve, reject) => {
+      const tx = highlightDB.transaction([HIGHLIGHT_STORE_NAME], 'readonly');
+      const req = tx.objectStore(HIGHLIGHT_STORE_NAME).get(videoId);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error);
+    });
+  } catch (e) {
+    console.warn('[YCS Highlight] 読込に失敗:', e);
+    return null;
+  }
 }
 
 function renderHighlightResults(candidates) {
@@ -2990,6 +3318,15 @@ function renderHighlightResults(candidates) {
       if (videoElement && Number.isFinite(c.time)) {
         videoElement.currentTime = c.time;
       }
+    });
+
+    // ホバー時に区間前後の字幕をツールチップ表示
+    // mouseleave時は遅延付きで非表示にし、その間にツールチップ上に移動すれば消えない
+    item.addEventListener('mouseenter', () => {
+      showHighlightSubtitleTooltip(c, item);
+    });
+    item.addEventListener('mouseleave', () => {
+      scheduleHideHighlightSubtitleTooltip();
     });
 
     fragment.appendChild(item);
