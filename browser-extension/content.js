@@ -44,6 +44,7 @@ let tsMarkers = []; // { id, time, text }
 let selectedMarkerId = null;
 let nextMarkerId = 1;
 const MARKER_SNAP_THRESHOLD_SEC = 3; // マーカー選択の判定距離（秒）
+const MARKER_SNAP_THRESHOLD_PX = 8; // マーカー選択の判定距離（ピクセル）。長時間動画では秒基準が1px未満になるため併用
 let tsZeroPad = false; // タイムスタンプのゼロ埋め設定
 let tsEditorMode = 'marker'; // 'marker': マーカー追加, 'seek': シーク
 
@@ -4235,6 +4236,14 @@ function startTimeSync() {
     updateVideoDuration();
   });
 
+  // 停止中のシークでも赤い再生位置ラインを追従させる
+  // （通常の更新は再生中のみのインターバル処理のため、シーク完了時にも更新する）
+  videoElement.addEventListener('seeked', () => {
+    if (isGraphVisible) {
+      updateTimeMarker();
+    }
+  });
+
   // すでに読み込み済みの場合
   if (videoElement.duration) {
     updateVideoDuration();
@@ -4658,7 +4667,7 @@ function createVolumeGraph() {
       </div>
       <div class="vdg-ts-footer">
         <div class="vdg-ts-help">
-          クリック: マーカー追加 | Del: 削除 | ←→: 1秒移動(2度押し5秒) | ↑↓: マーカー移動 | Space: 再生/停止
+          クリック: マーカー追加(付近は選択) | Del: 削除 | ←→: 1秒移動(2度押し5秒) | ↑↓: マーカー移動 | Space: 再生/停止
         </div>
         <label class="vdg-ts-format-toggle">
           <input type="checkbox" id="vdg-ts-zeropad">
@@ -4782,6 +4791,19 @@ function changeZoomLevel(delta) {
 }
 
 /**
+ * マーカースナップ判定の閾値（秒）を計算
+ * 長時間動画では秒基準の閾値が1ピクセル未満になり実質機能しないため、
+ * ピクセル基準の閾値と比較して大きい方を採用する
+ * @param {number} totalWidth - ズームを考慮したグラフの全体幅（ピクセル）
+ * @returns {number} 閾値（秒）
+ */
+function getMarkerSnapThresholdSec(totalWidth) {
+  if (!videoDuration || !totalWidth) return MARKER_SNAP_THRESHOLD_SEC;
+  const pxPerSec = totalWidth / videoDuration;
+  return Math.max(MARKER_SNAP_THRESHOLD_SEC, MARKER_SNAP_THRESHOLD_PX / pxPerSec);
+}
+
+/**
  * 音量グラフのイベント設定
  */
 function setupVolumeGraphEvents() {
@@ -4821,10 +4843,12 @@ function setupVolumeGraphEvents() {
         videoElement.currentTime = clickTime;
       } else {
         // マーカーモード: 既存マーカーの近くは選択、それ以外は追加
-        const nearMarker = tsMarkers.find(m => Math.abs(m.time - clickTime) < MARKER_SNAP_THRESHOLD_SEC);
+        const snapSec = getMarkerSnapThresholdSec(totalWidth);
+        const nearMarker = tsMarkers.find(m => Math.abs(m.time - clickTime) < snapSec);
         if (nearMarker) {
           selectedMarkerId = nearMarker.id;
           videoElement.currentTime = nearMarker.time;
+          updateTimestampList();
         } else {
           const marker = { id: nextMarkerId++, time: Math.floor(clickTime), text: '' };
           tsMarkers.push(marker);
@@ -4835,6 +4859,8 @@ function setupVolumeGraphEvents() {
           saveMarkersToStorage();
         }
       }
+      // 停止中でも赤い再生位置ラインを即時更新
+      updateTimeMarker();
       drawVolumeGraph();
     });
 
@@ -4848,6 +4874,16 @@ function setupVolumeGraphEvents() {
       const totalWidth = containerRect.width * getZoomLevel();
       const ratio = Math.max(0, Math.min(1, x / totalWidth));
       const time = ratio * videoDuration;
+
+      // カーソル形状: マーカーモードで既存マーカーの近くは「選択」を示すポインタ、
+      // それ以外は「追加」を示す十字。シークモードはポインタ
+      if (tsEditorMode === 'marker') {
+        const snapSec = getMarkerSnapThresholdSec(totalWidth);
+        const isNearMarker = tsMarkers.some(m => Math.abs(m.time - time) < snapSec);
+        container.style.cursor = isNearMarker ? 'pointer' : 'crosshair';
+      } else {
+        container.style.cursor = 'pointer';
+      }
 
       if (hoverTime) {
         hoverTime.textContent = formatTimeDisplay(time);
@@ -4982,11 +5018,15 @@ function setupVolumeGraphEvents() {
   }
 
   // タイムスタンプエディタ: キーボード操作
+  // YouTube本体のショートカット（Space: 再生/停止、←→: シーク等）と二重に発火すると
+  // 打ち消し合うため、キャプチャフェーズで先に処理して stopImmediatePropagation で止める
   let lastArrowTime = 0;
   document.addEventListener('keydown', (e) => {
     const isTextInput = e.target.classList.contains('vdg-ts-text-input');
     // テキスト入力中は基本的にスキップ（入力を妨げない）
     if (isTextInput && !['Delete', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
+    // 検索ボックスやコメント欄など、エディタ以外の編集可能要素への入力は妨げない
+    if (!isTextInput && isEditableTarget(e.target)) return;
     // グラフが非表示またはマーカー未選択なら何もしない
     if (!isGraphVisible || selectedMarkerId === null) return;
 
@@ -4994,9 +5034,11 @@ function setupVolumeGraphEvents() {
 
     if (e.key === 'Delete' && !isTextInput) {
       e.preventDefault();
+      e.stopImmediatePropagation();
       deleteSelectedMarker();
     } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
       e.preventDefault();
+      e.stopImmediatePropagation();
       // 上下キーで前後のマーカーに移動
       const currentIndex = tsMarkers.findIndex(m => m.id === selectedMarkerId);
       if (currentIndex < 0) return;
@@ -5007,12 +5049,14 @@ function setupVolumeGraphEvents() {
         selectedMarkerId = tsMarkers[nextIndex].id;
         if (videoElement) {
           videoElement.currentTime = tsMarkers[nextIndex].time;
+          updateTimeMarker();
         }
         updateTimestampList();
         drawVolumeGraph();
       }
     } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
       e.preventDefault();
+      e.stopImmediatePropagation();
       const direction = e.key === 'ArrowLeft' ? -1 : 1;
       // 200ms以内の連続押下で5秒移動
       const delta = (now - lastArrowTime < 200) ? 5 : 1;
@@ -5020,7 +5064,7 @@ function setupVolumeGraphEvents() {
       moveSelectedMarker(direction * delta);
     } else if (e.key === ' ') {
       e.preventDefault();
-      e.stopPropagation();
+      e.stopImmediatePropagation();
       if (videoElement) {
         if (videoElement.paused) {
           const marker = tsMarkers.find(m => m.id === selectedMarkerId);
@@ -5033,7 +5077,28 @@ function setupVolumeGraphEvents() {
         }
       }
     }
-  });
+  }, true);
+
+  // Spaceのkeyupも止める（フォーカス中のボタンがSpaceで反応して再生状態が再度トグルされるのを防ぐ）
+  document.addEventListener('keyup', (e) => {
+    if (e.key !== ' ') return;
+    if (e.target.classList.contains('vdg-ts-text-input')) return;
+    if (isEditableTarget(e.target)) return;
+    if (!isGraphVisible || selectedMarkerId === null) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+  }, true);
+}
+
+/**
+ * キー入力を妨げてはいけない編集可能要素かどうかを判定
+ * @param {EventTarget} target - イベントターゲット
+ * @returns {boolean}
+ */
+function isEditableTarget(target) {
+  if (!(target instanceof Element)) return false;
+  if (target.isContentEditable) return true;
+  return ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
 }
 
 /**
@@ -5516,6 +5581,7 @@ function updateTimestampList() {
       const marker = tsMarkers.find(m => m.id === id);
       if (marker && videoElement) {
         videoElement.currentTime = marker.time;
+        updateTimeMarker();
       }
       updateTimestampList();
       drawVolumeGraph();
@@ -5564,6 +5630,7 @@ function moveSelectedMarker(deltaSec) {
   marker.time = Math.max(0, Math.min(videoDuration, marker.time + deltaSec));
   tsMarkers.sort((a, b) => a.time - b.time);
   videoElement.currentTime = marker.time;
+  updateTimeMarker();
   updateTimestampList();
   drawVolumeGraph();
   saveMarkersToStorage();
