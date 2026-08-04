@@ -45,6 +45,7 @@ let selectedMarkerId = null;
 let nextMarkerId = 1;
 const MARKER_SNAP_THRESHOLD_SEC = 3; // マーカー選択の判定距離（秒）
 const MARKER_SNAP_THRESHOLD_PX = 8; // マーカー選択の判定距離（ピクセル）。長時間動画では秒基準が1px未満になるため併用
+let seekedListenerTarget = null; // seekedリスナー登録済みのvideo要素（重複登録防止）
 let tsZeroPad = false; // タイムスタンプのゼロ埋め設定
 let tsEditorMode = 'marker'; // 'marker': マーカー追加, 'seek': シーク
 
@@ -4238,11 +4239,15 @@ function startTimeSync() {
 
   // 停止中のシークでも赤い再生位置ラインを追従させる
   // （通常の更新は再生中のみのインターバル処理のため、シーク完了時にも更新する）
-  videoElement.addEventListener('seeked', () => {
-    if (isGraphVisible) {
-      updateTimeMarker();
-    }
-  });
+  // SPA遷移でstartTimeSyncが再実行されても同一要素へ重複登録しない
+  if (seekedListenerTarget !== videoElement) {
+    seekedListenerTarget = videoElement;
+    videoElement.addEventListener('seeked', () => {
+      if (isGraphVisible) {
+        updateTimeMarker();
+      }
+    });
+  }
 
   // すでに読み込み済みの場合
   if (videoElement.duration) {
@@ -5027,6 +5032,8 @@ function setupVolumeGraphEvents() {
     if (isTextInput && !['Delete', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
     // 検索ボックスやコメント欄など、エディタ以外の編集可能要素への入力は妨げない
     if (!isTextInput && isEditableTarget(e.target)) return;
+    // 設定メニューやボタン等、YouTube本体のUI部品にフォーカスがある間は本体の操作を優先
+    if (!isTsEditorKeyScope()) return;
     // グラフが非表示またはマーカー未選択なら何もしない
     if (!isGraphVisible || selectedMarkerId === null) return;
 
@@ -5079,11 +5086,11 @@ function setupVolumeGraphEvents() {
     }
   }, true);
 
-  // Spaceのkeyupも止める（フォーカス中のボタンがSpaceで反応して再生状態が再度トグルされるのを防ぐ）
+  // Spaceのkeyupも止める（フォーカス中の要素がSpaceで反応して再生状態が再度トグルされるのを防ぐ）
   document.addEventListener('keyup', (e) => {
     if (e.key !== ' ') return;
-    if (e.target.classList.contains('vdg-ts-text-input')) return;
     if (isEditableTarget(e.target)) return;
+    if (!isTsEditorKeyScope()) return;
     if (!isGraphVisible || selectedMarkerId === null) return;
     e.preventDefault();
     e.stopImmediatePropagation();
@@ -5099,6 +5106,22 @@ function isEditableTarget(target) {
   if (!(target instanceof Element)) return false;
   if (target.isContentEditable) return true;
   return ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
+}
+
+/**
+ * タイムスタンプエディタのキーボードショートカットを処理してよいフォーカス状態か判定
+ * 背景（body）・グラフ内・プレイヤー本体へのフォーカスのみ対象とし、
+ * 設定メニューや各種ボタンなどYouTube本体のUI部品にフォーカスがある場合は本体の操作を優先する
+ * @returns {boolean}
+ */
+function isTsEditorKeyScope() {
+  const active = document.activeElement;
+  if (!active || active === document.body || active === document.documentElement) return true;
+  if (volumeGraphContainer && volumeGraphContainer.contains(active)) return true;
+  if (active === videoElement) return true;
+  // プレイヤーのルート要素（#movie_player）自体は対象。内部のボタン・メニューは除外
+  if (active.id === 'movie_player') return true;
+  return false;
 }
 
 /**
