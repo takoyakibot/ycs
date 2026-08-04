@@ -4672,7 +4672,7 @@ function createVolumeGraph() {
       </div>
       <div class="vdg-ts-footer">
         <div class="vdg-ts-help">
-          クリック: マーカー追加(付近は選択) | Del: 削除 | ←→: 1秒移動(2度押し5秒) | ↑↓: マーカー移動 | Space: 再生/停止
+          クリック: マーカー追加(付近は選択/ドラッグで移動) | Del: 削除 | ←→: 1秒移動(2度押し5秒) | ↑↓: マーカー移動 | Space: 再生/停止
         </div>
         <label class="vdg-ts-format-toggle">
           <input type="checkbox" id="vdg-ts-zeropad">
@@ -4832,8 +4832,85 @@ function setupVolumeGraphEvents() {
   if (container) {
     const canvasWrapper = container.querySelector('#vdg-canvas-wrapper');
 
+    // マーカードラッグの状態
+    let draggingMarkerId = null; // ドラッグ中のマーカーID
+    let dragMoved = false; // ドラッグ判定（一定距離動いたか）
+    let dragStartClientX = 0;
+    let suppressClickAfterDrag = false; // ドラッグ直後のclickを無視するためのフラグ
+    const DRAG_START_THRESHOLD_PX = 3; // これ以上動いたらクリックではなくドラッグとみなす
+
+    // スクロール位置とズームを考慮して、マウス位置から動画内の時刻を計算
+    const getTimeFromMouseEvent = (e) => {
+      const containerRect = container.getBoundingClientRect();
+      const x = e.clientX - containerRect.left + container.scrollLeft;
+      const totalWidth = containerRect.width * getZoomLevel();
+      const ratio = Math.max(0, Math.min(1, x / totalWidth));
+      return ratio * videoDuration;
+    };
+
+    // マーカーモード: 既存マーカーの上でmousedownしたらドラッグ開始
+    container.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      if (tsEditorMode !== 'marker') return;
+      if (!videoElement || !videoDuration) return;
+
+      const containerRect = container.getBoundingClientRect();
+      const totalWidth = containerRect.width * getZoomLevel();
+      const time = getTimeFromMouseEvent(e);
+      const snapSec = getMarkerSnapThresholdSec(totalWidth);
+      const nearMarker = tsMarkers.find(m => Math.abs(m.time - time) < snapSec);
+      if (!nearMarker) return;
+
+      draggingMarkerId = nearMarker.id;
+      dragMoved = false;
+      dragStartClientX = e.clientX;
+      selectedMarkerId = nearMarker.id;
+      updateTimestampList();
+      drawVolumeGraph();
+      // ドラッグ中のテキスト選択を防止
+      e.preventDefault();
+    });
+
+    // ドラッグ中の移動（グラフ外に出ても追従できるようdocumentで監視）
+    document.addEventListener('mousemove', (e) => {
+      if (draggingMarkerId === null) return;
+      if (!dragMoved && Math.abs(e.clientX - dragStartClientX) < DRAG_START_THRESHOLD_PX) return;
+      dragMoved = true;
+
+      const marker = tsMarkers.find(m => m.id === draggingMarkerId);
+      if (!marker || !videoDuration) return;
+
+      marker.time = Math.floor(getTimeFromMouseEvent(e));
+      container.style.cursor = 'grabbing';
+      // 一覧の更新はドラッグ確定時にまとめて行う（毎フレームのDOM再生成を避ける）
+      drawVolumeGraph();
+    });
+
+    // ドラッグ確定
+    document.addEventListener('mouseup', () => {
+      if (draggingMarkerId === null) return;
+      const marker = tsMarkers.find(m => m.id === draggingMarkerId);
+      draggingMarkerId = null;
+      if (!dragMoved || !marker) return;
+
+      // ドラッグ直後に発火するclickでマーカー追加/選択が走らないようにする
+      // （グラフ外でmouseupした場合はclick自体が発火しないため、タイマーで確実にリセットする）
+      suppressClickAfterDrag = true;
+      setTimeout(() => { suppressClickAfterDrag = false; }, 0);
+      tsMarkers.sort((a, b) => a.time - b.time);
+      if (videoElement) {
+        videoElement.currentTime = marker.time;
+        updateTimeMarker();
+      }
+      updateTimestampList();
+      drawVolumeGraph();
+      saveMarkersToStorage();
+    });
+
     container.addEventListener('click', (e) => {
       if (!videoElement || !videoDuration) return;
+      // ドラッグ操作の終端で発火したclickは無視（リセットはmouseup側のタイマーで行う）
+      if (suppressClickAfterDrag) return;
 
       // スクロール位置とズームを考慮した座標計算
       const containerRect = container.getBoundingClientRect();
@@ -4880,12 +4957,15 @@ function setupVolumeGraphEvents() {
       const ratio = Math.max(0, Math.min(1, x / totalWidth));
       const time = ratio * videoDuration;
 
-      // カーソル形状: マーカーモードで既存マーカーの近くは「選択」を示すポインタ、
+      // カーソル形状: マーカーモードで既存マーカーの近くは「選択/ドラッグ可能」を示すgrab、
       // それ以外は「追加」を示す十字。シークモードはポインタ
-      if (tsEditorMode === 'marker') {
+      // ドラッグ中はgrabbing（documentのmousemove側で設定）を維持する
+      if (draggingMarkerId !== null) {
+        // 何もしない
+      } else if (tsEditorMode === 'marker') {
         const snapSec = getMarkerSnapThresholdSec(totalWidth);
         const isNearMarker = tsMarkers.some(m => Math.abs(m.time - time) < snapSec);
-        container.style.cursor = isNearMarker ? 'pointer' : 'crosshair';
+        container.style.cursor = isNearMarker ? 'grab' : 'crosshair';
       } else {
         container.style.cursor = 'pointer';
       }
