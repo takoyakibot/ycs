@@ -4672,7 +4672,7 @@ function createVolumeGraph() {
       </div>
       <div class="vdg-ts-footer">
         <div class="vdg-ts-help">
-          クリック: マーカー追加(付近は選択/ドラッグで移動) | Del: 削除 | ←→: 1秒移動(2度押し5秒) | ↑↓: マーカー移動 | Space: 再生/停止
+          クリック: マーカー追加(付近は選択/ドラッグで移動) | Del: 削除 | Esc: 選択解除 | ←→: 1秒移動(2度押し5秒) | ↑↓: マーカー移動 | Space: 再生/停止
         </div>
         <label class="vdg-ts-format-toggle">
           <input type="checkbox" id="vdg-ts-zeropad">
@@ -4887,10 +4887,12 @@ function setupVolumeGraphEvents() {
     });
 
     // ドラッグ確定
-    document.addEventListener('mouseup', () => {
+    document.addEventListener('mouseup', (e) => {
+      if (e.button !== 0) return;
       if (draggingMarkerId === null) return;
       const marker = tsMarkers.find(m => m.id === draggingMarkerId);
       draggingMarkerId = null;
+      container.style.cursor = 'grab';
       if (!dragMoved || !marker) return;
 
       // ドラッグ直後に発火するclickでマーカー追加/選択が走らないようにする
@@ -4975,6 +4977,16 @@ function setupVolumeGraphEvents() {
         // ホバー位置はスクロール位置を引いた画面上の位置
         hoverTime.style.left = `${e.clientX - containerRect.left}px`;
       }
+    });
+
+    // グラフ外のクリックで選択を解除する
+    // （選択がない間はDelete/Space等のショートカットが発動しないため、誤削除を防げる）
+    document.addEventListener('click', (e) => {
+      // マーカーをグラフ外までドラッグして離した際のclickでは解除しない
+      if (suppressClickAfterDrag) return;
+      if (selectedMarkerId === null) return;
+      if (e.target instanceof Element && volumeGraphContainer && volumeGraphContainer.contains(e.target)) return;
+      deselectMarker();
     });
 
     // マウスホイールイベント
@@ -5149,6 +5161,9 @@ function setupVolumeGraphEvents() {
       const delta = (now - lastArrowTime < 200) ? 5 : 1;
       lastArrowTime = now;
       moveSelectedMarker(direction * delta);
+    } else if (e.key === 'Escape') {
+      // 選択解除のみ行い、YouTube側のEsc処理（メニューを閉じる等）は妨げない
+      deselectMarker();
     } else if (e.key === ' ') {
       e.preventDefault();
       e.stopImmediatePropagation();
@@ -5702,11 +5717,35 @@ function updateTimestampList() {
     });
     input.addEventListener('focus', () => {
       const id = parseInt(input.dataset.markerId);
+      if (selectedMarkerId === id) return;
       selectedMarkerId = id;
-      updateTimestampList();
+      // ここでリスト全体をinnerHTML再生成するとフォーカス中の入力欄が破棄されて
+      // 曲名が入力できなくなるため、選択ハイライトのみ更新する
+      updateTimestampListSelection();
       drawVolumeGraph();
     });
   });
+}
+
+/**
+ * タイムスタンプ一覧の選択ハイライトのみ更新（DOMは再生成しない）
+ */
+function updateTimestampListSelection() {
+  const listEl = volumeGraphContainer?.querySelector('#vdg-ts-list');
+  if (!listEl) return;
+  listEl.querySelectorAll('.vdg-ts-row').forEach(row => {
+    row.classList.toggle('selected', parseInt(row.dataset.markerId) === selectedMarkerId);
+  });
+}
+
+/**
+ * マーカーの選択を解除
+ */
+function deselectMarker() {
+  if (selectedMarkerId === null) return;
+  selectedMarkerId = null;
+  updateTimestampListSelection();
+  drawVolumeGraph();
 }
 
 /**
@@ -5714,8 +5753,14 @@ function updateTimestampList() {
  */
 function deleteSelectedMarker() {
   if (selectedMarkerId === null) return;
+  const marker = tsMarkers.find(m => m.id === selectedMarkerId);
+  if (!marker) return;
+  // 曲名入力済みのマーカーは誤削除防止のため確認を挟む
+  const text = (marker.text || '').trim();
+  if (text !== '' && !confirm(`「${text}」(${formatTimestamp(marker.time)}) を削除しますか？`)) return;
   tsMarkers = tsMarkers.filter(m => m.id !== selectedMarkerId);
-  selectedMarkerId = tsMarkers.length > 0 ? tsMarkers[tsMarkers.length - 1].id : null;
+  // 削除直後にDeleteの連打で意図しないマーカーが消えないよう、選択は解除する
+  selectedMarkerId = null;
   updateTimestampList();
   drawVolumeGraph();
   saveMarkersToStorage();
