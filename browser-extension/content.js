@@ -4981,13 +4981,14 @@ function setupVolumeGraphEvents() {
 
     // グラフ外のクリックで選択を解除する
     // （選択がない間はDelete/Space等のショートカットが発動しないため、誤削除を防げる）
+    // stopPropagationするボタン・メニューのクリックでも確実に届くようキャプチャフェーズで監視
     document.addEventListener('click', (e) => {
       // マーカーをグラフ外までドラッグして離した際のclickでは解除しない
       if (suppressClickAfterDrag) return;
       if (selectedMarkerId === null) return;
       if (e.target instanceof Element && volumeGraphContainer && volumeGraphContainer.contains(e.target)) return;
       deselectMarker();
-    });
+    }, true);
 
     // マウスホイールイベント
     container.addEventListener('wheel', (e) => {
