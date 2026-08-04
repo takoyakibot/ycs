@@ -4531,6 +4531,8 @@ function createVolumeGraph() {
       .vdg-ts-list {
         max-height: 200px;
         overflow-y: auto;
+        /* 一覧の上下端に達してもYouTubeページ側へスクロールを伝播させない */
+        overscroll-behavior-y: contain;
         padding: 0 4px;
       }
 
@@ -5726,6 +5728,9 @@ function updateTimestampList() {
       drawVolumeGraph();
     });
   });
+
+  // 選択中の行が表示範囲外ならスクロールして表示（追加・選択・ドラッグ確定などの再構築時）
+  scrollSelectedRowIntoView();
 }
 
 /**
@@ -5737,6 +5742,29 @@ function updateTimestampListSelection() {
   listEl.querySelectorAll('.vdg-ts-row').forEach(row => {
     row.classList.toggle('selected', parseInt(row.dataset.markerId) === selectedMarkerId);
   });
+  scrollSelectedRowIntoView();
+}
+
+/**
+ * 選択中のタイムスタンプ行が一覧の表示範囲外にある場合、一覧内のスクロール位置を調整して表示する
+ * （ページ全体はスクロールさせない）
+ */
+function scrollSelectedRowIntoView() {
+  const listEl = volumeGraphContainer?.querySelector('#vdg-ts-list');
+  if (!listEl) return;
+  const row = listEl.querySelector('.vdg-ts-row.selected');
+  if (!row) return;
+
+  const listRect = listEl.getBoundingClientRect();
+  const rowRect = row.getBoundingClientRect();
+  // グラフ非表示時はサイズが取れないため何もしない
+  if (listRect.height === 0) return;
+
+  if (rowRect.top < listRect.top) {
+    listEl.scrollTop += rowRect.top - listRect.top;
+  } else if (rowRect.bottom > listRect.bottom) {
+    listEl.scrollTop += rowRect.bottom - listRect.bottom;
+  }
 }
 
 /**
