@@ -6115,10 +6115,15 @@ function showLyricsPastePopup(input, candidates, rawText) {
   `;
 
   // 入力欄の直下に配置（グラフコンテナ基準の絶対配置）
-  const containerRect = volumeGraphContainer.getBoundingClientRect();
-  const inputRect = input.getBoundingClientRect();
-  popup.style.left = `${inputRect.left - containerRect.left}px`;
-  popup.style.top = `${inputRect.bottom - containerRect.top + 2}px`;
+  // 一覧のスクロールに追従し、コンテナ右端からはみ出さないようにクランプする
+  const listEl = volumeGraphContainer.querySelector('#vdg-ts-list');
+  const reposition = () => {
+    const containerRect = volumeGraphContainer.getBoundingClientRect();
+    const inputRect = input.getBoundingClientRect();
+    const maxLeft = containerRect.width - popup.offsetWidth - 4;
+    popup.style.left = `${Math.max(0, Math.min(inputRect.left - containerRect.left, maxLeft))}px`;
+    popup.style.top = `${inputRect.bottom - containerRect.top + 2}px`;
+  };
 
   // 挿入して閉じる（execCommandならネイティブのinputイベント発火とUndo履歴が維持される）
   const insertAndClose = (value) => {
@@ -6155,13 +6160,17 @@ function showLyricsPastePopup(input, candidates, rawText) {
 
   input.addEventListener('keydown', onKeydown, true);
   document.addEventListener('mousedown', onOutsideMousedown, true);
+  listEl?.addEventListener('scroll', reposition);
   lyricsPastePopupCleanup = () => {
     input.removeEventListener('keydown', onKeydown, true);
     document.removeEventListener('mousedown', onOutsideMousedown, true);
+    listEl?.removeEventListener('scroll', reposition);
   };
 
   lyricsPastePopup = popup;
   volumeGraphContainer.appendChild(popup);
+  // offsetWidthを使うためDOM追加後に配置
+  reposition();
 }
 
 /**
@@ -6448,6 +6457,8 @@ function handleMessage(message, sender, sendResponse) {
 
     case 'HIDE_VOLUME_GRAPH':
       if (volumeGraphContainer) {
+        // ポップアップを開いたまま非表示になるとリスナーが残留するため閉じる
+        closeLyricsPastePopup();
         volumeGraphContainer.classList.remove('visible');
         isGraphVisible = false;
       }
@@ -6463,6 +6474,10 @@ function handleMessage(message, sender, sendResponse) {
         }
         volumeGraphContainer.classList.toggle('visible');
         isGraphVisible = volumeGraphContainer.classList.contains('visible');
+        if (!isGraphVisible) {
+          // ポップアップを開いたまま非表示になるとリスナーが残留するため閉じる
+          closeLyricsPastePopup();
+        }
         const computed = getComputedStyle(volumeGraphContainer);
         console.log('グラフ表示状態:', isGraphVisible, {
           classList: volumeGraphContainer.className,
