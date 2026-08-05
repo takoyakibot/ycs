@@ -4378,7 +4378,9 @@ function createVolumeGraph() {
       }
 
       .vdg-canvas-container {
-        flex: 1;
+        /* flex:1（=flex-basis:0%）にすると縦方向のflexアイテムではheightより
+           flex-basisが優先され、高さ指定が一切効かなくなるためflex伸縮させない */
+        flex: 0 0 auto;
         position: relative;
         /* 初期高さ。以降はresizeCanvas()がズームレベルに応じてインラインstyleで制御する
            （高さを未確定のままにすると、canvasの高さ属性やスクロールバーの出現が
@@ -5905,8 +5907,9 @@ function updateTimestampList() {
     });
   });
 
-  // 選択中の行が表示範囲外ならスクロールして表示（追加・選択・ドラッグ確定などの再構築時）
+  // 選択中の行・マーカーが表示範囲外ならスクロールして表示（追加・選択・ドラッグ確定などの再構築時）
   scrollSelectedRowIntoView();
+  scrollGraphToSelectedMarker();
 }
 
 /**
@@ -6005,6 +6008,34 @@ function updateTimestampListSelection() {
     row.classList.toggle('selected', parseInt(row.dataset.markerId) === selectedMarkerId);
   });
   scrollSelectedRowIntoView();
+  scrollGraphToSelectedMarker();
+}
+
+/**
+ * 選択中のマーカーがグラフの表示範囲（ズーム時の横スクロール領域）の外にある場合、
+ * グラフのスクロール位置を調整して画面内に表示する
+ */
+function scrollGraphToSelectedMarker() {
+  if (selectedMarkerId === null || !videoDuration) return;
+  const container = volumeGraphContainer?.querySelector('#vdg-canvas-container');
+  if (!container) return;
+
+  const marker = tsMarkers.find(m => m.id === selectedMarkerId);
+  if (!marker) return;
+
+  const visibleWidth = container.clientWidth;
+  const totalWidth = container.getBoundingClientRect().width * getZoomLevel();
+  // ズームしていない（スクロール不要）場合は何もしない
+  if (visibleWidth === 0 || totalWidth <= visibleWidth) return;
+
+  const x = (marker.time / videoDuration) * totalWidth;
+  // 端の判定に少し余白を持たせる
+  const margin = Math.min(20, visibleWidth / 4);
+  if (x >= container.scrollLeft + margin && x <= container.scrollLeft + visibleWidth - margin) return;
+
+  // 表示範囲外なら中央に寄せる
+  const target = x - visibleWidth / 2;
+  container.scrollLeft = Math.max(0, Math.min(target, totalWidth - visibleWidth));
 }
 
 /**
