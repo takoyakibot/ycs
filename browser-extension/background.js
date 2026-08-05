@@ -53,10 +53,18 @@ const YCS_SERVER_URL_MIGRATION_KEY = 'ycsServerUrlMigratedToProd';
   try {
     const result = await chrome.storage.local.get(['ycsServerUrl', YCS_SERVER_URL_MIGRATION_KEY]);
     if (result[YCS_SERVER_URL_MIGRATION_KEY]) return;
-    // 移行済みフラグを先に立てるため、以降ユーザーが意図的にlocalhostを設定しても上書きしない
-    await chrome.storage.local.set({ [YCS_SERVER_URL_MIGRATION_KEY]: true });
-    if (result.ycsServerUrl && result.ycsServerUrl.replace(/\/+$/, '') === LEGACY_YCS_SERVER_URL) {
-      await chrome.storage.local.set({ ycsServerUrl: 'https://ycs.alpacasandbag.jp' });
+
+    // フラグとURLは1回の書き込みでまとめて更新する
+    // （別々に書くと「フラグだけ立ってURLが未移行」の状態が残りうる。また移行済みフラグを
+    //   立てることで、以降ユーザーが意図的にlocalhostを設定しても上書きしない）
+    const update = { [YCS_SERVER_URL_MIGRATION_KEY]: true };
+    const isLegacyUrl = result.ycsServerUrl
+      && result.ycsServerUrl.replace(/\/+$/, '') === LEGACY_YCS_SERVER_URL;
+    if (isLegacyUrl) {
+      update.ycsServerUrl = 'https://ycs.alpacasandbag.jp';
+    }
+    await chrome.storage.local.set(update);
+    if (isLegacyUrl) {
       console.log('[YCS] サーバーURLの保存値を旧既定値から本番URLへ移行しました');
     }
   } catch (error) {
