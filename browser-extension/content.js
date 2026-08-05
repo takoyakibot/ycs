@@ -117,6 +117,8 @@ const subtitleSentCache = new Set();
 // YCS APIトークン（chrome.storageから読み込み）
 let ycsApiToken = null;
 let ycsServerUrl = null;
+// 字幕データ等の送信先。ローカル開発時はポップアップの設定で上書きする
+const DEFAULT_YCS_SERVER_URL = 'https://ycs.alpacasandbag.jp';
 
 /**
  * 埋め込みUI設定を読み込む
@@ -2383,7 +2385,8 @@ async function loadYcsApiSettings() {
   try {
     const result = await chrome.storage.local.get(['ycsApiToken', 'ycsServerUrl']);
     ycsApiToken = result.ycsApiToken || null;
-    ycsServerUrl = result.ycsServerUrl || 'http://localhost:8000';
+    // 末尾のスラッシュは除去する（APIパス連結時に「//」になるのを防ぐ）
+    ycsServerUrl = (result.ycsServerUrl || DEFAULT_YCS_SERVER_URL).replace(/\/+$/, '');
   } catch (error) {
     console.warn('[YCS] API設定読み込みエラー:', error);
   }

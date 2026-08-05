@@ -13,6 +13,9 @@ const STORAGE_KEY_CLAUDE_API_KEY = 'claudeApiKey';
 const STORAGE_KEY_YCS_SERVER_URL = 'ycsServerUrl';
 const STORAGE_KEY_YCS_API_TOKEN = 'ycsApiToken';
 
+// 字幕データ等の送信先。ローカル開発時は設定で上書きする
+const DEFAULT_YCS_SERVER_URL = 'https://ycs.alpacasandbag.jp';
+
 // DOM要素
 const elements = {
   showEmbeddedUI: document.getElementById('show-embedded-ui'),
@@ -89,7 +92,7 @@ async function init() {
   }
 
   // YCS API設定を読み込み
-  elements.ycsServerUrl.value = result[STORAGE_KEY_YCS_SERVER_URL] || 'http://localhost:8000';
+  elements.ycsServerUrl.value = result[STORAGE_KEY_YCS_SERVER_URL] || DEFAULT_YCS_SERVER_URL;
   if (result[STORAGE_KEY_YCS_API_TOKEN]) {
     elements.ycsApiToken.placeholder = '設定済み';
     elements.ycsSettingsStatus.textContent = 'APIトークン設定済み';
@@ -216,7 +219,8 @@ async function saveClaudeApiKey() {
  * YCS API設定を保存
  */
 async function saveYcsSettings() {
-  const serverUrl = elements.ycsServerUrl.value.trim() || 'http://localhost:8000';
+  // 末尾のスラッシュは除去する（APIパス連結時に「//」になるのを防ぐ）
+  const serverUrl = (elements.ycsServerUrl.value.trim() || DEFAULT_YCS_SERVER_URL).replace(/\/+$/, '');
   const apiToken = elements.ycsApiToken.value.trim();
 
   const settings = { [STORAGE_KEY_YCS_SERVER_URL]: serverUrl };
