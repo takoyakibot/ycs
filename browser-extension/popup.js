@@ -92,7 +92,8 @@ async function init() {
   }
 
   // YCS API設定を読み込み
-  elements.ycsServerUrl.value = result[STORAGE_KEY_YCS_SERVER_URL] || DEFAULT_YCS_SERVER_URL;
+  // 実際の送信先と表示を一致させるため、末尾スラッシュを除去して表示する
+  elements.ycsServerUrl.value = (result[STORAGE_KEY_YCS_SERVER_URL] || DEFAULT_YCS_SERVER_URL).replace(/\/+$/, '');
   if (result[STORAGE_KEY_YCS_API_TOKEN]) {
     elements.ycsApiToken.placeholder = '設定済み';
     elements.ycsSettingsStatus.textContent = 'APIトークン設定済み';
