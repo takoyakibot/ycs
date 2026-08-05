@@ -5846,6 +5846,29 @@ function updateTimestampList() {
         saveMarkersToStorage();
       }
     });
+    input.addEventListener('mousedown', (e) => {
+      // 未編集状態のシングルクリックは選択のみ（ダブルクリックで入力状態にする）
+      if (document.activeElement === input) return; // 編集中は通常のカーソル操作
+      e.preventDefault(); // フォーカス取得（入力状態化）を抑止
+      const id = parseInt(input.dataset.markerId);
+      selectedMarkerId = id;
+      const marker = tsMarkers.find(m => m.id === id);
+      if (marker && videoElement) {
+        videoElement.currentTime = marker.time;
+        updateTimeMarker();
+      }
+      // リストを再構築するとこの入力欄が破棄されてダブルクリック判定が壊れるため、
+      // ハイライトのみ更新する
+      updateTimestampListSelection();
+      drawVolumeGraph();
+    });
+    input.addEventListener('dblclick', (e) => {
+      e.preventDefault();
+      input.focus({ preventScroll: true });
+      const len = input.value.length;
+      input.setSelectionRange(len, len);
+      scrollSelectedRowIntoView();
+    });
     input.addEventListener('paste', (e) => {
       const pasted = e.clipboardData?.getData('text/plain');
       if (!pasted) return;
