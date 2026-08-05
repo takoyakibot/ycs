@@ -3884,7 +3884,7 @@ function handleStorageChange(changes, areaName) {
         const coverage = volumeData.length > 0
           ? (volumeData.filter(v => v > 0).length / volumeData.length) * 100
           : 0;
-        progress.textContent = `${Math.round(coverage)}%`;
+        progress.textContent = `分析 ${Math.round(coverage)}%`;
       }
     }
   }
@@ -4373,6 +4373,9 @@ function createVolumeGraph() {
       .vdg-canvas-container {
         flex: 1;
         position: relative;
+        /* 高さを固定しないと、canvasの高さ属性やスクロールバーの出現が
+           コンテナ高さの測定値に跳ね返り、ズームのたびに高さが増え続ける */
+        height: 150px;
         min-height: 40px;
         overflow-x: auto;
         overflow-y: hidden;
@@ -4657,8 +4660,8 @@ function createVolumeGraph() {
       <span class="vdg-title">音量ダイナミクス</span>
       <div class="vdg-controls">
         <span class="vdg-playlist-info" id="vdg-playlist-info"></span>
-        <span class="vdg-progress" id="vdg-progress">0%</span>
-        <span class="vdg-zoom-info" id="vdg-zoom-info">1x</span>
+        <span class="vdg-progress" id="vdg-progress" title="音量分析の完了率">分析 0%</span>
+        <span class="vdg-zoom-info" id="vdg-zoom-info" title="グラフの表示倍率（Ctrl+ホイールで変更）">倍率 1x</span>
         <button class="vdg-volume-mode" id="vdg-volume-mode-btn" title="固定スケールでの絶対値表示中（クリックで相対表示に切替）">絶対</button>
         <button class="vdg-btn" id="vdg-scan-btn" title="動画全体をスキャンしてグラフを生成">スキャン</button>
         <button class="vdg-btn" id="vdg-auto-scan-btn" title="再生リスト内の動画を順番にスキャン">自動</button>
@@ -4693,7 +4696,7 @@ function createVolumeGraph() {
       </div>
       <div class="vdg-ts-footer">
         <div class="vdg-ts-help">
-          クリック: マーカー追加(付近は選択/ドラッグで移動) | Del: 削除 | Esc: 選択解除 | ←→: 1秒移動(2度押し5秒) | ↑↓: マーカー移動 | Space: 再生/停止 | Ctrl+Z/Y: 戻る/進む
+          クリック: マーカー追加(付近は選択/ドラッグで移動) | Enter: 曲名入力 | Del: 削除 | Esc: 選択解除 | ←→: 1秒移動(2度押し5秒) | ↑↓: マーカー移動 | Space: 再生/停止 | Ctrl+Z/Y: 戻る/進む
         </div>
         <label class="vdg-ts-format-toggle">
           <input type="checkbox" id="vdg-ts-zeropad">
@@ -4759,14 +4762,19 @@ function resizeCanvas() {
   const containerRect = canvasContainer.getBoundingClientRect();
   const baseWidth = containerRect.width;
   const zoomedWidth = baseWidth * getZoomLevel();
+  // 高さは水平スクロールバーを除いた表示領域から取得する
+  // （getBoundingClientRect().heightはスクロールバーを含むため、ズームのたびに高さが増えてしまう）
+  const height = canvasContainer.clientHeight;
 
-  // ラッパーとCanvasの幅を設定
+  // ラッパーとCanvasの幅・高さを設定
+  // （高さもCSSで明示し、canvasの高さ属性がレイアウトへ影響しないようにする）
   canvasWrapper.style.width = `${zoomedWidth}px`;
   volumeCanvas.style.width = `${zoomedWidth}px`;
+  volumeCanvas.style.height = `${height}px`;
 
   // Canvas解像度を設定
   volumeCanvas.width = zoomedWidth * window.devicePixelRatio;
-  volumeCanvas.height = containerRect.height * window.devicePixelRatio;
+  volumeCanvas.height = height * window.devicePixelRatio;
 
   // コンテキストをリセット
   volumeCtx = volumeCanvas.getContext('2d');
@@ -4797,7 +4805,7 @@ function changeZoomLevel(delta) {
   // ズーム情報を更新
   const zoomInfo = volumeGraphContainer?.querySelector('#vdg-zoom-info');
   if (zoomInfo) {
-    zoomInfo.textContent = `${newZoom}x`;
+    zoomInfo.textContent = `倍率 ${newZoom}x`;
   }
 
   // スクロール位置を維持するための計算
@@ -5231,6 +5239,17 @@ function setupVolumeGraphEvents() {
       const delta = (now - lastArrowTime < 200) ? 5 : 1;
       lastArrowTime = now;
       moveSelectedMarker(direction * delta);
+    } else if (e.key === 'Enter' && !isTextInput) {
+      // 選択中マーカーの曲名入力欄にフォーカス（カーソルは末尾）
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      const input = volumeGraphContainer?.querySelector(`.vdg-ts-text-input[data-marker-id="${selectedMarkerId}"]`);
+      if (input) {
+        input.focus({ preventScroll: true });
+        const len = input.value.length;
+        input.setSelectionRange(len, len);
+        scrollSelectedRowIntoView();
+      }
     } else if (e.key === 'Escape') {
       // 選択解除のみ行い、YouTube側のEsc処理（メニューを閉じる等）は妨げない
       deselectMarker();
@@ -6072,7 +6091,7 @@ function updateProgress(percent) {
   if (!volumeGraphContainer) return;
   const progress = volumeGraphContainer.querySelector('#vdg-progress');
   if (progress) {
-    progress.textContent = `${Math.round(percent)}%`;
+    progress.textContent = `分析 ${Math.round(percent)}%`;
   }
 }
 
