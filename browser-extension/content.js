@@ -4637,7 +4637,44 @@ function createVolumeGraph() {
 
       .vdg-ts-help {
         font-size: 10px;
-        color: #555;
+        color: #999;
+      }
+
+      .vdg-paste-popup {
+        position: absolute;
+        background: #222;
+        border: 1px solid #555;
+        border-radius: 4px;
+        z-index: 100;
+        min-width: 180px;
+        max-width: 320px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        font-size: 11px;
+      }
+
+      .vdg-paste-popup-title {
+        padding: 4px 8px;
+        color: #888;
+        font-size: 10px;
+        border-bottom: 1px solid #444;
+      }
+
+      .vdg-paste-popup-item {
+        padding: 5px 8px;
+        color: #eee;
+        cursor: pointer;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .vdg-paste-popup-item:hover {
+        background: #444;
+      }
+
+      .vdg-paste-popup-item.raw {
+        color: #999;
+        border-top: 1px solid #444;
       }
 
       .vdg-ts-format-toggle {
@@ -5755,6 +5792,9 @@ function updateTimestampList() {
   const listEl = volumeGraphContainer?.querySelector('#vdg-ts-list');
   if (!listEl) return;
 
+  // リスト再構築でペースト変換ポップアップの対象入力欄が破棄されるため閉じる
+  closeLyricsPastePopup();
+
   if (tsMarkers.length === 0) {
     listEl.innerHTML = '<div class="vdg-ts-empty">波形グラフをクリックしてタイムスタンプを追加</div>';
     return;
@@ -5805,6 +5845,15 @@ function updateTimestampList() {
         marker.text = e.target.value;
         saveMarkersToStorage();
       }
+    });
+    input.addEventListener('paste', (e) => {
+      const pasted = e.clipboardData?.getData('text/plain');
+      if (!pasted) return;
+      // 「アーティスト名 曲名 歌詞 ...」形式なら変換候補を表示（通常のテキストはそのままペースト）
+      const candidates = buildLyricsSplitCandidates(pasted);
+      if (!candidates) return;
+      e.preventDefault();
+      showLyricsPastePopup(input, candidates, pasted.trim());
     });
     input.addEventListener('focus', () => {
       const id = parseInt(input.dataset.markerId);
@@ -5977,6 +6026,119 @@ function moveSelectedMarker(deltaSec) {
   updateTimestampList();
   drawVolumeGraph();
   saveMarkersToStorage();
+}
+
+/**
+ * 歌詞検索サイトの検索結果タイトル「アーティスト名 曲名 歌詞 ...」から
+ * 「曲名 / アーティスト名」の変換候補一覧を生成する
+ * 区切り位置はテキストだけでは一意に決まらないため、すべての分割候補を返し、
+ * ユーザーに選択させる（例: 「BBB CCC AAA 歌詞」→「AAA / BBB CCC」「CCC AAA / BBB」）
+ * @param {string} text - ペーストされたテキスト
+ * @returns {string[]|null} 変換候補（曲名が短い順）。形式に合わない場合はnull
+ */
+function buildLyricsSplitCandidates(text) {
+  const tokens = text.trim().split(/\s+/);
+  // 単独の「歌詞」トークンより前の部分を「アーティスト名+曲名」とみなす
+  // （「歌詞検索」のような複合語は区切りとして扱わない）
+  const idx = tokens.indexOf('歌詞');
+  if (idx < 2) return null; // 「歌詞」がない、または手前が1語以下で分割できない
+  const parts = tokens.slice(0, idx);
+  const candidates = [];
+  for (let k = parts.length - 1; k >= 1; k--) {
+    const artist = parts.slice(0, k).join(' ');
+    const title = parts.slice(k).join(' ');
+    candidates.push(`${title} / ${artist}`);
+  }
+  return candidates;
+}
+
+/**
+ * 表示中の変換候補ポップアップ
+ */
+let lyricsPastePopup = null;
+let lyricsPastePopupCleanup = null;
+
+function closeLyricsPastePopup() {
+  if (lyricsPastePopupCleanup) {
+    lyricsPastePopupCleanup();
+    lyricsPastePopupCleanup = null;
+  }
+  if (lyricsPastePopup) {
+    lyricsPastePopup.remove();
+    lyricsPastePopup = null;
+  }
+}
+
+/**
+ * 曲名入力欄の下に変換候補ポップアップを表示する
+ * 候補クリックで挿入、Esc・外側クリックは元のテキストのまま挿入、
+ * それ以外のキー入力はポップアップを閉じるだけ（挿入しない）
+ * @param {HTMLInputElement} input - ペースト先の入力欄
+ * @param {string[]} candidates - 変換候補
+ * @param {string} rawText - 元のペーストテキスト
+ */
+function showLyricsPastePopup(input, candidates, rawText) {
+  closeLyricsPastePopup();
+  if (!volumeGraphContainer) return;
+
+  // 候補値は属性に埋め込まずインデックスで参照する（escapeHtmlは引用符をエスケープしないため）
+  const values = [...candidates, rawText];
+  const popup = document.createElement('div');
+  popup.className = 'vdg-paste-popup';
+  popup.innerHTML = `
+    <div class="vdg-paste-popup-title">変換候補（クリックで挿入）</div>
+    ${candidates.map((c, i) => `<div class="vdg-paste-popup-item" data-index="${i}">${escapeHtml(c)}</div>`).join('')}
+    <div class="vdg-paste-popup-item raw" data-index="${candidates.length}">そのまま貼り付け</div>
+  `;
+
+  // 入力欄の直下に配置（グラフコンテナ基準の絶対配置）
+  const containerRect = volumeGraphContainer.getBoundingClientRect();
+  const inputRect = input.getBoundingClientRect();
+  popup.style.left = `${inputRect.left - containerRect.left}px`;
+  popup.style.top = `${inputRect.bottom - containerRect.top + 2}px`;
+
+  // 挿入して閉じる（execCommandならネイティブのinputイベント発火とUndo履歴が維持される）
+  const insertAndClose = (value) => {
+    closeLyricsPastePopup();
+    input.focus({ preventScroll: true });
+    document.execCommand('insertText', false, value);
+  };
+
+  // mousedownで処理して入力欄のフォーカスを維持する
+  popup.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const item = e.target.closest('.vdg-paste-popup-item');
+    if (item) {
+      insertAndClose(values[parseInt(item.dataset.index)]);
+    }
+  });
+
+  // Esc: 元のテキストのまま挿入 / その他のキー: 閉じるだけ
+  const onKeydown = (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      insertAndClose(rawText);
+    } else {
+      closeLyricsPastePopup();
+    }
+  };
+  // 外側クリック: 元のテキストのまま挿入（入力欄内のクリックはカーソル移動なので閉じない）
+  const onOutsideMousedown = (e) => {
+    if (popup.contains(e.target) || e.target === input) return;
+    insertAndClose(rawText);
+  };
+
+  input.addEventListener('keydown', onKeydown, true);
+  document.addEventListener('mousedown', onOutsideMousedown, true);
+  lyricsPastePopupCleanup = () => {
+    input.removeEventListener('keydown', onKeydown, true);
+    document.removeEventListener('mousedown', onOutsideMousedown, true);
+  };
+
+  lyricsPastePopup = popup;
+  volumeGraphContainer.appendChild(popup);
 }
 
 /**
