@@ -71,6 +71,8 @@ let audioInitialized = false; // 音声解析が初期化済みか
 
 // ズーム関連
 const ZOOM_LEVELS = [1, 1.5, 2, 3, 4, 5, 6, 7, 8];
+const GRAPH_BASE_HEIGHT_PX = 150; // ズーム1xでのグラフ高さ
+const GRAPH_HEIGHT_STEP_PX = 15; // ズーム1段階ごとの高さ増分
 let zoomIndex = 0; // ZOOM_LEVELSのインデックス
 let lastSaveTime = 0; // 最後に音量データを保存した時刻
 const SAVE_INTERVAL = 3000; // 保存間隔（ミリ秒）
@@ -234,8 +236,7 @@ function toggleEmbeddedUI() {
   if (volumeGraphContainer) {
     const isVisible = volumeGraphContainer.classList.contains('visible');
     if (isVisible) {
-      volumeGraphContainer.classList.remove('visible');
-      isGraphVisible = false;
+      hideVolumeGraphPanel();
     } else {
       volumeGraphContainer.classList.add('visible');
       isGraphVisible = true;
@@ -4379,8 +4380,9 @@ function createVolumeGraph() {
       .vdg-canvas-container {
         flex: 1;
         position: relative;
-        /* 高さを固定しないと、canvasの高さ属性やスクロールバーの出現が
-           コンテナ高さの測定値に跳ね返り、ズームのたびに高さが増え続ける */
+        /* 初期高さ。以降はresizeCanvas()がズームレベルに応じてインラインstyleで制御する
+           （高さを未確定のままにすると、canvasの高さ属性やスクロールバーの出現が
+             コンテナ高さの測定値に跳ね返り、ズームのたびに高さが増え続ける） */
         height: 150px;
         min-height: 40px;
         overflow-x: auto;
@@ -4805,8 +4807,11 @@ function resizeCanvas() {
   const containerRect = canvasContainer.getBoundingClientRect();
   const baseWidth = containerRect.width;
   const zoomedWidth = baseWidth * getZoomLevel();
-  // 高さは水平スクロールバーを除いた表示領域から取得する
-  // （getBoundingClientRect().heightはスクロールバーを含むため、ズームのたびに高さが増えてしまう）
+  // 高さはズームレベルから決定論的に算出する（拡大で高く、縮小で元に戻る）
+  // ※測定値から算出すると、canvasの高さ属性やスクロールバー分が測定に跳ね返って
+  //   高さが増え続けるフィードバックループになるため、必ず計算値を使うこと
+  canvasContainer.style.height = `${GRAPH_BASE_HEIGHT_PX + zoomIndex * GRAPH_HEIGHT_STEP_PX}px`;
+  // 描画領域は水平スクロールバーを除いた実表示高さ
   const height = canvasContainer.clientHeight;
 
   // ラッパーとCanvasの幅・高さを設定
