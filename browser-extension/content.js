@@ -4939,6 +4939,8 @@ function setupVolumeGraphEvents() {
       dragStartClientX = e.clientX;
       // 実際にドラッグ（移動）が確定した場合のみ履歴に積むため、開始時点の状態を控えておく
       dragStartSnapshot = snapshotMarkers();
+      // 曲名編集中なら入力状態を解除する（preventDefaultで自動blurが起きないため）
+      blurMarkerTextInput();
       selectedMarkerId = nearMarker.id;
       updateTimestampList();
       drawVolumeGraph();
@@ -5857,6 +5859,8 @@ function updateTimestampList() {
       // 未編集状態のシングルクリックは選択のみ（ダブルクリックで入力状態にする）
       if (document.activeElement === input) return; // 編集中は通常のカーソル操作
       e.preventDefault(); // フォーカス取得（入力状態化）を抑止
+      // 別の入力欄を編集中だった場合は入力状態を解除する
+      blurMarkerTextInput();
       const id = parseInt(input.dataset.markerId);
       selectedMarkerId = id;
       const marker = tsMarkers.find(m => m.id === id);
@@ -5973,6 +5977,17 @@ function updateUndoRedoButtons() {
   const redoBtn = volumeGraphContainer?.querySelector('#vdg-ts-redo-btn');
   if (undoBtn) undoBtn.disabled = tsHistoryUndo.length === 0;
   if (redoBtn) redoBtn.disabled = tsHistoryRedo.length === 0;
+}
+
+/**
+ * 曲名入力欄が編集中ならフォーカスを外して入力状態を解除する
+ * （mousedownのpreventDefaultで自動のフォーカス移動が起きないケース用）
+ */
+function blurMarkerTextInput() {
+  const active = document.activeElement;
+  if (active instanceof HTMLElement && active.classList.contains('vdg-ts-text-input')) {
+    active.blur();
+  }
 }
 
 /**
