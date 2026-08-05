@@ -297,6 +297,18 @@ function showEmbeddedUI() {
 }
 
 /**
+ * 音量グラフパネルを非表示にする共通処理
+ * ペースト変換ポップアップのリスナー残留を防ぐため、非表示化は必ずここを経由すること
+ */
+function hideVolumeGraphPanel() {
+  closeLyricsPastePopup();
+  if (volumeGraphContainer) {
+    volumeGraphContainer.classList.remove('visible');
+  }
+  isGraphVisible = false;
+}
+
+/**
  * 埋め込みUIを非表示
  */
 function hideEmbeddedUI() {
@@ -305,10 +317,7 @@ function hideEmbeddedUI() {
     embeddedTriggerButton.classList.add('hidden');
   }
   // グラフも非表示
-  if (volumeGraphContainer) {
-    volumeGraphContainer.classList.remove('visible');
-    isGraphVisible = false;
-  }
+  hideVolumeGraphPanel();
 }
 
 /**
@@ -3798,10 +3807,7 @@ function hideWatchPageUI() {
   if (embeddedTriggerButton) {
     embeddedTriggerButton.classList.add('hidden');
   }
-  if (volumeGraphContainer) {
-    volumeGraphContainer.classList.remove('visible');
-    isGraphVisible = false;
-  }
+  hideVolumeGraphPanel();
 
   // スキャン中なら停止
   if (isScanning) {
@@ -5847,6 +5853,7 @@ function updateTimestampList() {
       }
     });
     input.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return; // 右クリック等はコンテキストメニュー操作を妨げない
       // 未編集状態のシングルクリックは選択のみ（ダブルクリックで入力状態にする）
       if (document.activeElement === input) return; // 編集中は通常のカーソル操作
       e.preventDefault(); // フォーカス取得（入力状態化）を抑止
@@ -6456,12 +6463,7 @@ function handleMessage(message, sender, sendResponse) {
       break;
 
     case 'HIDE_VOLUME_GRAPH':
-      if (volumeGraphContainer) {
-        // ポップアップを開いたまま非表示になるとリスナーが残留するため閉じる
-        closeLyricsPastePopup();
-        volumeGraphContainer.classList.remove('visible');
-        isGraphVisible = false;
-      }
+      hideVolumeGraphPanel();
       break;
 
     case 'TOGGLE_VOLUME_GRAPH':
