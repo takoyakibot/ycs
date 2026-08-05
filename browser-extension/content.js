@@ -5309,11 +5309,8 @@ function setupVolumeGraphEvents() {
       e.preventDefault();
       e.stopImmediatePropagation();
       if (videoElement) {
+        // マーカー選択中でも再生位置は動かさず、現在位置から再生/停止する
         if (videoElement.paused) {
-          const marker = tsMarkers.find(m => m.id === selectedMarkerId);
-          if (marker) {
-            videoElement.currentTime = marker.time;
-          }
           videoElement.play();
         } else {
           videoElement.pause();
