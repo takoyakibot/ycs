@@ -46,6 +46,14 @@ let nextMarkerId = 1;
 const MARKER_SNAP_THRESHOLD_SEC = 3; // マーカー選択の判定距離（秒）
 const MARKER_SNAP_THRESHOLD_PX = 8; // マーカー選択の判定距離（ピクセル）。長時間動画では秒基準が1px未満になるため併用
 let seekedListenerTarget = null; // seekedリスナー登録済みのvideo要素（重複登録防止）
+
+// タイムスタンプエディタ: Undo/Redo履歴（変更前スナップショットのスタック）
+let tsHistoryUndo = [];
+let tsHistoryRedo = [];
+const TS_HISTORY_LIMIT = 50; // 履歴の最大保持数
+const TS_HISTORY_COALESCE_MS = 1500; // 同種の連続操作を1履歴にまとめる時間窓
+let lastHistoryTag = null;
+let lastHistoryTime = 0;
 let tsZeroPad = false; // タイムスタンプのゼロ埋め設定
 let tsEditorMode = 'marker'; // 'marker': マーカー追加, 'seek': シーク
 
@@ -4341,6 +4349,15 @@ function createVolumeGraph() {
         background: #555;
       }
 
+      .vdg-btn:disabled {
+        opacity: 0.35;
+        cursor: not-allowed;
+      }
+
+      .vdg-btn:disabled:hover {
+        background: #333;
+      }
+
       .vdg-btn.scanning {
         background: #c62828;
       }
@@ -4665,6 +4682,8 @@ function createVolumeGraph() {
           <button class="vdg-mode-btn" id="vdg-mode-seek" title="クリックで再生位置を移動">シーク</button>
         </div>
         <div class="vdg-ts-editor-actions">
+          <button class="vdg-btn" id="vdg-ts-undo-btn" title="元に戻す (Ctrl+Z)" disabled>↶ 戻る</button>
+          <button class="vdg-btn" id="vdg-ts-redo-btn" title="やり直す (Ctrl+Y)" disabled>↷ 進む</button>
           <button class="vdg-btn vdg-btn-copy" id="vdg-ts-copy-btn" title="テキストとしてコピー">コピー</button>
           <button class="vdg-btn vdg-btn-clear-markers" id="vdg-ts-clear-btn" title="すべてのマーカーを削除">クリア</button>
         </div>
@@ -4674,7 +4693,7 @@ function createVolumeGraph() {
       </div>
       <div class="vdg-ts-footer">
         <div class="vdg-ts-help">
-          クリック: マーカー追加(付近は選択/ドラッグで移動) | Del: 削除 | Esc: 選択解除 | ←→: 1秒移動(2度押し5秒) | ↑↓: マーカー移動 | Space: 再生/停止
+          クリック: マーカー追加(付近は選択/ドラッグで移動) | Del: 削除 | Esc: 選択解除 | ←→: 1秒移動(2度押し5秒) | ↑↓: マーカー移動 | Space: 再生/停止 | Ctrl+Z/Y: 戻る/進む
         </div>
         <label class="vdg-ts-format-toggle">
           <input type="checkbox" id="vdg-ts-zeropad">
@@ -4838,6 +4857,7 @@ function setupVolumeGraphEvents() {
     let draggingMarkerId = null; // ドラッグ中のマーカーID
     let dragMoved = false; // ドラッグ判定（一定距離動いたか）
     let dragStartClientX = 0;
+    let dragStartSnapshot = null; // ドラッグ開始時点の状態（Undo用）
     let suppressClickAfterDrag = false; // ドラッグ直後のclickを無視するためのフラグ
     const DRAG_START_THRESHOLD_PX = 3; // これ以上動いたらクリックではなくドラッグとみなす
 
@@ -4866,6 +4886,8 @@ function setupVolumeGraphEvents() {
       draggingMarkerId = nearMarker.id;
       dragMoved = false;
       dragStartClientX = e.clientX;
+      // 実際にドラッグ（移動）が確定した場合のみ履歴に積むため、開始時点の状態を控えておく
+      dragStartSnapshot = snapshotMarkers();
       selectedMarkerId = nearMarker.id;
       updateTimestampList();
       drawVolumeGraph();
@@ -4895,12 +4917,19 @@ function setupVolumeGraphEvents() {
       const marker = tsMarkers.find(m => m.id === draggingMarkerId);
       draggingMarkerId = null;
       container.style.cursor = 'grab';
-      if (!dragMoved || !marker) return;
+      if (!dragMoved || !marker) {
+        dragStartSnapshot = null;
+        return;
+      }
 
       // ドラッグ直後に発火するclickでマーカー追加/選択が走らないようにする
       // （グラフ外でmouseupした場合はclick自体が発火しないため、タイマーで確実にリセットする）
       suppressClickAfterDrag = true;
       setTimeout(() => { suppressClickAfterDrag = false; }, 0);
+      if (dragStartSnapshot) {
+        pushMarkerHistory(null, dragStartSnapshot);
+        dragStartSnapshot = null;
+      }
       tsMarkers.sort((a, b) => a.time - b.time);
       if (videoElement) {
         videoElement.currentTime = marker.time;
@@ -4936,6 +4965,7 @@ function setupVolumeGraphEvents() {
           videoElement.currentTime = nearMarker.time;
           updateTimestampList();
         } else {
+          pushMarkerHistory();
           const marker = { id: nextMarkerId++, time: Math.floor(clickTime), text: '' };
           tsMarkers.push(marker);
           tsMarkers.sort((a, b) => a.time - b.time);
@@ -5055,6 +5085,22 @@ function setupVolumeGraphEvents() {
     resizeCanvas();
   });
 
+  // タイムスタンプエディタ: 戻す/やり直すボタン
+  const tsUndoBtn = volumeGraphContainer.querySelector('#vdg-ts-undo-btn');
+  const tsRedoBtn = volumeGraphContainer.querySelector('#vdg-ts-redo-btn');
+  if (tsUndoBtn) {
+    tsUndoBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      undoMarkers();
+    });
+  }
+  if (tsRedoBtn) {
+    tsRedoBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      redoMarkers();
+    });
+  }
+
   // タイムスタンプエディタ: コピーボタン
   const tsCopyBtn = volumeGraphContainer.querySelector('#vdg-ts-copy-btn');
   if (tsCopyBtn) {
@@ -5071,6 +5117,7 @@ function setupVolumeGraphEvents() {
       e.stopPropagation();
       if (tsMarkers.length === 0) return;
       if (!confirm(`${tsMarkers.length}件のマーカーをすべて削除しますか？`)) return;
+      pushMarkerHistory();
       tsMarkers = [];
       selectedMarkerId = null;
       updateTimestampList();
@@ -5129,8 +5176,28 @@ function setupVolumeGraphEvents() {
     if (!isTextInput && isEditableTarget(e.target)) return;
     // 設定メニューやボタン等、YouTube本体のUI部品にフォーカスがある間は本体の操作を優先
     if (!isTsEditorKeyScope()) return;
-    // グラフが非表示またはマーカー未選択なら何もしない
-    if (!isGraphVisible || selectedMarkerId === null) return;
+    if (!isGraphVisible) return;
+
+    // Undo/Redo（マーカー未選択でも有効。テキスト入力中は先頭の早期returnにより入力欄側のUndoを優先）
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'z') {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (e.shiftKey) {
+        redoMarkers();
+      } else {
+        undoMarkers();
+      }
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'y') {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      redoMarkers();
+      return;
+    }
+
+    // マーカー未選択なら何もしない
+    if (selectedMarkerId === null) return;
 
     const now = Date.now();
 
@@ -5714,6 +5781,8 @@ function updateTimestampList() {
       const id = parseInt(input.dataset.markerId);
       const marker = tsMarkers.find(m => m.id === id);
       if (marker) {
+        // タイピングは1履歴にまとめる（marker.text更新前に積むので編集前の曲名が復元される）
+        pushMarkerHistory(`text:${id}`);
         marker.text = e.target.value;
         saveMarkersToStorage();
       }
@@ -5731,6 +5800,81 @@ function updateTimestampList() {
 
   // 選択中の行が表示範囲外ならスクロールして表示（追加・選択・ドラッグ確定などの再構築時）
   scrollSelectedRowIntoView();
+}
+
+/**
+ * マーカー状態のスナップショットを作成
+ */
+function snapshotMarkers() {
+  return {
+    markers: tsMarkers.map(m => ({ ...m })),
+    selectedId: selectedMarkerId,
+    nextId: nextMarkerId,
+  };
+}
+
+/**
+ * 変更前のマーカー状態をUndo履歴に積む。マーカーを変更する処理の直前に呼ぶこと
+ * @param {string|null} tag - 操作種別。同じtagの操作が短時間に連続した場合は1履歴にまとめる
+ *                            （←→連打での移動や曲名のタイピングを1回のUndoで戻せるようにするため）。
+ *                            nullはまとめない
+ * @param {object|null} snapshot - 積むスナップショット。省略時は現在の状態
+ */
+function pushMarkerHistory(tag = null, snapshot = null) {
+  const now = Date.now();
+  if (tag !== null && tag === lastHistoryTag && now - lastHistoryTime < TS_HISTORY_COALESCE_MS) {
+    lastHistoryTime = now;
+    return;
+  }
+  lastHistoryTag = tag;
+  lastHistoryTime = now;
+  tsHistoryUndo.push(snapshot || snapshotMarkers());
+  if (tsHistoryUndo.length > TS_HISTORY_LIMIT) tsHistoryUndo.shift();
+  tsHistoryRedo = [];
+  updateUndoRedoButtons();
+}
+
+/**
+ * 直前の操作を取り消す
+ */
+function undoMarkers() {
+  if (tsHistoryUndo.length === 0) return;
+  tsHistoryRedo.push(snapshotMarkers());
+  restoreMarkerSnapshot(tsHistoryUndo.pop());
+}
+
+/**
+ * 取り消した操作をやり直す
+ */
+function redoMarkers() {
+  if (tsHistoryRedo.length === 0) return;
+  tsHistoryUndo.push(snapshotMarkers());
+  restoreMarkerSnapshot(tsHistoryRedo.pop());
+}
+
+/**
+ * スナップショットからマーカー状態を復元
+ */
+function restoreMarkerSnapshot(snapshot) {
+  tsMarkers = snapshot.markers.map(m => ({ ...m }));
+  selectedMarkerId = snapshot.selectedId;
+  nextMarkerId = snapshot.nextId;
+  // Undo/Redo直後の操作が履歴にまとめられないようにリセット
+  lastHistoryTag = null;
+  updateTimestampList();
+  drawVolumeGraph();
+  saveMarkersToStorage();
+  updateUndoRedoButtons();
+}
+
+/**
+ * 戻す/やり直すボタンの有効状態を更新
+ */
+function updateUndoRedoButtons() {
+  const undoBtn = volumeGraphContainer?.querySelector('#vdg-ts-undo-btn');
+  const redoBtn = volumeGraphContainer?.querySelector('#vdg-ts-redo-btn');
+  if (undoBtn) undoBtn.disabled = tsHistoryUndo.length === 0;
+  if (redoBtn) redoBtn.disabled = tsHistoryRedo.length === 0;
 }
 
 /**
@@ -5787,6 +5931,7 @@ function deleteSelectedMarker() {
   // 曲名入力済みのマーカーは誤削除防止のため確認を挟む
   const text = (marker.text || '').trim();
   if (text !== '' && !confirm(`「${text}」(${formatTimestamp(marker.time)}) を削除しますか？`)) return;
+  pushMarkerHistory();
   tsMarkers = tsMarkers.filter(m => m.id !== selectedMarkerId);
   // 削除直後にDeleteの連打で意図しないマーカーが消えないよう、選択は解除する
   selectedMarkerId = null;
@@ -5804,6 +5949,8 @@ function moveSelectedMarker(deltaSec) {
   const marker = tsMarkers.find(m => m.id === selectedMarkerId);
   if (!marker || !videoElement) return;
 
+  // 連打での移動は1履歴にまとめる
+  pushMarkerHistory(`move:${selectedMarkerId}`);
   marker.time = Math.max(0, Math.min(videoDuration, marker.time + deltaSec));
   tsMarkers.sort((a, b) => a.time - b.time);
   videoElement.currentTime = marker.time;
@@ -5881,6 +6028,11 @@ function loadMarkersFromStorage() {
       tsMarkers = saved.markers;
       nextMarkerId = saved.nextId || tsMarkers.length + 1;
       selectedMarkerId = null;
+      // 別動画の履歴を引き継がないようリセット
+      tsHistoryUndo = [];
+      tsHistoryRedo = [];
+      lastHistoryTag = null;
+      updateUndoRedoButtons();
       updateTimestampList();
       drawVolumeGraph();
     }
