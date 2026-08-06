@@ -13,6 +13,7 @@
     "https://www.youtube.com/*",
     "https://www.google.com/*",
     "https://www.google.co.jp/*",
+    "https://ycs.alpacasandbag.jp/*",
     "http://localhost:8000/*",
     "http://127.0.0.1:8000/*",
     "https://api.anthropic.com/*"
@@ -37,6 +38,7 @@
     },
     {
       "matches": [
+        "https://ycs.alpacasandbag.jp/manage/archives*",
         "http://localhost:8000/manage/archives*",
         "http://127.0.0.1:8000/manage/archives*"
       ],

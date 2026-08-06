@@ -71,6 +71,15 @@ let audioInitialized = false; // 音声解析が初期化済みか
 
 // ズーム関連
 const ZOOM_LEVELS = [1, 1.5, 2, 3, 4, 5, 6, 7, 8];
+// グラフ高さの既定値（ポップアップの設定で上書きされる。popup.js側の既定値と揃えること）
+const DEFAULT_GRAPH_BASE_HEIGHT_PX = 60; // ズーム1xでのグラフ高さ
+const DEFAULT_GRAPH_HEIGHT_STEP_PX = 20; // ズーム1段階ごとの高さ増分
+let graphBaseHeightPx = DEFAULT_GRAPH_BASE_HEIGHT_PX;
+let graphHeightStepPx = DEFAULT_GRAPH_HEIGHT_STEP_PX;
+// 許容範囲（popup.js側と揃えること）。canvasに直接適用する値のため、
+// ストレージの内容を信頼せずここでも必ずクランプする
+const GRAPH_BASE_HEIGHT_RANGE = { min: 40, max: 400 };
+const GRAPH_HEIGHT_STEP_RANGE = { min: 0, max: 100 };
 let zoomIndex = 0; // ZOOM_LEVELSのインデックス
 let lastSaveTime = 0; // 最後に音量データを保存した時刻
 const SAVE_INTERVAL = 3000; // 保存間隔（ミリ秒）
@@ -115,6 +124,37 @@ const subtitleSentCache = new Set();
 // YCS APIトークン（chrome.storageから読み込み）
 let ycsApiToken = null;
 let ycsServerUrl = null;
+// 字幕データ等の送信先。ローカル開発時はポップアップの設定で上書きする
+const DEFAULT_YCS_SERVER_URL = 'https://ycs.alpacasandbag.jp';
+
+/**
+ * グラフ高さ設定の値を許容範囲に丸める
+ * @param {*} value - ストレージから読んだ値
+ * @param {number} defaultValue - 既定値
+ * @param {{min: number, max: number}} range - 許容範囲
+ * @returns {number}
+ */
+function clampGraphHeightValue(value, defaultValue, range) {
+  if (value === null || value === undefined || value === '') return defaultValue;
+  const num = Number(value);
+  if (!Number.isFinite(num)) return defaultValue;
+  return Math.max(range.min, Math.min(range.max, Math.round(num)));
+}
+
+/**
+ * グラフ高さ設定を読み込む（ポップアップで変更可能）
+ */
+async function loadGraphHeightSettings() {
+  try {
+    const result = await chrome.storage.local.get(['graphBaseHeight', 'graphHeightStep']);
+    graphBaseHeightPx = clampGraphHeightValue(
+      result.graphBaseHeight, DEFAULT_GRAPH_BASE_HEIGHT_PX, GRAPH_BASE_HEIGHT_RANGE);
+    graphHeightStepPx = clampGraphHeightValue(
+      result.graphHeightStep, DEFAULT_GRAPH_HEIGHT_STEP_PX, GRAPH_HEIGHT_STEP_RANGE);
+  } catch (error) {
+    console.warn('[YCS] グラフ高さ設定の読み込みエラー:', error);
+  }
+}
 
 /**
  * 埋め込みUI設定を読み込む
@@ -234,8 +274,7 @@ function toggleEmbeddedUI() {
   if (volumeGraphContainer) {
     const isVisible = volumeGraphContainer.classList.contains('visible');
     if (isVisible) {
-      volumeGraphContainer.classList.remove('visible');
-      isGraphVisible = false;
+      hideVolumeGraphPanel();
     } else {
       volumeGraphContainer.classList.add('visible');
       isGraphVisible = true;
@@ -297,6 +336,18 @@ function showEmbeddedUI() {
 }
 
 /**
+ * 音量グラフパネルを非表示にする共通処理
+ * ペースト変換ポップアップのリスナー残留を防ぐため、非表示化は必ずここを経由すること
+ */
+function hideVolumeGraphPanel() {
+  closeLyricsPastePopup();
+  if (volumeGraphContainer) {
+    volumeGraphContainer.classList.remove('visible');
+  }
+  isGraphVisible = false;
+}
+
+/**
  * 埋め込みUIを非表示
  */
 function hideEmbeddedUI() {
@@ -305,10 +356,7 @@ function hideEmbeddedUI() {
     embeddedTriggerButton.classList.add('hidden');
   }
   // グラフも非表示
-  if (volumeGraphContainer) {
-    volumeGraphContainer.classList.remove('visible');
-    isGraphVisible = false;
-  }
+  hideVolumeGraphPanel();
 }
 
 /**
@@ -2373,7 +2421,8 @@ async function loadYcsApiSettings() {
   try {
     const result = await chrome.storage.local.get(['ycsApiToken', 'ycsServerUrl']);
     ycsApiToken = result.ycsApiToken || null;
-    ycsServerUrl = result.ycsServerUrl || 'http://localhost:8000';
+    // 末尾のスラッシュは除去する（APIパス連結時に「//」になるのを防ぐ）
+    ycsServerUrl = (result.ycsServerUrl || DEFAULT_YCS_SERVER_URL).replace(/\/+$/, '');
   } catch (error) {
     console.warn('[YCS] API設定読み込みエラー:', error);
   }
@@ -3798,10 +3847,7 @@ function hideWatchPageUI() {
   if (embeddedTriggerButton) {
     embeddedTriggerButton.classList.add('hidden');
   }
-  if (volumeGraphContainer) {
-    volumeGraphContainer.classList.remove('visible');
-    isGraphVisible = false;
-  }
+  hideVolumeGraphPanel();
 
   // スキャン中なら停止
   if (isScanning) {
@@ -3819,8 +3865,9 @@ async function init() {
   chrome.storage.onChanged.addListener(handleStorageChange);
 
   try {
-    // 埋め込みUI設定を読み込み
+    // 埋め込みUI設定・グラフ高さ設定を読み込み（UI構築前に反映する）
     await loadEmbeddedUISettings();
+    await loadGraphHeightSettings();
 
     // watchページの場合のみUI初期化
     if (isWatchPage()) {
@@ -3839,6 +3886,21 @@ async function init() {
  */
 function handleStorageChange(changes, areaName) {
   if (areaName !== 'local') return;
+
+  // グラフ高さ設定の変更を即時反映
+  if (changes.graphBaseHeight || changes.graphHeightStep) {
+    if (changes.graphBaseHeight) {
+      graphBaseHeightPx = clampGraphHeightValue(
+        changes.graphBaseHeight.newValue, DEFAULT_GRAPH_BASE_HEIGHT_PX, GRAPH_BASE_HEIGHT_RANGE);
+    }
+    if (changes.graphHeightStep) {
+      graphHeightStepPx = clampGraphHeightValue(
+        changes.graphHeightStep.newValue, DEFAULT_GRAPH_HEIGHT_STEP_PX, GRAPH_HEIGHT_STEP_RANGE);
+    }
+    if (volumeGraphContainer) {
+      resizeCanvas();
+    }
+  }
 
   // 埋め込みUI設定の変更を監視
   if (changes.showEmbeddedUI) {
@@ -3884,7 +3946,7 @@ function handleStorageChange(changes, areaName) {
         const coverage = volumeData.length > 0
           ? (volumeData.filter(v => v > 0).length / volumeData.length) * 100
           : 0;
-        progress.textContent = `${Math.round(coverage)}%`;
+        progress.textContent = `分析 ${Math.round(coverage)}%`;
       }
     }
   }
@@ -4371,8 +4433,14 @@ function createVolumeGraph() {
       }
 
       .vdg-canvas-container {
-        flex: 1;
+        /* flex:1（=flex-basis:0%）にすると縦方向のflexアイテムではheightより
+           flex-basisが優先され、高さ指定が一切効かなくなるためflex伸縮させない */
+        flex: 0 0 auto;
         position: relative;
+        /* 初期高さ。以降はresizeCanvas()がズームレベルに応じてインラインstyleで制御する
+           （高さを未確定のままにすると、canvasの高さ属性やスクロールバーの出現が
+             コンテナ高さの測定値に跳ね返り、ズームのたびに高さが増え続ける） */
+        height: 60px;
         min-height: 40px;
         overflow-x: auto;
         overflow-y: hidden;
@@ -4634,7 +4702,44 @@ function createVolumeGraph() {
 
       .vdg-ts-help {
         font-size: 10px;
-        color: #555;
+        color: #999;
+      }
+
+      .vdg-paste-popup {
+        position: absolute;
+        background: #222;
+        border: 1px solid #555;
+        border-radius: 4px;
+        z-index: 100;
+        min-width: 180px;
+        max-width: 320px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        font-size: 11px;
+      }
+
+      .vdg-paste-popup-title {
+        padding: 4px 8px;
+        color: #888;
+        font-size: 10px;
+        border-bottom: 1px solid #444;
+      }
+
+      .vdg-paste-popup-item {
+        padding: 5px 8px;
+        color: #eee;
+        cursor: pointer;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .vdg-paste-popup-item:hover {
+        background: #444;
+      }
+
+      .vdg-paste-popup-item.raw {
+        color: #999;
+        border-top: 1px solid #444;
       }
 
       .vdg-ts-format-toggle {
@@ -4657,8 +4762,8 @@ function createVolumeGraph() {
       <span class="vdg-title">音量ダイナミクス</span>
       <div class="vdg-controls">
         <span class="vdg-playlist-info" id="vdg-playlist-info"></span>
-        <span class="vdg-progress" id="vdg-progress">0%</span>
-        <span class="vdg-zoom-info" id="vdg-zoom-info">1x</span>
+        <span class="vdg-progress" id="vdg-progress" title="音量分析の完了率">分析 0%</span>
+        <span class="vdg-zoom-info" id="vdg-zoom-info" title="グラフの表示倍率（Ctrl+ホイールで変更）">倍率 1x</span>
         <button class="vdg-volume-mode" id="vdg-volume-mode-btn" title="固定スケールでの絶対値表示中（クリックで相対表示に切替）">絶対</button>
         <button class="vdg-btn" id="vdg-scan-btn" title="動画全体をスキャンしてグラフを生成">スキャン</button>
         <button class="vdg-btn" id="vdg-auto-scan-btn" title="再生リスト内の動画を順番にスキャン">自動</button>
@@ -4693,7 +4798,7 @@ function createVolumeGraph() {
       </div>
       <div class="vdg-ts-footer">
         <div class="vdg-ts-help">
-          クリック: マーカー追加(付近は選択/ドラッグで移動) | Del: 削除 | Esc: 選択解除 | ←→: 1秒移動(2度押し5秒) | ↑↓: マーカー移動 | Space: 再生/停止 | Ctrl+Z/Y: 戻る/進む
+          クリック: マーカー追加(付近は選択/ドラッグで移動) | Enter: 曲名入力 | Del: 削除 | Esc: 選択解除 | ←→: 1秒移動(2度押し5秒) | ↑↓: マーカー移動 | Space: 再生/停止 | J/L: 再生を10秒戻す/進める | Ctrl+Z/Y: 操作を戻す/やり直す | Ctrl+ホイール: 拡大/縮小
         </div>
         <label class="vdg-ts-format-toggle">
           <input type="checkbox" id="vdg-ts-zeropad">
@@ -4759,14 +4864,22 @@ function resizeCanvas() {
   const containerRect = canvasContainer.getBoundingClientRect();
   const baseWidth = containerRect.width;
   const zoomedWidth = baseWidth * getZoomLevel();
+  // 高さはズームレベルから決定論的に算出する（拡大で高く、縮小で元に戻る）
+  // ※測定値から算出すると、canvasの高さ属性やスクロールバー分が測定に跳ね返って
+  //   高さが増え続けるフィードバックループになるため、必ず計算値を使うこと
+  canvasContainer.style.height = `${graphBaseHeightPx + zoomIndex * graphHeightStepPx}px`;
+  // 描画領域は水平スクロールバーを除いた実表示高さ
+  const height = canvasContainer.clientHeight;
 
-  // ラッパーとCanvasの幅を設定
+  // ラッパーとCanvasの幅・高さを設定
+  // （高さもCSSで明示し、canvasの高さ属性がレイアウトへ影響しないようにする）
   canvasWrapper.style.width = `${zoomedWidth}px`;
   volumeCanvas.style.width = `${zoomedWidth}px`;
+  volumeCanvas.style.height = `${height}px`;
 
   // Canvas解像度を設定
   volumeCanvas.width = zoomedWidth * window.devicePixelRatio;
-  volumeCanvas.height = containerRect.height * window.devicePixelRatio;
+  volumeCanvas.height = height * window.devicePixelRatio;
 
   // コンテキストをリセット
   volumeCtx = volumeCanvas.getContext('2d');
@@ -4797,7 +4910,7 @@ function changeZoomLevel(delta) {
   // ズーム情報を更新
   const zoomInfo = volumeGraphContainer?.querySelector('#vdg-zoom-info');
   if (zoomInfo) {
-    zoomInfo.textContent = `${newZoom}x`;
+    zoomInfo.textContent = `倍率 ${newZoom}x`;
   }
 
   // スクロール位置を維持するための計算
@@ -4888,6 +5001,8 @@ function setupVolumeGraphEvents() {
       dragStartClientX = e.clientX;
       // 実際にドラッグ（移動）が確定した場合のみ履歴に積むため、開始時点の状態を控えておく
       dragStartSnapshot = snapshotMarkers();
+      // 曲名編集中なら入力状態を解除する（preventDefaultで自動blurが起きないため）
+      blurMarkerTextInput();
       selectedMarkerId = nearMarker.id;
       updateTimestampList();
       drawVolumeGraph();
@@ -5022,20 +5137,21 @@ function setupVolumeGraphEvents() {
       deselectMarker();
     }, true);
 
-    // マウスホイールイベント
+    // マウスホイールイベント（ホイールのみ: 横スクロール）
+    // Ctrl+ホイールのズームはパネル全体で受けるため、ここでは処理せず親へ伝播させる
     container.addEventListener('wheel', (e) => {
-      if (e.ctrlKey) {
-        // Ctrl + ホイール: ズーム
-        e.preventDefault();
-        const zoomDelta = e.deltaY > 0 ? -1 : 1;
-        changeZoomLevel(zoomDelta);
-      } else {
-        // ホイールのみ: 横スクロール
-        e.preventDefault();
-        container.scrollLeft += e.deltaY;
-      }
+      if (e.ctrlKey) return;
+      e.preventDefault();
+      container.scrollLeft += e.deltaY;
     }, { passive: false });
   }
+
+  // Ctrl + ホイール: ズーム（グラフ上に限らずパネルのどこでも反応させる）
+  volumeGraphContainer.addEventListener('wheel', (e) => {
+    if (!e.ctrlKey) return; // 通常のホイールは一覧のスクロール等に任せる
+    e.preventDefault(); // ブラウザのページ拡大を抑止
+    changeZoomLevel(e.deltaY > 0 ? -1 : 1);
+  }, { passive: false });
 
   // 音量表示モード切り替えボタン
   const volumeModeBtn = volumeGraphContainer.querySelector('#vdg-volume-mode-btn');
@@ -5231,6 +5347,17 @@ function setupVolumeGraphEvents() {
       const delta = (now - lastArrowTime < 200) ? 5 : 1;
       lastArrowTime = now;
       moveSelectedMarker(direction * delta);
+    } else if (e.key === 'Enter' && !isTextInput) {
+      // 選択中マーカーの曲名入力欄にフォーカス（カーソルは末尾）
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      const input = volumeGraphContainer?.querySelector(`.vdg-ts-text-input[data-marker-id="${selectedMarkerId}"]`);
+      if (input) {
+        input.focus({ preventScroll: true });
+        const len = input.value.length;
+        input.setSelectionRange(len, len);
+        scrollSelectedRowIntoView();
+      }
     } else if (e.key === 'Escape') {
       // 選択解除のみ行い、YouTube側のEsc処理（メニューを閉じる等）は妨げない
       deselectMarker();
@@ -5238,11 +5365,8 @@ function setupVolumeGraphEvents() {
       e.preventDefault();
       e.stopImmediatePropagation();
       if (videoElement) {
+        // マーカー選択中でも再生位置は動かさず、現在位置から再生/停止する
         if (videoElement.paused) {
-          const marker = tsMarkers.find(m => m.id === selectedMarkerId);
-          if (marker) {
-            videoElement.currentTime = marker.time;
-          }
           videoElement.play();
         } else {
           videoElement.pause();
@@ -5736,6 +5860,9 @@ function updateTimestampList() {
   const listEl = volumeGraphContainer?.querySelector('#vdg-ts-list');
   if (!listEl) return;
 
+  // リスト再構築でペースト変換ポップアップの対象入力欄が破棄されるため閉じる
+  closeLyricsPastePopup();
+
   if (tsMarkers.length === 0) {
     listEl.innerHTML = '<div class="vdg-ts-empty">波形グラフをクリックしてタイムスタンプを追加</div>';
     return;
@@ -5787,6 +5914,41 @@ function updateTimestampList() {
         saveMarkersToStorage();
       }
     });
+    input.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return; // 右クリック等はコンテキストメニュー操作を妨げない
+      // 未編集状態のシングルクリックは選択のみ（ダブルクリックで入力状態にする）
+      if (document.activeElement === input) return; // 編集中は通常のカーソル操作
+      e.preventDefault(); // フォーカス取得（入力状態化）を抑止
+      // 別の入力欄を編集中だった場合は入力状態を解除する
+      blurMarkerTextInput();
+      const id = parseInt(input.dataset.markerId);
+      selectedMarkerId = id;
+      const marker = tsMarkers.find(m => m.id === id);
+      if (marker && videoElement) {
+        videoElement.currentTime = marker.time;
+        updateTimeMarker();
+      }
+      // リストを再構築するとこの入力欄が破棄されてダブルクリック判定が壊れるため、
+      // ハイライトのみ更新する
+      updateTimestampListSelection();
+      drawVolumeGraph();
+    });
+    input.addEventListener('dblclick', (e) => {
+      e.preventDefault();
+      input.focus({ preventScroll: true });
+      const len = input.value.length;
+      input.setSelectionRange(len, len);
+      scrollSelectedRowIntoView();
+    });
+    input.addEventListener('paste', (e) => {
+      const pasted = e.clipboardData?.getData('text/plain');
+      if (!pasted) return;
+      // 「アーティスト名 曲名 歌詞 ...」形式なら変換候補を表示（通常のテキストはそのままペースト）
+      const candidates = buildLyricsSplitCandidates(pasted);
+      if (!candidates) return;
+      e.preventDefault();
+      showLyricsPastePopup(input, candidates, pasted.trim());
+    });
     input.addEventListener('focus', () => {
       const id = parseInt(input.dataset.markerId);
       if (selectedMarkerId === id) return;
@@ -5798,8 +5960,9 @@ function updateTimestampList() {
     });
   });
 
-  // 選択中の行が表示範囲外ならスクロールして表示（追加・選択・ドラッグ確定などの再構築時）
+  // 選択中の行・マーカーが表示範囲外ならスクロールして表示（追加・選択・ドラッグ確定などの再構築時）
   scrollSelectedRowIntoView();
+  scrollGraphToSelectedMarker();
 }
 
 /**
@@ -5878,6 +6041,17 @@ function updateUndoRedoButtons() {
 }
 
 /**
+ * 曲名入力欄が編集中ならフォーカスを外して入力状態を解除する
+ * （mousedownのpreventDefaultで自動のフォーカス移動が起きないケース用）
+ */
+function blurMarkerTextInput() {
+  const active = document.activeElement;
+  if (active instanceof HTMLElement && active.classList.contains('vdg-ts-text-input')) {
+    active.blur();
+  }
+}
+
+/**
  * タイムスタンプ一覧の選択ハイライトのみ更新（DOMは再生成しない）
  */
 function updateTimestampListSelection() {
@@ -5887,6 +6061,34 @@ function updateTimestampListSelection() {
     row.classList.toggle('selected', parseInt(row.dataset.markerId) === selectedMarkerId);
   });
   scrollSelectedRowIntoView();
+  scrollGraphToSelectedMarker();
+}
+
+/**
+ * 選択中のマーカーがグラフの表示範囲（ズーム時の横スクロール領域）の外にある場合、
+ * グラフのスクロール位置を調整して画面内に表示する
+ */
+function scrollGraphToSelectedMarker() {
+  if (selectedMarkerId === null || !videoDuration) return;
+  const container = volumeGraphContainer?.querySelector('#vdg-canvas-container');
+  if (!container) return;
+
+  const marker = tsMarkers.find(m => m.id === selectedMarkerId);
+  if (!marker) return;
+
+  const visibleWidth = container.clientWidth;
+  const totalWidth = container.getBoundingClientRect().width * getZoomLevel();
+  // ズームしていない（スクロール不要）場合は何もしない
+  if (visibleWidth === 0 || totalWidth <= visibleWidth) return;
+
+  const x = (marker.time / videoDuration) * totalWidth;
+  // 端の判定に少し余白を持たせる
+  const margin = Math.min(20, visibleWidth / 4);
+  if (x >= container.scrollLeft + margin && x <= container.scrollLeft + visibleWidth - margin) return;
+
+  // 表示範囲外なら中央に寄せる
+  const target = x - visibleWidth / 2;
+  container.scrollLeft = Math.max(0, Math.min(target, totalWidth - visibleWidth));
 }
 
 /**
@@ -5958,6 +6160,128 @@ function moveSelectedMarker(deltaSec) {
   updateTimestampList();
   drawVolumeGraph();
   saveMarkersToStorage();
+}
+
+/**
+ * 歌詞検索サイトの検索結果タイトル「アーティスト名 曲名 歌詞 ...」から
+ * 「曲名 / アーティスト名」の変換候補一覧を生成する
+ * 区切り位置はテキストだけでは一意に決まらないため、すべての分割候補を返し、
+ * ユーザーに選択させる（例: 「BBB CCC AAA 歌詞」→「AAA / BBB CCC」「CCC AAA / BBB」）
+ * @param {string} text - ペーストされたテキスト
+ * @returns {string[]|null} 変換候補（曲名が短い順）。形式に合わない場合はnull
+ */
+function buildLyricsSplitCandidates(text) {
+  const tokens = text.trim().split(/\s+/);
+  // 単独の「歌詞」トークンより前の部分を「アーティスト名+曲名」とみなす
+  // （「歌詞検索」のような複合語は区切りとして扱わない）
+  const idx = tokens.indexOf('歌詞');
+  if (idx < 2) return null; // 「歌詞」がない、または手前が1語以下で分割できない
+  const parts = tokens.slice(0, idx);
+  const candidates = [];
+  for (let k = parts.length - 1; k >= 1; k--) {
+    const artist = parts.slice(0, k).join(' ');
+    const title = parts.slice(k).join(' ');
+    candidates.push(`${title} / ${artist}`);
+  }
+  return candidates;
+}
+
+/**
+ * 表示中の変換候補ポップアップ
+ */
+let lyricsPastePopup = null;
+let lyricsPastePopupCleanup = null;
+
+function closeLyricsPastePopup() {
+  if (lyricsPastePopupCleanup) {
+    lyricsPastePopupCleanup();
+    lyricsPastePopupCleanup = null;
+  }
+  if (lyricsPastePopup) {
+    lyricsPastePopup.remove();
+    lyricsPastePopup = null;
+  }
+}
+
+/**
+ * 曲名入力欄の下に変換候補ポップアップを表示する
+ * 候補クリックで挿入、Esc・外側クリックは元のテキストのまま挿入、
+ * それ以外のキー入力はポップアップを閉じるだけ（挿入しない）
+ * @param {HTMLInputElement} input - ペースト先の入力欄
+ * @param {string[]} candidates - 変換候補
+ * @param {string} rawText - 元のペーストテキスト
+ */
+function showLyricsPastePopup(input, candidates, rawText) {
+  closeLyricsPastePopup();
+  if (!volumeGraphContainer) return;
+
+  // 候補値は属性に埋め込まずインデックスで参照する（escapeHtmlは引用符をエスケープしないため）
+  const values = [...candidates, rawText];
+  const popup = document.createElement('div');
+  popup.className = 'vdg-paste-popup';
+  popup.innerHTML = `
+    <div class="vdg-paste-popup-title">変換候補（クリックで挿入）</div>
+    ${candidates.map((c, i) => `<div class="vdg-paste-popup-item" data-index="${i}">${escapeHtml(c)}</div>`).join('')}
+    <div class="vdg-paste-popup-item raw" data-index="${candidates.length}">そのまま貼り付け</div>
+  `;
+
+  // 入力欄の直下に配置（グラフコンテナ基準の絶対配置）
+  // 一覧のスクロールに追従し、コンテナ右端からはみ出さないようにクランプする
+  const listEl = volumeGraphContainer.querySelector('#vdg-ts-list');
+  const reposition = () => {
+    const containerRect = volumeGraphContainer.getBoundingClientRect();
+    const inputRect = input.getBoundingClientRect();
+    const maxLeft = containerRect.width - popup.offsetWidth - 4;
+    popup.style.left = `${Math.max(0, Math.min(inputRect.left - containerRect.left, maxLeft))}px`;
+    popup.style.top = `${inputRect.bottom - containerRect.top + 2}px`;
+  };
+
+  // 挿入して閉じる（execCommandならネイティブのinputイベント発火とUndo履歴が維持される）
+  const insertAndClose = (value) => {
+    closeLyricsPastePopup();
+    input.focus({ preventScroll: true });
+    document.execCommand('insertText', false, value);
+  };
+
+  // mousedownで処理して入力欄のフォーカスを維持する
+  popup.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const item = e.target.closest('.vdg-paste-popup-item');
+    if (item) {
+      insertAndClose(values[parseInt(item.dataset.index)]);
+    }
+  });
+
+  // Esc: 元のテキストのまま挿入 / その他のキー: 閉じるだけ
+  const onKeydown = (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      insertAndClose(rawText);
+    } else {
+      closeLyricsPastePopup();
+    }
+  };
+  // 外側クリック: 元のテキストのまま挿入（入力欄内のクリックはカーソル移動なので閉じない）
+  const onOutsideMousedown = (e) => {
+    if (popup.contains(e.target) || e.target === input) return;
+    insertAndClose(rawText);
+  };
+
+  input.addEventListener('keydown', onKeydown, true);
+  document.addEventListener('mousedown', onOutsideMousedown, true);
+  listEl?.addEventListener('scroll', reposition);
+  lyricsPastePopupCleanup = () => {
+    input.removeEventListener('keydown', onKeydown, true);
+    document.removeEventListener('mousedown', onOutsideMousedown, true);
+    listEl?.removeEventListener('scroll', reposition);
+  };
+
+  lyricsPastePopup = popup;
+  volumeGraphContainer.appendChild(popup);
+  // offsetWidthを使うためDOM追加後に配置
+  reposition();
 }
 
 /**
@@ -6072,7 +6396,7 @@ function updateProgress(percent) {
   if (!volumeGraphContainer) return;
   const progress = volumeGraphContainer.querySelector('#vdg-progress');
   if (progress) {
-    progress.textContent = `${Math.round(percent)}%`;
+    progress.textContent = `分析 ${Math.round(percent)}%`;
   }
 }
 
@@ -6243,10 +6567,7 @@ function handleMessage(message, sender, sendResponse) {
       break;
 
     case 'HIDE_VOLUME_GRAPH':
-      if (volumeGraphContainer) {
-        volumeGraphContainer.classList.remove('visible');
-        isGraphVisible = false;
-      }
+      hideVolumeGraphPanel();
       break;
 
     case 'TOGGLE_VOLUME_GRAPH':
@@ -6259,6 +6580,10 @@ function handleMessage(message, sender, sendResponse) {
         }
         volumeGraphContainer.classList.toggle('visible');
         isGraphVisible = volumeGraphContainer.classList.contains('visible');
+        if (!isGraphVisible) {
+          // ポップアップを開いたまま非表示になるとリスナーが残留するため閉じる
+          closeLyricsPastePopup();
+        }
         const computed = getComputedStyle(volumeGraphContainer);
         console.log('グラフ表示状態:', isGraphVisible, {
           classList: volumeGraphContainer.className,

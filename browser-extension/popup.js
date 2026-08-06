@@ -13,6 +13,18 @@ const STORAGE_KEY_CLAUDE_API_KEY = 'claudeApiKey';
 const STORAGE_KEY_YCS_SERVER_URL = 'ycsServerUrl';
 const STORAGE_KEY_YCS_API_TOKEN = 'ycsApiToken';
 
+const STORAGE_KEY_GRAPH_BASE_HEIGHT = 'graphBaseHeight';
+const STORAGE_KEY_GRAPH_HEIGHT_STEP = 'graphHeightStep';
+
+// 字幕データ等の送信先。ローカル開発時は設定で上書きする
+const DEFAULT_YCS_SERVER_URL = 'https://ycs.alpacasandbag.jp';
+
+// 音量グラフの高さ（content.js側の既定値と揃えること）
+const DEFAULT_GRAPH_BASE_HEIGHT = 60;
+const DEFAULT_GRAPH_HEIGHT_STEP = 20;
+const GRAPH_BASE_HEIGHT_RANGE = { min: 40, max: 400 };
+const GRAPH_HEIGHT_STEP_RANGE = { min: 0, max: 100 };
+
 // DOM要素
 const elements = {
   showEmbeddedUI: document.getElementById('show-embedded-ui'),
@@ -33,6 +45,9 @@ const elements = {
   scanSection: document.getElementById('scan-section'),
   scanBtn: document.getElementById('scan-btn'),
   scanStatus: document.getElementById('scan-status'),
+  graphBaseHeight: document.getElementById('graph-base-height'),
+  graphHeightStep: document.getElementById('graph-height-step'),
+  graphHeightStatus: document.getElementById('graph-height-status'),
   ycsServerUrl: document.getElementById('ycs-server-url'),
   ycsApiToken: document.getElementById('ycs-api-token'),
   saveYcsSettings: document.getElementById('save-ycs-settings'),
@@ -65,7 +80,9 @@ async function init() {
     STORAGE_KEY_TOXICITY_CHECK,
     STORAGE_KEY_CLAUDE_API_KEY,
     STORAGE_KEY_YCS_SERVER_URL,
-    STORAGE_KEY_YCS_API_TOKEN
+    STORAGE_KEY_YCS_API_TOKEN,
+    STORAGE_KEY_GRAPH_BASE_HEIGHT,
+    STORAGE_KEY_GRAPH_HEIGHT_STEP
   ]);
   const showUI = result[STORAGE_KEY_EMBEDDED_UI] !== false; // デフォルトはtrue
   const hideGoogleAI = result[STORAGE_KEY_HIDE_GOOGLE_AI] !== false; // デフォルトはtrue
@@ -88,8 +105,16 @@ async function init() {
     elements.apiKeyStatus.style.color = '#2e7d32';
   }
 
+  // 音量グラフの高さ設定を読み込み
+  elements.graphBaseHeight.value = clampNumber(
+    result[STORAGE_KEY_GRAPH_BASE_HEIGHT], DEFAULT_GRAPH_BASE_HEIGHT, GRAPH_BASE_HEIGHT_RANGE);
+  elements.graphHeightStep.value = clampNumber(
+    result[STORAGE_KEY_GRAPH_HEIGHT_STEP], DEFAULT_GRAPH_HEIGHT_STEP, GRAPH_HEIGHT_STEP_RANGE);
+  updateGraphHeightStatus();
+
   // YCS API設定を読み込み
-  elements.ycsServerUrl.value = result[STORAGE_KEY_YCS_SERVER_URL] || 'http://localhost:8000';
+  // 実際の送信先と表示を一致させるため、末尾スラッシュを除去して表示する
+  elements.ycsServerUrl.value = (result[STORAGE_KEY_YCS_SERVER_URL] || DEFAULT_YCS_SERVER_URL).replace(/\/+$/, '');
   if (result[STORAGE_KEY_YCS_API_TOKEN]) {
     elements.ycsApiToken.placeholder = '設定済み';
     elements.ycsSettingsStatus.textContent = 'APIトークン設定済み';
@@ -103,6 +128,8 @@ async function init() {
   elements.chatDelaySeconds.addEventListener('input', changeChatDelaySeconds);
   elements.toxicityCheckEnabled.addEventListener('change', toggleToxicityCheck);
   elements.saveApiKey.addEventListener('click', saveClaudeApiKey);
+  elements.graphBaseHeight.addEventListener('change', saveGraphHeightSettings);
+  elements.graphHeightStep.addEventListener('change', saveGraphHeightSettings);
   elements.saveYcsSettings.addEventListener('click', saveYcsSettings);
   elements.helpLink.addEventListener('click', showHelp);
   elements.clearAllBtn.addEventListener('click', clearAllScannedData);
@@ -213,10 +240,55 @@ async function saveClaudeApiKey() {
 }
 
 /**
+ * 数値を範囲内に丸める（不正値は既定値を返す）
+ * @param {*} value - 対象の値
+ * @param {number} defaultValue - 既定値
+ * @param {{min: number, max: number}} range - 許容範囲
+ * @returns {number}
+ */
+function clampNumber(value, defaultValue, range) {
+  // 空欄・未設定は「既定値を使う」として扱う（Number('')が0になり最小値へ丸められるのを防ぐ）
+  if (value === null || value === undefined || value === '') return defaultValue;
+  const num = Number(value);
+  if (!Number.isFinite(num)) return defaultValue;
+  return Math.max(range.min, Math.min(range.max, Math.round(num)));
+}
+
+/**
+ * 高さ設定の説明文を更新
+ */
+function updateGraphHeightStatus() {
+  const base = Number(elements.graphBaseHeight.value);
+  const step = Number(elements.graphHeightStep.value);
+  // ズームは9段階（1x〜8x）
+  const maxHeight = base + step * 8;
+  elements.graphHeightStatus.textContent = `等倍 ${base}px 〜 最大ズーム ${maxHeight}px`;
+}
+
+/**
+ * 音量グラフの高さ設定を保存（開いているYouTubeタブに即時反映される）
+ */
+async function saveGraphHeightSettings() {
+  const base = clampNumber(elements.graphBaseHeight.value, DEFAULT_GRAPH_BASE_HEIGHT, GRAPH_BASE_HEIGHT_RANGE);
+  const step = clampNumber(elements.graphHeightStep.value, DEFAULT_GRAPH_HEIGHT_STEP, GRAPH_HEIGHT_STEP_RANGE);
+
+  // 丸めた結果を入力欄に反映
+  elements.graphBaseHeight.value = base;
+  elements.graphHeightStep.value = step;
+  updateGraphHeightStatus();
+
+  await chrome.storage.local.set({
+    [STORAGE_KEY_GRAPH_BASE_HEIGHT]: base,
+    [STORAGE_KEY_GRAPH_HEIGHT_STEP]: step
+  });
+}
+
+/**
  * YCS API設定を保存
  */
 async function saveYcsSettings() {
-  const serverUrl = elements.ycsServerUrl.value.trim() || 'http://localhost:8000';
+  // 末尾のスラッシュは除去する（APIパス連結時に「//」になるのを防ぐ）
+  const serverUrl = (elements.ycsServerUrl.value.trim() || DEFAULT_YCS_SERVER_URL).replace(/\/+$/, '');
   const apiToken = elements.ycsApiToken.value.trim();
 
   const settings = { [STORAGE_KEY_YCS_SERVER_URL]: serverUrl };

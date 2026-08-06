@@ -258,12 +258,27 @@
       </div>
     </div>
 
+    <!-- 音量グラフ設定 -->
+    <div class="section-title">音量グラフ設定</div>
+    <div style="font-size: 12px; color: #666; margin-bottom: 8px;">グラフの高さ（拡大するほど高くなります）</div>
+    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+      <label for="graph-base-height" style="font-size: 11px; color: #555; white-space: nowrap;">初期の高さ</label>
+      <input type="number" id="graph-base-height" min="40" max="400" step="10" style="width: 70px; font-size: 11px; padding: 4px 6px; border: 1px solid #ddd; border-radius: 4px;">
+      <span style="font-size: 11px; color: #888;">px</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+      <label for="graph-height-step" style="font-size: 11px; color: #555; white-space: nowrap;">拡大1段階あたり</label>
+      <input type="number" id="graph-height-step" min="0" max="100" step="5" style="width: 70px; font-size: 11px; padding: 4px 6px; border: 1px solid #ddd; border-radius: 4px;">
+      <span style="font-size: 11px; color: #888;">px</span>
+    </div>
+    <div id="graph-height-status" style="font-size: 10px; color: #888; margin-bottom: 4px;"></div>
+
     <!-- YCS API設定 -->
     <div class="section-title">YCS API設定</div>
     <div style="font-size: 12px; color: #666; margin-bottom: 8px;">字幕データの自動送信に使用します</div>
     <div style="margin-bottom: 6px;">
       <div style="display: flex; align-items: center; gap: 4px;">
-        <input type="text" id="ycs-server-url" placeholder="http://localhost:8000" style="flex: 1; font-size: 11px; padding: 4px 6px; border: 1px solid #ddd; border-radius: 4px;">
+        <input type="text" id="ycs-server-url" placeholder="https://ycs.alpacasandbag.jp" style="flex: 1; font-size: 11px; padding: 4px 6px; border: 1px solid #ddd; border-radius: 4px;">
       </div>
       <div style="font-size: 10px; color: #888; margin-top: 2px;">サーバーURL</div>
     </div>

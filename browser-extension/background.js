@@ -44,6 +44,34 @@ chrome.storage.local.get('config', (result) => {
   }
 });
 
+// 旧既定値（ローカル開発サーバー）を保存していた場合のみ、一度だけ新既定値へ移行する
+// APIトークン保存時にサーバーURLも一緒に保存されるため、URLを変更していないユーザーでも
+// 旧既定値が明示的に保存済みになっており、既定値の変更だけでは本番に向かないため
+const LEGACY_YCS_SERVER_URL = 'http://localhost:8000';
+const YCS_SERVER_URL_MIGRATION_KEY = 'ycsServerUrlMigratedToProd';
+(async () => {
+  try {
+    const result = await chrome.storage.local.get(['ycsServerUrl', YCS_SERVER_URL_MIGRATION_KEY]);
+    if (result[YCS_SERVER_URL_MIGRATION_KEY]) return;
+
+    // フラグとURLは1回の書き込みでまとめて更新する
+    // （別々に書くと「フラグだけ立ってURLが未移行」の状態が残りうる。また移行済みフラグを
+    //   立てることで、以降ユーザーが意図的にlocalhostを設定しても上書きしない）
+    const update = { [YCS_SERVER_URL_MIGRATION_KEY]: true };
+    const isLegacyUrl = result.ycsServerUrl
+      && result.ycsServerUrl.replace(/\/+$/, '') === LEGACY_YCS_SERVER_URL;
+    if (isLegacyUrl) {
+      update.ycsServerUrl = 'https://ycs.alpacasandbag.jp';
+    }
+    await chrome.storage.local.set(update);
+    if (isLegacyUrl) {
+      console.log('[YCS] サーバーURLの保存値を旧既定値から本番URLへ移行しました');
+    }
+  } catch (error) {
+    console.warn('[YCS] サーバーURL移行エラー:', error.message);
+  }
+})();
+
 // Service Worker起動時にクリーンアップ
 // tabCaptureの「つかみっぱなし」を防ぐため、既存のOffscreen Documentを閉じる
 (async () => {
