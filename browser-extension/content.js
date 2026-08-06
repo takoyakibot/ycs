@@ -4801,7 +4801,7 @@ function createVolumeGraph() {
       </div>
       <div class="vdg-ts-footer">
         <div class="vdg-ts-help">
-          クリック: マーカー追加(付近は選択/ドラッグで移動) | Enter: 曲名入力 | Del: 削除 | Esc: 選択解除 | ←→: 1秒移動(2度押し5秒) | ↑↓: マーカー移動 | Space: 再生/停止 | J/L: 再生を10秒戻す/進める | Ctrl+Z/Y: 操作を戻す/やり直す | Ctrl+ホイール: 拡大/縮小
+          クリック: マーカー追加(付近は選択/ドラッグで移動) | Enter: 曲名入力/入力終了 | Del: 削除 | Esc: 入力終了・選択解除 | ←→: 1秒移動(2度押し5秒) | ↑↓: マーカー移動 | Space: 再生/停止 | J/L: 再生を10秒戻す/進める | Ctrl+Z/Y: 操作を戻す/やり直す | Ctrl+ホイール: 拡大/縮小
         </div>
         <label class="vdg-ts-format-toggle">
           <input type="checkbox" id="vdg-ts-zeropad">
@@ -5290,7 +5290,7 @@ function setupVolumeGraphEvents() {
   document.addEventListener('keydown', (e) => {
     const isTextInput = e.target.classList.contains('vdg-ts-text-input');
     // テキスト入力中は基本的にスキップ（入力を妨げない）
-    if (isTextInput && !['Delete', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
+    if (isTextInput && !['Delete', 'ArrowUp', 'ArrowDown', 'Enter', 'Escape'].includes(e.key)) return;
     // 検索ボックスやコメント欄など、エディタ以外の編集可能要素への入力は妨げない
     if (!isTextInput && isEditableTarget(e.target)) return;
     // 設定メニューやボタン等、YouTube本体のUI部品にフォーカスがある間は本体の操作を優先
@@ -5315,6 +5315,16 @@ function setupVolumeGraphEvents() {
       return;
     }
 
+    // 曲名入力中のEnter/Escは入力状態を終了して選択状態に戻す
+    // （入力内容は1文字ごとに保存済みなので、確定/取消の区別はせず単に抜ける。
+    //   編集前に戻したい場合はCtrl+Zを使う）
+    if (isTextInput && (e.key === 'Enter' || e.key === 'Escape')) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      e.target.blur();
+      return;
+    }
+
     // マーカー未選択なら何もしない
     if (selectedMarkerId === null) return;
 
@@ -5327,6 +5337,9 @@ function setupVolumeGraphEvents() {
     } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
       e.preventDefault();
       e.stopImmediatePropagation();
+      // 曲名入力中の場合は入力状態を抜けてから移動する
+      // （一覧の再構築による暗黙のフォーカス喪失に頼らず明示的に外す）
+      blurMarkerTextInput();
       // 上下キーで前後のマーカーに移動
       const currentIndex = tsMarkers.findIndex(m => m.id === selectedMarkerId);
       if (currentIndex < 0) return;
