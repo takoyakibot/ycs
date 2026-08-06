@@ -71,8 +71,11 @@ let audioInitialized = false; // 音声解析が初期化済みか
 
 // ズーム関連
 const ZOOM_LEVELS = [1, 1.5, 2, 3, 4, 5, 6, 7, 8];
-const GRAPH_BASE_HEIGHT_PX = 60; // ズーム1xでのグラフ高さ
-const GRAPH_HEIGHT_STEP_PX = 20; // ズーム1段階ごとの高さ増分（最大ズームで+160px）
+// グラフ高さの既定値（ポップアップの設定で上書きされる。popup.js側の既定値と揃えること）
+const DEFAULT_GRAPH_BASE_HEIGHT_PX = 60; // ズーム1xでのグラフ高さ
+const DEFAULT_GRAPH_HEIGHT_STEP_PX = 20; // ズーム1段階ごとの高さ増分
+let graphBaseHeightPx = DEFAULT_GRAPH_BASE_HEIGHT_PX;
+let graphHeightStepPx = DEFAULT_GRAPH_HEIGHT_STEP_PX;
 let zoomIndex = 0; // ZOOM_LEVELSのインデックス
 let lastSaveTime = 0; // 最後に音量データを保存した時刻
 const SAVE_INTERVAL = 3000; // 保存間隔（ミリ秒）
@@ -119,6 +122,21 @@ let ycsApiToken = null;
 let ycsServerUrl = null;
 // 字幕データ等の送信先。ローカル開発時はポップアップの設定で上書きする
 const DEFAULT_YCS_SERVER_URL = 'https://ycs.alpacasandbag.jp';
+
+/**
+ * グラフ高さ設定を読み込む（ポップアップで変更可能）
+ */
+async function loadGraphHeightSettings() {
+  try {
+    const result = await chrome.storage.local.get(['graphBaseHeight', 'graphHeightStep']);
+    graphBaseHeightPx = Number.isFinite(Number(result.graphBaseHeight))
+      ? Number(result.graphBaseHeight) : DEFAULT_GRAPH_BASE_HEIGHT_PX;
+    graphHeightStepPx = Number.isFinite(Number(result.graphHeightStep))
+      ? Number(result.graphHeightStep) : DEFAULT_GRAPH_HEIGHT_STEP_PX;
+  } catch (error) {
+    console.warn('[YCS] グラフ高さ設定の読み込みエラー:', error);
+  }
+}
 
 /**
  * 埋め込みUI設定を読み込む
@@ -3829,8 +3847,9 @@ async function init() {
   chrome.storage.onChanged.addListener(handleStorageChange);
 
   try {
-    // 埋め込みUI設定を読み込み
+    // 埋め込みUI設定・グラフ高さ設定を読み込み（UI構築前に反映する）
     await loadEmbeddedUISettings();
+    await loadGraphHeightSettings();
 
     // watchページの場合のみUI初期化
     if (isWatchPage()) {
@@ -3849,6 +3868,19 @@ async function init() {
  */
 function handleStorageChange(changes, areaName) {
   if (areaName !== 'local') return;
+
+  // グラフ高さ設定の変更を即時反映
+  if (changes.graphBaseHeight || changes.graphHeightStep) {
+    if (changes.graphBaseHeight && Number.isFinite(Number(changes.graphBaseHeight.newValue))) {
+      graphBaseHeightPx = Number(changes.graphBaseHeight.newValue);
+    }
+    if (changes.graphHeightStep && Number.isFinite(Number(changes.graphHeightStep.newValue))) {
+      graphHeightStepPx = Number(changes.graphHeightStep.newValue);
+    }
+    if (volumeGraphContainer) {
+      resizeCanvas();
+    }
+  }
 
   // 埋め込みUI設定の変更を監視
   if (changes.showEmbeddedUI) {
@@ -4815,7 +4847,7 @@ function resizeCanvas() {
   // 高さはズームレベルから決定論的に算出する（拡大で高く、縮小で元に戻る）
   // ※測定値から算出すると、canvasの高さ属性やスクロールバー分が測定に跳ね返って
   //   高さが増え続けるフィードバックループになるため、必ず計算値を使うこと
-  canvasContainer.style.height = `${GRAPH_BASE_HEIGHT_PX + zoomIndex * GRAPH_HEIGHT_STEP_PX}px`;
+  canvasContainer.style.height = `${graphBaseHeightPx + zoomIndex * graphHeightStepPx}px`;
   // 描画領域は水平スクロールバーを除いた実表示高さ
   const height = canvasContainer.clientHeight;
 
