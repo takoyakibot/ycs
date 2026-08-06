@@ -45,7 +45,7 @@ let selectedMarkerId = null;
 let nextMarkerId = 1;
 const MARKER_SNAP_THRESHOLD_SEC = 3; // マーカー選択の判定距離（秒）
 const MARKER_SNAP_THRESHOLD_PX = 8; // マーカー選択の判定距離（ピクセル）。長時間動画では秒基準が1px未満になるため併用
-let seekedListenerTarget = null; // seekedリスナー登録済みのvideo要素（重複登録防止）
+let videoListenerTarget = null; // イベント登録済みのvideo要素（SPA遷移での重複登録防止）
 
 // タイムスタンプエディタ: Undo/Redo履歴（変更前スナップショットのスタック）
 let tsHistoryUndo = [];
@@ -4302,16 +4302,19 @@ function startTimeSync() {
     clearInterval(timeUpdateInterval);
   }
 
-  // 動画のメタデータ読み込み時に長さを取得
-  videoElement.addEventListener('loadedmetadata', () => {
-    updateVideoDuration();
-  });
+  // video要素へのイベント登録
+  // YouTubeのSPA遷移では同じvideo要素が使い回されるため、startTimeSyncが
+  // 再実行されても同一要素へ重複登録しないようにする（リスナーの積み上がり防止）
+  if (videoListenerTarget !== videoElement) {
+    videoListenerTarget = videoElement;
 
-  // 停止中のシークでも赤い再生位置ラインを追従させる
-  // （通常の更新は再生中のみのインターバル処理のため、シーク完了時にも更新する）
-  // SPA遷移でstartTimeSyncが再実行されても同一要素へ重複登録しない
-  if (seekedListenerTarget !== videoElement) {
-    seekedListenerTarget = videoElement;
+    // 動画のメタデータ読み込み時に長さを取得
+    videoElement.addEventListener('loadedmetadata', () => {
+      updateVideoDuration();
+    });
+
+    // 停止中のシークでも赤い再生位置ラインを追従させる
+    // （通常の更新は再生中のみのインターバル処理のため、シーク完了時にも更新する）
     videoElement.addEventListener('seeked', () => {
       if (isGraphVisible) {
         updateTimeMarker();
@@ -6347,6 +6350,9 @@ function loadMarkersFromStorage() {
   if (!videoId) return;
   const key = `tsMarkers_${videoId}`;
   chrome.storage.local.get(key, (result) => {
+    // 読み込み中に別の動画へ遷移していた場合は破棄する（別動画のマーカーを適用しない）
+    if (getVideoId() !== videoId) return;
+
     const saved = result[key];
     if (saved && saved.markers) {
       tsMarkers = saved.markers;
@@ -6361,6 +6367,28 @@ function loadMarkersFromStorage() {
       drawVolumeGraph();
     }
   });
+}
+
+/**
+ * 動画切替時にタイムスタンプエディタの状態を初期化し、新しい動画の保存データを読み込む
+ *
+ * YouTubeのSPA遷移では content script が再読み込みされないため、これを呼ばないと
+ * 前の動画のマーカーが残ったままになり、編集すると saveMarkersToStorage() が
+ * 「新しい動画のキー」に「前の動画のマーカー」を保存してデータが混ざる
+ */
+function resetTimestampEditorForVideoChange() {
+  closeLyricsPastePopup();
+  tsMarkers = [];
+  selectedMarkerId = null;
+  nextMarkerId = 1;
+  tsHistoryUndo = [];
+  tsHistoryRedo = [];
+  lastHistoryTag = null;
+  updateUndoRedoButtons();
+  updateTimestampList();
+  drawVolumeGraph();
+  // 新しい動画に保存済みマーカーがあれば読み込む（なければ空のまま）
+  loadMarkersFromStorage();
 }
 
 /**
@@ -6457,6 +6485,8 @@ function observePageChanges() {
 
       initWatchPageUI();
       loadVolumeData();
+      // 前のwatchページのマーカーが残らないようリセットして読み込み直す
+      resetTimestampEditorForVideoChange();
     } else if (nowWatchPage && currentVideoId !== lastVideoId) {
       // watchページ → 別の動画のwatchページへの遷移
       lastVideoId = currentVideoId;
@@ -6489,6 +6519,8 @@ function observePageChanges() {
 
       // 保存済みデータを読み込み
       loadVolumeData();
+      // 前の動画のマーカー・Undo履歴が残らないようリセットして読み込み直す
+      resetTimestampEditorForVideoChange();
 
       // 自動スキャンモードの場合は継続
       if (isAutoScanMode && !autoScanStopRequested) {
