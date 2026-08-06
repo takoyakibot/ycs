@@ -4801,7 +4801,7 @@ function createVolumeGraph() {
       </div>
       <div class="vdg-ts-footer">
         <div class="vdg-ts-help">
-          クリック: マーカー追加(付近は選択/ドラッグで移動) | Enter: 曲名入力 | Del: 削除 | Esc: 選択解除 | ←→: 1秒移動(2度押し5秒) | ↑↓: マーカー移動 | Space: 再生/停止 | J/L: 再生を10秒戻す/進める | Ctrl+Z/Y: 操作を戻す/やり直す | Ctrl+ホイール: 拡大/縮小
+          クリック: マーカー追加(付近は選択/ドラッグで移動) | Enter: 曲名入力/入力終了 | Del: 削除 | Esc: 入力終了・選択解除 | ←→: 1秒移動(2度押し5秒) | ↑↓: マーカー移動(入力中は行頭/行末へ) | Space: 再生/停止 | J/L: 再生を10秒戻す/進める | Ctrl+Z/Y: 操作を戻す/やり直す | Ctrl+ホイール: 拡大/縮小
         </div>
         <label class="vdg-ts-format-toggle">
           <input type="checkbox" id="vdg-ts-zeropad">
@@ -5290,7 +5290,10 @@ function setupVolumeGraphEvents() {
   document.addEventListener('keydown', (e) => {
     const isTextInput = e.target.classList.contains('vdg-ts-text-input');
     // テキスト入力中は基本的にスキップ（入力を妨げない）
-    if (isTextInput && !['Delete', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
+    if (isTextInput && !['Delete', 'ArrowUp', 'ArrowDown', 'Enter', 'Escape'].includes(e.key)) return;
+    // IME変換中は確定(Enter)・取消(Esc)・候補選択(↑↓)をIME側の処理に委ねる
+    // （奪うと変換中の文字が失われる。keyCode 229は変換開始時のフォールバック判定）
+    if (isTextInput && (e.isComposing || e.keyCode === 229)) return;
     // 検索ボックスやコメント欄など、エディタ以外の編集可能要素への入力は妨げない
     if (!isTextInput && isEditableTarget(e.target)) return;
     // 設定メニューやボタン等、YouTube本体のUI部品にフォーカスがある間は本体の操作を優先
@@ -5315,6 +5318,31 @@ function setupVolumeGraphEvents() {
       return;
     }
 
+    // 曲名入力中のEnter/Escは入力状態を終了して選択状態に戻す
+    // （入力内容は1文字ごとに保存済みなので、確定/取消の区別はせず単に抜ける。
+    //   編集前に戻したい場合はCtrl+Zを使う）
+    if (isTextInput && (e.key === 'Enter' || e.key === 'Escape')) {
+      // ペースト変換ポップアップが開いている間は、ポップアップ側のキー処理を優先する
+      // （Esc=元テキストのまま挿入。閉じてから改めて押せば入力状態を抜けられる）
+      if (lyricsPastePopup) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      blurMarkerTextInput();
+      return;
+    }
+
+    // 曲名入力中の↑↓はカーソルを文字列の先頭/末尾へ移動する
+    // （入力状態を抜けるのはEnter/Escの役割。IME変換中は上のガードで候補選択が優先される）
+    if (isTextInput && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      // ポップアップが開いていれば閉じる（キー操作では挿入しないのがポップアップ側の挙動と同じ）
+      closeLyricsPastePopup();
+      const pos = e.key === 'ArrowUp' ? 0 : e.target.value.length;
+      e.target.setSelectionRange(pos, pos);
+      return;
+    }
+
     // マーカー未選択なら何もしない
     if (selectedMarkerId === null) return;
 
@@ -5327,7 +5355,7 @@ function setupVolumeGraphEvents() {
     } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
       e.preventDefault();
       e.stopImmediatePropagation();
-      // 上下キーで前後のマーカーに移動
+      // 上下キーで前後のマーカーに移動（入力中は上の分岐でカーソル移動として扱われる）
       const currentIndex = tsMarkers.findIndex(m => m.id === selectedMarkerId);
       if (currentIndex < 0) return;
       const nextIndex = e.key === 'ArrowUp'
@@ -6048,6 +6076,9 @@ function updateUndoRedoButtons() {
  * （mousedownのpreventDefaultで自動のフォーカス移動が起きないケース用）
  */
 function blurMarkerTextInput() {
+  // キーボード操作で入力を抜ける場合はポップアップのmousedown経由の後始末が働かないため、
+  // ここで明示的に閉じる（開いたまま残るとリスナーが生き続け、後続のクリックで誤挿入される）
+  closeLyricsPastePopup();
   const active = document.activeElement;
   if (active instanceof HTMLElement && active.classList.contains('vdg-ts-text-input')) {
     active.blur();
