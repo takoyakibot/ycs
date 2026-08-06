@@ -4798,7 +4798,7 @@ function createVolumeGraph() {
       </div>
       <div class="vdg-ts-footer">
         <div class="vdg-ts-help">
-          クリック: マーカー追加(付近は選択/ドラッグで移動) | Enter: 曲名入力 | Del: 削除 | Esc: 選択解除 | ←→: 1秒移動(2度押し5秒) | ↑↓: マーカー移動 | Space: 再生/停止 | J/L: 再生を10秒戻す/進める | Ctrl+Z/Y: 操作を戻す/やり直す
+          クリック: マーカー追加(付近は選択/ドラッグで移動) | Enter: 曲名入力 | Del: 削除 | Esc: 選択解除 | ←→: 1秒移動(2度押し5秒) | ↑↓: マーカー移動 | Space: 再生/停止 | J/L: 再生を10秒戻す/進める | Ctrl+Z/Y: 操作を戻す/やり直す | Ctrl+ホイール: 拡大/縮小
         </div>
         <label class="vdg-ts-format-toggle">
           <input type="checkbox" id="vdg-ts-zeropad">
@@ -5137,20 +5137,21 @@ function setupVolumeGraphEvents() {
       deselectMarker();
     }, true);
 
-    // マウスホイールイベント
+    // マウスホイールイベント（ホイールのみ: 横スクロール）
+    // Ctrl+ホイールのズームはパネル全体で受けるため、ここでは処理せず親へ伝播させる
     container.addEventListener('wheel', (e) => {
-      if (e.ctrlKey) {
-        // Ctrl + ホイール: ズーム
-        e.preventDefault();
-        const zoomDelta = e.deltaY > 0 ? -1 : 1;
-        changeZoomLevel(zoomDelta);
-      } else {
-        // ホイールのみ: 横スクロール
-        e.preventDefault();
-        container.scrollLeft += e.deltaY;
-      }
+      if (e.ctrlKey) return;
+      e.preventDefault();
+      container.scrollLeft += e.deltaY;
     }, { passive: false });
   }
+
+  // Ctrl + ホイール: ズーム（グラフ上に限らずパネルのどこでも反応させる）
+  volumeGraphContainer.addEventListener('wheel', (e) => {
+    if (!e.ctrlKey) return; // 通常のホイールは一覧のスクロール等に任せる
+    e.preventDefault(); // ブラウザのページ拡大を抑止
+    changeZoomLevel(e.deltaY > 0 ? -1 : 1);
+  }, { passive: false });
 
   // 音量表示モード切り替えボタン
   const volumeModeBtn = volumeGraphContainer.querySelector('#vdg-volume-mode-btn');
