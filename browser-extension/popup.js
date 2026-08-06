@@ -247,6 +247,8 @@ async function saveClaudeApiKey() {
  * @returns {number}
  */
 function clampNumber(value, defaultValue, range) {
+  // 空欄・未設定は「既定値を使う」として扱う（Number('')が0になり最小値へ丸められるのを防ぐ）
+  if (value === null || value === undefined || value === '') return defaultValue;
   const num = Number(value);
   if (!Number.isFinite(num)) return defaultValue;
   return Math.max(range.min, Math.min(range.max, Math.round(num)));

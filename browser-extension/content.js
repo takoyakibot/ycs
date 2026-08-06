@@ -76,6 +76,10 @@ const DEFAULT_GRAPH_BASE_HEIGHT_PX = 60; // ズーム1xでのグラフ高さ
 const DEFAULT_GRAPH_HEIGHT_STEP_PX = 20; // ズーム1段階ごとの高さ増分
 let graphBaseHeightPx = DEFAULT_GRAPH_BASE_HEIGHT_PX;
 let graphHeightStepPx = DEFAULT_GRAPH_HEIGHT_STEP_PX;
+// 許容範囲（popup.js側と揃えること）。canvasに直接適用する値のため、
+// ストレージの内容を信頼せずここでも必ずクランプする
+const GRAPH_BASE_HEIGHT_RANGE = { min: 40, max: 400 };
+const GRAPH_HEIGHT_STEP_RANGE = { min: 0, max: 100 };
 let zoomIndex = 0; // ZOOM_LEVELSのインデックス
 let lastSaveTime = 0; // 最後に音量データを保存した時刻
 const SAVE_INTERVAL = 3000; // 保存間隔（ミリ秒）
@@ -124,15 +128,29 @@ let ycsServerUrl = null;
 const DEFAULT_YCS_SERVER_URL = 'https://ycs.alpacasandbag.jp';
 
 /**
+ * グラフ高さ設定の値を許容範囲に丸める
+ * @param {*} value - ストレージから読んだ値
+ * @param {number} defaultValue - 既定値
+ * @param {{min: number, max: number}} range - 許容範囲
+ * @returns {number}
+ */
+function clampGraphHeightValue(value, defaultValue, range) {
+  if (value === null || value === undefined || value === '') return defaultValue;
+  const num = Number(value);
+  if (!Number.isFinite(num)) return defaultValue;
+  return Math.max(range.min, Math.min(range.max, Math.round(num)));
+}
+
+/**
  * グラフ高さ設定を読み込む（ポップアップで変更可能）
  */
 async function loadGraphHeightSettings() {
   try {
     const result = await chrome.storage.local.get(['graphBaseHeight', 'graphHeightStep']);
-    graphBaseHeightPx = Number.isFinite(Number(result.graphBaseHeight))
-      ? Number(result.graphBaseHeight) : DEFAULT_GRAPH_BASE_HEIGHT_PX;
-    graphHeightStepPx = Number.isFinite(Number(result.graphHeightStep))
-      ? Number(result.graphHeightStep) : DEFAULT_GRAPH_HEIGHT_STEP_PX;
+    graphBaseHeightPx = clampGraphHeightValue(
+      result.graphBaseHeight, DEFAULT_GRAPH_BASE_HEIGHT_PX, GRAPH_BASE_HEIGHT_RANGE);
+    graphHeightStepPx = clampGraphHeightValue(
+      result.graphHeightStep, DEFAULT_GRAPH_HEIGHT_STEP_PX, GRAPH_HEIGHT_STEP_RANGE);
   } catch (error) {
     console.warn('[YCS] グラフ高さ設定の読み込みエラー:', error);
   }
@@ -3871,11 +3889,13 @@ function handleStorageChange(changes, areaName) {
 
   // グラフ高さ設定の変更を即時反映
   if (changes.graphBaseHeight || changes.graphHeightStep) {
-    if (changes.graphBaseHeight && Number.isFinite(Number(changes.graphBaseHeight.newValue))) {
-      graphBaseHeightPx = Number(changes.graphBaseHeight.newValue);
+    if (changes.graphBaseHeight) {
+      graphBaseHeightPx = clampGraphHeightValue(
+        changes.graphBaseHeight.newValue, DEFAULT_GRAPH_BASE_HEIGHT_PX, GRAPH_BASE_HEIGHT_RANGE);
     }
-    if (changes.graphHeightStep && Number.isFinite(Number(changes.graphHeightStep.newValue))) {
-      graphHeightStepPx = Number(changes.graphHeightStep.newValue);
+    if (changes.graphHeightStep) {
+      graphHeightStepPx = clampGraphHeightValue(
+        changes.graphHeightStep.newValue, DEFAULT_GRAPH_HEIGHT_STEP_PX, GRAPH_HEIGHT_STEP_RANGE);
     }
     if (volumeGraphContainer) {
       resizeCanvas();
