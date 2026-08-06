@@ -4801,7 +4801,7 @@ function createVolumeGraph() {
       </div>
       <div class="vdg-ts-footer">
         <div class="vdg-ts-help">
-          クリック: マーカー追加(付近は選択/ドラッグで移動) | Enter: 曲名入力/入力終了 | Del: 削除 | Esc: 入力終了・選択解除 | ←→: 1秒移動(2度押し5秒) | ↑↓: マーカー移動 | Space: 再生/停止 | J/L: 再生を10秒戻す/進める | Ctrl+Z/Y: 操作を戻す/やり直す | Ctrl+ホイール: 拡大/縮小
+          クリック: マーカー追加(付近は選択/ドラッグで移動) | Enter: 曲名入力/入力終了 | Del: 削除 | Esc: 入力終了・選択解除 | ←→: 1秒移動(2度押し5秒) | ↑↓: マーカー移動(入力中は行頭/行末へ) | Space: 再生/停止 | J/L: 再生を10秒戻す/進める | Ctrl+Z/Y: 操作を戻す/やり直す | Ctrl+ホイール: 拡大/縮小
         </div>
         <label class="vdg-ts-format-toggle">
           <input type="checkbox" id="vdg-ts-zeropad">
@@ -5331,6 +5331,18 @@ function setupVolumeGraphEvents() {
       return;
     }
 
+    // 曲名入力中の↑↓はカーソルを文字列の先頭/末尾へ移動する
+    // （入力状態を抜けるのはEnter/Escの役割。IME変換中は上のガードで候補選択が優先される）
+    if (isTextInput && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      // ポップアップが開いていれば閉じる（キー操作では挿入しないのがポップアップ側の挙動と同じ）
+      closeLyricsPastePopup();
+      const pos = e.key === 'ArrowUp' ? 0 : e.target.value.length;
+      e.target.setSelectionRange(pos, pos);
+      return;
+    }
+
     // マーカー未選択なら何もしない
     if (selectedMarkerId === null) return;
 
@@ -5343,10 +5355,7 @@ function setupVolumeGraphEvents() {
     } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
       e.preventDefault();
       e.stopImmediatePropagation();
-      // 曲名入力中の場合は入力状態を抜けてから移動する
-      // （一覧の再構築による暗黙のフォーカス喪失に頼らず明示的に外す）
-      blurMarkerTextInput();
-      // 上下キーで前後のマーカーに移動
+      // 上下キーで前後のマーカーに移動（入力中は上の分岐でカーソル移動として扱われる）
       const currentIndex = tsMarkers.findIndex(m => m.id === selectedMarkerId);
       if (currentIndex < 0) return;
       const nextIndex = e.key === 'ArrowUp'
