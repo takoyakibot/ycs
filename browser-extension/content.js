@@ -71,8 +71,8 @@ let audioInitialized = false; // 音声解析が初期化済みか
 
 // ズーム関連
 const ZOOM_LEVELS = [1, 1.5, 2, 3, 4, 5, 6, 7, 8];
-const GRAPH_BASE_HEIGHT_PX = 150; // ズーム1xでのグラフ高さ
-const GRAPH_HEIGHT_STEP_PX = 15; // ズーム1段階ごとの高さ増分
+const GRAPH_BASE_HEIGHT_PX = 60; // ズーム1xでのグラフ高さ
+const GRAPH_HEIGHT_STEP_PX = 10; // ズーム1段階ごとの高さ増分（最大ズームで+80px）
 let zoomIndex = 0; // ZOOM_LEVELSのインデックス
 let lastSaveTime = 0; // 最後に音量データを保存した時刻
 const SAVE_INTERVAL = 3000; // 保存間隔（ミリ秒）
@@ -4388,7 +4388,7 @@ function createVolumeGraph() {
         /* 初期高さ。以降はresizeCanvas()がズームレベルに応じてインラインstyleで制御する
            （高さを未確定のままにすると、canvasの高さ属性やスクロールバーの出現が
              コンテナ高さの測定値に跳ね返り、ズームのたびに高さが増え続ける） */
-        height: 150px;
+        height: 60px;
         min-height: 40px;
         overflow-x: auto;
         overflow-y: hidden;
