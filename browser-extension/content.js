@@ -5291,6 +5291,9 @@ function setupVolumeGraphEvents() {
     const isTextInput = e.target.classList.contains('vdg-ts-text-input');
     // テキスト入力中は基本的にスキップ（入力を妨げない）
     if (isTextInput && !['Delete', 'ArrowUp', 'ArrowDown', 'Enter', 'Escape'].includes(e.key)) return;
+    // IME変換中は確定(Enter)・取消(Esc)・候補選択(↑↓)をIME側の処理に委ねる
+    // （奪うと変換中の文字が失われる。keyCode 229は変換開始時のフォールバック判定）
+    if (isTextInput && (e.isComposing || e.keyCode === 229)) return;
     // 検索ボックスやコメント欄など、エディタ以外の編集可能要素への入力は妨げない
     if (!isTextInput && isEditableTarget(e.target)) return;
     // 設定メニューやボタン等、YouTube本体のUI部品にフォーカスがある間は本体の操作を優先
@@ -5319,9 +5322,12 @@ function setupVolumeGraphEvents() {
     // （入力内容は1文字ごとに保存済みなので、確定/取消の区別はせず単に抜ける。
     //   編集前に戻したい場合はCtrl+Zを使う）
     if (isTextInput && (e.key === 'Enter' || e.key === 'Escape')) {
+      // ペースト変換ポップアップが開いている間は、ポップアップ側のキー処理を優先する
+      // （Esc=元テキストのまま挿入。閉じてから改めて押せば入力状態を抜けられる）
+      if (lyricsPastePopup) return;
       e.preventDefault();
       e.stopImmediatePropagation();
-      e.target.blur();
+      blurMarkerTextInput();
       return;
     }
 
@@ -6061,6 +6067,9 @@ function updateUndoRedoButtons() {
  * （mousedownのpreventDefaultで自動のフォーカス移動が起きないケース用）
  */
 function blurMarkerTextInput() {
+  // キーボード操作で入力を抜ける場合はポップアップのmousedown経由の後始末が働かないため、
+  // ここで明示的に閉じる（開いたまま残るとリスナーが生き続け、後続のクリックで誤挿入される）
+  closeLyricsPastePopup();
   const active = document.activeElement;
   if (active instanceof HTMLElement && active.classList.contains('vdg-ts-text-input')) {
     active.blur();
