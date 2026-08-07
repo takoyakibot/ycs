@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Redirect;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class ProfileController extends Controller
@@ -20,6 +21,7 @@ class ProfileController extends Controller
     {
         return view('profile.edit', [
             'user' => $request->user(),
+            'maxApiTokens' => self::MAX_API_TOKENS,
         ]);
     }
 
@@ -42,6 +44,11 @@ class ProfileController extends Controller
     }
 
     /**
+     * 1ユーザーあたりのAPIトークン発行上限
+     */
+    public const MAX_API_TOKENS = 5;
+
+    /**
      * APIトークンを発行
      */
     public function createApiToken(Request $request): RedirectResponse
@@ -50,8 +57,12 @@ class ProfileController extends Controller
             'token_name' => ['required', 'string', 'max:255'],
         ]);
 
-        // 既存トークンを全削除（1ユーザー1トークン）
-        $request->user()->tokens()->delete();
+        // 上限に達している場合は既存トークンに影響を与えずに拒否する
+        if ($request->user()->tokens()->count() >= self::MAX_API_TOKENS) {
+            throw ValidationException::withMessages([
+                'token_name' => 'APIトークンは最大'.self::MAX_API_TOKENS.'個までです。不要なトークンを失効してから発行してください。',
+            ]);
+        }
 
         $token = $request->user()->createToken($request->input('token_name'));
 
@@ -59,11 +70,18 @@ class ProfileController extends Controller
     }
 
     /**
-     * APIトークンを失効
+     * APIトークンを個別に失効
      */
-    public function destroyApiToken(Request $request): RedirectResponse
+    public function destroyApiToken(Request $request, string $token): RedirectResponse
     {
-        $request->user()->tokens()->delete();
+        // 他ユーザーのトークンを失効できないよう、必ず自分のトークンから検索する
+        $target = $request->user()->tokens()->whereKey($token)->first();
+
+        if ($target === null) {
+            abort(404);
+        }
+
+        $target->delete();
 
         return Redirect::route('profile.edit')->with('status', 'api-token-deleted');
     }
