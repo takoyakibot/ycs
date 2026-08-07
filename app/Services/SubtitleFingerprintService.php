@@ -9,7 +9,36 @@ use App\Models\VideoSubtitle;
 class SubtitleFingerprintService
 {
     /**
-     * 動画の全ts_itemsに対してフィンガープリントを生成
+     * フィンガープリントの窓の長さ（秒）
+     *
+     * 歌い出し直後は前奏で歌声がなく、自動字幕が [音楽] だけになる区間が続く。
+     * 30秒では前奏の長い楽曲で歌詞をまったく拾えないため60秒を採る。
+     *
+     * この値を変更した場合、既存のフィンガープリントは窓の長さが異なるため
+     * 照合対象から外れる（SubtitleMatchingService が duration_sec の一致を要求する）。
+     * 変更時は subtitle-fingerprints:generate で全件を再生成すること。
+     */
+    public const WINDOW_DURATION_SEC = 60;
+
+    /**
+     * 窓の開始を歌い出しの何秒手前から取るか
+     */
+    public const WINDOW_LEAD_SEC = 1;
+
+    /**
+     * フィンガープリントとして採用する最小トライグラム数
+     *
+     * トライグラムが少ないテキストはJaccard類似度が不安定になる。
+     * 特に効果音アノテーションだけが並ぶ区間は種類数が数個まで縮退し、
+     * 内容の異なる区間どうしが類似度1.0で一致してしまう。
+     */
+    public const MIN_TRIGRAM_COUNT = 20;
+
+    /**
+     * 動画の全ts_itemsに対してフィンガープリントを生成する。
+     *
+     * 生成対象から外れた既存のフィンガープリントは削除するため、
+     * 呼び出し後はこの動画のフィンガープリントが現行条件のものだけになる。
      *
      * @return int 生成件数
      */
@@ -29,15 +58,22 @@ class SubtitleFingerprintService
             ->whereNotNull('ts_num')
             ->get();
 
-        $count = 0;
+        $generatedTsItemIds = [];
         foreach ($tsItems as $tsItem) {
             $fp = $this->generateFingerprint($tsItem, $subtitle);
             if ($fp) {
-                $count++;
+                $generatedTsItemIds[] = $tsItem->id;
             }
         }
 
-        return $count;
+        // 今回の条件で生成されなかったフィンガープリントを削除する。
+        // 窓の長さの変更・ts_itemの非表示化・字幕の差し替えで古い行が残ると、
+        // 現行条件の行と混在して照合結果が歪むため。
+        SubtitleFingerprint::where('video_id', $videoId)
+            ->whereNotIn('ts_item_id', $generatedTsItemIds)
+            ->delete();
+
+        return count($generatedTsItemIds);
     }
 
     /**
@@ -50,7 +86,7 @@ class SubtitleFingerprintService
             return null;
         }
 
-        $durationSec = 30;
+        $durationSec = self::WINDOW_DURATION_SEC;
         $text = $this->extractSubtitleWindow($segments, (int) $tsItem->ts_num, $durationSec);
 
         if ($text === '') {
@@ -58,7 +94,7 @@ class SubtitleFingerprintService
         }
 
         $trigrams = self::generateTrigrams($text);
-        if (empty($trigrams)) {
+        if (count($trigrams) < self::MIN_TRIGRAM_COUNT) {
             return null;
         }
 
@@ -77,9 +113,11 @@ class SubtitleFingerprintService
     /**
      * 字幕セグメントから指定時間範囲のテキストを切り出し
      */
-    public function extractSubtitleWindow(array $segments, int $startSec, int $durationSec = 30): string
+    public function extractSubtitleWindow(array $segments, int $startSec, ?int $durationSec = null): string
     {
-        $windowStart = max(0, $startSec - 1);
+        $durationSec ??= self::WINDOW_DURATION_SEC;
+
+        $windowStart = max(0, $startSec - self::WINDOW_LEAD_SEC);
         $windowEnd = $startSec + $durationSec;
 
         $texts = [];
@@ -103,10 +141,16 @@ class SubtitleFingerprintService
 
     /**
      * フィンガープリント用のテキスト正規化
-     * 句読点・記号除去、小文字化
+     * 効果音アノテーション除去、句読点・記号除去、小文字化
      */
     public static function normalizeForFingerprint(string $text): string
     {
+        // 自動字幕の効果音アノテーション（[音楽] [拍手] [Music] など）を角括弧ごと除去する。
+        // 記号除去だけでは角括弧が外れて「音楽」が本文として残り、前奏や間奏の窓が
+        // 「音楽」の繰り返しだけになって、内容の異なる楽曲どうしが一致してしまう。
+        // 歌詞側の誤除去を避けるため、括弧内の長さに上限を設ける。
+        $text = preg_replace('/[\[［][^\[\]［］]{0,20}[\]］]/u', '', $text);
+
         // 小文字化
         $text = mb_strtolower($text, 'UTF-8');
 

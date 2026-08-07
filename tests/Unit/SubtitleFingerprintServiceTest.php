@@ -66,6 +66,40 @@ class SubtitleFingerprintServiceTest extends TestCase
         $this->assertEquals('abcd', $result);
     }
 
+    public function test_normalize_removes_asr_annotations(): void
+    {
+        $this->assertEquals(
+            'きみのこえ',
+            SubtitleFingerprintService::normalizeForFingerprint('[音楽] きみのこえ [拍手]')
+        );
+
+        // 全角の角括弧・英語表記のアノテーションも除去する
+        $this->assertEquals(
+            'きみのこえ',
+            SubtitleFingerprintService::normalizeForFingerprint('［音楽］きみのこえ[Applause]')
+        );
+    }
+
+    public function test_normalize_music_only_window_becomes_empty(): void
+    {
+        // 前奏や間奏の窓は [音楽] だけになる。角括弧ごと除去しないと「音楽」が本文として
+        // 残り、内容の異なる楽曲どうしが同じトライグラムを持ってしまう。
+        $normalized = SubtitleFingerprintService::normalizeForFingerprint('[音楽] [音楽] [音楽] [音楽]');
+
+        $this->assertEquals('', $normalized);
+        $this->assertEquals([], SubtitleFingerprintService::generateTrigrams($normalized));
+    }
+
+    public function test_normalize_keeps_long_bracketed_text(): void
+    {
+        // 括弧内が長いものは効果音アノテーションとみなさず、本文として残す
+        $long = str_repeat('あ', 21);
+
+        $result = SubtitleFingerprintService::normalizeForFingerprint("[{$long}]");
+
+        $this->assertEquals($long, $result);
+    }
+
     // ==========================================
     // 字幕ウィンドウ抽出のテスト
     // ==========================================
@@ -122,6 +156,28 @@ class SubtitleFingerprintServiceTest extends TestCase
         $result = $service->extractSubtitleWindow([], 60, 30);
 
         $this->assertEquals('', $result);
+    }
+
+    public function test_extract_subtitle_window_defaults_to_configured_duration(): void
+    {
+        $service = new SubtitleFingerprintService;
+
+        $segments = [
+            // 歌い出しの45秒後。前奏が長い楽曲ではこのあたりから歌詞が出はじめる
+            ['start' => 105, 'duration' => 3, 'text' => '歌い出しの45秒後'],
+        ];
+
+        // 既定の窓（ts_num=60 から WINDOW_DURATION_SEC 秒）には含まれる
+        $this->assertStringContainsString(
+            '歌い出しの45秒後',
+            $service->extractSubtitleWindow($segments, 60)
+        );
+
+        // 旧来の30秒窓では取りこぼしていた
+        $this->assertStringNotContainsString(
+            '歌い出しの45秒後',
+            $service->extractSubtitleWindow($segments, 60, 30)
+        );
     }
 
     // ==========================================
