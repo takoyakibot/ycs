@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Helpers\CharacterCategorizer;
 use App\Helpers\TextNormalizer;
 use App\Helpers\ValidationHelper;
 use App\Models\Channel;
@@ -153,16 +154,11 @@ class ChannelController extends Controller
     {
         $channel = Channel::where('handle', $id)->firstOrFail();
 
-        $allowedIndexes = [
-            'ABCDE', 'FGHIJ', 'KLMNO', 'PQRST', 'UVWXYZ',
-            '0-9', 'あ', 'か', 'さ', 'た', 'な', 'は', 'ま', 'や', 'ら', 'わ', 'その他',
-        ];
-
         $validated = $request->validate([
             'per_page' => 'integer|min:1|max:100',
             'page' => 'integer|min:1',
             'search' => 'string|max:255',
-            'index' => ['nullable', 'string', Rule::in($allowedIndexes)],
+            'index' => ['nullable', 'string', Rule::in(CharacterCategorizer::getAllCategories())],
         ]);
 
         $result = $this->timestampService->getTimestampsWithMapping(
@@ -183,11 +179,23 @@ class ChannelController extends Controller
     {
         $channel = Channel::where('handle', $id)->firstOrFail();
 
+        // 一覧と同じ絞り込み条件を受け取り、条件に合致する中からランダムに選ぶ
+        $validated = $request->validate([
+            'search' => 'nullable|string|max:255',
+            'index' => ['nullable', 'string', Rule::in(CharacterCategorizer::getAllCategories())],
+        ]);
+
         $excludeVideoId = $request->query('exclude_video_id');
         if ($excludeVideoId !== null && ! preg_match('/^[A-Za-z0-9_-]{11}$/', $excludeVideoId)) {
             $excludeVideoId = null;
         }
-        $result = $this->timestampService->getRandomTimestamp($channel, 50, $excludeVideoId);
+        $result = $this->timestampService->getRandomTimestamp(
+            $channel,
+            50,
+            $excludeVideoId,
+            $validated['search'] ?? '',
+            $validated['index'] ?? ''
+        );
 
         if (! $result) {
             return response()->json([

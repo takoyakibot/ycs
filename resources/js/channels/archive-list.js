@@ -911,7 +911,11 @@ function registerArchiveListComponent() {
                         this.isPlaybackTransitioning = true;
 
                         const excludeVideoId = this.selectedTimestamp?.video_id || null;
-                        const timestamp = await ChannelApiService.fetchRandomTimestamp(this.channel.handle, excludeVideoId);
+                        // 一覧の検索・頭文字フィルタと同じ条件で抽選する
+                        const timestamp = await ChannelApiService.fetchRandomTimestamp(this.channel.handle, excludeVideoId, {
+                            search: this.searchQuery,
+                            index: this.selectedIndex,
+                        });
 
                         if (excludeVideoId && timestamp.video_id === excludeVideoId) {
                             console.warn('同じアーカイブが再選択されました', { excludeVideoId, selectedVideoId: timestamp.video_id });
@@ -919,6 +923,8 @@ function registerArchiveListComponent() {
 
                         logUserAction('playRandomTimestamp', {
                             excludeVideoId: excludeVideoId,
+                            search: this.searchQuery,
+                            index: this.selectedIndex,
                             timestampId: timestamp.id,
                             videoId: timestamp.video_id,
                             tsNum: timestamp.ts_num,

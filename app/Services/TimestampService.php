@@ -67,20 +67,8 @@ class TimestampService
                 ->orWhere('timestamp_song_mappings.is_not_song', false);
         });
 
-        // 検索条件（スペース区切りでAND検索、正規化して類似文字を吸収）
-        if ($search) {
-            $keywords = QueryHelper::splitSearchKeywords($search);
-            foreach ($keywords as $keyword) {
-                $normalizedKeyword = TextNormalizer::normalize($keyword);
-                $escaped = QueryHelper::escapeLikeString($normalizedKeyword);
-                $query->where('ts_items.normalized_text', 'like', "%{$escaped}%");
-            }
-        }
-
-        // 頭文字インデックスでフィルタリング
-        if ($index) {
-            $this->applyIndexFilter($query, $index);
-        }
+        // 検索・頭文字インデックスで絞り込み
+        $this->applyFilters($query, $search, $index);
 
         // 楽曲名順でソート（楽曲名がなければタイムスタンプテキストを使用）
         $query->orderByRaw('COALESCE(songs.title, ts_items.text) ASC');
@@ -128,6 +116,32 @@ class TimestampService
             'total' => $paginated->total(),
             'available_indexes' => $availableIndexes,
         ];
+    }
+
+    /**
+     * 検索・頭文字インデックスの絞り込み条件を適用
+     *
+     * 一覧・ガチャ（ランダム取得）・ページ位置計算で同じ条件を使うため共通化している。
+     *
+     * @param  string  $search  検索キーワード（スペース区切りでAND検索）
+     * @param  string  $index  頭文字インデックス（カテゴリ名）
+     */
+    private function applyFilters(Builder $query, string $search, string $index): void
+    {
+        // 検索条件（スペース区切りでAND検索、正規化して類似文字を吸収）
+        if ($search) {
+            $keywords = QueryHelper::splitSearchKeywords($search);
+            foreach ($keywords as $keyword) {
+                $normalizedKeyword = TextNormalizer::normalize($keyword);
+                $escaped = QueryHelper::escapeLikeString($normalizedKeyword);
+                $query->where('ts_items.normalized_text', 'like', "%{$escaped}%");
+            }
+        }
+
+        // 頭文字インデックスでフィルタリング
+        if ($index) {
+            $this->applyIndexFilter($query, $index);
+        }
     }
 
     /**
@@ -267,10 +281,17 @@ class TimestampService
      * チャンネルのタイムスタンプからランダムに1件取得
      *
      * @param  int  $perPage  1ページあたりの件数（ページ番号計算用）
+     * @param  string  $search  検索キーワード（一覧と同じ条件で絞り込む）
+     * @param  string  $index  頭文字インデックス（一覧と同じ条件で絞り込む）
      * @return array|null タイムスタンプデータ（見つからない場合はnull）
      */
-    public function getRandomTimestamp(Channel $channel, int $perPage = 50, ?string $excludeVideoId = null): ?array
-    {
+    public function getRandomTimestamp(
+        Channel $channel,
+        int $perPage = 50,
+        ?string $excludeVideoId = null,
+        string $search = '',
+        string $index = ''
+    ): ?array {
         // ベースクエリ: ts_itemsとtimestamp_song_mappings、songsをLEFT JOIN
         $query = TsItem::with(['archive'])
             ->leftJoin('timestamp_song_mappings', 'ts_items.normalized_text', '=', 'timestamp_song_mappings.normalized_text')
@@ -301,6 +322,9 @@ class TimestampService
                 ->orWhere('timestamp_song_mappings.is_not_song', false);
         });
 
+        // 一覧と同じ検索・頭文字インデックスの条件で絞り込む
+        $this->applyFilters($query, $search, $index);
+
         // 直前のアーカイブを除外してランダムに1件取得（同じアーカイブの連続再生を防止）
         $item = null;
         if ($excludeVideoId) {
@@ -327,8 +351,9 @@ class TimestampService
         }
 
         // 選ばれたアイテムのソート順での位置を計算（ページ番号算出用）
+        // 一覧側も同じ絞り込みが効いているため、同条件でカウントしないとページがずれる
         $sortKey = $item->song_title ?? $item->text;
-        $position = $this->calculateItemPosition($channel, $sortKey, $item->id);
+        $position = $this->calculateItemPosition($channel, $sortKey, $item->id, $search, $index);
         $page = (int) ceil($position / $perPage);
 
         // 同じ動画内の次のタイムスタンプを取得（自動再抽選用）
@@ -479,10 +504,15 @@ class TimestampService
     /**
      * アイテムのソート順での位置を計算
      */
-    private function calculateItemPosition(Channel $channel, string $sortKey, string $itemId): int
-    {
+    private function calculateItemPosition(
+        Channel $channel,
+        string $sortKey,
+        string $itemId,
+        string $search = '',
+        string $index = ''
+    ): int {
         // ソートキーより前にあるアイテム数をカウント
-        $countBefore = TsItem::query()
+        $countBeforeQuery = TsItem::query()
             ->leftJoin('timestamp_song_mappings', 'ts_items.normalized_text', '=', 'timestamp_song_mappings.normalized_text')
             ->leftJoin('songs', 'timestamp_song_mappings.song_id', '=', 'songs.id')
             ->whereHas('archive', function ($q) use ($channel) {
@@ -497,11 +527,12 @@ class TimestampService
                 $q->whereNull('timestamp_song_mappings.id')
                     ->orWhere('timestamp_song_mappings.is_not_song', false);
             })
-            ->whereRaw('COALESCE(songs.title, ts_items.text) < ?', [$sortKey])
-            ->count();
+            ->whereRaw('COALESCE(songs.title, ts_items.text) < ?', [$sortKey]);
+        $this->applyFilters($countBeforeQuery, $search, $index);
+        $countBefore = $countBeforeQuery->count();
 
         // 同じソートキーを持つアイテムの中での位置も考慮
-        $countSameKey = TsItem::query()
+        $countSameKeyQuery = TsItem::query()
             ->leftJoin('timestamp_song_mappings', 'ts_items.normalized_text', '=', 'timestamp_song_mappings.normalized_text')
             ->leftJoin('songs', 'timestamp_song_mappings.song_id', '=', 'songs.id')
             ->whereHas('archive', function ($q) use ($channel) {
@@ -517,8 +548,9 @@ class TimestampService
                     ->orWhere('timestamp_song_mappings.is_not_song', false);
             })
             ->whereRaw('COALESCE(songs.title, ts_items.text) = ?', [$sortKey])
-            ->where('ts_items.id', '<', $itemId)
-            ->count();
+            ->where('ts_items.id', '<', $itemId);
+        $this->applyFilters($countSameKeyQuery, $search, $index);
+        $countSameKey = $countSameKeyQuery->count();
 
         return $countBefore + $countSameKey + 1;
     }
