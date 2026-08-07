@@ -25,7 +25,7 @@
                      x-text="selectedSong ? `${selectedSong.title}${selectedSong.artist ? ' / ' + selectedSong.artist : ''}` : ''"></div>
                 <div x-show="selectedTimestamp?.archive?.title"
                      class="channel-player-subtitle truncate"
-                     x-text="selectedTimestamp?.archive?.title"></div>
+                     x-text="[formatPublishedDate(selectedTimestamp?.archive?.published_at), selectedTimestamp?.archive?.title].filter(Boolean).join(' ')"></div>
             </div>
             {{-- 報告ボタン --}}
             <template x-if="selectedTimestamp">
