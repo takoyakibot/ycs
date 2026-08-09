@@ -25,3 +25,5 @@ yarn-error.log
 
 # Claude Code
 .claude/settings.local.json
+# settings.local.json のアトミック書き込みで残る一時ファイル
+.claude/settings.local.json.tmp.*
