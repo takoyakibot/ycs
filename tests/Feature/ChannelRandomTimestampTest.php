@@ -63,7 +63,7 @@ class ChannelRandomTimestampTest extends TestCase
         $this->createTsItem('夜に駆ける', 0);
         $this->createTsItem('アイドル', 180);
 
-        $response = $this->getJson('/api/channels/test-channel/timestamps/random?search=夜に駆ける');
+        $response = $this->getJson('/api/channels/test-channel/timestamps/random?search='.urlencode('夜に駆ける'));
 
         $response->assertOk()
             ->assertJsonPath('text', '夜に駆ける');
@@ -84,7 +84,7 @@ class ChannelRandomTimestampTest extends TestCase
     {
         $this->createTsItem('夜に駆ける', 0);
 
-        $response = $this->getJson('/api/channels/test-channel/timestamps/random?search=存在しない曲名');
+        $response = $this->getJson('/api/channels/test-channel/timestamps/random?search='.urlencode('存在しない曲名'));
 
         $response->assertNotFound();
     }
