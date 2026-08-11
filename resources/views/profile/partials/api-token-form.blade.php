@@ -33,30 +33,36 @@
     @endif
 
     @php
-        $currentToken = auth()->user()->tokens()->latest()->first();
+        $tokens = auth()->user()->tokens()->latest()->get();
     @endphp
 
-    @if ($currentToken)
-        {{-- 既存トークンの情報表示 --}}
-        <div class="mt-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-md">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ $currentToken->name }}</p>
-                    <p class="text-xs text-gray-500 dark:text-gray-400">
-                        発行日: {{ $currentToken->created_at->format('Y-m-d H:i') }}
-                        @if ($currentToken->last_used_at)
-                            / 最終使用: {{ $currentToken->last_used_at->format('Y-m-d H:i') }}
-                        @endif
-                    </p>
+    @if ($tokens->isNotEmpty())
+        {{-- 発行済みトークンの一覧 --}}
+        <div class="mt-4 space-y-2">
+            @foreach ($tokens as $token)
+                <div class="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-md">
+                    <div class="flex items-center justify-between gap-4">
+                        <div class="min-w-0">
+                            <p class="text-sm font-medium text-gray-900 dark:text-gray-100 break-all">{{ $token->name }}</p>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">
+                                発行日: {{ $token->created_at->format('Y-m-d H:i') }}
+                                @if ($token->last_used_at)
+                                    / 最終使用: {{ $token->last_used_at->format('Y-m-d H:i') }}
+                                @else
+                                    / 最終使用: -
+                                @endif
+                            </p>
+                        </div>
+                        <form method="post" action="{{ route('profile.api-token.destroy', $token) }}" onsubmit="return confirm('このトークンを失効しますか？')">
+                            @csrf
+                            @method('delete')
+                            <x-danger-button type="submit">
+                                失効
+                            </x-danger-button>
+                        </form>
+                    </div>
                 </div>
-                <form method="post" action="{{ route('profile.api-token.destroy') }}" onsubmit="return confirm('このトークンを失効しますか？')">
-                    @csrf
-                    @method('delete')
-                    <x-danger-button type="submit">
-                        失効
-                    </x-danger-button>
-                </form>
-            </div>
+            @endforeach
         </div>
     @endif
 
@@ -70,13 +76,11 @@
                 <x-input-error :messages="$errors->get('token_name')" class="mt-2" />
             </div>
             <x-primary-button>
-                {{ $currentToken ? '再発行' : '発行' }}
+                発行
             </x-primary-button>
         </div>
-        @if ($currentToken)
-            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                再発行すると現在のトークンは失効します。
-            </p>
-        @endif
+        <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+            トークンは最大{{ $maxApiTokens }}個まで発行できます（現在 {{ $tokens->count() }} / {{ $maxApiTokens }}）。
+        </p>
     </form>
 </section>
