@@ -19,6 +19,11 @@ class SubtitleApiTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * フィンガープリントの最小トライグラム数を満たす歌詞相当のテキスト
+     */
+    private const LYRICS_TEXT = 'あいうえおかきくけこさしすせそたちつてとなにぬねの';
+
     protected User $superAdmin;
 
     protected User $channelAdmin;
@@ -273,6 +278,154 @@ class SubtitleApiTest extends TestCase
     }
 
     // ==========================================
+    // フィンガープリント生成のテスト
+    // ==========================================
+
+    public function test_store_generates_fingerprint_with_configured_window(): void
+    {
+        $tsItem = TsItem::factory()->create([
+            'video_id' => 'dQw4w9WgXcQ',
+            'ts_num' => 60,
+            'text' => 'テスト曲',
+            'is_display' => '1',
+        ]);
+
+        // 前奏が長く、歌詞は歌い出しの45秒後から出はじめる
+        $response = $this->actingAs($this->superAdmin)
+            ->postJson('/api/manage/archives/subtitles/store', [
+                'video_id' => 'dQw4w9WgXcQ',
+                'language_code' => 'ja',
+                'kind' => 'asr',
+                'subtitles' => [
+                    ['start' => 60, 'duration' => 40, 'text' => '[音楽]'],
+                    ['start' => 105, 'duration' => 5, 'text' => self::LYRICS_TEXT],
+                ],
+            ]);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('fingerprints_generated', 1);
+
+        $this->assertDatabaseHas('subtitle_fingerprints', [
+            'ts_item_id' => $tsItem->id,
+            'duration_sec' => SubtitleFingerprintService::WINDOW_DURATION_SEC,
+        ]);
+    }
+
+    public function test_store_skips_fingerprint_for_music_only_window(): void
+    {
+        $tsItem = TsItem::factory()->create([
+            'video_id' => 'dQw4w9WgXcQ',
+            'ts_num' => 60,
+            'text' => 'テスト曲',
+            'is_display' => '1',
+        ]);
+
+        // 旧仕様で作られた既存のフィンガープリント。1件も生成されない場合でも削除される
+        SubtitleFingerprint::create([
+            'id' => Str::ulid(),
+            'video_id' => 'dQw4w9WgXcQ',
+            'ts_item_id' => $tsItem->id,
+            'start_sec' => 60,
+            'duration_sec' => 30,
+            'fingerprint_text' => self::LYRICS_TEXT,
+            'trigrams' => SubtitleFingerprintService::generateTrigrams(self::LYRICS_TEXT),
+        ]);
+
+        // 窓が効果音アノテーションだけの場合、トライグラムが数種類まで縮退して
+        // 別の楽曲と一致してしまうため、フィンガープリントを作らない
+        $response = $this->actingAs($this->superAdmin)
+            ->postJson('/api/manage/archives/subtitles/store', [
+                'video_id' => 'dQw4w9WgXcQ',
+                'language_code' => 'ja',
+                'kind' => 'asr',
+                'subtitles' => [
+                    ['start' => 60, 'duration' => 30, 'text' => '[音楽]'],
+                    ['start' => 90, 'duration' => 30, 'text' => '[音楽]'],
+                ],
+            ]);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('fingerprints_generated', 0);
+
+        $this->assertDatabaseCount('subtitle_fingerprints', 0);
+    }
+
+    public function test_store_prunes_stale_fingerprints(): void
+    {
+        $keptTsItem = TsItem::factory()->create([
+            'video_id' => 'dQw4w9WgXcQ',
+            'ts_num' => 60,
+            'text' => '残る曲',
+            'is_display' => '1',
+        ]);
+
+        $staleTsItem = TsItem::factory()->create([
+            'video_id' => 'dQw4w9WgXcQ',
+            'ts_num' => 600,
+            'text' => '消える曲',
+            'is_display' => '1',
+        ]);
+
+        // 旧仕様（30秒窓）で作られたフィンガープリントが残っている状態を作る
+        SubtitleFingerprint::create([
+            'id' => Str::ulid(),
+            'video_id' => 'dQw4w9WgXcQ',
+            'ts_item_id' => $staleTsItem->id,
+            'start_sec' => 600,
+            'duration_sec' => 30,
+            'fingerprint_text' => self::LYRICS_TEXT,
+            'trigrams' => SubtitleFingerprintService::generateTrigrams(self::LYRICS_TEXT),
+        ]);
+
+        // 再生成後、字幕のない ts_item のフィンガープリントは残らない
+        $this->actingAs($this->superAdmin)
+            ->postJson('/api/manage/archives/subtitles/store', [
+                'video_id' => 'dQw4w9WgXcQ',
+                'language_code' => 'ja',
+                'kind' => 'asr',
+                'subtitles' => [
+                    ['start' => 60, 'duration' => 10, 'text' => self::LYRICS_TEXT],
+                ],
+            ])
+            ->assertStatus(200)
+            ->assertJsonPath('fingerprints_generated', 1);
+
+        $this->assertDatabaseHas('subtitle_fingerprints', ['ts_item_id' => $keptTsItem->id]);
+        $this->assertDatabaseMissing('subtitle_fingerprints', ['ts_item_id' => $staleTsItem->id]);
+    }
+
+    public function test_generate_command_rebuilds_fingerprints(): void
+    {
+        $tsItem = TsItem::factory()->create([
+            'video_id' => 'dQw4w9WgXcQ',
+            'ts_num' => 60,
+            'text' => 'テスト曲',
+            'is_display' => '1',
+        ]);
+
+        VideoSubtitle::create([
+            'id' => Str::ulid(),
+            'video_id' => 'dQw4w9WgXcQ',
+            'language_code' => 'ja',
+            'kind' => 'asr',
+            'subtitle_data' => [
+                ['start' => 60, 'duration' => 10, 'text' => self::LYRICS_TEXT],
+            ],
+            'segment_count' => 1,
+        ]);
+
+        $this->assertDatabaseCount('subtitle_fingerprints', 0);
+
+        $this->artisan('subtitle-fingerprints:generate')
+            ->assertExitCode(0);
+
+        $this->assertDatabaseHas('subtitle_fingerprints', [
+            'ts_item_id' => $tsItem->id,
+            'duration_sec' => SubtitleFingerprintService::WINDOW_DURATION_SEC,
+        ]);
+    }
+
+    // ==========================================
     // matchCandidates（楽曲マッチング）のテスト
     // ==========================================
 
@@ -357,6 +510,65 @@ class SubtitleApiTest extends TestCase
             ->assertJsonPath('candidates.0.song_id', $song->id)
             ->assertJsonPath('candidates.0.song_title', 'テスト曲A')
             ->assertJsonPath('candidates.0.similarity', fn ($v) => abs($v - 1.0) < 0.001);
+    }
+
+    public function test_match_candidates_ignores_different_window_duration(): void
+    {
+        $tsItem1 = TsItem::factory()->create([
+            'video_id' => 'dQw4w9WgXcQ',
+            'ts_num' => 60,
+            'text' => 'テスト曲A',
+            'is_display' => '1',
+        ]);
+
+        Archive::factory()->create([
+            'channel_id' => $this->channel->channel_id,
+            'video_id' => 'abcdefghijk',
+        ]);
+        $tsItem2 = TsItem::factory()->create([
+            'video_id' => 'abcdefghijk',
+            'ts_num' => 120,
+            'text' => 'テスト曲A',
+            'is_display' => '1',
+        ]);
+
+        $trigrams = SubtitleFingerprintService::generateTrigrams(self::LYRICS_TEXT);
+
+        // トライグラムは完全一致だが、窓の長さが異なる（旧仕様で作られた行）
+        SubtitleFingerprint::create([
+            'id' => Str::ulid(),
+            'video_id' => 'dQw4w9WgXcQ',
+            'ts_item_id' => $tsItem1->id,
+            'start_sec' => 60,
+            'duration_sec' => 60,
+            'fingerprint_text' => self::LYRICS_TEXT,
+            'trigrams' => $trigrams,
+        ]);
+
+        SubtitleFingerprint::create([
+            'id' => Str::ulid(),
+            'video_id' => 'abcdefghijk',
+            'ts_item_id' => $tsItem2->id,
+            'start_sec' => 120,
+            'duration_sec' => 30,
+            'fingerprint_text' => self::LYRICS_TEXT,
+            'trigrams' => $trigrams,
+        ]);
+
+        // 窓の長さが違うものは同一楽曲でも類似度が構造的に下がるため比較しない
+        $this->actingAs($this->superAdmin)
+            ->getJson("/api/manage/subtitle-matches/{$tsItem1->id}")
+            ->assertStatus(200)
+            ->assertJsonPath('has_fingerprint', true)
+            ->assertJsonCount(0, 'candidates');
+
+        // 窓の長さを揃えれば候補として返る
+        SubtitleFingerprint::where('ts_item_id', $tsItem2->id)->update(['duration_sec' => 60]);
+
+        $this->actingAs($this->superAdmin)
+            ->getJson("/api/manage/subtitle-matches/{$tsItem1->id}")
+            ->assertStatus(200)
+            ->assertJsonCount(1, 'candidates');
     }
 
     public function test_match_candidates_returns_404_for_unknown_ts_item(): void

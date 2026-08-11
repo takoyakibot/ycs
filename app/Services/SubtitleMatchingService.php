@@ -76,6 +76,10 @@ class SubtitleMatchingService
 
     /**
      * 同一チャンネル内で類似フィンガープリントを検索
+     *
+     * 窓の長さ（duration_sec）が異なるものは比較しない。短い窓のトライグラム集合は
+     * 長い窓のほぼ部分集合になるため、同一楽曲でもJaccard類似度が構造的に低く出て
+     * しきい値を下回る。窓の長さを変更した直後の混在状態で静かに取りこぼすのを防ぐ。
      */
     private function findSimilarInChannel(SubtitleFingerprint $fp, string $channelId, float $threshold): Collection
     {
@@ -88,6 +92,7 @@ class SubtitleMatchingService
 
         SubtitleFingerprint::whereIn('video_id', $videoIds)
             ->where('ts_item_id', '!=', $fp->ts_item_id)
+            ->where('duration_sec', $fp->duration_sec)
             ->chunkById(500, function ($chunk) use ($targetTrigrams, $threshold, &$results) {
                 foreach ($chunk as $other) {
                     $similarity = self::jaccardSimilarity($targetTrigrams, $other->trigrams);
@@ -112,7 +117,8 @@ class SubtitleMatchingService
         $targetTrigrams = $fp->trigrams;
         $results = collect();
 
-        $query = SubtitleFingerprint::where('ts_item_id', '!=', $fp->ts_item_id);
+        $query = SubtitleFingerprint::where('ts_item_id', '!=', $fp->ts_item_id)
+            ->where('duration_sec', $fp->duration_sec);
         if (! empty($excludeTsItemIds)) {
             $query->whereNotIn('ts_item_id', $excludeTsItemIds);
         }
