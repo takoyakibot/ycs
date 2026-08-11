@@ -92,10 +92,9 @@ Route::middleware(['auth', 'admin'])->group(function () {
         ->name('manage.fetchSubtitles')
         ->middleware('throttle:5,1'); // 1分間に5回まで
 
-    // 字幕データ保存・取得API（Chrome拡張からの自動送信用）
-    Route::post('api/manage/archives/subtitles/store', [SubtitleApiController::class, 'store'])
-        ->name('manage.storeSubtitles')
-        ->middleware('throttle:30,1'); // 1分間に30回まで
+    // 字幕データ保存はChrome拡張（Bearerトークン認証）専用のため routes/api.php 側で定義。
+    // ここに同一URIのPOSTを定義するとapi.php側のルートが上書きされ、
+    // 拡張からの送信がCSRF検証(419)で失敗する
     Route::get('api/manage/archives/subtitles/stored', [SubtitleApiController::class, 'show'])
         ->name('manage.showStoredSubtitles');
 

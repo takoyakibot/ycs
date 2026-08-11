@@ -125,6 +125,27 @@ class SubtitleApiTest extends TestCase
         $response->assertStatus(401);
     }
 
+    public function test_store_subtitles_accepts_sanctum_bearer_token(): void
+    {
+        // Chrome拡張はセッションを持たず、APIトークン（Bearer）のみで送信する。
+        // web.phpに同一URIのルートがあるとSanctum認証ルートが上書きされ、
+        // CSRF検証（419）や認証エラーになるため、実際の拡張と同じ経路で検証する
+        $token = $this->superAdmin->createToken('extension')->plainTextToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/manage/archives/subtitles/store', [
+                'video_id' => 'dQw4w9WgXcQ',
+                'language_code' => 'ja',
+                'kind' => 'asr',
+                'subtitles' => [
+                    ['start' => 0, 'duration' => 2.5, 'text' => 'こんにちは'],
+                ],
+            ]);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('segment_count', 1);
+    }
+
     public function test_store_subtitles_validates_video_id(): void
     {
         $response = $this->actingAs($this->superAdmin)
