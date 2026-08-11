@@ -62,6 +62,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                         <p class="text-sm text-gray-600" title="元の値: ${escapeHTML(archive.published_at || '')}">
                                             公開日: ${formatDate(archive.published_at)}
                                         </p>
+                                        ${getSubtitleStatusBadges(archive.subtitle_status)}
                                     </div>
                                     <div class="flex flex-col">
                                         <div class="flex gap-2">
@@ -520,6 +521,41 @@ function updateTsItemStyle(item, isDisplay) {
     item.classList.toggle('text-gray-500', !isDisplay);
     item.classList.toggle('pl-4', !isDisplay);
     item.classList.toggle('bg-gray-200', !isDisplay);
+}
+
+/**
+ * 字幕・フィンガープリントの状況バッジを生成（#592）
+ * @param {{has_subtitles: boolean, subtitle_tracks: Array<{language_code: string, kind: string}>, fingerprint_count: number}|undefined} status
+ * @returns {string} バッジのHTML
+ */
+function getSubtitleStatusBadges(status) {
+    if (!status) {
+        return '';
+    }
+
+    const badge = (text, colorClasses) =>
+        `<span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${colorClasses}">${text}</span>`;
+
+    let html = '<div class="flex flex-wrap gap-1 mt-1">';
+
+    if (status.has_subtitles) {
+        const tracks = (status.subtitle_tracks || [])
+            .map(t => escapeHTML(`${t.language_code}${t.kind ? '/' + t.kind : ''}`))
+            .join(', ');
+        html += badge(`字幕 ${tracks}`, 'bg-green-100 text-green-800');
+
+        if (status.fingerprint_count > 0) {
+            html += badge(`FP ${status.fingerprint_count}件`, 'bg-blue-100 text-blue-800');
+        } else {
+            html += badge('FP なし', 'bg-yellow-100 text-yellow-800');
+        }
+    } else {
+        html += badge('字幕未取得', 'bg-gray-100 text-gray-500');
+    }
+
+    html += '</div>';
+
+    return html;
 }
 
 function getTsItems(tsItems) {
