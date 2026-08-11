@@ -311,6 +311,84 @@ class SubtitleApiTest extends TestCase
         ]);
     }
 
+    public function test_fingerprint_generation_prefers_japanese_subtitles(): void
+    {
+        // 同じkind優先順（手動 > asr）だけでは英語手動字幕が選ばれてしまうケース。
+        // 日本語の歌枠では言語一致を手動/自動より優先する（#591）
+        $tsItem = TsItem::factory()->create([
+            'video_id' => 'dQw4w9WgXcQ',
+            'ts_num' => 60,
+            'text' => 'テスト曲',
+            'is_display' => '1',
+        ]);
+
+        $englishText = 'thequickbrownfoxjumpsoverthelazydog';
+        $this->createSubtitle('en', '', $englishText);
+        $this->createSubtitle('ja', 'asr', self::LYRICS_TEXT);
+
+        $count = app(SubtitleFingerprintService::class)->generateFingerprintsForVideo('dQw4w9WgXcQ');
+
+        $this->assertEquals(1, $count);
+        $fp = SubtitleFingerprint::where('ts_item_id', $tsItem->id)->first();
+        $this->assertEquals(self::LYRICS_TEXT, $fp->fingerprint_text);
+    }
+
+    public function test_fingerprint_generation_prefers_manual_within_same_language(): void
+    {
+        // 同一言語内では従来どおり手動字幕（kind=''）を自動生成より優先する
+        $tsItem = TsItem::factory()->create([
+            'video_id' => 'dQw4w9WgXcQ',
+            'ts_num' => 60,
+            'text' => 'テスト曲',
+            'is_display' => '1',
+        ]);
+
+        $manualText = 'はひふへほまみむめもやゆよらりるれろわをんがぎぐげご';
+        $this->createSubtitle('ja', 'asr', self::LYRICS_TEXT);
+        $this->createSubtitle('ja', '', $manualText);
+
+        app(SubtitleFingerprintService::class)->generateFingerprintsForVideo('dQw4w9WgXcQ');
+
+        $fp = SubtitleFingerprint::where('ts_item_id', $tsItem->id)->first();
+        $this->assertEquals($manualText, $fp->fingerprint_text);
+    }
+
+    public function test_fingerprint_generation_is_deterministic_without_japanese(): void
+    {
+        // 日本語字幕がない場合もDBの行順に依存せず、言語コード昇順で安定して選ぶ
+        $tsItem = TsItem::factory()->create([
+            'video_id' => 'dQw4w9WgXcQ',
+            'ts_num' => 60,
+            'text' => 'テスト曲',
+            'is_display' => '1',
+        ]);
+
+        $englishText = 'thequickbrownfoxjumpsoverthelazydog';
+        $koreanText = 'packmyboxwithfivedozenliquorjugs';
+        $this->createSubtitle('ko', '', $koreanText);
+        $this->createSubtitle('en', '', $englishText);
+
+        app(SubtitleFingerprintService::class)->generateFingerprintsForVideo('dQw4w9WgXcQ');
+
+        $fp = SubtitleFingerprint::where('ts_item_id', $tsItem->id)->first();
+        $this->assertEquals($englishText, $fp->fingerprint_text);
+    }
+
+    /**
+     * 指定言語・kindの字幕を1本（窓に収まる1セグメント）で保存する
+     */
+    private function createSubtitle(string $languageCode, string $kind, string $text): VideoSubtitle
+    {
+        return VideoSubtitle::create([
+            'id' => Str::ulid(),
+            'video_id' => 'dQw4w9WgXcQ',
+            'language_code' => $languageCode,
+            'kind' => $kind,
+            'subtitle_data' => [['start' => 60, 'duration' => 5, 'text' => $text]],
+            'segment_count' => 1,
+        ]);
+    }
+
     public function test_store_skips_fingerprint_for_music_only_window(): void
     {
         $tsItem = TsItem::factory()->create([
