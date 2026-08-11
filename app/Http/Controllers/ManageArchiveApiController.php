@@ -11,8 +11,10 @@ use App\Jobs\RefreshChannelArchivesJob;
 use App\Models\Archive;
 use App\Models\ChangeList;
 use App\Models\Channel;
+use App\Models\SubtitleFingerprint;
 use App\Models\TimestampSongMapping;
 use App\Models\TsItem;
+use App\Models\VideoSubtitle;
 use App\Services\GetArchiveService;
 use App\Services\RefreshArchiveService;
 use Illuminate\Http\Request;
@@ -56,7 +58,50 @@ class ManageArchiveApiController extends Controller
         // ts_itemsのマッピング状態を付加
         $this->appendMappingStatus($archives);
 
+        // 字幕・フィンガープリントの状況を付加
+        $this->appendSubtitleStatus($archives);
+
         return response()->json($archives);
+    }
+
+    /**
+     * アーカイブ一覧に字幕・フィンガープリントの状況を付加
+     *
+     * ページ内のアーカイブ分をまとめて集計し、N+1クエリを避ける
+     */
+    private function appendSubtitleStatus($archives): void
+    {
+        $videoIds = collect($archives->items())->pluck('video_id')->filter()->unique();
+
+        if ($videoIds->isEmpty()) {
+            return;
+        }
+
+        // 動画ごとの字幕トラック（言語・種別）
+        $subtitleTracks = VideoSubtitle::whereIn('video_id', $videoIds)
+            ->orderBy('language_code')
+            ->orderBy('kind')
+            ->get(['video_id', 'language_code', 'kind'])
+            ->groupBy('video_id');
+
+        // 動画ごとのフィンガープリント件数
+        $fingerprintCounts = SubtitleFingerprint::whereIn('video_id', $videoIds)
+            ->selectRaw('video_id, count(*) as cnt')
+            ->groupBy('video_id')
+            ->pluck('cnt', 'video_id');
+
+        foreach ($archives->items() as $archive) {
+            $tracks = $subtitleTracks->get($archive->video_id, collect());
+
+            $archive->subtitle_status = [
+                'has_subtitles' => $tracks->isNotEmpty(),
+                'subtitle_tracks' => $tracks->map(fn ($t) => [
+                    'language_code' => $t->language_code,
+                    'kind' => $t->kind,
+                ])->values(),
+                'fingerprint_count' => (int) $fingerprintCounts->get($archive->video_id, 0),
+            ];
+        }
     }
 
     /**
