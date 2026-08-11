@@ -26,6 +26,15 @@ class SubtitleFingerprintService
     public const WINDOW_LEAD_SEC = 1;
 
     /**
+     * フィンガープリント生成で優先する字幕の言語
+     *
+     * 同一動画に複数言語の字幕が保存されている場合（拡張の字幕パネルで
+     * 言語を切り替えて取得すると普通に発生する）、歌唱内容を表す言語を
+     * 選ばないとマッチングが機能しなくなるため、日本語を最優先する。
+     */
+    public const PREFERRED_LANGUAGE = 'ja';
+
+    /**
      * フィンガープリントとして採用する最小トライグラム数
      *
      * トライグラムが少ないテキストはJaccard類似度が不安定になる。
@@ -44,9 +53,16 @@ class SubtitleFingerprintService
      */
     public function generateFingerprintsForVideo(string $videoId): int
     {
-        // 手動字幕を優先（kindが空 = 手動、'asr' = 自動生成）
+        // 優先度: 日本語（ja / ja-JP等） > 手動字幕（kindが空。'asr' = 自動生成）。
+        // 末尾のlanguage_code昇順は、同順位が並んだ場合でも選択結果を
+        // DBの行順に依存させないための決定的なタイブレーク（#591）
         $subtitle = VideoSubtitle::where('video_id', $videoId)
+            ->orderByRaw(
+                'CASE WHEN language_code = ? THEN 0 WHEN language_code LIKE ? THEN 1 ELSE 2 END',
+                [self::PREFERRED_LANGUAGE, self::PREFERRED_LANGUAGE.'-%']
+            )
             ->orderBy('kind', 'asc')
+            ->orderBy('language_code', 'asc')
             ->first();
 
         if (! $subtitle) {
