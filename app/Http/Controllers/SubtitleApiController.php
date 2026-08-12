@@ -140,20 +140,49 @@ class SubtitleApiController extends Controller
      */
     public function subtitleTargets(Request $request)
     {
-        $user = $request->user();
-
-        $channelIds = \App\Models\Channel::query()
-            ->when(! $user->isSuperAdmin(), fn ($q) => $q->where('user_id', $user->id))
-            ->pluck('channel_id');
-
-        $targets = Archive::whereIn('channel_id', $channelIds)
-            ->where('is_display', true)
+        $targets = $this->accessibleDisplayedArchives($request->user())
             ->whereHas('tsItemsDisplay')
             ->whereNotIn('video_id', VideoSubtitle::query()->select('video_id'))
             ->orderByDesc('published_at')
             ->limit(500)
             ->get(['video_id', 'title']);
 
+        return $this->targetsResponse($targets);
+    }
+
+    /**
+     * 音量リストスキャン対象のアーカイブ一覧を取得（Chrome拡張用）
+     *
+     * 音量スキャンはタイムスタンプ作成の支援が目的のため、
+     * 表示中のタイムスタンプが1件もない表示中アーカイブを返す
+     */
+    public function scanTargets(Request $request)
+    {
+        $targets = $this->accessibleDisplayedArchives($request->user())
+            ->whereDoesntHave('tsItemsDisplay')
+            ->orderByDesc('published_at')
+            ->limit(500)
+            ->get(['video_id', 'title']);
+
+        return $this->targetsResponse($targets);
+    }
+
+    /**
+     * アクセス可能なチャンネルの表示中アーカイブのベースクエリ
+     * （一般管理者は自分のチャンネル、スーパー管理者は全チャンネル）
+     */
+    private function accessibleDisplayedArchives($user): \Illuminate\Database\Eloquent\Builder
+    {
+        $channelIds = \App\Models\Channel::query()
+            ->when(! $user->isSuperAdmin(), fn ($q) => $q->where('user_id', $user->id))
+            ->pluck('channel_id');
+
+        return Archive::whereIn('channel_id', $channelIds)
+            ->where('is_display', true);
+    }
+
+    private function targetsResponse($targets)
+    {
         return response()->json([
             'count' => $targets->count(),
             'targets' => $targets->map(fn ($a) => [
