@@ -27,4 +27,7 @@ Route::middleware(['auth:sanctum', 'admin'])->group(function () {
 
     Route::post('extension/highlights/detect', [HighlightDetectionApiController::class, 'detect'])
         ->middleware('throttle:10,1');
+
+    Route::get('extension/subtitle-matches', [SubtitleApiController::class, 'matchByPosition'])
+        ->middleware('throttle:30,1');
 });
