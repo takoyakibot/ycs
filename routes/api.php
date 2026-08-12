@@ -30,4 +30,7 @@ Route::middleware(['auth:sanctum', 'admin'])->group(function () {
 
     Route::get('extension/subtitle-matches', [SubtitleApiController::class, 'matchByPosition'])
         ->middleware('throttle:30,1');
+
+    Route::get('extension/subtitle-targets', [SubtitleApiController::class, 'subtitleTargets'])
+        ->middleware('throttle:10,1');
 });

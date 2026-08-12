@@ -133,6 +133,37 @@ class SubtitleApiController extends Controller
     }
 
     /**
+     * 字幕未取得アーカイブの一覧を取得（Chrome拡張の一括取得スキャン用）
+     *
+     * アクセス可能なチャンネルの表示中アーカイブのうち、
+     * 表示中のタイムスタンプがあり字幕が未保存のものを返す
+     */
+    public function subtitleTargets(Request $request)
+    {
+        $user = $request->user();
+
+        $channelIds = \App\Models\Channel::query()
+            ->when(! $user->isSuperAdmin(), fn ($q) => $q->where('user_id', $user->id))
+            ->pluck('channel_id');
+
+        $targets = Archive::whereIn('channel_id', $channelIds)
+            ->where('is_display', true)
+            ->whereHas('tsItemsDisplay')
+            ->whereNotIn('video_id', VideoSubtitle::query()->select('video_id'))
+            ->orderByDesc('published_at')
+            ->limit(500)
+            ->get(['video_id', 'title']);
+
+        return response()->json([
+            'count' => $targets->count(),
+            'targets' => $targets->map(fn ($a) => [
+                'video_id' => $a->video_id,
+                'title' => $a->title,
+            ])->values(),
+        ]);
+    }
+
+    /**
      * 再生位置から楽曲候補を取得（Chrome拡張のマーカー用）
      *
      * ts_itemが未作成のローカルマーカーに対して、保存済み字幕から
