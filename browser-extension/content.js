@@ -653,6 +653,7 @@ function createListScanPanel() {
       <div class="lsp-tabs">
         <button class="lsp-tab active" data-tab="list-scan">リストスキャン</button>
         <button class="lsp-tab" data-tab="scanned-list">スキャン済み一覧</button>
+        <button class="lsp-tab" data-tab="subtitle-scan">字幕取得</button>
       </div>
     </div>
     <div class="lsp-content">
@@ -684,6 +685,18 @@ function createListScanPanel() {
           <button class="lsp-btn lsp-btn-danger" id="lsp-clear-all-btn">全てクリア</button>
         </div>
       </div>
+      <!-- 字幕一括取得 タブ -->
+      <div class="lsp-tab-content" id="tab-subtitle-scan">
+        <div class="lsp-progress" id="ssp-status">タイムスタンプあり＆字幕未取得のアーカイブを順次取得します</div>
+        <div class="lsp-list" id="ssp-video-list">
+          <div class="lsp-empty">「対象を読み込み」をクリック</div>
+        </div>
+        <div class="lsp-btn-row">
+          <button class="lsp-btn lsp-btn-secondary" id="ssp-load-btn">対象を読み込み</button>
+          <button class="lsp-btn lsp-btn-primary" id="ssp-start-btn" disabled>▶ 開始</button>
+          <button class="lsp-btn lsp-btn-danger" id="ssp-stop-btn" style="display:none;">■ 停止</button>
+        </div>
+      </div>
     </div>
   `;
 
@@ -696,6 +709,12 @@ function createListScanPanel() {
   listScanPanel.querySelector('#lsp-start-btn').addEventListener('click', startListScanFromPanel);
   listScanPanel.querySelector('#lsp-stop-btn').addEventListener('click', stopListScanFromPanel);
   listScanPanel.querySelector('#lsp-clear-all-btn').addEventListener('click', clearAllScannedVideos);
+
+  // 字幕一括取得タブ
+  listScanPanel.querySelector('#ssp-load-btn').addEventListener('click', loadSubtitleScanTargets);
+  listScanPanel.querySelector('#ssp-start-btn').addEventListener('click', startSubtitleScan);
+  listScanPanel.querySelector('#ssp-stop-btn').addEventListener('click', stopSubtitleScan);
+  restoreSubtitleScanPanelState();
 
   // タブ切り替えイベント
   listScanPanel.querySelectorAll('.lsp-tab').forEach(tab => {
@@ -966,6 +985,269 @@ async function stopListScanFromPanel() {
 
   // スキャン中の場合は停止
   chrome.runtime.sendMessage({ type: 'STOP_SCAN' });
+}
+
+// ==========================================
+// 字幕一括取得スキャン（#598）
+// タイムスタンプあり＆字幕未取得のアーカイブを順次遷移して字幕を送信する。
+// 状態は音量リストスキャン（listScan*）と独立したキーで持つ
+// ==========================================
+
+let subtitleScanTargets = [];
+
+/**
+ * 自タブのIDをbackground経由で取得する
+ */
+function getOwnTabId() {
+  return new Promise(resolve => {
+    try {
+      chrome.runtime.sendMessage({ type: 'GET_TAB_ID' }, res => {
+        resolve(res?.tabId ?? null);
+      });
+    } catch (e) {
+      resolve(null);
+    }
+  });
+}
+
+function setSubtitleScanStatus(text) {
+  const el = listScanPanel?.querySelector('#ssp-status');
+  if (el) el.textContent = text;
+}
+
+/**
+ * サーバーから字幕未取得のアーカイブ一覧を読み込む
+ */
+async function loadSubtitleScanTargets() {
+  if (!ycsApiToken) {
+    await loadYcsApiSettings();
+  }
+  if (!ycsApiToken) {
+    setSubtitleScanStatus('APIトークンが未設定です。プロフィール画面で発行し、拡張の設定に登録してください');
+    return;
+  }
+
+  setSubtitleScanStatus('対象を読み込んでいます…');
+
+  try {
+    const response = await fetch(`${ycsServerUrl}/api/extension/subtitle-targets`, {
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${ycsApiToken}`,
+      },
+    });
+    if (!response.ok) {
+      throw new Error(`一覧の取得に失敗しました (${response.status})`);
+    }
+
+    const data = await response.json();
+    subtitleScanTargets = data.targets || [];
+
+    const listEl = listScanPanel?.querySelector('#ssp-video-list');
+    if (listEl) {
+      listEl.innerHTML = subtitleScanTargets.length === 0
+        ? '<div class="lsp-empty">字幕未取得のアーカイブはありません</div>'
+        : subtitleScanTargets.map((t, i) => `
+            <div class="lsp-item">
+              <span class="lsp-item-index">${i + 1}.</span>
+              <span class="lsp-item-id" title="${escapeHtml(t.video_id)}">${escapeHtml(t.title || t.video_id)}</span>
+            </div>
+          `).join('');
+    }
+    setSubtitleScanStatus(`対象: ${subtitleScanTargets.length}件`);
+
+    const startBtn = listScanPanel?.querySelector('#ssp-start-btn');
+    if (startBtn) startBtn.disabled = subtitleScanTargets.length === 0;
+  } catch (error) {
+    console.error('[YCS] 字幕取得対象の読み込みエラー:', error);
+    setSubtitleScanStatus('エラー: ' + error.message);
+  }
+}
+
+/**
+ * 字幕一括取得スキャンを開始する
+ */
+async function startSubtitleScan() {
+  if (subtitleScanTargets.length === 0) return;
+
+  // 音量リストスキャンと同時に走ると遷移を取り合うため開始を拒否する
+  const { listScanActive } = await chrome.storage.local.get(['listScanActive']);
+  if (listScanActive) {
+    setSubtitleScanStatus('音量のリストスキャン実行中は開始できません。先に停止してください');
+    return;
+  }
+
+  const tabId = await getOwnTabId();
+  const videoIds = subtitleScanTargets.map(t => t.video_id);
+
+  await chrome.storage.local.set({
+    subtitleScanVideoIds: videoIds,
+    subtitleScanIndex: 0,
+    subtitleScanActive: true,
+    subtitleScanTabId: tabId,
+    subtitleScanResults: { sent: 0, skipped: 0, failed: 0 },
+  });
+
+  updateSubtitleScanButtons(true);
+
+  const firstVideoId = videoIds[0];
+  if (getVideoId() === firstVideoId) {
+    checkAndStartSubtitleScan();
+  } else {
+    window.location.href = `https://www.youtube.com/watch?v=${firstVideoId}`;
+  }
+}
+
+/**
+ * 字幕一括取得スキャンを停止する
+ */
+async function stopSubtitleScan() {
+  await chrome.storage.local.set({ subtitleScanActive: false });
+  updateSubtitleScanButtons(false);
+  setSubtitleScanStatus('停止しました');
+}
+
+function updateSubtitleScanButtons(running) {
+  if (!listScanPanel) return;
+  listScanPanel.querySelector('#ssp-start-btn').style.display = running ? 'none' : 'block';
+  listScanPanel.querySelector('#ssp-stop-btn').style.display = running ? 'block' : 'none';
+}
+
+/**
+ * パネル生成時に実行中の字幕スキャン状態をUIへ反映する
+ */
+async function restoreSubtitleScanPanelState() {
+  try {
+    const result = await chrome.storage.local.get([
+      'subtitleScanActive', 'subtitleScanVideoIds', 'subtitleScanIndex',
+    ]);
+    if (result.subtitleScanActive && result.subtitleScanVideoIds) {
+      updateSubtitleScanButtons(true);
+      setSubtitleScanStatus(`字幕取得中… ${(result.subtitleScanIndex || 0) + 1}/${result.subtitleScanVideoIds.length}`);
+    }
+  } catch (e) { /* 復元失敗は無視 */ }
+}
+
+/**
+ * ページ読み込み時に字幕スキャンの続きを実行する
+ * 実行タブ以外・想定外の動画では何もしない（#580と同種の暴走を防ぐ）
+ */
+async function checkAndStartSubtitleScan() {
+  try {
+    const result = await chrome.storage.local.get([
+      'subtitleScanVideoIds', 'subtitleScanIndex', 'subtitleScanActive', 'subtitleScanTabId',
+    ]);
+
+    if (!result.subtitleScanActive || !result.subtitleScanVideoIds) return;
+
+    // 実行タブのガード
+    const tabId = await getOwnTabId();
+    if (result.subtitleScanTabId != null && tabId !== result.subtitleScanTabId) return;
+
+    const videoIds = result.subtitleScanVideoIds;
+    const index = result.subtitleScanIndex || 0;
+    const videoId = getVideoId();
+    if (videoId !== videoIds[index]) return;
+
+    console.log(`[YCS] 字幕スキャン: ${index + 1}/${videoIds.length} を処理します`);
+    setSubtitleScanStatus(`字幕取得中… ${index + 1}/${videoIds.length}`);
+    updateSubtitleScanButtons(true);
+
+    // プレイヤーの準備を待ってから処理（CCボタン経由の取得に必要）
+    waitForPlayerAndProcessSubtitle(videoId);
+  } catch (error) {
+    console.error('[YCS] 字幕スキャンチェックエラー:', error);
+  }
+}
+
+function waitForPlayerAndProcessSubtitle(videoId) {
+  let attempt = 0;
+  const check = () => {
+    if (videoElement && videoElement.readyState >= 2) {
+      processSubtitleScanVideo(videoId);
+    } else if (attempt >= 30) {
+      // 30秒待っても準備できない動画（限定公開・削除等）はスキップ
+      console.warn('[YCS] 字幕スキャン: プレイヤーが準備できないためスキップします', videoId);
+      recordSubtitleScanResult('skipped').then(proceedToNextSubtitleScanVideo);
+    } else {
+      attempt++;
+      setTimeout(check, 1000);
+    }
+  };
+  // ページ読み込み直後の切り替わりを待つ
+  setTimeout(check, 1500);
+}
+
+/**
+ * 現在の動画の字幕を取得してサーバーへ送信し、次へ進む
+ */
+async function processSubtitleScanVideo(videoId) {
+  try {
+    const tracks = await getCaptionTracksFromPage();
+    if (!tracks || tracks.length === 0) {
+      console.log('[YCS] 字幕スキャン: 字幕がないためスキップ', videoId);
+      await recordSubtitleScanResult('skipped');
+    } else {
+      const track = pickPreferredCaptionTrack(tracks);
+      const segments = await fetchTimedText(videoId, track.languageCode);
+      if (!segments || segments.length === 0) {
+        await recordSubtitleScanResult('skipped');
+      } else {
+        await postSubtitlesToServer(videoId, track.languageCode, track.kind === 'asr' ? 'asr' : '', segments);
+        await recordSubtitleScanResult('sent');
+      }
+    }
+  } catch (error) {
+    console.warn('[YCS] 字幕スキャン: 取得・送信に失敗', videoId, error.message);
+    await recordSubtitleScanResult('failed');
+  }
+
+  await proceedToNextSubtitleScanVideo();
+}
+
+async function recordSubtitleScanResult(kind) {
+  const result = await chrome.storage.local.get(['subtitleScanResults']);
+  const counts = result.subtitleScanResults || { sent: 0, skipped: 0, failed: 0 };
+  counts[kind] = (counts[kind] || 0) + 1;
+  await chrome.storage.local.set({ subtitleScanResults: counts });
+}
+
+/**
+ * 次の動画へ遷移する。最後まで進んだらまとめを表示して終了
+ */
+async function proceedToNextSubtitleScanVideo() {
+  const result = await chrome.storage.local.get([
+    'subtitleScanVideoIds', 'subtitleScanIndex', 'subtitleScanActive', 'subtitleScanTabId', 'subtitleScanResults',
+  ]);
+
+  // 停止済みなら何もしない（処理中に停止ボタンが押されたケース）
+  if (!result.subtitleScanActive) return;
+
+  // 実行タブのガード（遷移直前にも確認する）
+  const tabId = await getOwnTabId();
+  if (result.subtitleScanTabId != null && tabId !== result.subtitleScanTabId) return;
+
+  const videoIds = result.subtitleScanVideoIds || [];
+  const nextIndex = (result.subtitleScanIndex || 0) + 1;
+
+  if (nextIndex >= videoIds.length) {
+    const counts = result.subtitleScanResults || {};
+    const summary = `字幕一括取得が完了しました（送信 ${counts.sent || 0}件 / スキップ ${counts.skipped || 0}件 / 失敗 ${counts.failed || 0}件）`;
+    console.log('[YCS] ' + summary);
+    await chrome.storage.local.set({ subtitleScanActive: false });
+    updateSubtitleScanButtons(false);
+    setSubtitleScanStatus(summary);
+    return;
+  }
+
+  await chrome.storage.local.set({ subtitleScanIndex: nextIndex });
+
+  // 連続アクセスを避けるため少し待ってから遷移する（待機中に停止されたら遷移しない）
+  setTimeout(async () => {
+    const { subtitleScanActive } = await chrome.storage.local.get(['subtitleScanActive']);
+    if (!subtitleScanActive) return;
+    window.location.href = `https://www.youtube.com/watch?v=${videoIds[nextIndex]}`;
+  }, 2000);
 }
 
 /**
@@ -2460,8 +2742,8 @@ async function postSubtitlesToServer(videoId, languageCode, kind, subtitles) {
     await loadYcsApiSettings();
   }
   if (!ycsApiToken) {
-    console.warn('[YCS] APIトークンが未設定です。プロフィール画面でトークンを発行し、拡張の設定に登録してください。');
-    return;
+    // 自動送信側はcatchでwarnになり従来と同じ扱い。スキャン・候補表示側は失敗として扱える
+    throw new Error('APIトークンが未設定です。プロフィール画面でトークンを発行し、拡張の設定に登録してください');
   }
 
   // 重複送信防止
@@ -3848,6 +4130,9 @@ function initWatchPageUI() {
 
   // リストスキャンモードをチェック
   checkAndStartListScan();
+
+  // 字幕一括取得スキャンをチェック
+  checkAndStartSubtitleScan();
 }
 
 /**

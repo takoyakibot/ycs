@@ -92,8 +92,23 @@ const YCS_SERVER_URL_MIGRATION_KEY = 'ycsServerUrlMigratedToProd';
 })();
 
 // メッセージリスナー
+// 字幕一括取得スキャン: 実行タブが閉じられたら状態を落とす（タブID残留で他タブが遷移するのを防ぐ）
+chrome.tabs.onRemoved.addListener(async (tabId) => {
+  try {
+    const result = await chrome.storage.local.get(['subtitleScanActive', 'subtitleScanTabId']);
+    if (result.subtitleScanActive && result.subtitleScanTabId === tabId) {
+      await chrome.storage.local.set({ subtitleScanActive: false });
+    }
+  } catch (e) { /* サービスワーカー停止間際などは無視 */ }
+});
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   switch (message.type) {
+    case 'GET_TAB_ID':
+      // content scriptは自身のtabIdを直接取得できないためここで返す
+      sendResponse({ tabId: sender.tab?.id ?? null });
+      return true;
+
     case 'GET_STATUS':
       sendResponse({
         isScanning,
