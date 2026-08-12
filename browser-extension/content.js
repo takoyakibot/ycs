@@ -1261,9 +1261,10 @@ function switchTab(tabId) {
     tab.classList.toggle('active', tab.dataset.tab === tabId);
   });
 
-  // タブコンテンツの表示を切り替え
-  listScanPanel.querySelector('#tab-list-scan').classList.toggle('active', tabId === 'list-scan');
-  listScanPanel.querySelector('#tab-scanned-list').classList.toggle('active', tabId === 'scanned-list');
+  // タブコンテンツの表示を切り替え（タブ追加時の反映漏れを防ぐため全コンテンツを走査する）
+  listScanPanel.querySelectorAll('.lsp-tab-content').forEach(content => {
+    content.classList.toggle('active', content.id === `tab-${tabId}`);
+  });
 
   // スキャン済み一覧タブに切り替えた場合はリストを更新
   if (tabId === 'scanned-list') {
