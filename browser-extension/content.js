@@ -663,6 +663,7 @@ function createListScanPanel() {
           <textarea class="lsp-textarea" id="lsp-video-ids" placeholder="videoIdを1行に1つずつ入力（11文字の英数字）"></textarea>
           <div class="lsp-btn-row">
             <button class="lsp-btn lsp-btn-primary" id="lsp-load-btn">読み込み</button>
+            <button class="lsp-btn lsp-btn-secondary" id="lsp-fetch-targets-btn" title="タイムスタンプ未作成のアーカイブをサーバーから取得">サーバーから読み込み</button>
             <button class="lsp-btn lsp-btn-secondary" id="lsp-clear-btn">クリア</button>
           </div>
         </div>
@@ -705,6 +706,7 @@ function createListScanPanel() {
   // イベントリスナー設定
   listScanPanel.querySelector('#lsp-close-btn').addEventListener('click', hideListScanPanel);
   listScanPanel.querySelector('#lsp-load-btn').addEventListener('click', loadVideoIdList);
+  listScanPanel.querySelector('#lsp-fetch-targets-btn').addEventListener('click', fetchListScanTargetsFromServer);
   listScanPanel.querySelector('#lsp-clear-btn').addEventListener('click', clearVideoIdList);
   listScanPanel.querySelector('#lsp-start-btn').addEventListener('click', startListScanFromPanel);
   listScanPanel.querySelector('#lsp-stop-btn').addEventListener('click', stopListScanFromPanel);
@@ -790,6 +792,50 @@ async function loadVideoIdList() {
 
   // UIを更新
   await renderVideoList();
+}
+
+/**
+ * サーバーからリストスキャン対象（タイムスタンプ未作成のアーカイブ）を取得して読み込む
+ * テキストエリアに反映してから既存の読み込み処理を通すため、手動での編集も可能
+ */
+async function fetchListScanTargetsFromServer() {
+  const progressInfo = listScanPanel.querySelector('#lsp-progress-info');
+
+  if (!ycsApiToken) {
+    await loadYcsApiSettings();
+  }
+  if (!ycsApiToken) {
+    progressInfo.textContent = 'APIトークンが未設定です';
+    return;
+  }
+
+  progressInfo.textContent = '対象を読み込んでいます…';
+
+  try {
+    const response = await fetch(`${ycsServerUrl}/api/extension/scan-targets`, {
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${ycsApiToken}`,
+      },
+    });
+    if (!response.ok) {
+      throw new Error(`一覧の取得に失敗しました (${response.status})`);
+    }
+
+    const data = await response.json();
+    const targets = data.targets || [];
+
+    if (targets.length === 0) {
+      progressInfo.textContent = 'タイムスタンプ未作成のアーカイブはありません';
+      return;
+    }
+
+    listScanPanel.querySelector('#lsp-video-ids').value = targets.map(t => t.video_id).join('\n');
+    await loadVideoIdList();
+  } catch (error) {
+    console.error('[YCS] スキャン対象の読み込みエラー:', error);
+    progressInfo.textContent = 'エラー: ' + error.message;
+  }
 }
 
 /**
