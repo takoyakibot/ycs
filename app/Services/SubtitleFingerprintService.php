@@ -53,17 +53,7 @@ class SubtitleFingerprintService
      */
     public function generateFingerprintsForVideo(string $videoId): int
     {
-        // 優先度: 日本語（ja / ja-JP等） > 手動字幕（kindが空。'asr' = 自動生成）。
-        // 末尾のlanguage_code昇順は、同順位が並んだ場合でも選択結果を
-        // DBの行順に依存させないための決定的なタイブレーク（#591）
-        $subtitle = VideoSubtitle::where('video_id', $videoId)
-            ->orderByRaw(
-                'CASE WHEN language_code = ? THEN 0 WHEN language_code LIKE ? THEN 1 ELSE 2 END',
-                [self::PREFERRED_LANGUAGE, self::PREFERRED_LANGUAGE.'-%']
-            )
-            ->orderBy('kind', 'asc')
-            ->orderBy('language_code', 'asc')
-            ->first();
+        $subtitle = $this->findPreferredSubtitle($videoId);
 
         if (! $subtitle) {
             return 0;
@@ -90,6 +80,25 @@ class SubtitleFingerprintService
             ->delete();
 
         return count($generatedTsItemIds);
+    }
+
+    /**
+     * フィンガープリント生成・照合に使う字幕を選択する。
+     *
+     * 優先度: 日本語（ja / ja-JP等） > 手動字幕（kindが空。'asr' = 自動生成）。
+     * 末尾のlanguage_code昇順は、同順位が並んだ場合でも選択結果を
+     * DBの行順に依存させないための決定的なタイブレーク（#591）
+     */
+    public function findPreferredSubtitle(string $videoId): ?VideoSubtitle
+    {
+        return VideoSubtitle::where('video_id', $videoId)
+            ->orderByRaw(
+                'CASE WHEN language_code = ? THEN 0 WHEN language_code LIKE ? THEN 1 ELSE 2 END',
+                [self::PREFERRED_LANGUAGE, self::PREFERRED_LANGUAGE.'-%']
+            )
+            ->orderBy('kind', 'asc')
+            ->orderBy('language_code', 'asc')
+            ->first();
     }
 
     /**

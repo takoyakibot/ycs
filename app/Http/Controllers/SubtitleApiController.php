@@ -133,6 +133,51 @@ class SubtitleApiController extends Controller
     }
 
     /**
+     * 再生位置から楽曲候補を取得（Chrome拡張のマーカー用）
+     *
+     * ts_itemが未作成のローカルマーカーに対して、保存済み字幕から
+     * 指定位置の窓を切り出してフィンガープリント照合を行う
+     */
+    public function matchByPosition(Request $request)
+    {
+        $validated = $request->validate([
+            'video_id' => ['required', 'string', 'size:11', 'regex:/^[A-Za-z0-9_-]{11}$/'],
+            'sec' => ['required', 'integer', 'min:0', 'max:86400'],
+        ]);
+
+        // アーカイブの存在確認とアクセス権チェック
+        $archive = Archive::where('video_id', $validated['video_id'])->first();
+        if (! $archive) {
+            return response()->json(['message' => '指定された動画はアーカイブに登録されていません'], 404);
+        }
+
+        $channel = $archive->channel;
+        if (! $channel || ! $this->canAccessChannel($channel)) {
+            return response()->json(['message' => 'このチャンネルへのアクセス権限がありません'], 403);
+        }
+
+        try {
+            $result = $this->matchingService->getCandidateSongsForPosition(
+                $validated['video_id'],
+                $validated['sec']
+            );
+
+            return response()->json(array_merge([
+                'video_id' => $validated['video_id'],
+                'sec' => $validated['sec'],
+            ], $result));
+        } catch (Exception $e) {
+            Log::error('再生位置の楽曲マッチングエラー', [
+                'video_id' => $validated['video_id'],
+                'sec' => $validated['sec'],
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json(['message' => '楽曲マッチングに失敗しました'], 500);
+        }
+    }
+
+    /**
      * 楽曲候補を取得（字幕フィンガープリントベースのマッチング）
      */
     public function matchCandidates(string $tsItemId)

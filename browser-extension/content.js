@@ -341,6 +341,7 @@ function showEmbeddedUI() {
  */
 function hideVolumeGraphPanel() {
   closeLyricsPastePopup();
+  closeSongCandidatePopup();
   if (volumeGraphContainer) {
     volumeGraphContainer.classList.remove('visible');
   }
@@ -2433,6 +2434,25 @@ async function loadYcsApiSettings() {
  * 失敗時はconsole.warnのみ（字幕表示自体は影響させない）
  */
 async function sendSubtitlesToServer(videoId, lang, subtitles) {
+  // 選択中のトラックからkindを判定
+  const selectEl = subtitlePanel?.querySelector('#stp-lang-select');
+  const selectedOption = selectEl?.selectedOptions?.[0];
+  const selectedLang = selectedOption?.dataset?.lang || lang;
+  const selectedTrack = currentCaptionTracks.find(t => t.languageCode === selectedLang);
+  const kind = selectedTrack?.kind === 'asr' ? 'asr' : '';
+
+  try {
+    await postSubtitlesToServer(videoId, selectedLang, kind, subtitles);
+  } catch (error) {
+    console.warn('[YCS] 字幕データ送信エラー:', error.message);
+  }
+}
+
+/**
+ * 字幕データ送信の共通処理（言語・kindを明示して送信）
+ * 失敗時はthrowする（自動送信側はcatchして握りつぶし、候補表示側はエラー表示に使う）
+ */
+async function postSubtitlesToServer(videoId, languageCode, kind, subtitles) {
   if (!videoId || !subtitles || subtitles.length === 0) return;
 
   // API設定が未読み込みなら読み込む
@@ -2444,47 +2464,37 @@ async function sendSubtitlesToServer(videoId, lang, subtitles) {
     return;
   }
 
-  // 選択中のトラックからkindを判定
-  const selectEl = subtitlePanel?.querySelector('#stp-lang-select');
-  const selectedOption = selectEl?.selectedOptions?.[0];
-  const selectedLang = selectedOption?.dataset?.lang || lang;
-  const selectedTrack = currentCaptionTracks.find(t => t.languageCode === selectedLang);
-  const kind = selectedTrack?.kind === 'asr' ? 'asr' : '';
-
   // 重複送信防止
-  const cacheKey = `${videoId}_${selectedLang}_${kind}`;
+  const cacheKey = `${videoId}_${languageCode}_${kind}`;
   if (subtitleSentCache.has(cacheKey)) return;
 
-  try {
-    const response = await fetch(`${ycsServerUrl}/api/manage/archives/subtitles/store`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'Authorization': `Bearer ${ycsApiToken}`,
-      },
-      body: JSON.stringify({
-        video_id: videoId,
-        language_code: selectedLang,
-        kind: kind,
-        subtitles: subtitles.map(s => ({
-          start: s.start,
-          duration: s.duration,
-          text: s.text,
-        })),
-      }),
-    });
+  const response = await fetch(`${ycsServerUrl}/api/manage/archives/subtitles/store`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'Authorization': `Bearer ${ycsApiToken}`,
+    },
+    body: JSON.stringify({
+      video_id: videoId,
+      language_code: languageCode,
+      kind: kind,
+      subtitles: subtitles.map(s => ({
+        start: s.start,
+        duration: s.duration,
+        text: s.text,
+      })),
+    }),
+  });
 
-    if (response.ok) {
-      subtitleSentCache.add(cacheKey);
-      const data = await response.json();
-      console.log(`[YCS] 字幕データ送信成功: ${videoId} (${data.segment_count}セグメント, FP: ${data.fingerprints_generated}件)`);
-    } else {
-      console.warn(`[YCS] 字幕データ送信失敗: ${response.status}`);
-    }
-  } catch (error) {
-    console.warn('[YCS] 字幕データ送信エラー:', error.message);
+  if (!response.ok) {
+    console.warn(`[YCS] 字幕データ送信失敗: ${response.status}`);
+    throw new Error(`字幕データの送信に失敗しました (${response.status})`);
   }
+
+  subtitleSentCache.add(cacheKey);
+  const data = await response.json();
+  console.log(`[YCS] 字幕データ送信成功: ${videoId} (${data.segment_count}セグメント, FP: ${data.fingerprints_generated}件)`);
 }
 
 /**
@@ -4745,6 +4755,40 @@ function createVolumeGraph() {
         border-top: 1px solid #444;
       }
 
+      .vdg-ts-suggest-btn {
+        background: #2a3a4a;
+        border: 1px solid #456;
+        color: #9cf;
+        font-size: 10px;
+        padding: 1px 4px;
+        border-radius: 3px;
+        cursor: pointer;
+        flex-shrink: 0;
+        line-height: 1.2;
+      }
+
+      .vdg-ts-suggest-btn:hover {
+        background: #345;
+        color: #cef;
+      }
+
+      .vdg-paste-popup-item .similarity {
+        color: #8a8;
+        font-size: 10px;
+        margin-left: 6px;
+      }
+
+      .vdg-paste-popup-item .artist {
+        color: #999;
+        font-size: 10px;
+        margin-left: 6px;
+      }
+
+      .vdg-paste-popup-item.message {
+        color: #999;
+        cursor: default;
+      }
+
       .vdg-ts-format-toggle {
         display: flex;
         align-items: center;
@@ -5338,6 +5382,7 @@ function setupVolumeGraphEvents() {
       e.stopImmediatePropagation();
       // ポップアップが開いていれば閉じる（キー操作では挿入しないのがポップアップ側の挙動と同じ）
       closeLyricsPastePopup();
+      closeSongCandidatePopup();
       const pos = e.key === 'ArrowUp' ? 0 : e.target.value.length;
       e.target.setSelectionRange(pos, pos);
       return;
@@ -5391,6 +5436,8 @@ function setupVolumeGraphEvents() {
       }
     } else if (e.key === 'Escape') {
       // 選択解除のみ行い、YouTube側のEsc処理（メニューを閉じる等）は妨げない
+      // （入力欄非フォーカスで曲名候補ポップアップだけ開いている場合もここで閉じる）
+      closeSongCandidatePopup();
       deselectMarker();
     } else if (e.key === ' ') {
       e.preventDefault();
@@ -5893,6 +5940,7 @@ function updateTimestampList() {
 
   // リスト再構築でペースト変換ポップアップの対象入力欄が破棄されるため閉じる
   closeLyricsPastePopup();
+  closeSongCandidatePopup();
 
   if (tsMarkers.length === 0) {
     listEl.innerHTML = '<div class="vdg-ts-empty">波形グラフをクリックしてタイムスタンプを追加</div>';
@@ -5905,6 +5953,7 @@ function updateTimestampList() {
       <span class="vdg-ts-time">${formatTimestamp(marker.time)}</span>
       <button type="button" class="vdg-ts-offset-btn" data-marker-id="${marker.id}" data-delta="1" title="+1秒" tabindex="-1">+1s</button>
       <input type="text" class="vdg-ts-text-input" value="${escapeHtml(marker.text)}" placeholder="曲名を入力..." data-marker-id="${marker.id}">
+      <button type="button" class="vdg-ts-suggest-btn" data-marker-id="${marker.id}" title="字幕から曲名候補を表示" tabindex="-1">候補</button>
     </div>
   `).join('');
 
@@ -5919,9 +5968,21 @@ function updateTimestampList() {
     });
   });
 
+  listEl.querySelectorAll('.vdg-ts-suggest-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = parseInt(btn.dataset.markerId);
+      selectedMarkerId = id;
+      const marker = tsMarkers.find(m => m.id === id);
+      if (marker) {
+        showSongCandidates(marker);
+      }
+    });
+  });
+
   listEl.querySelectorAll('.vdg-ts-row').forEach(row => {
     row.addEventListener('click', (e) => {
-      if (e.target.classList.contains('vdg-ts-text-input') || e.target.classList.contains('vdg-ts-offset-btn')) return;
+      if (e.target.classList.contains('vdg-ts-text-input') || e.target.classList.contains('vdg-ts-offset-btn') || e.target.classList.contains('vdg-ts-suggest-btn')) return;
       const id = parseInt(row.dataset.markerId);
       selectedMarkerId = id;
       const marker = tsMarkers.find(m => m.id === id);
@@ -6079,6 +6140,7 @@ function blurMarkerTextInput() {
   // キーボード操作で入力を抜ける場合はポップアップのmousedown経由の後始末が働かないため、
   // ここで明示的に閉じる（開いたまま残るとリスナーが生き続け、後続のクリックで誤挿入される）
   closeLyricsPastePopup();
+  closeSongCandidatePopup();
   const active = document.activeElement;
   if (active instanceof HTMLElement && active.classList.contains('vdg-ts-text-input')) {
     active.blur();
@@ -6247,6 +6309,7 @@ function closeLyricsPastePopup() {
  */
 function showLyricsPastePopup(input, candidates, rawText) {
   closeLyricsPastePopup();
+  closeSongCandidatePopup();
   if (!volumeGraphContainer) return;
 
   // 候補値は属性に埋め込まずインデックスで参照する（escapeHtmlは引用符をエスケープしないため）
@@ -6313,6 +6376,241 @@ function showLyricsPastePopup(input, candidates, rawText) {
   };
 
   lyricsPastePopup = popup;
+  volumeGraphContainer.appendChild(popup);
+  // offsetWidthを使うためDOM追加後に配置
+  reposition();
+}
+
+/**
+ * 曲名候補ポップアップ（字幕フィンガープリントによるマッチング候補・#595）
+ */
+let songCandidatePopup = null;
+let songCandidatePopupCleanup = null;
+
+// 表示要求の世代。await中にポップアップが閉じられた/別マーカーで開き直された場合、
+// 古い要求の結果で上書きしないためのガード
+let songCandidateRequestSeq = 0;
+
+// 字幕準備フロー（取得→送信）の実行中Promise（動画ID単位の相乗り用）。
+// 複数マーカーで連打しても字幕の取得・送信は1本しか走らない
+let subtitlePrepareFlow = null;
+
+function closeSongCandidatePopup() {
+  songCandidateRequestSeq++;
+  if (songCandidatePopupCleanup) {
+    songCandidatePopupCleanup();
+    songCandidatePopupCleanup = null;
+  }
+  if (songCandidatePopup) {
+    songCandidatePopup.remove();
+    songCandidatePopup = null;
+  }
+}
+
+/**
+ * 「候補」ボタンから曲名候補を表示するフロー
+ * 字幕がサーバー未送信の場合は取得→送信してから再問い合わせする
+ */
+async function showSongCandidates(marker) {
+  const input = volumeGraphContainer?.querySelector(`.vdg-ts-text-input[data-marker-id="${marker.id}"]`);
+  if (!input) return;
+
+  // openSongCandidatePopupは開き直しのたびに内部で世代を進めるため、
+  // 自分で開いた直後の世代を控えて「外部から閉じられた/開き直された」を検出する
+  let seq;
+  const open = (items) => {
+    openSongCandidatePopup(input, items);
+    seq = songCandidateRequestSeq;
+  };
+  const isStale = () => seq !== songCandidateRequestSeq;
+
+  open([{ type: 'message', label: '候補を検索しています…' }]);
+
+  try {
+    if (!ycsApiToken) {
+      await loadYcsApiSettings();
+    }
+    if (!ycsApiToken) {
+      if (!isStale()) openSongCandidatePopup(input, [{ type: 'message', label: 'APIトークンが未設定です。プロフィール画面で発行し、拡張の設定に登録してください' }]);
+      return;
+    }
+
+    const videoId = getVideoId();
+    if (!videoId) {
+      if (!isStale()) openSongCandidatePopup(input, [{ type: 'message', label: '動画IDを取得できませんでした' }]);
+      return;
+    }
+
+    const sec = Math.floor(marker.time);
+    let result = await fetchSongCandidates(videoId, sec);
+    if (isStale()) return;
+
+    // 字幕が未送信なら取得→送信してから再問い合わせ
+    if (result.has_subtitles === false) {
+      openSongCandidatePopup(input, [{ type: 'message', label: '字幕を取得しています…' }]);
+      await ensureSubtitlesOnServer(videoId);
+      if (isStale()) return;
+      result = await fetchSongCandidates(videoId, sec);
+      if (isStale()) return;
+    }
+
+    if (result.has_fingerprint === false) {
+      openSongCandidatePopup(input, [{ type: 'message', label: 'この位置の字幕から候補を計算できませんでした（歌声の字幕が少ない可能性があります）' }]);
+      return;
+    }
+
+    const candidates = (result.candidates || []).slice(0, 5);
+    if (candidates.length === 0) {
+      openSongCandidatePopup(input, [{ type: 'message', label: '候補が見つかりませんでした' }]);
+      return;
+    }
+
+    openSongCandidatePopup(input, candidates.map(c => ({
+      type: 'candidate',
+      label: c.song_title || c.normalized_text || '',
+      artist: c.song_artist || '',
+      similarity: c.similarity,
+    })));
+  } catch (error) {
+    console.warn('[YCS] 曲名候補の取得エラー:', error.message);
+    if (!isStale()) openSongCandidatePopup(input, [{ type: 'message', label: 'エラー: ' + error.message }]);
+  }
+}
+
+/**
+ * 曲名候補APIを呼び出す
+ */
+async function fetchSongCandidates(videoId, sec) {
+  const response = await fetch(
+    `${ycsServerUrl}/api/extension/subtitle-matches?video_id=${encodeURIComponent(videoId)}&sec=${sec}`,
+    {
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${ycsApiToken}`,
+      },
+    }
+  );
+
+  if (response.status === 401) throw new Error('APIトークンが無効です');
+  if (response.status === 403) throw new Error('このチャンネルへのアクセス権限がありません');
+  if (response.status === 404) throw new Error('この動画はアーカイブに登録されていません');
+  if (!response.ok) throw new Error(`候補の取得に失敗しました (${response.status})`);
+
+  return response.json();
+}
+
+/**
+ * 字幕をサーバーに送信済みの状態にする（取得→送信）
+ * 実行中の再呼び出しは同じPromiseに相乗りし、二重送信を防ぐ
+ */
+function ensureSubtitlesOnServer(videoId) {
+  if (subtitlePrepareFlow && subtitlePrepareFlow.videoId === videoId) {
+    return subtitlePrepareFlow.promise;
+  }
+
+  const promise = (async () => {
+    const tracks = await getCaptionTracksFromPage();
+    if (!tracks || tracks.length === 0) {
+      throw new Error('この動画には字幕がありません');
+    }
+    const track = pickPreferredCaptionTrack(tracks);
+    const segments = await fetchTimedText(videoId, track.languageCode);
+    if (!segments || segments.length === 0) {
+      throw new Error('字幕を取得できませんでした');
+    }
+    await postSubtitlesToServer(videoId, track.languageCode, track.kind === 'asr' ? 'asr' : '', segments);
+  })().finally(() => {
+    if (subtitlePrepareFlow?.videoId === videoId) {
+      subtitlePrepareFlow = null;
+    }
+  });
+
+  subtitlePrepareFlow = { videoId, promise };
+
+  return promise;
+}
+
+/**
+ * 候補計算に使う字幕トラックを選ぶ（サーバー側の言語優先と同じ考え方）
+ * 日本語（手動 > 自動生成）> 先頭のトラック
+ */
+function pickPreferredCaptionTrack(tracks) {
+  const ja = tracks.filter(t => (t.languageCode || '').startsWith('ja'));
+  return ja.find(t => t.kind !== 'asr') || ja[0] || tracks[0];
+}
+
+/**
+ * 曲名候補ポップアップを表示する（既存のペースト変換ポップアップと同じ操作感）
+ * 候補クリックで入力欄の内容を置き換え、Esc・外側クリック・他のキーで閉じる
+ * @param {HTMLInputElement} input - 挿入先の入力欄
+ * @param {Array<{type: string, label: string, artist?: string, similarity?: number}>} items
+ */
+function openSongCandidatePopup(input, items) {
+  closeSongCandidatePopup();
+  closeLyricsPastePopup();
+  if (!volumeGraphContainer) return;
+
+  const popup = document.createElement('div');
+  popup.className = 'vdg-paste-popup';
+  popup.innerHTML = `
+    <div class="vdg-paste-popup-title">曲名候補（クリックで挿入）</div>
+    ${items.map((item, i) => item.type === 'candidate' ? `
+      <div class="vdg-paste-popup-item" data-index="${i}">${escapeHtml(item.label)}${item.artist ? `<span class="artist">${escapeHtml(item.artist)}</span>` : ''}<span class="similarity">${Math.round((item.similarity || 0) * 100)}%</span></div>
+    ` : `
+      <div class="vdg-paste-popup-item message">${escapeHtml(item.label)}</div>
+    `).join('')}
+  `;
+
+  // 入力欄の直下に配置（グラフコンテナ基準の絶対配置）
+  const listEl = volumeGraphContainer.querySelector('#vdg-ts-list');
+  const reposition = () => {
+    const containerRect = volumeGraphContainer.getBoundingClientRect();
+    const inputRect = input.getBoundingClientRect();
+    const maxLeft = containerRect.width - popup.offsetWidth - 4;
+    popup.style.left = `${Math.max(0, Math.min(inputRect.left - containerRect.left, maxLeft))}px`;
+    popup.style.top = `${inputRect.bottom - containerRect.top + 2}px`;
+  };
+
+  // 候補クリック: 入力欄の内容を候補で置き換える
+  // （execCommandならネイティブのinputイベント発火とUndo履歴が維持される）
+  popup.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const item = e.target.closest('.vdg-paste-popup-item');
+    if (item && item.dataset.index !== undefined) {
+      const value = items[parseInt(item.dataset.index)]?.label ?? '';
+      closeSongCandidatePopup();
+      input.focus({ preventScroll: true });
+      input.select();
+      document.execCommand('insertText', false, value);
+    }
+  });
+
+  // Escや他のキー入力: 閉じるだけ（挿入しない）
+  const onKeydown = (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    closeSongCandidatePopup();
+  };
+
+  // 外側クリック: 閉じるだけ（入力欄内のクリックはカーソル移動なので閉じない）
+  const onOutsideMousedown = (e) => {
+    if (popup.contains(e.target) || e.target === input) return;
+    closeSongCandidatePopup();
+  };
+
+  input.addEventListener('keydown', onKeydown, true);
+  document.addEventListener('mousedown', onOutsideMousedown, true);
+  listEl?.addEventListener('scroll', reposition);
+  songCandidatePopupCleanup = () => {
+    input.removeEventListener('keydown', onKeydown, true);
+    document.removeEventListener('mousedown', onOutsideMousedown, true);
+    listEl?.removeEventListener('scroll', reposition);
+  };
+
+  songCandidatePopup = popup;
   volumeGraphContainer.appendChild(popup);
   // offsetWidthを使うためDOM追加後に配置
   reposition();
@@ -6409,6 +6707,7 @@ function loadMarkersFromStorage() {
  */
 function resetTimestampEditorForVideoChange() {
   closeLyricsPastePopup();
+  closeSongCandidatePopup();
   tsMarkers = [];
   selectedMarkerId = null;
   nextMarkerId = 1;
@@ -6646,6 +6945,7 @@ function handleMessage(message, sender, sendResponse) {
         if (!isGraphVisible) {
           // ポップアップを開いたまま非表示になるとリスナーが残留するため閉じる
           closeLyricsPastePopup();
+          closeSongCandidatePopup();
         }
         const computed = getComputedStyle(volumeGraphContainer);
         console.log('グラフ表示状態:', isGraphVisible, {

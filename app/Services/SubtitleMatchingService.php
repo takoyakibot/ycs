@@ -11,6 +11,8 @@ class SubtitleMatchingService
 {
     private const MIN_CHANNEL_CANDIDATES = 3;
 
+    public function __construct(private SubtitleFingerprintService $fingerprintService) {}
+
     /**
      * 候補楽曲を返す（チャンネル内優先→全体フォールバック）
      */
@@ -26,30 +28,89 @@ class SubtitleMatchingService
             ];
         }
 
-        // チャンネルIDを取得
-        $archive = Archive::where('video_id', $fingerprint->video_id)->first();
-        $channelId = $archive?->channel_id;
+        return [
+            'ts_item_id' => $tsItemId,
+            'has_fingerprint' => true,
+            'candidates' => $this->findCandidates(
+                $fingerprint->trigrams,
+                $fingerprint->duration_sec,
+                $fingerprint->video_id,
+                $fingerprint->ts_item_id,
+                $threshold
+            ),
+        ];
+    }
+
+    /**
+     * 再生位置から候補楽曲を返す（拡張のマーカー用。ts_item不要）
+     *
+     * 保存済み字幕から指定位置の窓を切り出し、保存済みフィンガープリントと照合する
+     */
+    public function getCandidateSongsForPosition(string $videoId, int $sec, float $threshold = 0.5): array
+    {
+        $subtitle = $this->fingerprintService->findPreferredSubtitle($videoId);
+
+        if (! $subtitle) {
+            return [
+                'has_subtitles' => false,
+                'has_fingerprint' => false,
+                'candidates' => [],
+            ];
+        }
+
+        $text = $this->fingerprintService->extractSubtitleWindow($subtitle->subtitle_data ?? [], $sec);
+        $trigrams = SubtitleFingerprintService::generateTrigrams($text);
+
+        if (count($trigrams) < SubtitleFingerprintService::MIN_TRIGRAM_COUNT) {
+            return [
+                'has_subtitles' => true,
+                'has_fingerprint' => false,
+                'candidates' => [],
+            ];
+        }
+
+        return [
+            'has_subtitles' => true,
+            'has_fingerprint' => true,
+            'candidates' => $this->findCandidates(
+                $trigrams,
+                SubtitleFingerprintService::WINDOW_DURATION_SEC,
+                $videoId,
+                null,
+                $threshold
+            ),
+        ];
+    }
+
+    /**
+     * トライグラム集合に対する候補検索の共通処理
+     *
+     * @param  string|null  $excludeTsItemId  照合対象から除外するts_item（自分自身との照合を防ぐ）
+     */
+    private function findCandidates(
+        array $trigrams,
+        int $durationSec,
+        string $videoId,
+        ?string $excludeTsItemId,
+        float $threshold
+    ): array {
+        $channelId = Archive::where('video_id', $videoId)->first()?->channel_id;
 
         // 同一チャンネル内で検索
         $channelCandidates = collect();
         $channelMatchedIds = collect();
         if ($channelId) {
-            $channelCandidates = $this->findSimilarInChannel($fingerprint, $channelId, $threshold);
+            $channelCandidates = $this->findSimilarInChannel($trigrams, $durationSec, $excludeTsItemId, $channelId, $threshold);
             $channelMatchedIds = $channelCandidates->pluck('fingerprint.ts_item_id');
         }
 
         // 候補が少なければ全チャンネルにフォールバック（チャンネル内の結果は除外）
         $otherCandidates = collect();
         if ($channelCandidates->count() < self::MIN_CHANNEL_CANDIDATES) {
-            $otherCandidates = $this->findSimilarOtherChannels($fingerprint, $channelMatchedIds->toArray(), $threshold);
+            $otherCandidates = $this->findSimilarOtherChannels($trigrams, $durationSec, $excludeTsItemId, $channelMatchedIds->toArray(), $threshold);
         }
 
-        // 結果を統合してランク付け
-        return [
-            'ts_item_id' => $tsItemId,
-            'has_fingerprint' => true,
-            'candidates' => $this->rankCandidates($channelCandidates, $otherCandidates),
-        ];
+        return $this->rankCandidates($channelCandidates, $otherCandidates);
     }
 
     /**
@@ -81,18 +142,17 @@ class SubtitleMatchingService
      * 長い窓のほぼ部分集合になるため、同一楽曲でもJaccard類似度が構造的に低く出て
      * しきい値を下回る。窓の長さを変更した直後の混在状態で静かに取りこぼすのを防ぐ。
      */
-    private function findSimilarInChannel(SubtitleFingerprint $fp, string $channelId, float $threshold): Collection
+    private function findSimilarInChannel(array $targetTrigrams, int $durationSec, ?string $excludeTsItemId, string $channelId, float $threshold): Collection
     {
         $videoIds = Archive::where('channel_id', $channelId)
             ->pluck('video_id')
             ->toArray();
 
-        $targetTrigrams = $fp->trigrams;
         $results = collect();
 
         SubtitleFingerprint::whereIn('video_id', $videoIds)
-            ->where('ts_item_id', '!=', $fp->ts_item_id)
-            ->where('duration_sec', $fp->duration_sec)
+            ->when($excludeTsItemId, fn ($q) => $q->where('ts_item_id', '!=', $excludeTsItemId))
+            ->where('duration_sec', $durationSec)
             ->chunkById(500, function ($chunk) use ($targetTrigrams, $threshold, &$results) {
                 foreach ($chunk as $other) {
                     $similarity = self::jaccardSimilarity($targetTrigrams, $other->trigrams);
@@ -112,13 +172,13 @@ class SubtitleMatchingService
     /**
      * 他チャンネルで検索（フォールバック、チャンネル内の結果は除外）
      */
-    private function findSimilarOtherChannels(SubtitleFingerprint $fp, array $excludeTsItemIds, float $threshold): Collection
+    private function findSimilarOtherChannels(array $targetTrigrams, int $durationSec, ?string $excludeTsItemId, array $excludeTsItemIds, float $threshold): Collection
     {
-        $targetTrigrams = $fp->trigrams;
         $results = collect();
 
-        $query = SubtitleFingerprint::where('ts_item_id', '!=', $fp->ts_item_id)
-            ->where('duration_sec', $fp->duration_sec);
+        $query = SubtitleFingerprint::query()
+            ->when($excludeTsItemId, fn ($q) => $q->where('ts_item_id', '!=', $excludeTsItemId))
+            ->where('duration_sec', $durationSec);
         if (! empty($excludeTsItemIds)) {
             $query->whereNotIn('ts_item_id', $excludeTsItemIds);
         }
