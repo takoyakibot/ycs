@@ -36,4 +36,7 @@ Route::middleware(['auth:sanctum', 'admin'])->group(function () {
 
     Route::get('extension/scan-targets', [SubtitleApiController::class, 'scanTargets'])
         ->middleware('throttle:10,1');
+
+    Route::post('extension/subtitles/unavailable', [SubtitleApiController::class, 'markSubtitlesUnavailable'])
+        ->middleware('throttle:30,1');
 });

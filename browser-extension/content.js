@@ -1225,6 +1225,33 @@ function waitForPlayerAndProcessSubtitle(videoId) {
 }
 
 /**
+ * 字幕が存在しないことをサーバーに報告する（次回以降の字幕スキャン対象から除外・#603）
+ * 後から字幕が付いた場合は字幕保存時にフラグが自動解除される。
+ * 報告の失敗はスキップ処理を妨げない
+ */
+async function reportSubtitlesUnavailable(videoId) {
+  try {
+    if (!ycsApiToken) {
+      await loadYcsApiSettings();
+    }
+    if (!ycsApiToken) return;
+
+    await fetch(`${ycsServerUrl}/api/extension/subtitles/unavailable`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${ycsApiToken}`,
+      },
+      body: JSON.stringify({ video_id: videoId }),
+    });
+    console.log('[YCS] 字幕なしを記録しました:', videoId);
+  } catch (error) {
+    console.warn('[YCS] 字幕なし報告エラー:', error.message);
+  }
+}
+
+/**
  * 現在の動画の字幕を取得してサーバーへ送信し、次へ進む
  */
 async function processSubtitleScanVideo(videoId) {
@@ -1232,6 +1259,9 @@ async function processSubtitleScanVideo(videoId) {
     const tracks = await getCaptionTracksFromPage();
     if (!tracks || tracks.length === 0) {
       console.log('[YCS] 字幕スキャン: 字幕がないためスキップ', videoId);
+      // 字幕トラックが存在しないと確定したケースのみ記録する
+      // （プレイヤー準備不可や取得エラーは一時的な可能性があるため記録しない）
+      await reportSubtitlesUnavailable(videoId);
       await recordSubtitleScanResult('skipped');
     } else {
       const track = pickPreferredCaptionTrack(tracks);
@@ -6843,6 +6873,8 @@ function ensureSubtitlesOnServer(videoId) {
   const promise = (async () => {
     const tracks = await getCaptionTracksFromPage();
     if (!tracks || tracks.length === 0) {
+      // 候補ボタン経由でも「字幕なし」を記録し、字幕スキャン対象から除外する（#603）
+      reportSubtitlesUnavailable(videoId);
       throw new Error('この動画には字幕がありません');
     }
     const track = pickPreferredCaptionTrack(tracks);
