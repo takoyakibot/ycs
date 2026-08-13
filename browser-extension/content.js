@@ -4578,6 +4578,7 @@ async function checkAndStartListScan() {
  * 動画の読み込みを待ってリストスキャンボタンを表示
  */
 function waitForVideoAndShowButton(currentIndex, totalCount) {
+  let attempt = 0;
   const checkVideo = () => {
     if (videoElement && videoElement.readyState >= 2 && videoDuration > 0) {
       // 既にスキャン済みかチェック
@@ -4591,7 +4592,13 @@ function waitForVideoAndShowButton(currentIndex, totalCount) {
           showListScanButton(currentIndex, totalCount);
         }
       });
+    } else if (attempt >= 30) {
+      // 配信予定の枠・限定公開・削除済みなど、動画が再生可能にならないページで
+      // 永久に待ち続けないようスキップして次へ進む（#605）
+      console.warn('リストスキャン: 動画が再生可能にならないためスキップします', getVideoId());
+      proceedToNextListScanVideo();
     } else {
+      attempt++;
       setTimeout(checkVideo, 1000);
     }
   };
