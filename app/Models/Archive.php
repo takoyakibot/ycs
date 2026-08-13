@@ -19,6 +19,7 @@ class Archive extends Model
         'is_display',
         'published_at',
         'comments_updated_at',
+        'subtitles_unavailable_at',
     ];
 
     protected $hidden = ['channel_id'];

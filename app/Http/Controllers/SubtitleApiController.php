@@ -68,6 +68,11 @@ class SubtitleApiController extends Controller
 
             $isNew = $subtitle->wasRecentlyCreated;
 
+            // 「字幕なし」と記録されていた動画に字幕が保存できたのでフラグを解除する（#603）
+            if ($archive->subtitles_unavailable_at !== null) {
+                $archive->update(['subtitles_unavailable_at' => null]);
+            }
+
             // フィンガープリントを自動生成
             $fingerprintCount = $this->fingerprintService->generateFingerprintsForVideo($videoId);
 
@@ -143,11 +148,39 @@ class SubtitleApiController extends Controller
         $targets = $this->accessibleDisplayedArchives($request->user())
             ->whereHas('tsItemsDisplay')
             ->whereNotIn('video_id', VideoSubtitle::query()->select('video_id'))
+            ->whereNull('subtitles_unavailable_at')
             ->orderByDesc('published_at')
             ->limit(500)
             ->get(['video_id', 'title']);
 
         return $this->targetsResponse($targets);
+    }
+
+    /**
+     * 字幕が存在しないことを記録（Chrome拡張から報告）
+     *
+     * 字幕一括取得スキャンの対象から除外するためのフラグ。
+     * 後から字幕が付いた場合はstore()で自動的にクリアされる
+     */
+    public function markSubtitlesUnavailable(Request $request)
+    {
+        $validated = $request->validate([
+            'video_id' => ['required', 'string', 'size:11', 'regex:/^[A-Za-z0-9_-]{11}$/'],
+        ]);
+
+        $archive = Archive::where('video_id', $validated['video_id'])->first();
+        if (! $archive) {
+            return response()->json(['message' => '指定された動画はアーカイブに登録されていません'], 404);
+        }
+
+        $channel = $archive->channel;
+        if (! $channel || ! $this->canAccessChannel($channel)) {
+            return response()->json(['message' => 'このチャンネルへのアクセス権限がありません'], 403);
+        }
+
+        $archive->update(['subtitles_unavailable_at' => now()]);
+
+        return response()->json(['video_id' => $archive->video_id, 'subtitles_unavailable_at' => $archive->subtitles_unavailable_at]);
     }
 
     /**

@@ -173,4 +173,74 @@ class ExtensionSubtitleTargetsTest extends TestCase
 
         $response->assertStatus(401);
     }
+
+    public function test_excludes_archives_flagged_as_subtitles_unavailable(): void
+    {
+        $archive = $this->createArchiveWithTsItem('nosubsvideo');
+        $archive->update(['subtitles_unavailable_at' => now()]);
+
+        $response = $this->requestTargets();
+
+        $response->assertStatus(200)->assertJsonPath('count', 0);
+    }
+
+    public function test_mark_unavailable_flags_archive(): void
+    {
+        $archive = $this->createArchiveWithTsItem('target00001');
+        $token = $this->user->createToken('extension')->plainTextToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/extension/subtitles/unavailable', ['video_id' => 'target00001']);
+
+        $response->assertStatus(200);
+        $this->assertNotNull($archive->fresh()->subtitles_unavailable_at);
+
+        // フラグ後は対象一覧から消える
+        $this->requestTargets()->assertJsonPath('count', 0);
+    }
+
+    public function test_mark_unavailable_denied_for_other_users_channel(): void
+    {
+        $this->createArchiveWithTsItem('target00001');
+
+        $otherUser = User::factory()->create([
+            'email_verified_at' => now(),
+            'role' => User::ROLE_ADMIN,
+        ]);
+        $token = $otherUser->createToken('extension')->plainTextToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/extension/subtitles/unavailable', ['video_id' => 'target00001']);
+
+        $response->assertStatus(403);
+    }
+
+    public function test_mark_unavailable_returns_404_for_unknown_video(): void
+    {
+        $token = $this->user->createToken('extension')->plainTextToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/extension/subtitles/unavailable', ['video_id' => 'xxxxxxxxxxx']);
+
+        $response->assertStatus(404);
+    }
+
+    public function test_storing_subtitles_clears_unavailable_flag(): void
+    {
+        // 「字幕なし」と記録した後に字幕が付いたケース。保存で自動回復する
+        $archive = $this->createArchiveWithTsItem('recovervid1');
+        $archive->update(['subtitles_unavailable_at' => now()]);
+
+        $token = $this->user->createToken('extension')->plainTextToken;
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/manage/archives/subtitles/store', [
+                'video_id' => 'recovervid1',
+                'language_code' => 'ja',
+                'kind' => 'asr',
+                'subtitles' => [['start' => 0, 'duration' => 1, 'text' => 'テスト']],
+            ]);
+
+        $response->assertStatus(200);
+        $this->assertNull($archive->fresh()->subtitles_unavailable_at);
+    }
 }
