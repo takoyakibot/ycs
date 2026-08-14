@@ -49,6 +49,19 @@ let selectedMarkerId = null;
 let nextMarkerId = 1;
 const MARKER_SNAP_THRESHOLD_SEC = 3; // マーカー選択の判定距離（秒）
 const MARKER_SNAP_THRESHOLD_PX = 8; // マーカー選択の判定距離（ピクセル）。長時間動画では秒基準が1px未満になるため併用
+
+// 楽曲開始の自動検出設定
+// 閾値は配信ごとの音量差を吸収するため絶対値ではなく基準音量（上位パーセンタイル）比で決める
+const SONG_DETECT_CONFIG = {
+  SMOOTH_WINDOW_SEC: 10, // 平滑化（移動平均）の窓幅
+  REF_PERCENTILE: 0.95, // 基準音量とするパーセンタイル（≒その配信の「歌のピーク」水準）
+  ENTER_RATIO: 0.5, // 歌区間の開始とみなす閾値（基準音量比）
+  EXIT_RATIO: 0.3, // 歌区間の終了とみなす閾値（基準音量比）。開始より低くして間奏での分断を防ぐ
+  EXIT_TOLERANCE_SEC: 12, // 終了閾値を下回ってもこの時間内に戻れば同一区間として継続
+  MIN_SEGMENT_SEC: 60, // 歌とみなす最小継続時間。笑い声・SE等の短いスパイクを除外する
+  START_BACKTRACK_MAX_SEC: 8, // 平滑化で鈍った立ち上がりを実データで遡る最大時間
+};
+const AUTO_DETECT_SKIP_NEAR_MARKER_SEC = 60; // 既存マーカーからこの秒数以内の候補は追加しない
 let videoListenerTarget = null; // イベント登録済みのvideo要素（SPA遷移での重複登録防止）
 
 // タイムスタンプエディタ: Undo/Redo履歴（変更前スナップショットのスタック）
@@ -5042,6 +5055,31 @@ function createVolumeGraph() {
       .vdg-ts-editor-actions {
         display: flex;
         gap: 4px;
+        flex-shrink: 0;
+      }
+
+      .vdg-ts-notice {
+        flex: 1;
+        margin: 0 8px;
+        font-size: 11px;
+        color: #4fc3f7;
+        text-align: right;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        min-width: 0;
+      }
+
+      .vdg-ts-notice.warning {
+        color: #ffb74d;
+      }
+
+      .vdg-btn-detect {
+        background: #2e7d32 !important;
+      }
+
+      .vdg-btn-detect:hover {
+        background: #388e3c !important;
       }
 
       .vdg-btn-copy {
@@ -5268,7 +5306,9 @@ function createVolumeGraph() {
           <button class="vdg-mode-btn active" id="vdg-mode-marker" title="クリックでマーカーを追加">+ マーカー</button>
           <button class="vdg-mode-btn" id="vdg-mode-seek" title="クリックで再生位置を移動">シーク</button>
         </div>
+        <span class="vdg-ts-notice" id="vdg-ts-notice"></span>
         <div class="vdg-ts-editor-actions">
+          <button class="vdg-btn vdg-btn-detect" id="vdg-ts-detect-btn" title="音量の変化から楽曲の開始位置を検出し、候補マーカーを一括追加（既存マーカー付近は除く）">自動検出</button>
           <button class="vdg-btn" id="vdg-ts-undo-btn" title="元に戻す (Ctrl+Z)" disabled>↶ 戻る</button>
           <button class="vdg-btn" id="vdg-ts-redo-btn" title="やり直す (Ctrl+Y)" disabled>↷ 進む</button>
           <button class="vdg-btn vdg-btn-copy" id="vdg-ts-copy-btn" title="テキストとしてコピー">コピー</button>
@@ -5715,6 +5755,15 @@ function setupVolumeGraphEvents() {
     tsRedoBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       redoMarkers();
+    });
+  }
+
+  // タイムスタンプエディタ: 自動検出ボタン
+  const tsDetectBtn = volumeGraphContainer.querySelector('#vdg-ts-detect-btn');
+  if (tsDetectBtn) {
+    tsDetectBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      autoDetectSongStarts();
     });
   }
 
@@ -7087,6 +7136,192 @@ function formatTimestamp(seconds) {
     }
     return `${m}:${s.toString().padStart(2, '0')}`;
   }
+}
+
+/**
+ * 中央寄せ移動平均で音量データを平滑化する
+ * （片側窓だと立ち上がりが後ろへずれるため中央寄せにする）
+ * @param {number[]} values - 音量データ
+ * @param {number} windowSize - 窓幅（サンプル数）
+ * @returns {number[]} 平滑化されたデータ
+ */
+function movingAverageCentered(values, windowSize) {
+  const half = Math.floor(windowSize / 2);
+  const result = new Array(values.length);
+  for (let i = 0; i < values.length; i++) {
+    let sum = 0;
+    let count = 0;
+    for (let j = Math.max(0, i - half); j <= Math.min(values.length - 1, i + half); j++) {
+      sum += values[j];
+      count++;
+    }
+    result[i] = sum / count;
+  }
+  return result;
+}
+
+/**
+ * 音量データから楽曲の開始位置候補を検出する
+ *
+ * 検出戦略:
+ *   1. スキャン済み範囲（末尾の未取得0を除く）を平滑化する
+ *   2. 配信全体の基準音量（上位パーセンタイル）から開始/終了の2段閾値を決める
+ *   3. ヒステリシスで「高音量が持続する区間」を切り出す
+ *      （終了閾値を開始より低くし、下回っても許容時間内の復帰は同一区間とする）
+ *   4. 最小継続時間に満たない区間（笑い声・SE等）を除外する
+ *   5. 各区間の開始を、平滑化前のデータで立ち上がりまで遡って補正する
+ *
+ * トークもある程度の音量を持つため誤検出は残る前提で、
+ * 「候補マーカーを一括生成し、ユーザーが微調整・削除する」用途に割り切っている。
+ *
+ * @param {number[]} data - 音量データ（0..1。0は未スキャンまたは無音）
+ * @param {number} intervalSec - 1サンプルあたりの秒数
+ * @returns {number[]} 開始候補の秒数（昇順）
+ */
+function detectSongStartCandidates(data, intervalSec) {
+  if (!Array.isArray(data) || data.length === 0 || !intervalSec || intervalSec <= 0) return [];
+
+  // 末尾の未スキャン領域（0埋め）を解析対象から外す
+  let lastFilled = -1;
+  for (let i = data.length - 1; i >= 0; i--) {
+    if (data[i] > 0) {
+      lastFilled = i;
+      break;
+    }
+  }
+  if (lastFilled < 0) return [];
+  const values = data.slice(0, lastFilled + 1);
+
+  const cfg = SONG_DETECT_CONFIG;
+  const minSegmentSamples = Math.max(1, Math.round(cfg.MIN_SEGMENT_SEC / intervalSec));
+
+  // 有効サンプルが1曲分に満たなければ判定不能
+  const nonzeroSorted = values.filter(v => v > 0).sort((a, b) => a - b);
+  if (nonzeroSorted.length < minSegmentSamples) return [];
+
+  const smoothWindow = Math.max(1, Math.round(cfg.SMOOTH_WINDOW_SEC / intervalSec));
+  const smoothed = movingAverageCentered(values, smoothWindow);
+
+  const refIndex = Math.min(nonzeroSorted.length - 1, Math.floor(nonzeroSorted.length * cfg.REF_PERCENTILE));
+  const refVolume = nonzeroSorted[refIndex];
+  const enterThreshold = refVolume * cfg.ENTER_RATIO;
+  const exitThreshold = refVolume * cfg.EXIT_RATIO;
+
+  const exitToleranceSamples = Math.max(1, Math.round(cfg.EXIT_TOLERANCE_SEC / intervalSec));
+  const backtrackMaxSamples = Math.max(1, Math.round(cfg.START_BACKTRACK_MAX_SEC / intervalSec));
+
+  // 平滑化で開始が後ろへ鈍るため、元データが終了閾値以上の間は立ち上がりまで遡る
+  const refineStart = (startIndex) => {
+    let refined = startIndex;
+    while (
+      refined > 0 &&
+      startIndex - (refined - 1) <= backtrackMaxSamples &&
+      values[refined - 1] >= exitThreshold
+    ) {
+      refined--;
+    }
+    return refined;
+  };
+
+  const candidates = [];
+  let inSegment = false;
+  let segStart = 0;
+  let segLastAbove = 0; // 最後に終了閾値以上だったサンプル（区間長は許容時間の垂れ流し分を含めない）
+  let belowCount = 0;
+
+  const flushSegment = () => {
+    if (segLastAbove - segStart + 1 >= minSegmentSamples) {
+      candidates.push(Math.floor(refineStart(segStart) * intervalSec));
+    }
+  };
+
+  for (let i = 0; i < smoothed.length; i++) {
+    if (!inSegment) {
+      if (smoothed[i] >= enterThreshold) {
+        inSegment = true;
+        segStart = i;
+        segLastAbove = i;
+        belowCount = 0;
+      }
+    } else if (smoothed[i] < exitThreshold) {
+      belowCount++;
+      if (belowCount >= exitToleranceSamples) {
+        flushSegment();
+        inSegment = false;
+      }
+    } else {
+      belowCount = 0;
+      segLastAbove = i;
+    }
+  }
+  if (inSegment) flushSegment();
+
+  return candidates;
+}
+
+/**
+ * 自動検出を実行し、候補マーカーを一括追加する
+ * 既存マーカーの近く（前後 AUTO_DETECT_SKIP_NEAR_MARKER_SEC 秒）の候補はスキップする
+ */
+function autoDetectSongStarts() {
+  // 数値以外の要素が混ざっていた場合の防御（ハイライト送信側と同じ正規化）
+  const numericData = volumeData.map(v => {
+    if (typeof v === 'number' && Number.isFinite(v)) return v;
+    return Number.isFinite(v?.value) ? v.value : 0;
+  });
+
+  if (!videoDuration || numericData.length === 0 || !numericData.some(v => v > 0)) {
+    showTsEditorNotice('音量データがありません。先にスキャンを実行してください', true);
+    return;
+  }
+
+  // 保存データは動画長とサンプル数から間隔を逆算する（旧形式の500分割データにも対応）
+  const intervalSec = videoDuration / numericData.length;
+  const candidates = detectSongStartCandidates(numericData, intervalSec);
+  if (candidates.length === 0) {
+    showTsEditorNotice('楽曲らしい区間が見つかりませんでした', true);
+    return;
+  }
+
+  const newTimes = candidates.filter(
+    t => !tsMarkers.some(m => Math.abs(m.time - t) <= AUTO_DETECT_SKIP_NEAR_MARKER_SEC)
+  );
+  const skippedCount = candidates.length - newTimes.length;
+  if (newTimes.length === 0) {
+    showTsEditorNotice(`候補${candidates.length}件はすべて既存マーカー付近のためスキップしました`, true);
+    return;
+  }
+
+  pushMarkerHistory();
+  for (const time of newTimes) {
+    tsMarkers.push({ id: nextMarkerId++, time, text: '' });
+  }
+  tsMarkers.sort((a, b) => a.time - b.time);
+  updateTimestampList();
+  drawVolumeGraph();
+  saveMarkersToStorage();
+
+  const skippedNote = skippedCount > 0 ? `（既存マーカー付近の${skippedCount}件はスキップ）` : '';
+  showTsEditorNotice(`${newTimes.length}件の候補マーカーを追加しました${skippedNote}`);
+}
+
+let tsEditorNoticeTimer = null;
+
+/**
+ * タイムスタンプエディタのヘッダーに一時的なメッセージを表示する
+ * @param {string} text - 表示するメッセージ
+ * @param {boolean} isWarning - 警告表示（黄色）にするか
+ */
+function showTsEditorNotice(text, isWarning = false) {
+  const noticeEl = volumeGraphContainer?.querySelector('#vdg-ts-notice');
+  if (!noticeEl) return;
+  noticeEl.textContent = text;
+  noticeEl.classList.toggle('warning', isWarning);
+  if (tsEditorNoticeTimer) clearTimeout(tsEditorNoticeTimer);
+  tsEditorNoticeTimer = setTimeout(() => {
+    noticeEl.textContent = '';
+    tsEditorNoticeTimer = null;
+  }, 6000);
 }
 
 /**
