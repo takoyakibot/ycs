@@ -20,6 +20,8 @@ let autoScanStopRequested = false;
 
 // リストスキャン用（videoIdリストからの連続スキャン）
 let isListScanMode = false;
+// リストスキャンの遷移処理が進行中か（インデックス二重加算の防止・#607）
+let listScanProceeding = false;
 let listScanButtonContainer = null;
 let listScanAutoClickTimer = null;
 let listScanCountdownInterval = null;
@@ -63,7 +65,8 @@ let tsEditorMode = 'marker'; // 'marker': マーカー追加, 'seek': シーク
  * @returns {number} データポイント数
  */
 function calcGraphResolution(duration) {
-  if (!duration || duration <= 0) return LEGACY_GRAPH_RESOLUTION;
+  // ライブ配信中はdurationがInfinityになり、Array確保で例外になるためガードする（#607）
+  if (!duration || duration <= 0 || !isFinite(duration)) return LEGACY_GRAPH_RESOLUTION;
   return Math.ceil(duration / SAMPLING_INTERVAL_SEC);
 }
 let originalPlaybackRate = 1;
@@ -990,12 +993,15 @@ async function startListScanFromPanel() {
     }
   }
 
-  // ストレージに状態を保存
+  // ストレージに状態を保存（実行タブのIDも記録し、他タブでの遷移暴走を防ぐ・#580）
+  const ownTabId = await getOwnTabId();
   await chrome.storage.local.set({
     listScanVideoIds: currentListScanVideoIds,
     listScanCurrentIndex: startIndex,
-    listScanActive: true
+    listScanActive: true,
+    listScanTabId: ownTabId
   });
+  listScanProceeding = false;
 
   // UIを更新
   listScanPanel.querySelector('#lsp-start-btn').style.display = 'none';
@@ -3855,6 +3861,13 @@ function loadVolumeData() {
   chrome.storage.local.get(storageKey, (result) => {
     const saved = result[storageKey];
     if (saved && saved.data && saved.data.length > 0) {
+      // 実動画とdurationが乖離した壊れたデータは復元しない（#607）
+      if (isSavedVolumeDataStale(saved)) {
+        console.warn(`保存された音量データのdurationが動画と一致しないため破棄します: ${videoId}`);
+        chrome.storage.local.remove(storageKey);
+        return;
+      }
+
       volumeData = saved.data;
       if (saved.duration) {
         videoDuration = saved.duration;
@@ -4101,20 +4114,49 @@ function goToNextVideo() {
 }
 
 /**
- * 現在の動画が既にスキャン済みかチェック
+ * 保存された音量データが現在の動画と整合しないか判定
+ *
+ * 広告再生中にスキャンを開始すると広告のdurationで保存されてしまい、
+ * グラフの長さ・スケールが狂ったまま復元され続ける。実動画のdurationと
+ * 5%以上乖離している保存データは壊れたものとして扱う（#607）
  */
-function isCurrentVideoScanned() {
-  return new Promise((resolve) => {
-    const videoId = getVideoId();
-    if (!videoId) {
-      resolve(false);
-      return;
-    }
-    const storageKey = `volumeData_${videoId}`;
-    chrome.storage.local.get(storageKey, (result) => {
-      resolve(!!result[storageKey]);
+function isSavedVolumeDataStale(saved) {
+  const actual = videoElement?.duration;
+  if (!saved?.duration || !actual || !isFinite(actual)) return false;
+
+  return Math.abs(saved.duration - actual) / actual > 0.05;
+}
+
+/**
+ * 現在の動画が既にスキャン済み（完了扱い）かチェック
+ *
+ * スキャン中の定期保存で部分データが残るため、データの存在だけで判定すると
+ * 中断した動画がスキップされてしまう。パネル側（getVideoScanStatus）と同じ
+ * 進捗95%基準で判定する（#607）
+ */
+async function isCurrentVideoScanned() {
+  const videoId = getVideoId();
+  if (!videoId) return false;
+
+  const storageKey = `volumeData_${videoId}`;
+  const result = await chrome.storage.local.get(storageKey);
+  const saved = result[storageKey];
+  if (!saved || !saved.data || saved.data.length === 0) return false;
+
+  // durationが実動画と乖離した壊れたデータは破棄して未スキャン扱いにする
+  if (isSavedVolumeDataStale(saved)) {
+    console.warn('保存された音量データのdurationが動画と一致しないため破棄します', {
+      videoId,
+      saved: saved.duration,
+      actual: videoElement?.duration,
     });
-  });
+    await chrome.storage.local.remove(storageKey);
+    return false;
+  }
+
+  const filledCount = saved.data.filter(v => v > 0).length;
+
+  return (filledCount / saved.data.length) * 100 >= 95;
 }
 
 /**
@@ -4546,12 +4588,22 @@ async function checkAndStartListScan() {
     const result = await chrome.storage.local.get([
       'listScanVideoIds',
       'listScanCurrentIndex',
-      'listScanActive'
+      'listScanActive',
+      'listScanTabId'
     ]);
 
     if (!result.listScanActive || !result.listScanVideoIds) {
       return;
     }
+
+    // 実行タブ以外ではスキャンモードに入らない（#580: 別タブで対象動画を
+    // 開くと、そのタブが次々に遷移して共有インデックスを壊してしまう）
+    const ownTabId = await getOwnTabId();
+    if (result.listScanTabId != null && ownTabId !== result.listScanTabId) {
+      return;
+    }
+
+    listScanProceeding = false;
 
     const videoIds = result.listScanVideoIds;
     const currentIndex = result.listScanCurrentIndex || 0;
@@ -4580,7 +4632,9 @@ async function checkAndStartListScan() {
 function waitForVideoAndShowButton(currentIndex, totalCount) {
   let attempt = 0;
   const checkVideo = () => {
-    if (videoElement && videoElement.readyState >= 2 && videoDuration > 0) {
+    // 広告中は実動画のdurationが取れないため準備完了と見なさない。
+    // ライブ配信中の枠（duration=Infinity）はスキャン不能なのでタイムアウトスキップに落とす（#607）
+    if (videoElement && videoElement.readyState >= 2 && videoDuration > 0 && isFinite(videoDuration) && !isAdShowing()) {
       // 既にスキャン済みかチェック
       isCurrentVideoScanned().then(scanned => {
         if (scanned) {
@@ -4615,11 +4669,27 @@ async function proceedToNextListScanVideo() {
     return;
   }
 
+  // 二重実行防止（#607）: 遷移までの待機中に別経路のproceedが走ると
+  // インデックスが二重加算され、次の動画が飛ばされてしまう
+  if (listScanProceeding) {
+    console.log('リストスキャン: 遷移処理が既に進行中のためスキップ');
+    return;
+  }
+  listScanProceeding = true;
+
   try {
     const result = await chrome.storage.local.get([
       'listScanVideoIds',
-      'listScanCurrentIndex'
+      'listScanCurrentIndex',
+      'listScanTabId'
     ]);
+
+    // 実行タブ以外ではインデックスを進めない（#580）
+    const ownTabId = await getOwnTabId();
+    if (result.listScanTabId != null && ownTabId !== result.listScanTabId) {
+      console.log('リストスキャン: 実行タブではないため遷移しません');
+      return;
+    }
 
     const videoIds = result.listScanVideoIds || [];
     const currentIndex = result.listScanCurrentIndex || 0;
@@ -4654,6 +4724,7 @@ async function proceedToNextListScanVideo() {
   } catch (error) {
     console.error('リストスキャン次の動画移動エラー:', error);
     isListScanMode = false;
+    listScanProceeding = false;
   }
 }
 
@@ -6051,9 +6122,18 @@ async function startDirectScan() {
     await audioContext.resume();
   }
 
+  // 広告再生中は実動画のdurationが取れないため、終了を待つ（最大120秒・#607）
+  for (let i = 0; isAdShowing() && i < 120; i++) {
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+  if (isAdShowing()) {
+    console.error('広告が終了しないためスキャンを開始できません');
+    return;
+  }
+
   // 動画情報を取得
   updateVideoDuration();
-  if (!videoDuration) {
+  if (!videoDuration || !isFinite(videoDuration)) {
     console.error('動画の長さを取得できません');
     return;
   }
@@ -7130,10 +7210,20 @@ function updateProgress(percent) {
 }
 
 /**
+ * 広告再生中か判定
+ * 広告中はvideoElementが広告メディアを指すため、duration等を採用してはいけない
+ */
+function isAdShowing() {
+  return !!document.querySelector('.html5-video-player.ad-showing');
+}
+
+/**
  * 動画時間を更新
  */
 function updateVideoDuration() {
   if (!videoElement) return;
+  // 広告のdurationを実動画の長さとして採用しない（#607）
+  if (isAdShowing()) return;
   videoDuration = videoElement.duration || 0;
 
   if (!volumeGraphContainer) return;
