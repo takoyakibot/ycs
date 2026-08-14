@@ -37,6 +37,8 @@ let analyserNode = null;
 let gainNode = null; // 音量制御用
 let mediaElementSource = null;
 let isScanning = false;
+// backgroundスキャンの対象動画ID。VOLUME_DATA_UPDATEを別動画に誤適用しないためのガード（#614）
+let backgroundScanVideoId = null;
 let scanInterval = null;
 const SAMPLING_INTERVAL_SEC = 2; // サンプリング間隔（秒）
 const LEGACY_GRAPH_RESOLUTION = 500; // 旧形式との互換用
@@ -7238,6 +7240,7 @@ function observePageChanges() {
       // 以前のwatchページのステートが残っている場合のためリセット
       volumeData = [];
       videoDuration = 0;
+      backgroundScanVideoId = null;
       detectedTimestamps = [];
       zoomIndex = 0;
       currentSubtitles = [];
@@ -7262,6 +7265,7 @@ function observePageChanges() {
       lastVideoId = currentVideoId;
       volumeData = [];
       videoDuration = 0;
+      backgroundScanVideoId = null;
       detectedTimestamps = []; // タイムスタンプもクリア
       zoomIndex = 0; // ズームレベルをリセット
       currentSubtitles = []; // 字幕データをクリア
@@ -7414,6 +7418,12 @@ function handleMessage(message, sender, sendResponse) {
       break;
 
     case 'VOLUME_DATA_UPDATE':
+      // スキャン対象の動画を表示している場合のみ適用する。
+      // 無関係な動画に適用すると、グラフの誤表示に加えて
+      // 定期保存でその動画のIDに誤保存されてしまう（#614）
+      if (!backgroundScanVideoId || backgroundScanVideoId !== getVideoId()) {
+        break;
+      }
       // 音量データを更新
       volumeData = message.data;
       updateProgress(message.progress || 0);
@@ -7428,6 +7438,8 @@ function handleMessage(message, sender, sendResponse) {
       break;
 
     case 'SCAN_STARTED':
+      // このタブのこの動画がスキャン対象であることを記録（#614）
+      backgroundScanVideoId = getVideoId();
       if (volumeGraphContainer) {
         const scanBtn = volumeGraphContainer.querySelector('#vdg-scan-btn');
         if (scanBtn) {
@@ -7447,6 +7459,7 @@ function handleMessage(message, sender, sendResponse) {
       break;
 
     case 'SCAN_STOPPED':
+      backgroundScanVideoId = null;
       if (volumeGraphContainer) {
         const scanBtnStop = volumeGraphContainer.querySelector('#vdg-scan-btn');
         if (scanBtnStop) {
