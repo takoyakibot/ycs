@@ -353,7 +353,10 @@ async function notifyContentScript(timestamp) {
  */
 async function sendVolumeDataToContent() {
   try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    // スキャン中のタブ（キャプチャ対象）に送る。アクティブタブ宛てにすると、
+    // スキャン中に別タブでアーカイブを開いたとき無関係な動画にグラフが
+    // 表示・誤保存されてしまう（#614）
+    const tab = currentTabId ? { id: currentTabId } : null;
     if (tab?.id) {
       // スパース配列を埋める
       const filledData = [];
@@ -538,16 +541,19 @@ async function stopScan() {
   chrome.runtime.sendMessage({ type: 'STOP_VOLUME_SCAN' }).catch(() => {});
 
   try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (tab?.id) {
+    // 後始末は必ずスキャン中のタブに対して行う。アクティブタブ宛てだと、
+    // 別タブを見ている間に停止した場合にスキャン中のタブが4倍速ミュートの
+    // まま残り、見ていた無関係なタブが一時停止・先頭シークされてしまう（#614）
+    const tabId = currentTabId;
+    if (tabId) {
       // 再生速度を元に戻し、ミュートを解除
-      await chrome.tabs.sendMessage(tab.id, { type: 'SET_MUTED', muted: false });
-      await chrome.tabs.sendMessage(tab.id, { type: 'SET_PLAYBACK_RATE', rate: 1 });
-      await chrome.tabs.sendMessage(tab.id, { type: 'PAUSE_VIDEO' });
-      await chrome.tabs.sendMessage(tab.id, { type: 'SEEK_VIDEO', time: 0 });
+      await chrome.tabs.sendMessage(tabId, { type: 'SET_MUTED', muted: false });
+      await chrome.tabs.sendMessage(tabId, { type: 'SET_PLAYBACK_RATE', rate: 1 });
+      await chrome.tabs.sendMessage(tabId, { type: 'PAUSE_VIDEO' });
+      await chrome.tabs.sendMessage(tabId, { type: 'SEEK_VIDEO', time: 0 });
 
       // UIに通知
-      chrome.tabs.sendMessage(tab.id, { type: 'SCAN_STOPPED' });
+      chrome.tabs.sendMessage(tabId, { type: 'SCAN_STOPPED' });
 
       // 最終データを送信
       sendVolumeDataToContent();
