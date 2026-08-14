@@ -25,9 +25,11 @@ export class ChannelApiService {
      * @param {number} options.per_page - 1ページあたりの件数
      * @param {string} options.search - 検索クエリ
      * @param {string} options.index - インデックスフィルター
+     * @param {string} options.published_from - アーカイブ公開日の開始日（YYYY-MM-DD）
+     * @param {string} options.published_to - アーカイブ公開日の終了日（YYYY-MM-DD）
      * @returns {Promise<Object>} タイムスタンプ一覧データ
      */
-    static async fetchTimestamps(channelHandle, { page = 1, per_page = 50, search = '', index = '' } = {}) {
+    static async fetchTimestamps(channelHandle, { page = 1, per_page = 50, search = '', index = '', published_from = '', published_to = '' } = {}) {
         const params = new URLSearchParams({ page, per_page });
 
         if (search) {
@@ -36,6 +38,14 @@ export class ChannelApiService {
 
         if (index) {
             params.set('index', index);
+        }
+
+        if (published_from) {
+            params.set('published_from', published_from);
+        }
+
+        if (published_to) {
+            params.set('published_to', published_to);
         }
 
         const response = await fetch(`/api/channels/${channelHandle}/timestamps?${params}`);
@@ -68,10 +78,10 @@ export class ChannelApiService {
      * ランダムなタイムスタンプを1件取得
      * @param {string} channelHandle - チャンネルハンドル
      * @param {string|null} excludeVideoId - 直前のアーカイブID（連続再生防止用）
-     * @param {{search?: string, index?: string}} filters - 一覧と同じ絞り込み条件
+     * @param {{search?: string, index?: string, published_from?: string, published_to?: string}} filters - 一覧と同じ絞り込み条件
      * @returns {Promise<Object>} ランダムなタイムスタンプデータ
      */
-    static async fetchRandomTimestamp(channelHandle, excludeVideoId = null, { search = '', index = '' } = {}) {
+    static async fetchRandomTimestamp(channelHandle, excludeVideoId = null, { search = '', index = '', published_from = '', published_to = '' } = {}) {
         const params = new URLSearchParams();
 
         if (excludeVideoId) {
@@ -84,6 +94,14 @@ export class ChannelApiService {
 
         if (index) {
             params.set('index', index);
+        }
+
+        if (published_from) {
+            params.set('published_from', published_from);
+        }
+
+        if (published_to) {
+            params.set('published_to', published_to);
         }
 
         const queryString = params.toString();

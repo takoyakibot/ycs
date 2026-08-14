@@ -33,7 +33,9 @@ class TimestampService
         int $perPage = 50,
         int $currentPage = 1,
         string $search = '',
-        string $index = ''
+        string $index = '',
+        string $publishedFrom = '',
+        string $publishedTo = ''
     ): array {
         // ベースクエリ: ts_itemsとtimestamp_song_mappings、songsをLEFT JOIN
         $query = TsItem::with(['archive'])
@@ -67,14 +69,14 @@ class TimestampService
                 ->orWhere('timestamp_song_mappings.is_not_song', false);
         });
 
-        // 検索・頭文字インデックスで絞り込み
-        $this->applyFilters($query, $search, $index);
+        // 検索・頭文字インデックス・公開日で絞り込み
+        $this->applyFilters($query, $search, $index, $publishedFrom, $publishedTo);
 
         // 楽曲名順でソート（楽曲名がなければタイムスタンプテキストを使用）
         $query->orderByRaw('COALESCE(songs.title, ts_items.text) ASC');
 
         // 利用可能な頭文字カテゴリを取得（フィルタリング前のベースクエリで）
-        $availableIndexes = $this->fetchAvailableIndexes($channel, $search);
+        $availableIndexes = $this->fetchAvailableIndexes($channel, $search, $publishedFrom, $publishedTo);
 
         // DBページネーション
         $paginated = $query->paginate($perPage, ['*'], 'page', $currentPage);
@@ -125,8 +127,10 @@ class TimestampService
      *
      * @param  string  $search  検索キーワード（スペース区切りでAND検索）
      * @param  string  $index  頭文字インデックス（カテゴリ名）
+     * @param  string  $publishedFrom  アーカイブ公開日の開始日（Y-m-d、空文字は指定なし）
+     * @param  string  $publishedTo  アーカイブ公開日の終了日（Y-m-d、空文字は指定なし）
      */
-    private function applyFilters(Builder $query, string $search, string $index): void
+    private function applyFilters(Builder $query, string $search, string $index, string $publishedFrom = '', string $publishedTo = ''): void
     {
         // 検索条件（スペース区切りでAND検索、正規化して類似文字を吸収）
         if ($search) {
@@ -142,6 +146,31 @@ class TimestampService
         if ($index) {
             $this->applyIndexFilter($query, $index);
         }
+
+        // アーカイブ公開日でフィルタリング
+        $this->applyPublishedDateFilter($query, $publishedFrom, $publishedTo);
+    }
+
+    /**
+     * アーカイブ公開日（from/to）でフィルタリング
+     *
+     * @param  string  $publishedFrom  開始日（Y-m-d、空文字は指定なし）
+     * @param  string  $publishedTo  終了日（Y-m-d、空文字は指定なし）
+     */
+    private function applyPublishedDateFilter(Builder $query, string $publishedFrom, string $publishedTo): void
+    {
+        if ($publishedFrom === '' && $publishedTo === '') {
+            return;
+        }
+
+        $query->whereHas('archive', function ($q) use ($publishedFrom, $publishedTo) {
+            if ($publishedFrom !== '') {
+                $q->whereDate('published_at', '>=', $publishedFrom);
+            }
+            if ($publishedTo !== '') {
+                $q->whereDate('published_at', '<=', $publishedTo);
+            }
+        });
     }
 
     /**
@@ -229,7 +258,7 @@ class TimestampService
     /**
      * 利用可能な頭文字カテゴリを取得
      */
-    private function fetchAvailableIndexes(Channel $channel, string $search): array
+    private function fetchAvailableIndexes(Channel $channel, string $search, string $publishedFrom = '', string $publishedTo = ''): array
     {
         // ベースクエリを構築（頭文字抽出用）
         $query = TsItem::query()
@@ -248,15 +277,8 @@ class TimestampService
                     ->orWhere('timestamp_song_mappings.is_not_song', false);
             });
 
-        // 検索条件（スペース区切りでAND検索、正規化して類似文字を吸収）
-        if ($search) {
-            $keywords = QueryHelper::splitSearchKeywords($search);
-            foreach ($keywords as $keyword) {
-                $normalizedKeyword = TextNormalizer::normalize($keyword);
-                $escaped = QueryHelper::escapeLikeString($normalizedKeyword);
-                $query->where('ts_items.normalized_text', 'like', "%{$escaped}%");
-            }
-        }
+        // 検索・公開日で絞り込み（頭文字インデックスはカテゴリ抽出対象のため適用しない）
+        $this->applyFilters($query, $search, '', $publishedFrom, $publishedTo);
 
         // 頭文字を取得（楽曲名優先、なければタイムスタンプテキスト）
         $firstChars = $query
@@ -283,6 +305,8 @@ class TimestampService
      * @param  int  $perPage  1ページあたりの件数（ページ番号計算用）
      * @param  string  $search  検索キーワード（一覧と同じ条件で絞り込む）
      * @param  string  $index  頭文字インデックス（一覧と同じ条件で絞り込む）
+     * @param  string  $publishedFrom  アーカイブ公開日の開始日（一覧と同じ条件で絞り込む）
+     * @param  string  $publishedTo  アーカイブ公開日の終了日（一覧と同じ条件で絞り込む）
      * @return array|null タイムスタンプデータ（見つからない場合はnull）
      */
     public function getRandomTimestamp(
@@ -290,7 +314,9 @@ class TimestampService
         int $perPage = 50,
         ?string $excludeVideoId = null,
         string $search = '',
-        string $index = ''
+        string $index = '',
+        string $publishedFrom = '',
+        string $publishedTo = ''
     ): ?array {
         // ベースクエリ: ts_itemsとtimestamp_song_mappings、songsをLEFT JOIN
         $query = TsItem::with(['archive'])
@@ -322,8 +348,8 @@ class TimestampService
                 ->orWhere('timestamp_song_mappings.is_not_song', false);
         });
 
-        // 一覧と同じ検索・頭文字インデックスの条件で絞り込む
-        $this->applyFilters($query, $search, $index);
+        // 一覧と同じ検索・頭文字インデックス・公開日の条件で絞り込む
+        $this->applyFilters($query, $search, $index, $publishedFrom, $publishedTo);
 
         // 直前のアーカイブを除外してランダムに1件取得（同じアーカイブの連続再生を防止）
         $item = null;
@@ -353,7 +379,7 @@ class TimestampService
         // 選ばれたアイテムのソート順での位置を計算（ページ番号算出用）
         // 一覧側も同じ絞り込みが効いているため、同条件でカウントしないとページがずれる
         $sortKey = $item->song_title ?? $item->text;
-        $position = $this->calculateItemPosition($channel, $sortKey, $item->id, $search, $index);
+        $position = $this->calculateItemPosition($channel, $sortKey, $item->id, $search, $index, $publishedFrom, $publishedTo);
         $page = (int) ceil($position / $perPage);
 
         // 同じ動画内の次のタイムスタンプを取得（自動再抽選用）
@@ -509,7 +535,9 @@ class TimestampService
         string $sortKey,
         string $itemId,
         string $search = '',
-        string $index = ''
+        string $index = '',
+        string $publishedFrom = '',
+        string $publishedTo = ''
     ): int {
         // ソートキーより前にあるアイテム数をカウント
         $countBeforeQuery = TsItem::query()
@@ -528,7 +556,7 @@ class TimestampService
                     ->orWhere('timestamp_song_mappings.is_not_song', false);
             })
             ->whereRaw('COALESCE(songs.title, ts_items.text) < ?', [$sortKey]);
-        $this->applyFilters($countBeforeQuery, $search, $index);
+        $this->applyFilters($countBeforeQuery, $search, $index, $publishedFrom, $publishedTo);
         $countBefore = $countBeforeQuery->count();
 
         // 同じソートキーを持つアイテムの中での位置も考慮
@@ -549,7 +577,7 @@ class TimestampService
             })
             ->whereRaw('COALESCE(songs.title, ts_items.text) = ?', [$sortKey])
             ->where('ts_items.id', '<', $itemId);
-        $this->applyFilters($countSameKeyQuery, $search, $index);
+        $this->applyFilters($countSameKeyQuery, $search, $index, $publishedFrom, $publishedTo);
         $countSameKey = $countSameKeyQuery->count();
 
         return $countBefore + $countSameKey + 1;

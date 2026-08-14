@@ -159,6 +159,8 @@ class ChannelController extends Controller
             'page' => 'integer|min:1',
             'search' => 'string|max:255',
             'index' => ['nullable', 'string', Rule::in(CharacterCategorizer::getAllCategories())],
+            'published_from' => 'nullable|date_format:Y-m-d',
+            'published_to' => 'nullable|date_format:Y-m-d',
         ]);
 
         $result = $this->timestampService->getTimestampsWithMapping(
@@ -166,7 +168,9 @@ class ChannelController extends Controller
             $validated['per_page'] ?? 50,
             $validated['page'] ?? 1,
             $validated['search'] ?? '',
-            $validated['index'] ?? ''
+            $validated['index'] ?? '',
+            $validated['published_from'] ?? '',
+            $validated['published_to'] ?? ''
         );
 
         return response()->json($result);
@@ -183,6 +187,8 @@ class ChannelController extends Controller
         $validated = $request->validate([
             'search' => 'nullable|string|max:255',
             'index' => ['nullable', 'string', Rule::in(CharacterCategorizer::getAllCategories())],
+            'published_from' => 'nullable|date_format:Y-m-d',
+            'published_to' => 'nullable|date_format:Y-m-d',
         ]);
 
         $excludeVideoId = $request->query('exclude_video_id');
@@ -194,7 +200,9 @@ class ChannelController extends Controller
             50,
             $excludeVideoId,
             $validated['search'] ?? '',
-            $validated['index'] ?? ''
+            $validated['index'] ?? '',
+            $validated['published_from'] ?? '',
+            $validated['published_to'] ?? ''
         );
 
         if (! $result) {

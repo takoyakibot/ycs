@@ -30,7 +30,8 @@
     </div>
 
     {{-- 頭文字フィルタナビゲーション --}}
-    <div x-show="timestamps.available_indexes && timestamps.available_indexes.length > 0" class="mb-4 hidden sm:block">
+    {{-- 公開日フィルター適用中は0件でも表示を維持する（解除手段を残すため） --}}
+    <div x-show="(timestamps.available_indexes && timestamps.available_indexes.length > 0) || publishedFrom || publishedTo" class="mb-4 hidden sm:block">
         <div class="flex flex-wrap items-center gap-1">
             <button
                 @click="toggleFilterExpanded()"
@@ -48,6 +49,16 @@
                 class="channel-filter-btn">
                 すべて
             </button>
+            {{-- 折りたたみ中の公開日フィルター適用チップ --}}
+            <template x-if="publishedDateFilterLabel && !filterExpanded">
+                <button
+                    @click="clearPublishedDateFilter()"
+                    class="channel-filter-btn channel-filter-active-all"
+                    title="公開日フィルターを解除">
+                    <span x-text="'公開日: ' + publishedDateFilterLabel"></span>
+                    <span class="ml-1">✕</span>
+                </button>
+            </template>
             <template x-if="recentFilters.length > 0 && !filterExpanded">
                 <span class="flex items-center gap-1">
                     <span class="text-gray-300 dark:text-gray-600 mx-1">|</span>
@@ -123,6 +134,30 @@
                     </button>
                 </span>
             </template>
+        </div>
+        {{-- 公開日フィルター（折りたたみ内） --}}
+        <div x-show="filterExpanded" class="mt-2 flex flex-wrap items-center gap-2">
+            <span class="text-xs text-gray-500 dark:text-gray-400">公開日:</span>
+            <input
+                type="date"
+                x-model="publishedFrom"
+                @change="changePublishedDateFilter()"
+                aria-label="公開日フィルター（開始日）"
+                class="border p-1.5 rounded text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100" />
+            <span class="text-gray-400 dark:text-gray-500">〜</span>
+            <input
+                type="date"
+                x-model="publishedTo"
+                @change="changePublishedDateFilter()"
+                aria-label="公開日フィルター（終了日）"
+                class="border p-1.5 rounded text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100" />
+            <button
+                type="button"
+                x-show="publishedFrom || publishedTo"
+                @click="clearPublishedDateFilter()"
+                class="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 underline">
+                解除
+            </button>
         </div>
     </div>
 
