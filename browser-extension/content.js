@@ -853,7 +853,7 @@ async function fetchListScanTargetsFromServer() {
     await loadYcsApiSettings();
   }
   if (!ycsApiToken) {
-    progressInfo.textContent = 'APIトークンが未設定です';
+    progressInfo.textContent = missingTokenMessage();
     return;
   }
 
@@ -918,9 +918,9 @@ async function renderVideoList() {
     currentListScanVideoIds.map(id => getVideoScanStatus(id))
   );
 
-  // 完了数をカウント
+  // 完了数をカウント（この表示は「完了した動画数/全体数」であり、選択中の位置ではない）
   const completedCount = statuses.filter(s => s.status === 'completed').length;
-  progressInfo.textContent = `${completedCount} / ${currentListScanVideoIds.length}`;
+  progressInfo.textContent = `完了 ${completedCount} / ${currentListScanVideoIds.length}`;
 
   // 現在の動画ID
   const currentVideoId = getVideoId();
@@ -1120,7 +1120,7 @@ async function loadSubtitleScanTargets() {
     await loadYcsApiSettings();
   }
   if (!ycsApiToken) {
-    setSubtitleScanStatus('APIトークンが未設定です。プロフィール画面で発行し、拡張の設定に登録してください');
+    setSubtitleScanStatus(missingTokenMessage());
     return;
   }
 
@@ -2840,6 +2840,30 @@ async function loadYcsApiSettings() {
 }
 
 /**
+ * 拡張のコンテキストが有効か判定する。
+ * 拡張の更新・リロード後、開きっぱなしのページのcontent scriptは chrome.* に
+ * アクセスできなくなる（Extension context invalidated）。その状態では設定読込が
+ * 失敗してトークンがnullのままになり「未設定」と誤診してしまうため、区別する（#620）
+ */
+function isExtensionContextValid() {
+  try {
+    return !!chrome.runtime?.id;
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * トークンが取得できなかったときの案内メッセージ
+ * 本当に未設定なのか、拡張リロードでページ側が切り離されたのかで案内を変える
+ */
+function missingTokenMessage() {
+  return isExtensionContextValid()
+    ? 'APIトークンが未設定です。プロフィール画面で発行し、拡張の設定に登録してください'
+    : '拡張機能が更新されました。ページを再読み込みしてください';
+}
+
+/**
  * 字幕データをYCSサーバーに自動送信
  * 失敗時はconsole.warnのみ（字幕表示自体は影響させない）
  */
@@ -2880,7 +2904,7 @@ async function postSubtitlesToServer(videoId, languageCode, kind, subtitles) {
     }
     if (!ycsApiToken) {
       // 自動送信側はcatchでwarnになり従来と同じ扱い。スキャン・候補表示側は失敗として扱える
-      throw new Error('APIトークンが未設定です。プロフィール画面でトークンを発行し、拡張の設定に登録してください');
+      throw new Error(missingTokenMessage());
     }
 
     const response = await fetch(`${ycsServerUrl}/api/manage/archives/subtitles/store`, {
@@ -3418,7 +3442,7 @@ async function detectHighlights() {
       await loadYcsApiSettings();
     }
     if (!ycsApiToken) {
-      setHighlightStatus('APIトークンが未設定です。拡張ポップアップで設定してください', true);
+      setHighlightStatus(missingTokenMessage(), true);
       return;
     }
 
@@ -6926,7 +6950,7 @@ async function showSongCandidates(marker) {
       await loadYcsApiSettings();
     }
     if (!ycsApiToken) {
-      if (!isStale()) openSongCandidatePopup(input, [{ type: 'message', label: 'APIトークンが未設定です。プロフィール画面で発行し、拡張の設定に登録してください' }]);
+      if (!isStale()) openSongCandidatePopup(input, [{ type: 'message', label: missingTokenMessage() }]);
       return;
     }
 
