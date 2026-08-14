@@ -453,7 +453,8 @@ function createListScanPanel() {
         display: flex;
         flex-direction: column;
         gap: 12px;
-        overflow-y: auto;
+        /* リストはタブ内で個別にスクロールさせ、ボタンが画面外に流れないようにする */
+        overflow: hidden;
         max-height: 350px;
       }
       .lsp-tab-content {
@@ -463,6 +464,7 @@ function createListScanPanel() {
         display: flex;
         flex-direction: column;
         gap: 12px;
+        min-height: 0;
       }
       .lsp-input-section {
         display: flex;
@@ -530,6 +532,30 @@ function createListScanPanel() {
         display: flex;
         flex-direction: column;
         gap: 4px;
+        /* 数百件でもリスト内でスクロールし、前後の操作ボタンは常に見える位置に保つ */
+        overflow-y: auto;
+        min-height: 0;
+      }
+      .lsp-input-row {
+        display: flex;
+        gap: 8px;
+      }
+      .lsp-input-row .lsp-textarea {
+        /* videoIdは11文字なので幅を絞り、余った横幅をボタンに使う */
+        width: 140px;
+        flex-shrink: 0;
+        height: 92px;
+      }
+      .lsp-input-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        flex: 1;
+        min-width: 0;
+      }
+      .lsp-input-actions .lsp-btn {
+        padding: 6px 8px;
+        font-size: 11px;
       }
       .lsp-item {
         display: flex;
@@ -663,20 +689,22 @@ function createListScanPanel() {
       <!-- リストスキャン タブ -->
       <div class="lsp-tab-content active" id="tab-list-scan">
         <div class="lsp-input-section">
-          <textarea class="lsp-textarea" id="lsp-video-ids" placeholder="videoIdを1行に1つずつ入力（11文字の英数字）"></textarea>
-          <div class="lsp-btn-row">
-            <button class="lsp-btn lsp-btn-primary" id="lsp-load-btn">読み込み</button>
-            <button class="lsp-btn lsp-btn-secondary" id="lsp-fetch-targets-btn" title="タイムスタンプ未作成のアーカイブをサーバーから取得">サーバーから読み込み</button>
-            <button class="lsp-btn lsp-btn-secondary" id="lsp-clear-btn">クリア</button>
+          <div class="lsp-input-row">
+            <textarea class="lsp-textarea" id="lsp-video-ids" placeholder="videoId&#10;（1行に1件）"></textarea>
+            <div class="lsp-input-actions">
+              <button class="lsp-btn lsp-btn-primary" id="lsp-load-btn">読み込み</button>
+              <button class="lsp-btn lsp-btn-secondary" id="lsp-fetch-targets-btn" title="タイムスタンプ未作成のアーカイブをサーバーから取得">サーバーから読み込み</button>
+              <button class="lsp-btn lsp-btn-secondary" id="lsp-clear-btn">クリア</button>
+            </div>
           </div>
-        </div>
-        <div class="lsp-progress" id="lsp-progress-info">0 / 0</div>
-        <div class="lsp-list" id="lsp-video-list">
-          <div class="lsp-empty">VideoIDを入力して読み込みボタンをクリック</div>
         </div>
         <div class="lsp-btn-row">
           <button class="lsp-btn lsp-btn-primary" id="lsp-start-btn" disabled>▶ スキャン開始</button>
           <button class="lsp-btn lsp-btn-danger" id="lsp-stop-btn" style="display:none;">■ 停止</button>
+        </div>
+        <div class="lsp-progress" id="lsp-progress-info">0 / 0</div>
+        <div class="lsp-list" id="lsp-video-list">
+          <div class="lsp-empty">VideoIDを入力して読み込みボタンをクリック</div>
         </div>
       </div>
       <!-- スキャン済み一覧 タブ -->
