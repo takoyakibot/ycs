@@ -4011,81 +4011,6 @@ async function discardVolumeDataAndReset() {
   getScanStatus().then(status => updateScanButtonState(status));
 }
 
-// タイムスタンプ検出パラメータ（デフォルト値）
-let detectParams = {
-  volumeThreshold: 0.15,    // 音量のしきい値（0-1）
-  quietThreshold: 0.05,     // 静かな状態と判定する音量
-  quietMinDuration: 1.0,    // 静かな状態が続く最小時間（秒）
-  cooldown: 3.0             // 連続検出を防ぐクールダウン（秒）
-};
-
-/**
- * 保存された音量データからタイムスタンプを再検出
- * 注意: グラフ用データはRMS*5で正規化されているため、元のスケールに戻して検出
- */
-function redetectTimestamps() {
-  if (!volumeData || volumeData.length === 0 || !videoDuration) {
-    console.log('再検出: 音量データがありません');
-    return;
-  }
-
-  // 既存のタイムスタンプをクリア
-  detectedTimestamps = [];
-
-  const secondsPerSample = videoDuration / volumeData.length;
-  let quietDuration = 0;
-  let lastDetectionTime = -detectParams.cooldown;
-
-  // グラフ用データはRMS*5で正規化されているので、元のスケールに戻す
-  const NORMALIZATION_FACTOR = 5;
-
-  console.log('再検出開始', {
-    params: detectParams,
-    dataLength: volumeData.length,
-    duration: videoDuration,
-    secondsPerSample,
-    normalizationFactor: NORMALIZATION_FACTOR
-  });
-
-  for (let i = 0; i < volumeData.length; i++) {
-    // 正規化を解除して元のRMSスケールに戻す
-    const volume = volumeData[i] / NORMALIZATION_FACTOR;
-    const currentTime = i * secondsPerSample;
-
-    // 静かな状態をトラッキング
-    if (volume < detectParams.quietThreshold) {
-      quietDuration += secondsPerSample;
-    } else {
-      // 静かな状態から急に大きくなった場合
-      if (quietDuration >= detectParams.quietMinDuration &&
-          volume > detectParams.volumeThreshold &&
-          (currentTime - lastDetectionTime) > detectParams.cooldown) {
-
-        const timestamp = {
-          time: currentTime,
-          formattedTime: formatTime(currentTime),
-          volume: volume,
-          detectedAt: new Date().toISOString()
-        };
-
-        detectedTimestamps.push(timestamp);
-        lastDetectionTime = currentTime;
-
-        console.log('タイムスタンプ検出:', timestamp.formattedTime, 'volume:', volume.toFixed(4));
-      }
-      quietDuration = 0;
-    }
-  }
-
-  console.log(`再検出完了: ${detectedTimestamps.length}件のタイムスタンプを検出`);
-
-  // グラフを再描画（マーカー更新のため）
-  drawVolumeGraph();
-
-  // データを保存
-  saveVolumeData();
-}
-
 /**
  * 秒数を MM:SS または HH:MM:SS 形式に変換
  */
@@ -6408,23 +6333,6 @@ function drawVolumeGraph() {
  */
 function drawTimestampMarkers(width, height) {
   if (!volumeCtx || !videoDuration) return;
-
-  // 自動検出マーカー（旧機能、破線オレンジ）
-  if (detectedTimestamps.length > 0) {
-    volumeCtx.strokeStyle = '#ff5722';
-    volumeCtx.lineWidth = 1;
-    volumeCtx.setLineDash([4, 2]);
-
-    for (const ts of detectedTimestamps) {
-      const x = (ts.time / videoDuration) * width;
-      volumeCtx.beginPath();
-      volumeCtx.moveTo(x, 0);
-      volumeCtx.lineTo(x, height);
-      volumeCtx.stroke();
-    }
-
-    volumeCtx.setLineDash([]);
-  }
 
   // 手動マーカー（タイムスタンプエディタ）
   for (const marker of tsMarkers) {
