@@ -92,12 +92,22 @@ const YCS_SERVER_URL_MIGRATION_KEY = 'ycsServerUrlMigratedToProd';
 })();
 
 // メッセージリスナー
-// 字幕一括取得スキャン: 実行タブが閉じられたら状態を落とす（タブID残留で他タブが遷移するのを防ぐ）
+// 各スキャン: 実行タブが閉じられたら状態を落とす（タブID残留で他タブが遷移するのを防ぐ）
 chrome.tabs.onRemoved.addListener(async (tabId) => {
   try {
-    const result = await chrome.storage.local.get(['subtitleScanActive', 'subtitleScanTabId']);
+    const result = await chrome.storage.local.get([
+      'subtitleScanActive', 'subtitleScanTabId',
+      'listScanActive', 'listScanTabId',
+    ]);
+    const updates = {};
     if (result.subtitleScanActive && result.subtitleScanTabId === tabId) {
-      await chrome.storage.local.set({ subtitleScanActive: false });
+      updates.subtitleScanActive = false;
+    }
+    if (result.listScanActive && result.listScanTabId === tabId) {
+      updates.listScanActive = false;
+    }
+    if (Object.keys(updates).length > 0) {
+      await chrome.storage.local.set(updates);
     }
   } catch (e) { /* サービスワーカー停止間際などは無視 */ }
 });
