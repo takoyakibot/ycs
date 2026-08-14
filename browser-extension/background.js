@@ -138,7 +138,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
 
     case 'UPDATE_VIDEO_TIME':
-      // Offscreen Documentに転送
+      // キャプチャ対象（スキャン中）のタブからの再生位置のみoffscreenへ転送する。
+      // 再生中の全タブがこのメッセージを送ってくるため、無条件に転送すると
+      // 別タブの再生位置にスキャン中の音声が書き込まれてグラフが汚染される（#618）
+      if (!isCapturing || sender.tab?.id !== currentTabId) {
+        return false;
+      }
       chrome.runtime.sendMessage({
         type: 'UPDATE_VIDEO_TIME',
         time: message.time
