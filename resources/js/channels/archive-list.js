@@ -118,6 +118,8 @@ function registerArchiveListComponent() {
                 searchTimeout: null,
                 currentTimestampPage: 1,
                 selectedIndex: '',
+                publishedFrom: '',
+                publishedTo: '',
                 loading: false,
                 error: null,
                 isFiltered: false,
@@ -244,7 +246,9 @@ function registerArchiveListComponent() {
                     logUserAction('fetchTimestamps', {
                         page,
                         search,
-                        index
+                        index,
+                        publishedFrom: this.publishedFrom,
+                        publishedTo: this.publishedTo
                     });
 
                     try {
@@ -253,7 +257,14 @@ function registerArchiveListComponent() {
 
                         const data = await ChannelApiService.fetchTimestamps(
                             this.channel.handle,
-                            { page, per_page: 50, search, index }
+                            {
+                                page,
+                                per_page: 50,
+                                search,
+                                index,
+                                published_from: this.publishedFrom,
+                                published_to: this.publishedTo
+                            }
                         );
 
                         this.timestamps = data;
@@ -283,6 +294,24 @@ function registerArchiveListComponent() {
                     this.selectedIndex = '';
                     this.currentTimestampPage = 1;
                     this.fetchTimestamps(1, this.searchQuery, '');
+                },
+
+                // 公開日フィルター変更時の再検索（1ページ目に戻す）
+                changePublishedDateFilter() {
+                    this.currentTimestampPage = 1;
+                    this.fetchTimestamps(1, this.searchQuery, this.selectedIndex);
+                },
+
+                clearPublishedDateFilter() {
+                    this.publishedFrom = '';
+                    this.publishedTo = '';
+                    this.changePublishedDateFilter();
+                },
+
+                // 公開日フィルターの表示用ラベル（例: 2024-01-01〜2024-12-31）
+                get publishedDateFilterLabel() {
+                    if (!this.publishedFrom && !this.publishedTo) return '';
+                    return `${this.publishedFrom || ''}〜${this.publishedTo || ''}`;
                 },
 
                 toggleFilterExpanded() {
@@ -401,6 +430,12 @@ function registerArchiveListComponent() {
                         if (this.selectedIndex) {
                             params.set('index', this.selectedIndex);
                         }
+                        if (this.publishedFrom) {
+                            params.set('published_from', this.publishedFrom);
+                        }
+                        if (this.publishedTo) {
+                            params.set('published_to', this.publishedTo);
+                        }
                         if (this.currentTimestampPage && this.currentTimestampPage > 1) {
                             params.set('page', this.currentTimestampPage);
                         }
@@ -465,6 +500,12 @@ function registerArchiveListComponent() {
                         this.activeTab = 'timestamps';
                         this.searchQuery = search || '';
                         this.selectedIndex = params.get('index') || '';
+                        // 公開日はYYYY-MM-DD形式のみ受け付ける（不正な値はバックエンドで422になるため除外）
+                        const dateFormat = /^\d{4}-\d{2}-\d{2}$/;
+                        const publishedFrom = params.get('published_from') || '';
+                        const publishedTo = params.get('published_to') || '';
+                        this.publishedFrom = dateFormat.test(publishedFrom) ? publishedFrom : '';
+                        this.publishedTo = dateFormat.test(publishedTo) ? publishedTo : '';
                         this.currentTimestampPage = page;
                         this.fetchTimestamps(page, this.searchQuery, this.selectedIndex);
                     }
@@ -911,10 +952,12 @@ function registerArchiveListComponent() {
                         this.isPlaybackTransitioning = true;
 
                         const excludeVideoId = this.selectedTimestamp?.video_id || null;
-                        // 一覧の検索・頭文字フィルタと同じ条件で抽選する
+                        // 一覧の検索・頭文字・公開日フィルタと同じ条件で抽選する
                         const timestamp = await ChannelApiService.fetchRandomTimestamp(this.channel.handle, excludeVideoId, {
                             search: this.searchQuery,
                             index: this.selectedIndex,
+                            published_from: this.publishedFrom,
+                            published_to: this.publishedTo,
                         });
 
                         if (excludeVideoId && timestamp.video_id === excludeVideoId) {
@@ -925,6 +968,8 @@ function registerArchiveListComponent() {
                             excludeVideoId: excludeVideoId,
                             search: this.searchQuery,
                             index: this.selectedIndex,
+                            publishedFrom: this.publishedFrom,
+                            publishedTo: this.publishedTo,
                             timestampId: timestamp.id,
                             videoId: timestamp.video_id,
                             tsNum: timestamp.ts_num,
