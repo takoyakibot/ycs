@@ -7248,14 +7248,20 @@ function detectSongStartCandidates(data, intervalSec) {
  * 既存マーカーの近く（前後 AUTO_DETECT_SKIP_NEAR_MARKER_SEC 秒）の候補はスキップする
  */
 function autoDetectSongStarts() {
-  if (!videoDuration || volumeData.length === 0 || !volumeData.some(v => v > 0)) {
+  // 数値以外の要素が混ざっていた場合の防御（ハイライト送信側と同じ正規化）
+  const numericData = volumeData.map(v => {
+    if (typeof v === 'number' && Number.isFinite(v)) return v;
+    return Number.isFinite(v?.value) ? v.value : 0;
+  });
+
+  if (!videoDuration || numericData.length === 0 || !numericData.some(v => v > 0)) {
     showTsEditorNotice('音量データがありません。先にスキャンを実行してください', true);
     return;
   }
 
   // 保存データは動画長とサンプル数から間隔を逆算する（旧形式の500分割データにも対応）
-  const intervalSec = videoDuration / volumeData.length;
-  const candidates = detectSongStartCandidates(volumeData, intervalSec);
+  const intervalSec = videoDuration / numericData.length;
+  const candidates = detectSongStartCandidates(numericData, intervalSec);
   if (candidates.length === 0) {
     showTsEditorNotice('楽曲らしい区間が見つかりませんでした', true);
     return;
