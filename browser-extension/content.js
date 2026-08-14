@@ -123,6 +123,8 @@ let highlightPanelVisible = false;
 
 // 字幕サーバー送信用（重複送信防止キャッシュ）
 const subtitleSentCache = new Set();
+// 字幕サーバー送信用（実行中の送信Promise。送信完了前の再実行による二重POSTを防ぐ）
+const subtitleSendInFlight = new Map();
 
 // YCS APIトークン（chrome.storageから読み込み）
 let ycsApiToken = null;
@@ -2848,46 +2850,60 @@ async function sendSubtitlesToServer(videoId, lang, subtitles) {
 async function postSubtitlesToServer(videoId, languageCode, kind, subtitles) {
   if (!videoId || !subtitles || subtitles.length === 0) return;
 
-  // API設定が未読み込みなら読み込む
-  if (!ycsApiToken) {
-    await loadYcsApiSettings();
-  }
-  if (!ycsApiToken) {
-    // 自動送信側はcatchでwarnになり従来と同じ扱い。スキャン・候補表示側は失敗として扱える
-    throw new Error('APIトークンが未設定です。プロフィール画面でトークンを発行し、拡張の設定に登録してください');
-  }
-
   // 重複送信防止
   const cacheKey = `${videoId}_${languageCode}_${kind}`;
   if (subtitleSentCache.has(cacheKey)) return;
 
-  const response = await fetch(`${ycsServerUrl}/api/manage/archives/subtitles/store`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      'Authorization': `Bearer ${ycsApiToken}`,
-    },
-    body: JSON.stringify({
-      video_id: videoId,
-      language_code: languageCode,
-      kind: kind,
-      subtitles: subtitles.map(s => ({
-        start: s.start,
-        duration: s.duration,
-        text: s.text,
-      })),
-    }),
-  });
+  // 送信中に再トリガーされた場合は実行中のPromiseを返す（送信完了前の再実行による二重POST防止）
+  const inFlight = subtitleSendInFlight.get(cacheKey);
+  if (inFlight) return inFlight;
 
-  if (!response.ok) {
-    console.warn(`[YCS] 字幕データ送信失敗: ${response.status}`);
-    throw new Error(`字幕データの送信に失敗しました (${response.status})`);
+  const sendPromise = (async () => {
+    // API設定が未読み込みなら読み込む
+    if (!ycsApiToken) {
+      await loadYcsApiSettings();
+    }
+    if (!ycsApiToken) {
+      // 自動送信側はcatchでwarnになり従来と同じ扱い。スキャン・候補表示側は失敗として扱える
+      throw new Error('APIトークンが未設定です。プロフィール画面でトークンを発行し、拡張の設定に登録してください');
+    }
+
+    const response = await fetch(`${ycsServerUrl}/api/manage/archives/subtitles/store`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${ycsApiToken}`,
+      },
+      body: JSON.stringify({
+        video_id: videoId,
+        language_code: languageCode,
+        kind: kind,
+        subtitles: subtitles.map(s => ({
+          start: s.start,
+          duration: s.duration,
+          text: s.text,
+        })),
+      }),
+    });
+
+    if (!response.ok) {
+      console.warn(`[YCS] 字幕データ送信失敗: ${response.status}`);
+      throw new Error(`字幕データの送信に失敗しました (${response.status})`);
+    }
+
+    subtitleSentCache.add(cacheKey);
+    const data = await response.json();
+    console.log(`[YCS] 字幕データ送信成功: ${videoId} (${data.segment_count}セグメント, FP: ${data.fingerprints_generated}件)`);
+  })();
+
+  subtitleSendInFlight.set(cacheKey, sendPromise);
+  try {
+    return await sendPromise;
+  } finally {
+    // 成功時はsentCacheが再送信を防ぐ。失敗時はin-flightを解除して再試行可能にする
+    subtitleSendInFlight.delete(cacheKey);
   }
-
-  subtitleSentCache.add(cacheKey);
-  const data = await response.json();
-  console.log(`[YCS] 字幕データ送信成功: ${videoId} (${data.segment_count}セグメント, FP: ${data.fingerprints_generated}件)`);
 }
 
 /**
