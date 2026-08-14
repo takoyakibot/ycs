@@ -3995,16 +3995,20 @@ function hidePermissionError() {
 }
 
 /**
- * 保存された音量データを削除
+ * 現在の動画の音量データを破棄し、メモリ上のグラフ表示もリセットする
  */
-function deleteVolumeData() {
+async function discardVolumeDataAndReset() {
   const videoId = getVideoId();
-  if (!videoId) return;
+  if (videoId) {
+    await chrome.storage.local.remove(`volumeData_${videoId}`);
+    console.log(`音量データを破棄しました: ${videoId}`);
+  }
 
-  const storageKey = `volumeData_${videoId}`;
-  chrome.storage.local.remove(storageKey, () => {
-    console.log(`音量データを削除しました: ${videoId}`);
-  });
+  volumeData = [];
+  detectedTimestamps = [];
+  drawVolumeGraph();
+  updateProgress(0);
+  getScanStatus().then(status => updateScanButtonState(status));
 }
 
 // タイムスタンプ検出パラメータ（デフォルト値）
@@ -4362,6 +4366,20 @@ function handleStorageChange(changes, areaName) {
   // 現在の動画のデータが更新された場合
   if (changes[storageKey]) {
     const newData = changes[storageKey].newValue;
+
+    // 削除された場合（ポップアップやパネルの削除ボタン）はメモリ上のグラフも消す。
+    // これがないと画面上はデータが残り続け、次の保存契機で復活してしまう
+    if (!newData) {
+      if (isScanning) return;
+      console.log(`音量データが削除されたためグラフをリセットします: ${videoId}`);
+      volumeData = [];
+      detectedTimestamps = [];
+      drawVolumeGraph();
+      updateProgress(0);
+      getScanStatus().then(status => updateScanButtonState(status));
+      return;
+    }
+
     if (newData && newData.data && newData.data.length > 0) {
       // 自分自身のスキャン中は無視（自分の保存による更新）
       if (isScanning) return;
@@ -4745,8 +4763,13 @@ async function proceedToNextListScanVideo() {
     const nextVideoId = videoIds[nextIndex];
     console.log(`リストスキャン: 次の動画へ移動 (${nextIndex + 1}/${videoIds.length}): ${nextVideoId}`);
 
-    // 少し待ってから移動（安定性向上のため）
-    setTimeout(() => {
+    // 少し待ってから移動（安定性向上のため）。待機中に停止されたら遷移しない
+    setTimeout(async () => {
+      const { listScanActive } = await chrome.storage.local.get(['listScanActive']);
+      if (!listScanActive || !isListScanMode) {
+        listScanProceeding = false;
+        return;
+      }
       window.location.href = `https://www.youtube.com/watch?v=${nextVideoId}`;
     }, 1500);
   } catch (error) {
@@ -5281,6 +5304,7 @@ function createVolumeGraph() {
         <span class="vdg-zoom-info" id="vdg-zoom-info" title="グラフの表示倍率（Ctrl+ホイールで変更）">倍率 1x</span>
         <button class="vdg-volume-mode" id="vdg-volume-mode-btn" title="固定スケールでの絶対値表示中（クリックで相対表示に切替）">絶対</button>
         <button class="vdg-btn" id="vdg-scan-btn" title="動画全体をスキャンしてグラフを生成">スキャン</button>
+        <button class="vdg-btn" id="vdg-rescan-btn" title="保存された音量データを破棄して最初からスキャンし直す">やり直し</button>
         <button class="vdg-btn" id="vdg-auto-scan-btn" title="再生リスト内の動画を順番にスキャン">自動</button>
       </div>
     </div>
@@ -5691,6 +5715,25 @@ function setupVolumeGraphEvents() {
       try {
         const response = await chrome.runtime.sendMessage({ type: 'START_SCAN' });
         console.log('START_SCAN応答:', response);
+      } catch (error) {
+        console.error('START_SCANエラー:', error);
+      }
+    });
+  }
+
+  // やり直しボタン: 保存データを破棄して最初からスキャンし直す（#607）
+  // duration乖離の自動破棄で拾えない「値だけ狂ったデータ」を手軽に捨てられるようにする
+  const rescanBtn = volumeGraphContainer.querySelector('#vdg-rescan-btn');
+  if (rescanBtn) {
+    rescanBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (isScanning) return;
+      if (!confirm('保存された音量データを破棄して、最初からスキャンし直しますか？')) return;
+
+      await discardVolumeDataAndReset();
+
+      try {
+        await chrome.runtime.sendMessage({ type: 'START_SCAN' });
       } catch (error) {
         console.error('START_SCANエラー:', error);
       }
@@ -7514,10 +7557,21 @@ function handleMessage(message, sender, sendResponse) {
       if (isAutoScanMode && !autoScanStopRequested) {
         proceedToNextVideoOrFinish();
       }
-      // リストスキャンモードの場合は次の動画へ
+      // リストスキャンモード: SCAN_STOPPEDは自然完了とユーザー停止の両方で届くため、
+      // スキャンが完了扱い（進捗95%以上）の場合のみ次へ進む。
+      // 途中停止時は続行ボタンを出し直し、勝手に次の動画へ遷移しない
       if (isListScanMode) {
-        hideListScanButton();
-        proceedToNextListScanVideo();
+        isCurrentVideoScanned().then(async (completed) => {
+          if (completed) {
+            hideListScanButton();
+            proceedToNextListScanVideo();
+          } else {
+            const state = await chrome.storage.local.get(['listScanCurrentIndex', 'listScanVideoIds']);
+            if (state.listScanVideoIds) {
+              showListScanButton(state.listScanCurrentIndex || 0, state.listScanVideoIds.length);
+            }
+          }
+        });
       }
       break;
 
