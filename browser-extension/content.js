@@ -5311,6 +5311,7 @@ function createVolumeGraph() {
         <button class="vdg-btn" id="vdg-scan-btn" title="動画全体をスキャンしてグラフを生成">スキャン</button>
         <button class="vdg-btn" id="vdg-rescan-btn" title="保存された音量データを破棄して最初からスキャンし直す">やり直し</button>
         <button class="vdg-btn" id="vdg-auto-scan-btn" title="再生リスト内の動画を順番にスキャン">自動</button>
+        <button class="vdg-btn" id="vdg-audio-recover-btn" title="スキャン後に音量が戻らない場合に、ミュート・音声ゲイン・再生速度を通常状態へ復旧する">🔊復旧</button>
       </div>
     </div>
     <div class="vdg-canvas-container" id="vdg-canvas-container">
@@ -5725,6 +5726,21 @@ function setupVolumeGraphEvents() {
       } catch (error) {
         console.error('START_SCANエラー:', error);
       }
+    });
+  }
+
+  // 音量復旧ボタン: スキャンの後始末が届かなかった場合（クラッシュ・タブ切替等）に
+  // ミュート・音声ゲイン・再生速度を手動で通常状態へ戻す
+  const audioRecoverBtn = volumeGraphContainer.querySelector('#vdg-audio-recover-btn');
+  if (audioRecoverBtn) {
+    audioRecoverBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setAudioGain(false);
+      if (videoElement) {
+        videoElement.muted = false;
+        videoElement.playbackRate = 1;
+      }
+      console.log('[YCS] 音量・再生速度を復旧しました');
     });
   }
 
