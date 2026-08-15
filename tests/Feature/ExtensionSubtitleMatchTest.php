@@ -115,6 +115,45 @@ class ExtensionSubtitleMatchTest extends TestCase
         return $song;
     }
 
+    public function test_returns_candidates_for_moderately_similar_fingerprint(): void
+    {
+        // 実運用のASR字幕では同一曲でもJaccard類似度が0.2前後になることが多い
+        // （2026-08-15の本番実測: 同一曲395組の88%が0.15以上、異曲ノイズは最大0.089）。
+        // しきい値0.15でこの水準のペアが候補に出ることを検証する
+        $this->createTargetSubtitle();
+        $song = $this->createMappedFingerprint();
+
+        // 保存済みFPのトライグラムを「窓と約0.21の類似度」になるよう部分一致に差し替える
+        $windowTrigrams = SubtitleFingerprintService::generateTrigrams(self::LYRICS_TEXT);
+        $shared = array_slice($windowTrigrams, 0, 7);
+        $othersText = 'まみむめもやゆよらりるれろわをんABCDEFGHIJKLM';
+        $otherTrigrams = array_slice(SubtitleFingerprintService::generateTrigrams($othersText), 0, 13);
+        SubtitleFingerprint::query()->update(['trigrams' => array_values(array_merge($shared, $otherTrigrams))]);
+
+        $response = $this->requestMatch('dQw4w9WgXcQ', 60);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('has_fingerprint', true)
+            ->assertJsonPath('candidates.0.song_title', 'テスト曲A');
+    }
+
+    public function test_ignores_noise_level_similarity(): void
+    {
+        // 異曲ノイズ水準（0.1未満）の類似度では候補に出さない
+        $this->createTargetSubtitle();
+        $this->createMappedFingerprint();
+
+        $windowTrigrams = SubtitleFingerprintService::generateTrigrams(self::LYRICS_TEXT);
+        $shared = array_slice($windowTrigrams, 0, 2);
+        $othersText = 'まみむめもやゆよらりるれろわをんABCDEFGHIJKLMNOPQRS';
+        $otherTrigrams = array_slice(SubtitleFingerprintService::generateTrigrams($othersText), 0, 20);
+        SubtitleFingerprint::query()->update(['trigrams' => array_values(array_merge($shared, $otherTrigrams))]);
+
+        $response = $this->requestMatch('dQw4w9WgXcQ', 60);
+
+        $response->assertStatus(200)->assertJsonPath('candidates', []);
+    }
+
     public function test_returns_candidates_for_position(): void
     {
         $this->createTargetSubtitle();
