@@ -8,6 +8,7 @@ use App\Models\Channel;
 use App\Models\TimestampReport;
 use App\Models\TsItem;
 use App\Models\User;
+use App\Models\VideoSubtitle;
 use Exception;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -26,18 +27,22 @@ class RefreshArchiveService
 
     protected CoverSongTitleExtractorService $coverSongTitleExtractorService;
 
+    protected SubtitleFingerprintService $subtitleFingerprintService;
+
     public function __construct(
         YouTubeService $youtubeService,
         ChangeListService $changeListService,
         ChannelQueryService $channelQueryService,
         VideoAnalyzerService $videoAnalyzerService,
-        CoverSongTitleExtractorService $coverSongTitleExtractorService
+        CoverSongTitleExtractorService $coverSongTitleExtractorService,
+        SubtitleFingerprintService $subtitleFingerprintService
     ) {
         $this->youtubeService = $youtubeService;
         $this->changeListService = $changeListService;
         $this->channelQueryService = $channelQueryService;
         $this->videoAnalyzerService = $videoAnalyzerService;
         $this->coverSongTitleExtractorService = $coverSongTitleExtractorService;
+        $this->subtitleFingerprintService = $subtitleFingerprintService;
     }
 
     public function cliLogin(string $userId): void
@@ -149,6 +154,16 @@ class RefreshArchiveService
         // カバー曲（歌ってみた）のts_itemsを生成
         $cover_ts_items = $this->extractCoverSongTsItems($rtn_archives, $channel->channel_id);
 
+        // 字幕なしフラグはarchivesのDELETE→再INSERTで失われるため、退避して引き継ぐ（#622）
+        $subtitlesUnavailableMap = Archive::where('channel_id', $channel->channel_id)
+            ->whereNotNull('subtitles_unavailable_at')
+            ->pluck('subtitles_unavailable_at', 'video_id');
+        foreach ($rtn_archives as &$archive) {
+            // chunk insertは全行のカラム構成を揃える必要があるため、該当なしはnullを明示する
+            $archive['subtitles_unavailable_at'] = $subtitlesUnavailableMap[$archive['video_id']] ?? null;
+        }
+        unset($archive);
+
         // 全てのDB操作を1つのトランザクションで実行（原子性を保証）
         DB::transaction(function () use ($channel, $rtn_archives, $rtn_ts_items, $comment_ts_items_map, $cover_ts_items) {
             // 2.一度関連情報を削除（cascadeでTsItemsも消える）
@@ -203,6 +218,24 @@ class RefreshArchiveService
             // 4.5.不要な報告を削除する（対応するts_itemが存在しなくなった報告）
             $this->deleteObsoleteReports($channel->channel_id);
         });
+
+        // 5.フィンガープリントを再生成する（#622）
+        // ts_itemsのIDが再発行されて古いフィンガープリントは失われるため、
+        // 生き残った字幕データから作り直す（表示状態の反映後に実施）。
+        // 失敗してもアーカイブ更新自体は成立しているため、ログに残して続行する
+        $subtitledVideoIds = VideoSubtitle::whereIn('video_id', array_column($rtn_archives, 'video_id'))
+            ->distinct()
+            ->pluck('video_id');
+        foreach ($subtitledVideoIds as $subtitledVideoId) {
+            try {
+                $this->subtitleFingerprintService->generateFingerprintsForVideo($subtitledVideoId);
+            } catch (Exception $e) {
+                Log::warning('アーカイブ更新後のフィンガープリント再生成に失敗', [
+                    'video_id' => $subtitledVideoId,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
 
         return count($rtn_archives);
     }
