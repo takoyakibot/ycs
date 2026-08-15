@@ -147,9 +147,17 @@ class TimestampNormalization {
         document.getElementById('editSongDurationMs').addEventListener('input', (e) => this.onDurationMsInput(e));
         document.getElementById('editSongDurationSeconds').addEventListener('input', (e) => this.onDurationSecondsInput(e));
 
-        // モーダル外クリックで閉じる
-        document.getElementById('editSongModal').addEventListener('click', (e) => {
-            if (e.target.id === 'editSongModal') {
+        // モーダル外クリックで閉じる。
+        // モーダル内でテキスト選択などのドラッグを始めて外でマウスを離すと、
+        // clickイベントのtargetが背景要素になり誤って閉じてしまうため、
+        // mousedownも背景で始まった場合のみ閉じる
+        const editSongModal = document.getElementById('editSongModal');
+        let editModalPressedOnBackdrop = false;
+        editSongModal.addEventListener('mousedown', (e) => {
+            editModalPressedOnBackdrop = e.target.id === 'editSongModal';
+        });
+        editSongModal.addEventListener('click', (e) => {
+            if (e.target.id === 'editSongModal' && editModalPressedOnBackdrop) {
                 this.closeEditModal();
             }
         });
