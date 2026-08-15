@@ -7000,12 +7000,17 @@ async function showSongCandidates(marker) {
       return;
     }
 
-    openSongCandidatePopup(input, candidates.map(c => ({
-      type: 'candidate',
-      label: c.song_title || c.normalized_text || '',
-      artist: c.song_artist || '',
-      similarity: c.similarity,
-    })));
+    openSongCandidatePopup(input, candidates.map(c => {
+      const title = c.song_title || c.normalized_text || '';
+      return {
+        type: 'candidate',
+        label: title,
+        artist: c.song_artist || '',
+        // 挿入値はタイムスタンプの表記慣習（ペースト変換と同じ「曲名 / アーティスト」）に合わせる
+        insertValue: c.song_artist ? `${title} / ${c.song_artist}` : title,
+        similarity: c.similarity,
+      };
+    }));
   } catch (error) {
     console.warn('[YCS] 曲名候補の取得エラー:', error.message);
     if (!isStale()) openSongCandidatePopup(input, [{ type: 'message', label: 'エラー: ' + error.message }]);
@@ -7115,7 +7120,8 @@ function openSongCandidatePopup(input, items) {
     e.stopPropagation();
     const item = e.target.closest('.vdg-paste-popup-item');
     if (item && item.dataset.index !== undefined) {
-      const value = items[parseInt(item.dataset.index)]?.label ?? '';
+      const selected = items[parseInt(item.dataset.index)];
+      const value = selected?.insertValue ?? selected?.label ?? '';
       closeSongCandidatePopup();
       input.focus({ preventScroll: true });
       input.select();
