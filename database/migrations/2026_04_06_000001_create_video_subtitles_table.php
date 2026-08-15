@@ -19,10 +19,10 @@ return new class extends Migration
 
             $table->unique(['video_id', 'language_code', 'kind']);
 
-            $table->foreign('video_id')
-                ->references('video_id')
-                ->on('archives')
-                ->cascadeOnDelete();
+            // archivesへの外部キーは張らない（#622）。
+            // アーカイブ更新はDELETE→再INSERT方式のため、cascadeにすると
+            // 更新のたびに収集済みの字幕が全滅する。video_idはYouTube由来の
+            // 安定IDなので、アーカイブ再作成後もそのまま対応が取れる
         });
     }
 

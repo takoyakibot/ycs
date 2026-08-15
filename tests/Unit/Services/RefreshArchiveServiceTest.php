@@ -43,7 +43,8 @@ class RefreshArchiveServiceTest extends TestCase
             $changeListService,
             $channelQueryService,
             $videoAnalyzerService,
-            $coverSongTitleExtractorService
+            $coverSongTitleExtractorService,
+            app(\App\Services\SubtitleFingerprintService::class)
         );
     }
 
@@ -1129,6 +1130,137 @@ class RefreshArchiveServiceTest extends TestCase
     /**
      * 他のチャンネルの報告は削除されないことをテスト
      */
+    /**
+     * アーカイブ更新後も字幕データが残り、フィンガープリントが再生成され、
+     * 字幕なしフラグが引き継がれることを検証する（#622）
+     */
+    public function test_refresh_archives_preserves_subtitles_and_regenerates_fingerprints(): void
+    {
+        $channel = Channel::factory()->create(['channel_id' => 'UC123456789']);
+
+        // 更新前の状態: 字幕＋FPありのアーカイブと、字幕なしフラグ付きのアーカイブ
+        Archive::create([
+            'id' => Str::ulid(),
+            'video_id' => 'video123abc',
+            'channel_id' => $channel->channel_id,
+            'title' => 'Subtitled Archive',
+            'is_public' => true,
+            'is_display' => true,
+            'published_at' => now(),
+            'comments_updated_at' => now(),
+        ]);
+        $oldTsItem = TsItem::create([
+            'id' => Str::ulid(),
+            'video_id' => 'video123abc',
+            'type' => '1',
+            'ts_text' => '1:00',
+            'ts_num' => 60,
+            'text' => 'テスト曲',
+            'is_display' => true,
+        ]);
+        \App\Models\VideoSubtitle::create([
+            'id' => Str::ulid(),
+            'video_id' => 'video123abc',
+            'language_code' => 'ja',
+            'kind' => 'asr',
+            'subtitle_data' => [
+                ['start' => 60, 'duration' => 5, 'text' => 'あいうえおかきくけこさしすせそたちつてとなにぬねの'],
+            ],
+            'segment_count' => 1,
+        ]);
+        \App\Models\SubtitleFingerprint::create([
+            'id' => Str::ulid(),
+            'video_id' => 'video123abc',
+            'ts_item_id' => $oldTsItem->id,
+            'start_sec' => 60,
+            'duration_sec' => \App\Services\SubtitleFingerprintService::WINDOW_DURATION_SEC,
+            'fingerprint_text' => 'old',
+            'trigrams' => ['old'],
+        ]);
+
+        Archive::create([
+            'id' => Str::ulid(),
+            'video_id' => 'video456def',
+            'channel_id' => $channel->channel_id,
+            'title' => 'No Subtitle Archive',
+            'is_public' => true,
+            'is_display' => true,
+            'published_at' => now(),
+            'comments_updated_at' => now(),
+            'subtitles_unavailable_at' => now()->subDay(),
+        ]);
+
+        // 更新: 同じ動画が新しいIDのts_itemsで返ってくる
+        $this->youtubeService
+            ->shouldReceive('getArchivesAndTsItems')
+            ->once()
+            ->andReturn([
+                [
+                    'id' => Str::uuid()->toString(),
+                    'video_id' => 'video123abc',
+                    'channel_id' => $channel->channel_id,
+                    'title' => 'Subtitled Archive',
+                    'thumbnail' => '',
+                    'is_public' => true,
+                    'is_display' => true,
+                    'published_at' => now(),
+                    'comments_updated_at' => now(),
+                    'description' => '',
+                    'ts_items' => [
+                        [
+                            'id' => Str::uuid()->toString(),
+                            'video_id' => 'video123abc',
+                            'type' => '1',
+                            'ts_text' => '1:00',
+                            'ts_num' => 60,
+                            'text' => 'テスト曲',
+                            'is_display' => true,
+                        ],
+                    ],
+                ],
+                [
+                    'id' => Str::uuid()->toString(),
+                    'video_id' => 'video456def',
+                    'channel_id' => $channel->channel_id,
+                    'title' => 'No Subtitle Archive',
+                    'thumbnail' => '',
+                    'is_public' => true,
+                    'is_display' => true,
+                    'published_at' => now(),
+                    'comments_updated_at' => now(),
+                    'description' => '',
+                    'ts_items' => [
+                        [
+                            'id' => Str::uuid()->toString(),
+                            'video_id' => 'video456def',
+                            'type' => '1',
+                            'ts_text' => '2:00',
+                            'ts_num' => 120,
+                            'text' => '別の曲',
+                            'is_display' => true,
+                        ],
+                    ],
+                ],
+            ]);
+
+        $this->service->refreshArchives($channel);
+
+        // 字幕データが生き残っている
+        $this->assertDatabaseHas('video_subtitles', ['video_id' => 'video123abc']);
+
+        // 字幕なしフラグが引き継がれている
+        $this->assertNotNull(
+            Archive::where('video_id', 'video456def')->first()->subtitles_unavailable_at
+        );
+
+        // フィンガープリントが新しいts_itemを指して再生成されている
+        $fps = \App\Models\SubtitleFingerprint::where('video_id', 'video123abc')->get();
+        $this->assertCount(1, $fps);
+        $newTsItem = TsItem::where('video_id', 'video123abc')->first();
+        $this->assertEquals($newTsItem->id, $fps->first()->ts_item_id);
+        $this->assertNotEquals($oldTsItem->id, $fps->first()->ts_item_id);
+    }
+
     public function test_refresh_archives_does_not_delete_other_channel_reports(): void
     {
         $channel1 = Channel::factory()->create(['channel_id' => 'UC111111111']);
