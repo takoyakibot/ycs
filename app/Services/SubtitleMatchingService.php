@@ -11,12 +11,23 @@ class SubtitleMatchingService
 {
     private const MIN_CHANNEL_CANDIDATES = 3;
 
+    /**
+     * 候補として採用する最小Jaccard類似度
+     *
+     * 2026-08-15の本番実測（FP2182件・同一曲395組・異曲3000ペア）:
+     * - 同一曲ペアの最高類似度は0.15以上が88%、0.5以上は16%しかない
+     *   （ASR字幕は歌唱ごとの認識ブレやMCの混入で類似度が下がる）
+     * - 異曲ペアのノイズは最大0.089で、0.15とは明確に分離している
+     * 0.5では大半の同一曲を取りこぼすため0.15とする
+     */
+    public const DEFAULT_THRESHOLD = 0.15;
+
     public function __construct(private SubtitleFingerprintService $fingerprintService) {}
 
     /**
      * 候補楽曲を返す（チャンネル内優先→全体フォールバック）
      */
-    public function getCandidateSongs(string $tsItemId, float $threshold = 0.5): array
+    public function getCandidateSongs(string $tsItemId, float $threshold = self::DEFAULT_THRESHOLD): array
     {
         $fingerprint = SubtitleFingerprint::where('ts_item_id', $tsItemId)->first();
 
@@ -46,7 +57,7 @@ class SubtitleMatchingService
      *
      * 保存済み字幕から指定位置の窓を切り出し、保存済みフィンガープリントと照合する
      */
-    public function getCandidateSongsForPosition(string $videoId, int $sec, float $threshold = 0.5): array
+    public function getCandidateSongsForPosition(string $videoId, int $sec, float $threshold = self::DEFAULT_THRESHOLD): array
     {
         $subtitle = $this->fingerprintService->findPreferredSubtitle($videoId);
 
