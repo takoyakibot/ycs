@@ -44,6 +44,66 @@ class TimestampExtractorServiceTest extends TestCase
     }
 
     /**
+     * 範囲表記（from〜to）: 開始時刻を採用し、終了時刻はtextに残さない（#627）
+     */
+    public function test_extract_timestamps_removes_range_end_time(): void
+    {
+        $description = "1:23:45〜1:27:30 曲名A\n2:00~3:00 曲名B\n10:00 → 12:00 曲名C\n4:00 - 5:00 曲名D";
+        $results = $this->service->extractTimestamps('test_video3', '1', $description, 'dummy_comment_id');
+
+        $this->assertCount(4, $results);
+        $this->assertEquals('1:23:45', $results[0]['ts_text']);
+        $this->assertEquals('曲名A', $results[0]['text']);
+        $this->assertEquals('2:00', $results[1]['ts_text']);
+        $this->assertEquals('曲名B', $results[1]['text']);
+        $this->assertEquals('曲名C', $results[2]['text']);
+        $this->assertEquals('曲名D', $results[3]['text']);
+    }
+
+    /**
+     * 括弧囲みタイムスタンプ: 空の括弧をtextに残さない（#627）
+     */
+    public function test_extract_timestamps_removes_surrounding_brackets(): void
+    {
+        $description = "[1:23] 曲名A / アーティストA\n【2:34】曲名B\n（3:45）曲名C\n(4:56) 曲名D";
+        $results = $this->service->extractTimestamps('test_video4', '1', $description, 'dummy_comment_id');
+
+        $this->assertCount(4, $results);
+        $this->assertEquals('1:23', $results[0]['ts_text']);
+        $this->assertEquals('曲名A / アーティストA', $results[0]['text']);
+        $this->assertEquals('曲名B', $results[1]['text']);
+        $this->assertEquals('曲名C', $results[2]['text']);
+        $this->assertEquals('曲名D', $results[3]['text']);
+    }
+
+    /**
+     * 括弧囲み＋範囲表記の複合（#627）
+     */
+    public function test_extract_timestamps_removes_bracketed_range(): void
+    {
+        $description = '[1:23〜4:56] 曲名A';
+        $results = $this->service->extractTimestamps('test_video5', '1', $description, 'dummy_comment_id');
+
+        $this->assertCount(1, $results);
+        $this->assertEquals('1:23', $results[0]['ts_text']);
+        $this->assertEquals('曲名A', $results[0]['text']);
+    }
+
+    /**
+     * 対になっていない括弧や曲名中の記号は誤除去しない（#627）
+     */
+    public function test_extract_timestamps_keeps_unpaired_brackets_and_title_symbols(): void
+    {
+        $description = "【告知】1:23 曲名A\n2:34 曲名B（cover）\n3:45 A〜B ノンストップメドレー";
+        $results = $this->service->extractTimestamps('test_video6', '1', $description, 'dummy_comment_id');
+
+        $this->assertCount(3, $results);
+        $this->assertEquals('【告知】 曲名A', $results[0]['text']);
+        $this->assertEquals('曲名B（cover）', $results[1]['text']);
+        $this->assertEquals('A〜B ノンストップメドレー', $results[2]['text']);
+    }
+
+    /**
      * applyStripPatterns: 基本的な除去
      */
     public function test_apply_strip_patterns_removes_patterns(): void
