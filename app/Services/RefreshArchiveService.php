@@ -115,8 +115,45 @@ class RefreshArchiveService
                 AND t1.channel_id = ?
         ", [$channel->channel_id]);
 
-        foreach ($results as $result) {
-            $video_id = $result->video_id;
+        // 概要欄由来のタイムスタンプしか無く、それが全て非表示にされている歌枠もコメントを見に行く（#628）。
+        // 概要欄にイベントスケジュール等が書かれていると初回取り込みで
+        // 「概要欄にタイムスタンプあり」と判定されコメントを見に行かないため、
+        // ユーザーの「概要欄のは楽曲用ではない」という非表示操作を取得の意思表示として扱う
+        $hiddenDescriptionResults = DB::select("
+            SELECT t1.video_id, t1.title
+            FROM archives t1
+            WHERE
+                NOT EXISTS (
+                    SELECT 1
+                    FROM ts_items t2
+                    WHERE t2.video_id = t1.video_id
+                    AND t2.type = '2'
+                )
+                AND EXISTS (
+                    SELECT 1
+                    FROM ts_items t4
+                    WHERE t4.video_id = t1.video_id
+                    AND t4.type = '1'
+                )
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM ts_items t5
+                    WHERE t5.video_id = t1.video_id
+                    AND t5.type = '1'
+                    AND t5.is_display = 1
+                )
+                AND t1.channel_id = ?
+        ", [$channel->channel_id]);
+
+        $targetVideoIds = collect($results)->pluck('video_id');
+        foreach ($hiddenDescriptionResults as $row) {
+            // コメント取得は歌枠のみ（初回取り込みと同じ条件）
+            if (! $targetVideoIds->contains($row->video_id) && $this->videoAnalyzerService->isSingingStream($row->title)) {
+                $targetVideoIds->push($row->video_id);
+            }
+        }
+
+        foreach ($targetVideoIds as $video_id) {
             // 既にコメント取得済みの動画はスキップ
             if (in_array($video_id, $alreadyFetchedVideoIds)) {
                 continue;

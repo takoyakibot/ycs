@@ -1261,6 +1261,177 @@ class RefreshArchiveServiceTest extends TestCase
         $this->assertNotEquals($oldTsItem->id, $fps->first()->ts_item_id);
     }
 
+    /**
+     * 概要欄由来のタイムスタンプが全て非表示にされた歌枠は、
+     * 更新時にコメントからタイムスタンプを自動取得する（#628）
+     */
+    public function test_refresh_fetches_comments_when_all_description_timestamps_hidden(): void
+    {
+        $channel = Channel::factory()->create(['channel_id' => 'UC123456789']);
+
+        // 更新前の状態: 概要欄由来（type=1）のts_itemsが全て非表示、コメント由来なし
+        Archive::create([
+            'id' => Str::ulid(),
+            'video_id' => 'schedule0001',
+            'channel_id' => $channel->channel_id,
+            'title' => '歌枠アーカイブ',
+            'is_public' => true,
+            'is_display' => true,
+            'published_at' => now(),
+            'comments_updated_at' => now(),
+        ]);
+        foreach ([['0:00', 0, 'イベントA'], ['10:00', 600, 'イベントB']] as [$tsText, $tsNum, $text]) {
+            TsItem::create([
+                'id' => Str::ulid(),
+                'video_id' => 'schedule0001',
+                'type' => '1',
+                'ts_text' => $tsText,
+                'ts_num' => $tsNum,
+                'text' => $text,
+                'is_display' => false,
+            ]);
+        }
+
+        // 更新: 概要欄タイムスタンプが2件以上返る（イベントスケジュール）
+        $this->youtubeService
+            ->shouldReceive('getArchivesAndTsItems')
+            ->once()
+            ->andReturn([
+                [
+                    'id' => Str::uuid()->toString(),
+                    'video_id' => 'schedule0001',
+                    'channel_id' => $channel->channel_id,
+                    'title' => '歌枠アーカイブ',
+                    'thumbnail' => '',
+                    'is_public' => true,
+                    'is_display' => true,
+                    'published_at' => now(),
+                    'comments_updated_at' => now(),
+                    'description' => '',
+                    'ts_items' => [
+                        [
+                            'id' => Str::uuid()->toString(),
+                            'video_id' => 'schedule0001',
+                            'type' => '1',
+                            'ts_text' => '0:00',
+                            'ts_num' => 0,
+                            'text' => 'イベントA',
+                            'is_display' => true,
+                        ],
+                        [
+                            'id' => Str::uuid()->toString(),
+                            'video_id' => 'schedule0001',
+                            'type' => '1',
+                            'ts_text' => '10:00',
+                            'ts_num' => 600,
+                            'text' => 'イベントB',
+                            'is_display' => true,
+                        ],
+                    ],
+                ],
+            ]);
+
+        // コメント取得が呼ばれ、楽曲タイムスタンプが返る
+        $this->youtubeService
+            ->shouldReceive('getTimeStampsFromComments')
+            ->once()
+            ->with('schedule0001', [])
+            ->andReturn([
+                [
+                    'id' => Str::uuid()->toString(),
+                    'comment_id' => 'comment-abc',
+                    'video_id' => 'schedule0001',
+                    'type' => '2',
+                    'ts_text' => '5:00',
+                    'ts_num' => 300,
+                    'text' => 'テスト曲',
+                    'is_display' => true,
+                ],
+            ]);
+
+        $this->service->refreshArchives($channel);
+
+        // コメント由来のタイムスタンプが取り込まれている
+        $this->assertDatabaseHas('ts_items', [
+            'video_id' => 'schedule0001',
+            'type' => '2',
+            'text' => 'テスト曲',
+        ]);
+    }
+
+    /**
+     * 概要欄タイムスタンプが表示中の動画では、コメント取得は従来どおり発動しない（#628）
+     */
+    public function test_refresh_does_not_fetch_comments_when_description_timestamps_visible(): void
+    {
+        $channel = Channel::factory()->create(['channel_id' => 'UC123456789']);
+
+        Archive::create([
+            'id' => Str::ulid(),
+            'video_id' => 'normalvideo1',
+            'channel_id' => $channel->channel_id,
+            'title' => '歌枠アーカイブ',
+            'is_public' => true,
+            'is_display' => true,
+            'published_at' => now(),
+            'comments_updated_at' => now(),
+        ]);
+        TsItem::create([
+            'id' => Str::ulid(),
+            'video_id' => 'normalvideo1',
+            'type' => '1',
+            'ts_text' => '1:00',
+            'ts_num' => 60,
+            'text' => '曲A',
+            'is_display' => true,
+        ]);
+        TsItem::create([
+            'id' => Str::ulid(),
+            'video_id' => 'normalvideo1',
+            'type' => '1',
+            'ts_text' => '2:00',
+            'ts_num' => 120,
+            'text' => '曲B',
+            'is_display' => false,
+        ]);
+
+        $this->youtubeService
+            ->shouldReceive('getArchivesAndTsItems')
+            ->once()
+            ->andReturn([
+                [
+                    'id' => Str::uuid()->toString(),
+                    'video_id' => 'normalvideo1',
+                    'channel_id' => $channel->channel_id,
+                    'title' => '歌枠アーカイブ',
+                    'thumbnail' => '',
+                    'is_public' => true,
+                    'is_display' => true,
+                    'published_at' => now(),
+                    'comments_updated_at' => now(),
+                    'description' => '',
+                    'ts_items' => [
+                        [
+                            'id' => Str::uuid()->toString(),
+                            'video_id' => 'normalvideo1',
+                            'type' => '1',
+                            'ts_text' => '1:00',
+                            'ts_num' => 60,
+                            'text' => '曲A',
+                            'is_display' => true,
+                        ],
+                    ],
+                ],
+            ]);
+
+        // コメント取得は呼ばれない
+        $this->youtubeService->shouldNotReceive('getTimeStampsFromComments');
+
+        $this->service->refreshArchives($channel);
+
+        $this->assertDatabaseMissing('ts_items', ['video_id' => 'normalvideo1', 'type' => '2']);
+    }
+
     public function test_refresh_archives_does_not_delete_other_channel_reports(): void
     {
         $channel1 = Channel::factory()->create(['channel_id' => 'UC111111111']);
