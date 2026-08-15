@@ -72,8 +72,25 @@ class TimestampExtractorService
         foreach ($lines as $line) {
             // 各行からタイムスタンプを抽出
             if (preg_match($pattern, $line, $matches)) {
-                $timestamp = $matches[1];                              // タイムスタンプ部分
-                $comment = trim(str_replace($timestamp, '', $line)); // タイムスタンプを除外した部分
+                $timestamp = $matches[1]; // タイムスタンプ部分（範囲表記の場合は開始時刻）
+
+                // タイムスタンプ表現全体をtextから除去する（#627）
+                // - 範囲表記「開始〜終了」は終了時刻ごと除去（textに終了時刻が混入すると
+                //   正規化テキストが汚れて楽曲マッチングを阻害する）
+                // - 「[mm:ss] 曲名」のような括弧囲みは、対の括弧で囲まれている場合のみ括弧ごと除去
+                //   （曲名側の括弧や対になっていない括弧は誤除去しない）
+                $quoted = preg_quote($timestamp, '/');
+                $tsPattern = '\d{1,2}:\d{2}(?::\d{2})?';
+                $range = $quoted.'(?:\s*[〜~～\-－–—→]\s*'.$tsPattern.')?';
+                $removePattern = '/(?:'
+                    .'\[\s*'.$range.'\s*\]'
+                    .'|［\s*'.$range.'\s*］'
+                    .'|\(\s*'.$range.'\s*\)'
+                    .'|（\s*'.$range.'\s*）'
+                    .'|【\s*'.$range.'\s*】'
+                    .'|'.$range
+                    .')/u';
+                $comment = trim(preg_replace($removePattern, '', $line, 1));
                 // 先頭の全角スペースを除外
                 $comment = TextNormalizer::trimFullwidthSpace($comment);
 
