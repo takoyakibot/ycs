@@ -169,6 +169,38 @@ class ExtensionSubtitleMatchTest extends TestCase
             ->assertJsonPath('candidates.0.song_artist', 'テストアーティスト');
     }
 
+    public function test_unmapped_candidate_returns_original_text(): void
+    {
+        // マスタ未登録の候補は正規化テキスト（小文字寄せ）ではなく元の表記を返す（#633）
+        $this->createTargetSubtitle();
+
+        Archive::factory()->create([
+            'channel_id' => $this->channel->channel_id,
+            'video_id' => 'abcdefghijk',
+        ]);
+        $tsItem = TsItem::factory()->create([
+            'video_id' => 'abcdefghijk',
+            'ts_num' => 120,
+            'text' => 'CHE.R.RY / YUI',
+            'is_display' => '1',
+        ]);
+        SubtitleFingerprint::create([
+            'id' => Str::ulid(),
+            'video_id' => 'abcdefghijk',
+            'ts_item_id' => $tsItem->id,
+            'start_sec' => 120,
+            'duration_sec' => SubtitleFingerprintService::WINDOW_DURATION_SEC,
+            'fingerprint_text' => self::LYRICS_TEXT,
+            'trigrams' => SubtitleFingerprintService::generateTrigrams(self::LYRICS_TEXT),
+        ]);
+
+        $response = $this->requestMatch('dQw4w9WgXcQ', 60);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('candidates.0.song_id', null)
+            ->assertJsonPath('candidates.0.text', 'CHE.R.RY / YUI');
+    }
+
     public function test_returns_no_subtitles_when_not_stored(): void
     {
         $response = $this->requestMatch('dQw4w9WgXcQ', 60);
