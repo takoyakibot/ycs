@@ -1431,6 +1431,11 @@ class TimestampNormalization {
             activeTab.classList.remove('border-transparent', 'text-gray-500');
             activeTab.classList.add('border-purple-500', 'text-purple-600');
             document.getElementById('songsList').classList.remove('hidden');
+
+            // 一覧タブに戻ってきたタイミングで再検索する。
+            // 「検索→見つからず登録→一覧に戻る」の流れで、登録したばかりの
+            // 楽曲が古い検索結果のせいで表示されない問題を防ぐ
+            this.loadSongs(document.getElementById('songsSearch')?.value ?? '');
         }
     }
 
