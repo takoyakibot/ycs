@@ -7001,7 +7001,9 @@ async function showSongCandidates(marker) {
     }
 
     openSongCandidatePopup(input, candidates.map(c => {
-      const title = c.song_title || c.normalized_text || '';
+      // マスタ未登録の候補は元の表記（text）を優先する。
+      // normalized_textは小文字寄せ済みのフォールバック（#633）
+      const title = c.song_title || c.text || c.normalized_text || '';
       return {
         type: 'candidate',
         label: title,

@@ -296,10 +296,15 @@ class SubtitleMatchingService
             // 同一チャンネル内のマッチを優先
             $sameChannelCount = collect($group['matches'])->where('source', 'same_channel')->count();
 
+            // マスタ未登録の候補向けに、代表の元テキスト（大文字小文字等の表記を保持）を返す。
+            // normalized_textは小文字寄せ済みで表示・挿入には不向きなため（#633）
+            $bestMatch = collect($group['matches'])->sortByDesc('similarity')->first();
+
             return [
                 'song_id' => $group['song_id'],
                 'song_title' => $group['song_title'],
                 'song_artist' => $group['song_artist'],
+                'text' => $bestMatch['text'] ?? null,
                 'normalized_text' => $group['normalized_text'],
                 'similarity' => round($group['max_similarity'], 4),
                 'match_count' => $matchCount,
