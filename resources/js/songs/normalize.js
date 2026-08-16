@@ -836,6 +836,10 @@ class TimestampNormalization {
             return;
         }
 
+        // 選択解除時などに一覧を再描画できるよう、表示中のリストを保持する
+        this.lastDisplayedSongs = songs;
+        this.lastDisplayedSongsTotal = total;
+
         container.innerHTML = '';
         this.updateSongsCount(total !== null ? total : songs.length);
 
@@ -931,7 +935,8 @@ class TimestampNormalization {
         div.appendChild(buttonContainer);
 
         div.addEventListener('click', () => {
-            this.selectedSong = song;
+            // 選択済みの楽曲をもう一度クリックしたら選択を解除する
+            this.selectedSong = this.selectedSong?.id === song.id ? null : song;
             this.displaySongs(songs, total);
             this.updateSelectionDisplay();
         });
@@ -1023,6 +1028,17 @@ class TimestampNormalization {
      */
     clearSongFilter() {
         this.currentSongFilter = null;
+
+        // 絞り込みを解除したら楽曲マスタの選択も解除する。
+        // 選択が残ったままだと、意図しない楽曲への紐付けが起こりやすい
+        if (this.selectedSong) {
+            this.selectedSong = null;
+            if (Array.isArray(this.lastDisplayedSongs)) {
+                this.displaySongs(this.lastDisplayedSongs, this.lastDisplayedSongsTotal);
+            }
+            this.updateSelectionDisplay();
+        }
+
         this.updateSongFilterDisplay();
         this.loadTimestamps(1, this.currentSearchQuery);
     }
