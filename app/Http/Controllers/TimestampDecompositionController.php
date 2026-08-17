@@ -45,10 +45,7 @@ class TimestampDecompositionController extends Controller
                 'original_text' => $item->original_text,
                 'parts' => $parts,
                 // 補足を除去した候補。パーツと同じ並び・同じ要素数を保つ
-                'cleaned_parts' => array_map(
-                    fn ($part) => SupplementStripper::stripPart((string) $part),
-                    $parts
-                ),
+                'cleaned_parts' => SupplementStripper::stripParts($parts),
                 'separator_count' => $item->separator_count,
                 'title_part_index' => $item->title_part_index,
                 'artist_part_index' => $item->artist_part_index,

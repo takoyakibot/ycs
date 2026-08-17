@@ -31,7 +31,9 @@ use Illuminate\Support\Facades\Route;
 // ローカル開発用ログイン（Google OAuthを通せない環境でのUI確認用）
 // DEV_LOGIN_ENABLED=true かつ APP_ENV=local のときだけ動作し、それ以外は404。
 // 無効化するには .env の DEV_LOGIN_ENABLED を消すか false にする。
-Route::get('/dev-login', DevLoginController::class)->name('dev.login');
+Route::get('/dev-login', DevLoginController::class)
+    ->middleware('throttle:10,1')
+    ->name('dev.login');
 
 // 管理者（Channel Admin以上）専用機能
 Route::middleware(['auth', 'admin'])->group(function () {

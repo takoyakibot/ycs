@@ -78,6 +78,24 @@ class DecomposeSupplementCleanupTest extends TestCase
     }
 
     /**
+     * 区切りが無いテキスト（パーツが1つ）では区切り以降ルールを適用しないこと
+     *
+     * 「YOASOBI　アンコール」の後半が補足なのか曲名の一部なのか判別できないため、
+     * 候補として曲名を削ってしまわないようにする
+     */
+    public function test_next_keeps_single_part_without_separator(): void
+    {
+        $this->createDecomposition(
+            'YOASOBI　アンコール',
+            ['YOASOBI　アンコール']
+        );
+
+        $this->getJson('/api/songs/decompose/next')
+            ->assertOk()
+            ->assertJsonPath('item.cleaned_parts', ['YOASOBI　アンコール']);
+    }
+
+    /**
      * 曲名の一部としての括弧は候補でも残ること
      */
     public function test_next_keeps_meaningful_brackets(): void

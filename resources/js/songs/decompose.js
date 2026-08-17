@@ -63,6 +63,12 @@ class TimestampDecomposition {
         // パネル内の入力欄では Enter で確定 / Esc でキャンセル
         ['cleanupTitle', 'cleanupArtist'].forEach((id) => {
             document.getElementById(id).addEventListener('keydown', (e) => {
+                // 日本語入力の変換確定のEnterで送信してしまわないようにする
+                // （keyCode 229 は isComposing 未対応環境向けのフォールバック）
+                if (e.isComposing || e.keyCode === 229) {
+                    return;
+                }
+
                 if (e.key === 'Enter') {
                     e.preventDefault();
                     this.confirmCleanup();

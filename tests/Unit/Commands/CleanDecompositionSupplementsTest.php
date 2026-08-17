@@ -87,6 +87,44 @@ class CleanDecompositionSupplementsTest extends TestCase
         );
     }
 
+    /**
+     * 区切りが無いテキスト（パーツが1つ）は区切り以降ルールの対象にしないこと
+     *
+     * 「YOASOBI　アンコール」の後半が補足なのか曲名の一部なのか判別できないため、
+     * 一括掃除で曲名を削ってしまわないようにする
+     */
+    public function test_apply_keeps_single_part_without_separator(): void
+    {
+        $decomposition = $this->createDecomposition('YOASOBI　アンコール');
+
+        $this->artisan('ts-decompositions:clean-supplements --apply')->assertSuccessful();
+
+        $decomposition->refresh();
+
+        $this->assertEquals(['YOASOBI　アンコール'], $decomposition->parts);
+    }
+
+    /**
+     * 掃除では updated_at / updated_by を書き換えないこと
+     *
+     * undoAction() が「同じ updated_by かつ updated_at が近いもの」を
+     * カスケード操作のまとまりとみなすため、掃除で書き換えると
+     * 無関係なレコードが巻き込まれて戻されてしまう
+     */
+    public function test_apply_does_not_touch_update_metadata(): void
+    {
+        $decomposition = $this->createDecomposition('気まぐれロマンティック / いきものがかり (エコーかけ忘れ)');
+
+        $updatedAt = $decomposition->updated_at;
+
+        $this->artisan('ts-decompositions:clean-supplements --apply')->assertSuccessful();
+
+        $decomposition->refresh();
+
+        $this->assertEquals(['気まぐれロマンティック', 'いきものがかり'], $decomposition->parts);
+        $this->assertEquals($updatedAt->toDateTimeString(), $decomposition->updated_at->toDateTimeString());
+    }
+
     public function test_apply_cleans_bracket_and_symbol_in_parts(): void
     {
         $paren = $this->createDecomposition('気まぐれロマンティック（アンコール） / いきものがかり');

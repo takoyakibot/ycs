@@ -86,31 +86,59 @@ class SupplementStripper
     }
 
     /**
-     * TS分解のパーツから補足を除去する
+     * TS分解のパーツ配列から補足を除去する
      *
-     * パーツは既に区切り文字で分割された後なので、パーツ単体には区切りが
-     * 含まれない（例: 「いきものがかり 　エコーかけ忘れ」）。
-     * そのため RULE_TRAILING の区切り必須ガードを外して適用する。
+     * パーツは区切り文字で分割された後なので、パーツ単体には区切りが含まれない
+     * （例: 「いきものがかり 　エコーかけ忘れ」）。そのため RULE_TRAILING の
+     * 区切り必須ガードを外して適用する。
      *
+     * ただしパーツが1つしかない場合、元のテキストは区切り文字で分解されていない
+     * ため、「YOASOBI　アンコール」の後半が補足なのか曲名の一部なのか判別できない。
+     * この場合はガードを効かせて誤除去を防ぐ。
+     *
+     * パーツ単体を処理するメソッドは用意しない。パーツ数を見ないと上記の判別が
+     * できず、曲名を削ってしまうため。
+     *
+     * @param  array<int, string>  $parts
      * @param  string[]|null  $rules  適用するルール。null で全ルール
+     * @return array<int, array{
+     *     result: string,
+     *     hits: array<int, array{rule: string, keyword: ?string, removed: string}>
+     * }>
      */
-    public static function stripPart(?string $text, ?array $rules = null): string
+    public static function analyzeParts(array $parts, ?array $rules = null): array
     {
-        return self::analyzePart($text, $rules)['result'];
+        $options = ['require_separator' => self::requiresSeparatorForParts($parts)];
+
+        return array_map(
+            fn ($part) => self::analyze((string) $part, $rules, $options),
+            $parts
+        );
     }
 
     /**
-     * stripPart() の結果とヒット内容を返す
+     * analyzeParts() の結果から補足除去後のパーツだけを返す
      *
+     * @param  array<int, string>  $parts
      * @param  string[]|null  $rules  適用するルール。null で全ルール
-     * @return array{
-     *     result: string,
-     *     hits: array<int, array{rule: string, keyword: ?string, removed: string}>
-     * }
+     * @return array<int, string>
      */
-    public static function analyzePart(?string $text, ?array $rules = null): array
+    public static function stripParts(array $parts, ?array $rules = null): array
     {
-        return self::analyze($text, $rules, ['require_separator' => false]);
+        return array_map(
+            fn (array $analysis) => $analysis['result'],
+            self::analyzeParts($parts, $rules)
+        );
+    }
+
+    /**
+     * パーツ配列に対して RULE_TRAILING の区切り必須ガードが必要か
+     *
+     * @param  array<int, string>  $parts
+     */
+    public static function requiresSeparatorForParts(array $parts): bool
+    {
+        return count($parts) <= 1;
     }
 
     /**
