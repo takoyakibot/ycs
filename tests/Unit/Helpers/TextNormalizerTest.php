@@ -312,6 +312,11 @@ class TextNormalizerTest extends TestCase
         $this->assertTrue(TextNormalizer::isIgnorablePart('歌ってみた'));
         $this->assertTrue(TextNormalizer::isIgnorablePart('shorts'));
         $this->assertTrue(TextNormalizer::isIgnorablePart('カバー'));
+
+        // 「キーワード＋別の語」の形のノイズ表記も無視対象にする
+        $this->assertTrue(TextNormalizer::isIgnorablePart('Official Video'));
+        $this->assertTrue(TextNormalizer::isIgnorablePart('(Full ver.)'));
+        $this->assertTrue(TextNormalizer::isIgnorablePart('Short ver.'));
     }
 
     /**
@@ -326,6 +331,11 @@ class TextNormalizerTest extends TestCase
         $this->assertFalse(TextNormalizer::isIgnorablePart('ORANGE RANGE'));
         $this->assertFalse(TextNormalizer::isIgnorablePart('オリジナル曲'));
         $this->assertFalse(TextNormalizer::isIgnorablePart('Covers'));
+
+        // 短いキーワード（ver）を語の一部に含む名前も残ること
+        $this->assertFalse(TextNormalizer::isIgnorablePart('Silver'));
+        $this->assertFalse(TextNormalizer::isIgnorablePart('Forever'));
+        $this->assertFalse(TextNormalizer::isIgnorablePart('Over The Rainbow'));
 
         // キーワードを含まないパーツ（記号・絵文字のみ）も無視対象にしない
         $this->assertFalse(TextNormalizer::isIgnorablePart('🎵'));
