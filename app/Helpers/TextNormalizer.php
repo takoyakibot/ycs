@@ -247,19 +247,43 @@ class TextNormalizer
     }
 
     /**
-     * パーツが無視すべきキーワードを含むかどうかを判定
+     * パーツが無視すべき（楽曲名・アーティスト名の候補にならない）かどうかを判定
+     *
+     * 無視キーワードと記号だけで構成されているパーツのみを無視対象とする。
+     * 単純な部分一致で判定すると、キーワードを語の一部に含むアーティスト名
+     * （例: "Official髭男dism" の "official"）まで無視してしまい、
+     * アーティスト名が空の楽曲マスタが作られる原因になるため。
      */
     public static function isIgnorablePart(string $part): bool
     {
-        $lowerPart = mb_strtolower($part, 'UTF-8');
+        $normalizedPart = self::normalize($part);
 
-        foreach (self::IGNORE_KEYWORDS as $keyword) {
-            if (mb_strpos($lowerPart, mb_strtolower($keyword, 'UTF-8')) !== false) {
-                return true;
-            }
+        if ($normalizedPart === '') {
+            return false;
         }
 
-        return false;
+        // 長いキーワードから除去する（"shorts" が "short" より先に除去されるように）
+        $keywords = self::getIgnoreKeywords();
+        usort($keywords, fn ($a, $b) => mb_strlen($b) <=> mb_strlen($a));
+
+        $remaining = $normalizedPart;
+        $matched = false;
+        foreach ($keywords as $keyword) {
+            if ($keyword === '' || ! str_contains($remaining, $keyword)) {
+                continue;
+            }
+
+            $remaining = str_replace($keyword, ' ', $remaining);
+            $matched = true;
+        }
+
+        // キーワードを含まないパーツ（記号・絵文字のみなど）は無視対象にしない
+        if (! $matched) {
+            return false;
+        }
+
+        // 文字・数字が残っていなければ、キーワードと記号だけのパーツ
+        return preg_match('/[\p{L}\p{N}]/u', $remaining) !== 1;
     }
 
     /**

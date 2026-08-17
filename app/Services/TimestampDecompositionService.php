@@ -16,7 +16,7 @@ class TimestampDecompositionService
     /**
      * 自動選択の確信度閾値
      */
-    private const AUTO_SELECT_THRESHOLD = 0.8;
+    public const AUTO_SELECT_THRESHOLD = 0.8;
 
     /**
      * 区切り文字を含むタイムスタンプをスキャンして分解結果をDBに保存
