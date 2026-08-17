@@ -110,8 +110,12 @@ class TimestampSongMapping extends Model
         }
 
         // 部分一致とLike検索
+        // 前方一致の検索語は mb_substr で切り出す（substr だとマルチバイト文字の途中で
+        // 分断され、不正なバイト列を含むLIKE条件になってしまう）
+        $prefix = mb_substr($normalized, 0, 20, 'UTF-8');
+
         $candidates = static::where('normalized_text', 'like', "%{$normalized}%")
-            ->orWhere('normalized_text', 'like', substr($normalized, 0, 20).'%')
+            ->orWhere('normalized_text', 'like', $prefix.'%')
             ->get();
 
         if ($candidates->isEmpty()) {
