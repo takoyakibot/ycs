@@ -178,17 +178,24 @@ class TextNormalizer
 
     /**
      * 無視すべきキーワード（カバー関連など）
+     *
+     * isIgnorablePart() は「パーツ全体がここに挙げたキーワードと記号だけで
+     * 構成されているか」で判定するため、短い語を入れても語の一部に一致して
+     * アーティスト名を捨ててしまうことはない（例: 'ver' があっても
+     * "Silver" は "sil" が残るので無視対象にならない）。
      */
     private const IGNORE_KEYWORDS = [
         'cover',
         'カバー',
         'mv',
         'music video',
+        'video',
         'オリジナル',
         'original',
         'full',
         'short',
         'shorts',
+        'ver',
         'official',
         '公式',
         '歌ってみた',
@@ -294,6 +301,10 @@ class TextNormalizer
 
     /**
      * 正規化済み無視キーワードのキャッシュ（文字数の降順）
+     *
+     * IGNORE_KEYWORDS はクラス定数でプロセス内で変わらないため、
+     * 破棄する手段は用意していない。キーワードを設定ファイル等から
+     * 読むようにする場合はこのキャッシュを見直すこと。
      *
      * @var string[]|null
      */
