@@ -73,6 +73,46 @@
                             </div>
                         </div>
 
+                        <!-- 補足除去候補（] キーで表示） -->
+                        <div id="cleanupPanel" class="mb-6 hidden p-4 border-2 border-amber-400 dark:border-amber-500 bg-amber-50 dark:bg-gray-700 rounded">
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="text-sm font-medium text-amber-700 dark:text-amber-300">
+                                    補足除去候補
+                                </div>
+                                <div class="text-xs text-gray-500 dark:text-gray-400">
+                                    Enter: この内容で確定 / Esc: キャンセル
+                                </div>
+                            </div>
+
+                            <div id="cleanupNoChange" class="hidden text-xs text-gray-500 dark:text-gray-400 mb-3">
+                                除去できる補足は見つかりませんでした。手入力で調整できます。
+                            </div>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="cleanupTitle" class="block text-sm text-gray-500 dark:text-gray-400 mb-1">楽曲名</label>
+                                    <input id="cleanupTitle" type="text" maxlength="255"
+                                        class="w-full px-3 py-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500">
+                                    <div id="cleanupTitleRemoved" class="mt-1 text-xs text-red-600 dark:text-red-400 hidden"></div>
+                                </div>
+                                <div>
+                                    <label for="cleanupArtist" class="block text-sm text-gray-500 dark:text-gray-400 mb-1">アーティスト名</label>
+                                    <input id="cleanupArtist" type="text" maxlength="255"
+                                        class="w-full px-3 py-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:border-green-500 focus:ring-green-500">
+                                    <div id="cleanupArtistRemoved" class="mt-1 text-xs text-red-600 dark:text-red-400 hidden"></div>
+                                </div>
+                            </div>
+
+                            <div class="flex justify-end gap-2 mt-3">
+                                <button id="cleanupCancelBtn" class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600">
+                                    キャンセル <span class="text-xs opacity-75">(Esc)</span>
+                                </button>
+                                <button id="cleanupConfirmBtn" class="px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+                                    この内容で確定 <span class="text-xs opacity-75">(Enter)</span>
+                                </button>
+                            </div>
+                        </div>
+
                         <!-- 確信度表示（自動判定がある場合） -->
                         <div id="confidenceArea" class="mb-6 hidden">
                             <div class="flex items-center gap-2">
@@ -118,6 +158,7 @@
                         <span class="ml-4">1-9: アーティスト選択</span>
                         <span class="ml-4">Shift+1-9 または Q,W,E...: 楽曲名選択</span>
                         <span class="ml-4">A: 全体を楽曲名</span>
+                        <span class="ml-4">]: 補足除去候補</span>
                         <span class="ml-4">Enter: 確定</span>
                         <span class="ml-4">S: スキップ</span>
                         <span class="ml-4">R: リセット</span>

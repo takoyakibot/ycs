@@ -177,23 +177,35 @@ class TimestampDecompositionService
      * @param  array  $titleIndices  楽曲名パーツのインデックス配列
      * @param  array  $artistIndices  アーティスト名パーツのインデックス配列
      * @param  bool  $enableCascade  カスケード処理を有効にするか
+     * @param  array{title?: ?string, artist?: ?string}  $overrides
+     *                                                               パーツ連結の代わりに使う確定値。補足除去候補の確定や画面上での
+     *                                                               微調整で使う。キーが存在する場合のみ優先される。
      * @return array{decomposition: TimestampDecomposition, cascaded_count: int}
      */
-    public function saveSelection(string $id, array $titleIndices, array $artistIndices, bool $enableCascade = true): array
-    {
+    public function saveSelection(
+        string $id,
+        array $titleIndices,
+        array $artistIndices,
+        bool $enableCascade = true,
+        array $overrides = []
+    ): array {
         $decomposition = TimestampDecomposition::findOrFail($id);
 
-        // 複数パーツを元の区切り文字を維持して連結
-        $derivedTitle = $this->joinPartsWithOriginalSeparators(
-            $decomposition->original_text,
-            $decomposition->parts,
-            $titleIndices
-        );
-        $derivedArtist = $this->joinPartsWithOriginalSeparators(
-            $decomposition->original_text,
-            $decomposition->parts,
-            $artistIndices
-        );
+        // 複数パーツを元の区切り文字を維持して連結（overrides があればそちらを優先）
+        $derivedTitle = array_key_exists('title', $overrides)
+            ? trim((string) $overrides['title'])
+            : $this->joinPartsWithOriginalSeparators(
+                $decomposition->original_text,
+                $decomposition->parts,
+                $titleIndices
+            );
+        $derivedArtist = array_key_exists('artist', $overrides)
+            ? trim((string) $overrides['artist'])
+            : $this->joinPartsWithOriginalSeparators(
+                $decomposition->original_text,
+                $decomposition->parts,
+                $artistIndices
+            );
 
         // DBには最初のインデックスのみ保存（後方互換性のため）
         $decomposition->update([
