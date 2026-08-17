@@ -275,4 +275,59 @@ class TimestampServiceRandomTest extends TestCase
         $this->assertEquals('3曲目', $result['text']);
         $this->assertEquals(360, $result['ts_num']);
     }
+
+    public function test_next_ts_num_skips_not_song_items(): void
+    {
+        // 「楽曲ではない」項目が next_ts_num に混ざると、その時刻に表示更新が走った際に
+        // 次の楽曲が取得できず監視が行き止まりになる
+        $this->createTsItem(['text' => '1曲目', 'ts_text' => '0:00', 'ts_num' => 0]);
+        $notSongItem = $this->createTsItem(['text' => 'MC', 'ts_text' => '3:00', 'ts_num' => 180]);
+        $this->createTsItem(['text' => '3曲目', 'ts_text' => '6:00', 'ts_num' => 360]);
+
+        TimestampSongMapping::create([
+            'id' => Str::ulid(),
+            'normalized_text' => $notSongItem->normalized_text,
+            'is_not_song' => true,
+        ]);
+
+        $result = $this->service->getNextTimestampInArchive($this->channel, $this->archive->video_id, 0);
+
+        $this->assertNotNull($result);
+        $this->assertEquals(360, $result['ts_num']);
+        // 3曲目の後には楽曲がないため末尾として扱われる
+        $this->assertNull($result['next_ts_num']);
+        $this->assertTrue($result['is_last_in_archive']);
+    }
+
+    public function test_next_ts_num_marks_last_song_followed_by_not_song_as_last(): void
+    {
+        // 最後の楽曲の後ろに「楽曲ではない」項目だけが残るケース
+        $this->createTsItem(['text' => '最後の曲', 'ts_text' => '0:00', 'ts_num' => 0]);
+        $endingItem = $this->createTsItem(['text' => 'エンディング', 'ts_text' => '5:00', 'ts_num' => 300]);
+
+        TimestampSongMapping::create([
+            'id' => Str::ulid(),
+            'normalized_text' => $endingItem->normalized_text,
+            'is_not_song' => true,
+        ]);
+
+        $result = $this->service->getRandomTimestamp($this->channel);
+
+        $this->assertNotNull($result);
+        $this->assertEquals('最後の曲', $result['text']);
+        $this->assertNull($result['next_ts_num']);
+    }
+
+    public function test_next_ts_num_skips_hidden_items(): void
+    {
+        $this->createTsItem(['text' => '1曲目', 'ts_text' => '0:00', 'ts_num' => 0]);
+        $this->createTsItem(['text' => '非表示曲', 'ts_text' => '3:00', 'ts_num' => 180, 'is_display' => 0]);
+        $this->createTsItem(['text' => '3曲目', 'ts_text' => '6:00', 'ts_num' => 360]);
+
+        $result = $this->service->getNextTimestampInArchive($this->channel, $this->archive->video_id, 0);
+
+        $this->assertNotNull($result);
+        $this->assertEquals(360, $result['ts_num']);
+        $this->assertNull($result['next_ts_num']);
+    }
 }

@@ -405,6 +405,58 @@ export class VideoPlayerManager {
     }
 
     /**
+     * 動画の長さ（秒）を取得
+     *
+     * メタデータ未読み込み時や取得できない場合は0を返す。
+     *
+     * @returns {number}
+     */
+    getDuration() {
+        if (this.player && typeof this.player.getDuration === 'function') {
+            const duration = this.player.getDuration();
+            return typeof duration === 'number' && isFinite(duration) && duration > 0 ? duration : 0;
+        }
+        return 0;
+    }
+
+    /**
+     * 実際にプレイヤーに読み込まれている動画IDを取得
+     *
+     * loadAndPlay()直後は切り替えが完了しておらず、前の動画のIDが返る。
+     * 取得手段がない場合はnullを返す。
+     *
+     * @returns {string|null}
+     */
+    getPlayingVideoId() {
+        if (!this.player || typeof this.player.getVideoData !== 'function') {
+            return null;
+        }
+
+        try {
+            return this.player.getVideoData()?.video_id || null;
+        } catch (error) {
+            // getVideoDataは非公開APIのため、取得できない場合は判定を諦める
+            return null;
+        }
+    }
+
+    /**
+     * 再生指示した動画の読み込みが完了しているかどうか
+     *
+     * 動画の切り替え中に前の動画の再生位置・長さを参照してしまうのを防ぐために使う。
+     * 判定手段がない場合は処理を止めないようtrueを返す。
+     *
+     * @returns {boolean}
+     */
+    isCurrentVideoLoaded() {
+        const playingVideoId = this.getPlayingVideoId();
+        if (playingVideoId === null || this.currentVideoId === null) {
+            return true;
+        }
+        return playingVideoId === this.currentVideoId;
+    }
+
+    /**
      * プレイヤーが初期化済みかどうか
      * @returns {boolean}
      */

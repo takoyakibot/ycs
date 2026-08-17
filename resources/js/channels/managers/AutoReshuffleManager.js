@@ -29,11 +29,17 @@ export class AutoReshuffleManager {
         this.lastPlaybackTime = 0;
         this.stallCount = 0;
 
+        // アーカイブ末尾の多重処理防止フラグ
+        // 動画終端の検知はENDEDイベント・監視・PAUSEDの3経路があるため、
+        // 1回の再生につき1度だけ末尾処理を実行する
+        this.archiveEndHandled = false;
+
         // コールバック
         this.onSongEnd = null;          // 動画終了時に呼び出される（自動再抽選用）
         this.onStallDetected = null;    // スタック検知時に呼び出される
         this.onBufferingTimeout = null; // バッファリングタイムアウト時に呼び出される
         this.onNextTimestampReached = null; // 次のタイムスタンプ到達時に呼び出される（表示更新用）
+        this.onArchiveEndWithoutReshuffle = null; // 自動再抽選OFFで末尾に到達したときに呼び出される
     }
 
     /**
@@ -119,6 +125,8 @@ export class AutoReshuffleManager {
     setEndTime(endTime) {
         console.debug('[Monitor] setEndTime:', endTime);
         this.currentSongEndTime = endTime;
+        // 新しい再生位置に移ったので末尾処理フラグをリセット
+        this.archiveEndHandled = false;
     }
 
     /**
@@ -131,14 +139,16 @@ export class AutoReshuffleManager {
 
     /**
      * 再生位置監視を開始
+     *
+     * 次のタイムスタンプがない（＝アーカイブ内の最後の楽曲）場合も監視を続ける。
+     * ENDEDイベントが届かないアーカイブでも末尾を検知できるようにするため。
      */
     startMonitor() {
         // 既存の監視を停止
         this.stopMonitor();
 
-        if (!videoPlayerManager.isInitialized() || this.currentSongEndTime === null) {
-            console.debug('[Monitor] startMonitor aborted: initialized=%s, endTime=%s',
-                videoPlayerManager.isInitialized(), this.currentSongEndTime);
+        if (!videoPlayerManager.isInitialized()) {
+            console.debug('[Monitor] startMonitor aborted: player not initialized');
             return;
         }
 
@@ -160,9 +170,27 @@ export class AutoReshuffleManager {
 
             const currentTime = videoPlayerManager.getCurrentTime();
             const isPlaying = videoPlayerManager.getIsPlaying();
+            const nearVideoEnd = this.isNearVideoEnd(currentTime);
+
+            // 動画終端に到達（ENDEDイベントが届かないケースの保険）
+            // 再生中のみ判定する。停止中は動画の切り替え待ちの可能性があり、
+            // 前の動画の終端値を拾って再抽選が連鎖するおそれがあるため
+            if (isPlaying && nearVideoEnd) {
+                console.debug('[Monitor] videoEndReached: currentTime=%s, duration=%s',
+                    currentTime, videoPlayerManager.getDuration());
+                this.handleArchiveEnd();
+                return;
+            }
+
+            // 終端から離れた位置を再生している（シーク戻しなど）場合は
+            // 末尾処理フラグを戻し、再度末尾に到達したときに処理できるようにする
+            if (this.archiveEndHandled && !nearVideoEnd) {
+                this.archiveEndHandled = false;
+            }
 
             // スタック検知: 再生中なのに時間が進まない状態を検知
-            if (isPlaying) {
+            // 自動再抽選がOFFのときは勝手に次の曲へ進めない（バッファリング検知と同じ扱い）
+            if (isPlaying && this.enabled) {
                 if (Math.abs(currentTime - this.lastPlaybackTime) < 0.1) {
                     this.stallCount++;
                     if (this.stallCount >= MAX_STALL_COUNT) {
@@ -182,7 +210,7 @@ export class AutoReshuffleManager {
 
             // 次のタイムスタンプに到達（表示更新のみ、動画は継続再生）
             // フェードアウトは行わない
-            if (currentTime >= this.currentSongEndTime) {
+            if (this.currentSongEndTime !== null && currentTime >= this.currentSongEndTime) {
                 console.debug('[Monitor] nextTimestampReached: currentTime=%s, endTime=%s',
                     currentTime, this.currentSongEndTime);
                 this.stopMonitor();
@@ -191,6 +219,69 @@ export class AutoReshuffleManager {
                 }
             }
         }, CHECK_INTERVAL);
+    }
+
+    /**
+     * 動画の終端付近かどうか
+     *
+     * 動画長が取得できない（ライブアーカイブのメタデータ未確定など）場合や、
+     * 動画の切り替えが完了していない場合は判定できないためfalseを返す。
+     *
+     * @param {number} currentTime - 現在の再生位置（秒）
+     * @returns {boolean}
+     */
+    isNearVideoEnd(currentTime) {
+        const VIDEO_END_THRESHOLD = 1.5; // 終端とみなす残り秒数
+
+        if (!videoPlayerManager.isCurrentVideoLoaded()) {
+            return false;
+        }
+
+        const duration = videoPlayerManager.getDuration();
+
+        return duration > 0 && currentTime >= duration - VIDEO_END_THRESHOLD;
+    }
+
+    /**
+     * アーカイブ末尾到達時の処理
+     *
+     * ENDEDイベント・再生位置監視・終端での一時停止のいずれから呼ばれても
+     * 1回の再生につき1度だけ処理する。
+     */
+    handleArchiveEnd() {
+        if (this.archiveEndHandled) {
+            return;
+        }
+        this.archiveEndHandled = true;
+        this.stopMonitor();
+
+        if (!this.enabled) {
+            // 自動再抽選OFFのときは何も選ばずに停止する（仕様）
+            // ただし無言で止まると不具合に見えるため呼び出し元に通知する
+            console.debug('[Monitor] archiveEnd (auto reshuffle off)');
+            if (this.onArchiveEndWithoutReshuffle) {
+                this.onArchiveEndWithoutReshuffle();
+            }
+            return;
+        }
+
+        console.debug('[Monitor] archiveEnd: reshuffling');
+        if (this.onSongEnd) {
+            this.onSongEnd();
+        }
+    }
+
+    /**
+     * 監視を中断し、以降の末尾処理を抑止する
+     *
+     * プレイヤーを閉じたときなど、stopVideo()由来のENDEDで
+     * 意図しない再抽選が走らないようにするために使う。
+     */
+    suspend() {
+        this.stopMonitor();
+        this.clearBufferingTimeout();
+        // 終了時刻は保持する。再度再生したときに曲送り表示を継続するため
+        this.archiveEndHandled = true;
     }
 
     /**
@@ -339,8 +430,9 @@ export class AutoReshuffleManager {
             if (this.needsFadeIn) {
                 this.startFadeIn();
             }
-            // 一時停止から再開した場合、表示更新用の監視を再開
-            if (this.currentSongEndTime !== null && !this.reshuffleMonitorId) {
+            // 一時停止から再開した場合、監視を再開
+            // 次のタイムスタンプがない（最後の楽曲）場合も末尾検知のため監視する
+            if (!this.reshuffleMonitorId) {
                 this.startMonitor();
             }
         }
@@ -352,14 +444,16 @@ export class AutoReshuffleManager {
             this.clearBufferingTimeout();
         }
 
-        // 動画終了時に次のタイムスタンプに遷移（自動再抽選が有効な場合）
-        if (event.data === YT.PlayerState.ENDED && this.enabled) {
-            this.stopMonitor();
-            if (this.onSongEnd) {
-                this.onSongEnd();
-            }
+        // 動画終了時はアーカイブ末尾として扱う
+        if (event.data === YT.PlayerState.ENDED) {
+            this.handleArchiveEnd();
         } else if (event.data === YT.PlayerState.PAUSED) {
-            this.stopMonitor();
+            // 終端で一時停止扱いになるプレイヤーもあるため、末尾かどうかを確認する
+            if (this.isNearVideoEnd(videoPlayerManager.getCurrentTime())) {
+                this.handleArchiveEnd();
+            } else {
+                this.stopMonitor();
+            }
         }
     }
 
