@@ -720,4 +720,61 @@ class TimestampDecompositionServiceTest extends TestCase
         $this->assertNull($saved->title_part_index);
         $this->assertNull($saved->artist_part_index);
     }
+
+    /**
+     * 無視キーワードを語の一部に含むアーティスト名が自動判定で捨てられないことをテスト
+     *
+     * "Official髭男dism" の "official" が無視キーワードとして部分一致すると、
+     * アーティスト名なしで自動確定され、アーティスト名が空の楽曲マスタが作られてしまう
+     */
+    public function test_scan_does_not_auto_match_artist_containing_ignore_keyword(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        Channel::create([
+            'channel_id' => 'UC_test_channel',
+            'handle' => '@test',
+            'title' => 'Test Channel',
+            'user_id' => $user->id,
+        ]);
+
+        Archive::create([
+            'id' => (string) Str::ulid(),
+            'video_id' => 'test_video_1',
+            'channel_id' => 'UC_test_channel',
+            'title' => 'Test Video',
+            'is_display' => true,
+            'published_at' => now(),
+            'comments_updated_at' => now(),
+        ]);
+
+        $text = 'ミックスナッツ / Official髭男dism';
+
+        TsItem::create([
+            'id' => (string) Str::ulid(),
+            'video_id' => 'test_video_1',
+            'comment_id' => 'test_video_1',
+            'type' => '1',
+            'ts_text' => '0:00',
+            'ts_num' => 0,
+            'text' => $text,
+            'normalized_text' => TextNormalizer::normalize($text),
+            'is_display' => true,
+        ]);
+
+        $this->service->scanAndDecompose();
+
+        $decomposition = TimestampDecomposition::where('normalized_text', TextNormalizer::normalize($text))->first();
+
+        $this->assertNotNull($decomposition);
+        // アーティスト名を捨てて自動確定せず、手動選別に回ること
+        $this->assertEquals(TimestampDecomposition::STATUS_PENDING, $decomposition->status);
+        $this->assertNull($decomposition->derived_title);
+        $this->assertNull($decomposition->derived_artist);
+
+        // アーティスト名が空の楽曲マスタが作られないこと
+        $this->service->bulkLinkAutoMatched();
+        $this->assertDatabaseCount('songs', 0);
+    }
 }
