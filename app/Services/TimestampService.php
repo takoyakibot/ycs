@@ -420,7 +420,11 @@ class TimestampService
     }
 
     /**
-     * 同じ動画内の次のタイムスタンプ（秒数）を取得
+     * 同じ動画内の次の楽曲タイムスタンプ（秒数）を取得
+     *
+     * 抽出条件はgetNextTimestampInArchive()と揃える。
+     * 条件がずれていると「next_ts_numはあるのに次の楽曲は取得できない」状態になり、
+     * 表示更新の監視が行き止まりになる。
      */
     private function getNextTimestampInVideo(string $videoId, ?int $currentTsNum): ?int
     {
@@ -428,13 +432,21 @@ class TimestampService
             return null;
         }
 
-        $nextItem = TsItem::where('video_id', $videoId)
-            ->where('ts_num', '>', $currentTsNum)
-            ->where('is_display', 1)
-            ->whereNotNull('text')
-            ->where('text', '!=', '')
-            ->orderBy('ts_num', 'asc')
-            ->first(['ts_num']);
+        $nextItem = TsItem::query()
+            ->leftJoin('timestamp_song_mappings', 'ts_items.normalized_text', '=', 'timestamp_song_mappings.normalized_text')
+            ->where('ts_items.video_id', $videoId)
+            ->where('ts_items.ts_num', '>', $currentTsNum)
+            ->where('ts_items.is_display', 1)
+            ->whereNotNull('ts_items.text')
+            ->where('ts_items.text', '!=', '')
+            ->whereNotNull('ts_items.normalized_text')
+            // 「楽曲ではない」を除外
+            ->where(function ($q) {
+                $q->whereNull('timestamp_song_mappings.id')
+                    ->orWhere('timestamp_song_mappings.is_not_song', false);
+            })
+            ->orderBy('ts_items.ts_num', 'asc')
+            ->first(['ts_items.ts_num']);
 
         return $nextItem?->ts_num;
     }
