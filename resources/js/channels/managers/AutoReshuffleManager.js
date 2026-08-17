@@ -280,7 +280,7 @@ export class AutoReshuffleManager {
     suspend() {
         this.stopMonitor();
         this.clearBufferingTimeout();
-        this.currentSongEndTime = null;
+        // 終了時刻は保持する。再度再生したときに曲送り表示を継続するため
         this.archiveEndHandled = true;
     }
 
