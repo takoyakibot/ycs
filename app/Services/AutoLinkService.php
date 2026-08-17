@@ -2,16 +2,21 @@
 
 namespace App\Services;
 
-use App\Helpers\TextNormalizer;
-use App\Models\Song;
 use App\Models\TimestampSongMapping;
 use App\Models\TsItem;
 use Illuminate\Support\Facades\Log;
 
 class AutoLinkService
 {
+    public function __construct(
+        protected SongMatchingService $songMatchingService
+    ) {}
+
     /**
      * 未紐付けのタイムスタンプを既存楽曲マスタと照合し、自動紐付けする
+     *
+     * 楽曲マスタの新規作成は行わない。誤った表記からマスタが量産されるのを
+     * 避けるため、自動処理は既存マスタへの紐付けのみに限定する。
      *
      * @param  int  $limit  処理件数上限
      * @param  callable|null  $onProgress  進捗コールバック function(string $message): void
@@ -35,29 +40,127 @@ class AutoLinkService
             return $result;
         }
 
-        $onProgress && $onProgress(sprintf('%d件の未紐付けテキストを処理します。', count($unlinkedTexts)));
+        $total = count($unlinkedTexts);
+        $onProgress && $onProgress(sprintf('%d件の未紐付けテキストを処理します。', $total));
 
         foreach ($unlinkedTexts as $index => $item) {
             $result['processed']++;
 
             try {
-                $linkResult = $this->processAutoLink($item['normalized_text']);
+                $match = $this->songMatchingService->findBestMatch($item['normalized_text']);
 
-                if ($linkResult === 'linked') {
+                if ($match !== null) {
+                    $this->createAutoLinkMapping($item['normalized_text'], $match['song_id'], $match['confidence']);
+
                     $result['linked']++;
-                    $onProgress && $onProgress(sprintf('[%d/%d] 紐付け成功: %s', $index + 1, count($unlinkedTexts), $item['text']));
+                    $onProgress && $onProgress(sprintf(
+                        '[%d/%d] 紐付け成功: %s → %s / %s (信頼度 %.2f)',
+                        $index + 1,
+                        $total,
+                        $item['text'],
+                        $match['title'],
+                        $match['artist'],
+                        $match['confidence']
+                    ));
                 } else {
                     $result['skipped']++;
-                    $onProgress && $onProgress(sprintf('[%d/%d] 一致なし: %s', $index + 1, count($unlinkedTexts), $item['text']));
+                    $onProgress && $onProgress(sprintf('[%d/%d] 一致なし: %s', $index + 1, $total, $item['text']));
                 }
             } catch (\Exception $e) {
                 $result['failed']++;
                 $this->log('error', sprintf('自動紐付けエラー: %s - %s', $item['text'], $e->getMessage()));
-                $onProgress && $onProgress(sprintf('[%d/%d] エラー: %s - %s', $index + 1, count($unlinkedTexts), $item['text'], $e->getMessage()));
+                $onProgress && $onProgress(sprintf('[%d/%d] エラー: %s - %s', $index + 1, $total, $item['text'], $e->getMessage()));
             }
         }
 
         return $result;
+    }
+
+    /**
+     * 未紐付けテキストを照合するが、紐付けは行わずに結果を集計する
+     *
+     * 閾値を本番へ反映する前に、実データでの的中件数と誤爆の傾向を
+     * 確認するために使用する。
+     *
+     * @param  int  $limit  処理件数上限
+     * @param  string|null  $channelId  チャンネルIDフィルタ
+     * @return array{
+     *     total: int,
+     *     auto_linkable: int,
+     *     candidate_only: int,
+     *     no_match: int,
+     *     ambiguous: int,
+     *     by_confidence: array<string, int>,
+     *     samples: array<int, array{text: string, title: string, artist: string, confidence: float, coverage: float, artist_hit: bool}>,
+     *     no_match_samples: string[]
+     * }
+     */
+    public function analyzeUnlinkedTimestamps(int $limit = 100, ?string $channelId = null): array
+    {
+        $autoThreshold = (float) config('songs.matching.auto_link_threshold', 0.85);
+        $candidateThreshold = (float) config('songs.matching.candidate_threshold', 0.5);
+
+        $unlinkedTexts = $this->getUnlinkedTexts($limit, $channelId);
+
+        $summary = [
+            'total' => count($unlinkedTexts),
+            'auto_linkable' => 0,
+            'candidate_only' => 0,
+            'no_match' => 0,
+            'ambiguous' => 0,
+            'by_confidence' => [],
+            'samples' => [],
+            'no_match_samples' => [],
+        ];
+
+        foreach ($unlinkedTexts as $item) {
+            $candidates = $this->songMatchingService->findCandidates($item['normalized_text']);
+
+            if (empty($candidates)) {
+                $summary['no_match']++;
+                if (count($summary['no_match_samples']) < 20) {
+                    $summary['no_match_samples'][] = $item['text'];
+                }
+
+                continue;
+            }
+
+            $best = $candidates[0];
+            $confidenceKey = number_format($best['confidence'], 2);
+            $summary['by_confidence'][$confidenceKey] = ($summary['by_confidence'][$confidenceKey] ?? 0) + 1;
+
+            // 同信頼度で別楽曲が並ぶ場合は自動紐付けの対象外となる
+            $isAmbiguous = isset($candidates[1])
+                && $candidates[1]['song_id'] !== $best['song_id']
+                && $candidates[1]['confidence'] === $best['confidence'];
+
+            if ($isAmbiguous) {
+                $summary['ambiguous']++;
+            }
+
+            if ($best['confidence'] >= $autoThreshold && ! $isAmbiguous) {
+                $summary['auto_linkable']++;
+            } elseif ($best['confidence'] >= $candidateThreshold) {
+                $summary['candidate_only']++;
+            } else {
+                $summary['no_match']++;
+            }
+
+            if (count($summary['samples']) < 30) {
+                $summary['samples'][] = [
+                    'text' => $item['text'],
+                    'title' => $best['title'],
+                    'artist' => $best['artist'],
+                    'confidence' => $best['confidence'],
+                    'coverage' => $best['coverage'],
+                    'artist_hit' => $best['artist_hit'],
+                ];
+            }
+        }
+
+        krsort($summary['by_confidence']);
+
+        return $summary;
     }
 
     /**
@@ -95,78 +198,12 @@ class AutoLinkService
     }
 
     /**
-     * 単一テキストの自動紐付け処理
-     *
-     * normalized_textからtitle/artistを抽出し、songs.normalized_titleと完全一致照合。
-     * 一致すれば自動紐付け、不一致なら未紐付けのまま。
-     *
-     * @return string 'linked'|'not_found'
-     */
-    protected function processAutoLink(string $normalizedText): string
-    {
-        $existingSong = $this->findSongByNormalizedText($normalizedText);
-        if ($existingSong) {
-            $this->createAutoLinkMapping($normalizedText, $existingSong->id);
-
-            return 'linked';
-        }
-
-        return 'not_found';
-    }
-
-    /**
-     * normalized_textから楽曲名を抽出し、既存songsテーブルと照合する
-     *
-     * extractSongInfo()で分割し、title部分とartist部分の両方で
-     * songs.normalized_titleを検索する（順序が不定のため）
-     */
-    protected function findSongByNormalizedText(string $normalizedText): ?Song
-    {
-        $songInfo = TextNormalizer::extractSongInfo($normalizedText);
-
-        $candidates = [];
-
-        // parts[1]（title部分）でnormalized_titleを検索
-        if (! empty($songInfo['title'])) {
-            $song = Song::where('normalized_title', $songInfo['title'])->first();
-            if ($song) {
-                $candidates[] = $song;
-            }
-        }
-
-        // parts[0]（artist部分）でもnormalized_titleを検索（順序が逆の場合に対応）
-        if (! empty($songInfo['artist'])) {
-            $song = Song::where('normalized_title', $songInfo['artist'])->first();
-            if ($song && ! in_array($song->id, array_map(fn ($s) => $s->id, $candidates))) {
-                $candidates[] = $song;
-            }
-        }
-
-        // 区切りなしの場合
-        if (empty($songInfo['artist'])) {
-            return $candidates[0] ?? null;
-        }
-
-        // 候補が1つならそのまま返す
-        if (count($candidates) === 1) {
-            return $candidates[0];
-        }
-
-        // 候補が複数ある場合、artist側も一致するものを優先
-        foreach ($candidates as $candidate) {
-            $normalizedArtist = $candidate->normalized_artist;
-            if ($normalizedArtist === $songInfo['artist'] || $normalizedArtist === $songInfo['title']) {
-                return $candidate;
-            }
-        }
-
-        return $candidates[0] ?? null;
-    }
-
-    /**
      * 自動紐付けマッピングを作成
+     *
+     * is_manual を false のまま作成するため、誤った紐付けが混ざった場合でも
+     * 自動紐付け分だけをまとめて取り消すことができる。
      */
-    protected function createAutoLinkMapping(string $normalizedText, string $songId): void
+    protected function createAutoLinkMapping(string $normalizedText, string $songId, float $confidence): void
     {
         TimestampSongMapping::updateOrCreate(
             ['normalized_text' => $normalizedText],
@@ -175,7 +212,7 @@ class AutoLinkService
                 'is_not_song' => false,
                 'status' => TimestampSongMapping::STATUS_LINKED,
                 'is_manual' => false,
-                'confidence' => 0.8,
+                'confidence' => $confidence,
             ]
         );
     }

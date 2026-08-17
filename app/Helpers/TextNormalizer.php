@@ -123,6 +123,101 @@ class TextNormalizer
     }
 
     /**
+     * 照合専用キーを生成
+     *
+     * normalize() が「表記を統一する」のに対し、こちらは「装飾を捨てる」ことを目的とする。
+     * 記号・空白・制御文字をすべて除去し、文字と数字だけを残す。
+     *
+     * タイムスタンプに付与される装飾（♪、絵文字、【】、曲番号、時間範囲など）は
+     * 種類が無限にあり、除去パターンを列挙して消す方式では追従できない。
+     * そのため「何を消すか」ではなく「何を残すか」を定義し、
+     * 残ったキーに楽曲マスタのキーが含まれるかで照合する。
+     *
+     * 例: "♪01.ロキ/みきとP (0:00～3:20)" → "01ロキみきとp"
+     *
+     * @param  string|null  $text  対象テキスト
+     * @return string 照合用キー（照合できない場合は空文字）
+     */
+    public static function matchKey(?string $text): string
+    {
+        if (empty($text)) {
+            return '';
+        }
+
+        $normalized = static::normalize($text);
+
+        // 結合文字（濁点・半濁点の分解表記）を合成済みの表記に統一する
+        // 例: "か\u{3099}" (2文字) → "が" (1文字)
+        if (class_exists(\Normalizer::class) && ! \Normalizer::isNormalized($normalized, \Normalizer::FORM_C)) {
+            $composed = \Normalizer::normalize($normalized, \Normalizer::FORM_C);
+            if ($composed !== false) {
+                $normalized = $composed;
+            }
+        }
+
+        // 記号(S)・句読点(P)・区切り(Z)・制御/書式(C)を除去
+        // 文字(L)・数字(N)・結合文字(M)のみが残る
+        $key = preg_replace('/[\p{P}\p{S}\p{Z}\p{C}]+/u', '', $normalized);
+
+        return $key ?? '';
+    }
+
+    /**
+     * アーティスト名の連結表記を分割するパターン
+     *
+     * 同じ楽曲でも「歌唱者」「作曲者」「グループ名」「ボカロ名」のいずれを
+     * 記載するかは投稿者によって異なり、複数名を接続詞で並べる例も多い。
+     * そのため単一の文字列として比較せず、トークンに分割して
+     * 「どれか1つでも一致すれば加点」という判定に用いる。
+     */
+    private const ARTIST_CONNECTOR_PATTERNS = [
+        // feat 系は直後に空白が無い表記が多い（例: "feat.鏡音リン"）
+        '/(?:\s|^)(?:featuring|feat|ft)\.?\s*/iu',
+        // 単語として現れる接続語は前後の空白を必須にする
+        // （"and" や "x" を含む名前を誤分割しないため）
+        '/\s+(?:with|versus|vs|and)\.?\s+/iu',
+        '/\s+x\s+/iu',
+    ];
+
+    /**
+     * アーティスト名を構成要素のトークンに分割
+     *
+     * 正規化前の生テキストを受け取る（normalize() はハイフンやコロンを
+     * スラッシュへ統一するため、"AKB-48" のような名前が壊れる）。
+     *
+     * 例: "みきとP feat.鏡音リン" → ["みきとP", "鏡音リン"]
+     * 例: "YOASOBI×初音ミク"      → ["YOASOBI", "初音ミク"]
+     *
+     * @param  string|null  $artist  アーティスト名（生テキスト）
+     * @return string[] トークンの配列（空要素は除去済み）
+     */
+    public static function splitArtistTokens(?string $artist): array
+    {
+        if (empty($artist)) {
+            return [];
+        }
+
+        // 接続語をセパレータ記号へ置換したうえで、記号類でまとめて分割する
+        $text = $artist;
+        foreach (self::ARTIST_CONNECTOR_PATTERNS as $pattern) {
+            $text = preg_replace($pattern, '|', $text) ?? $text;
+        }
+
+        $tokens = preg_split('/[|,、&＆\/／・×✕✖]+/u', $text, -1, PREG_SPLIT_NO_EMPTY);
+        if ($tokens === false) {
+            return [];
+        }
+
+        $tokens = array_map('trim', $tokens);
+        $tokens = array_filter($tokens, fn ($token) => $token !== '');
+
+        // 全体も1トークンとして扱う（分割せずに一致する場合に対応するため）
+        $tokens[] = trim($artist);
+
+        return array_values(array_unique($tokens));
+    }
+
+    /**
      * 先頭の全角スペース（および半角スペース）を除外し、不可視文字を除去
      */
     public static function trimFullwidthSpace(?string $text): string

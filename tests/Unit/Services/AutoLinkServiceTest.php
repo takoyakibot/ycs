@@ -207,4 +207,92 @@ class AutoLinkServiceTest extends TestCase
             'song_id' => $existingSong->id,
         ]);
     }
+
+    public function test_auto_link_matches_text_with_decorations(): void
+    {
+        $existingSong = Song::factory()->create([
+            'title' => 'ロキ',
+            'artist' => 'みきとP',
+        ]);
+
+        // 除去パターンを定義していない装飾（曲番号・時間範囲・記号）でも紐付く
+        $this->createTsItem('♪01.ロキ/みきとP (0:00～3:20)');
+
+        $result = $this->service->autoLinkUnlinkedTimestamps(10);
+
+        $this->assertEquals(1, $result['linked']);
+        $this->assertDatabaseHas('timestamp_song_mappings', [
+            'song_id' => $existingSong->id,
+            'is_manual' => false,
+        ]);
+    }
+
+    public function test_auto_link_does_not_create_songs(): void
+    {
+        $this->createTsItem('マスタに存在しない曲 / だれか');
+
+        $result = $this->service->autoLinkUnlinkedTimestamps(10);
+
+        $this->assertEquals(0, $result['linked']);
+        $this->assertDatabaseCount('songs', 0);
+    }
+
+    public function test_auto_link_skips_ambiguous_matches(): void
+    {
+        // 同名タイトルで別アーティストの楽曲が2件ある状態
+        Song::factory()->create(['title' => 'カタルシス', 'artist' => 'アーティストA']);
+        Song::factory()->create(['title' => 'カタルシス', 'artist' => 'アーティストB']);
+
+        $this->createTsItem('カタルシス');
+
+        $result = $this->service->autoLinkUnlinkedTimestamps(10);
+
+        $this->assertEquals(1, $result['processed']);
+        $this->assertEquals(0, $result['linked']);
+        $this->assertDatabaseCount('timestamp_song_mappings', 0);
+    }
+
+    public function test_auto_link_records_matching_confidence(): void
+    {
+        Song::factory()->create(['title' => 'シャルル', 'artist' => 'バルーン']);
+
+        $this->createTsItem('シャルル');
+
+        $this->service->autoLinkUnlinkedTimestamps(10);
+
+        $mapping = TimestampSongMapping::first();
+        $this->assertNotNull($mapping);
+        $this->assertEquals(0.95, $mapping->confidence);
+    }
+
+    public function test_analyze_summarizes_without_writing(): void
+    {
+        Song::factory()->create(['title' => 'ロキ', 'artist' => 'みきとP']);
+
+        $this->createTsItem('♪ロキ / みきとP');
+        $this->createTsItem('マスタに存在しない曲');
+
+        $summary = $this->service->analyzeUnlinkedTimestamps(10);
+
+        $this->assertEquals(2, $summary['total']);
+        $this->assertEquals(1, $summary['auto_linkable']);
+        $this->assertEquals(1, $summary['no_match']);
+
+        // ドライランなのでマッピングは作られない
+        $this->assertDatabaseCount('timestamp_song_mappings', 0);
+    }
+
+    public function test_analyze_counts_candidate_only_matches(): void
+    {
+        Song::factory()->create(['title' => '夜', 'artist' => 'ヨルシカ']);
+
+        // 短いタイトルの部分一致は自動紐付けせず候補提示に留まる
+        $this->createTsItem('夜行 / だれか');
+
+        $summary = $this->service->analyzeUnlinkedTimestamps(10);
+
+        $this->assertEquals(1, $summary['total']);
+        $this->assertEquals(0, $summary['auto_linkable']);
+        $this->assertDatabaseCount('timestamp_song_mappings', 0);
+    }
 }

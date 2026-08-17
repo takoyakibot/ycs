@@ -32,4 +32,26 @@ return [
     |
     */
     'auto_link' => [],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Song Matching Settings
+    |--------------------------------------------------------------------------
+    |
+    | タイムスタンプのテキストと楽曲マスタの照合設定です。
+    | 照合は「マスタのタイトルがテキストに含まれるか」で行い、
+    | 一致の確実さを信頼度（0.0 ～ 1.0）として算出します。
+    |
+    | auto_link_threshold: この値以上の信頼度で自動紐付けします。
+    | candidate_threshold: この値以上の信頼度を画面上の候補として提示します。
+    |
+    | 信頼度の水準は SongMatchingService の CONFIDENCE_* 定数を参照してください。
+    | 閾値を下げると紐付け件数は増えますが誤爆も増えます。
+    |
+    */
+    'matching' => [
+        'auto_link_threshold' => env('SONG_AUTO_LINK_THRESHOLD', 0.85),
+        'candidate_threshold' => env('SONG_CANDIDATE_THRESHOLD', 0.5),
+        'candidate_limit' => env('SONG_CANDIDATE_LIMIT', 5),
+    ],
 ];

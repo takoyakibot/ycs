@@ -503,4 +503,106 @@ class TextNormalizerTest extends TestCase
         $this->assertEquals('🎵 テスト', TextNormalizer::trimFullwidthSpace('　🎵 テスト'));
         $this->assertEquals('🎶 曲名', TextNormalizer::trimFullwidthSpace('🎶 曲名'));
     }
+
+    /**
+     * matchKeyが記号・空白・絵文字を除去することをテスト
+     */
+    public function test_match_key_removes_decorations(): void
+    {
+        $this->assertEquals('ロキみきとp', TextNormalizer::matchKey('♪ロキ / みきとP'));
+        $this->assertEquals('ロキみきとp', TextNormalizer::matchKey('【ロキ / みきとP】'));
+        $this->assertEquals('ロキみきとp', TextNormalizer::matchKey('★☆ロキ☆★　みきとP'));
+        $this->assertEquals('ロキみきとp', TextNormalizer::matchKey('ロキ（みきとP）🎤'));
+        $this->assertEquals('愛して愛して愛して', TextNormalizer::matchKey('♪愛して愛して愛して🎤'));
+    }
+
+    /**
+     * matchKeyが数字を保持することをテスト
+     *
+     * 曲番号は残るが、照合は包含判定で行うため問題にならない。
+     */
+    public function test_match_key_keeps_digits(): void
+    {
+        $this->assertEquals('01ロキみきとp', TextNormalizer::matchKey('01.ロキ/みきとP'));
+        $this->assertEquals('0123401602ロキ', TextNormalizer::matchKey('0:12:34～0:16:02 ロキ'));
+    }
+
+    /**
+     * matchKeyが記号のみのテキストに対して空文字を返すことをテスト
+     */
+    public function test_match_key_returns_empty_for_symbols_only(): void
+    {
+        $this->assertEquals('', TextNormalizer::matchKey('♪♪♪'));
+        $this->assertEquals('', TextNormalizer::matchKey('---'));
+        $this->assertEquals('', TextNormalizer::matchKey(''));
+        $this->assertEquals('', TextNormalizer::matchKey(null));
+    }
+
+    /**
+     * matchKeyが日本語以外の文字を保持することをテスト
+     */
+    public function test_match_key_keeps_non_japanese_letters(): void
+    {
+        $this->assertEquals('café', TextNormalizer::matchKey('Café'));
+        $this->assertEquals('한국노래', TextNormalizer::matchKey('한국노래'));
+        $this->assertEquals('々ノ木', TextNormalizer::matchKey('々ノ木'));
+    }
+
+    /**
+     * matchKeyが濁点の分解表記を合成表記に統一することをテスト
+     */
+    public function test_match_key_composes_decomposed_characters(): void
+    {
+        // "か" + 結合濁点(U+3099) は "が" と同じキーになる
+        $decomposed = "か\u{3099}ちょう";
+
+        $this->assertEquals(TextNormalizer::matchKey('がちょう'), TextNormalizer::matchKey($decomposed));
+    }
+
+    /**
+     * splitArtistTokensが接続詞でアーティスト名を分割することをテスト
+     */
+    public function test_split_artist_tokens_splits_by_connectors(): void
+    {
+        $this->assertEquals(
+            ['みきとP', '鏡音リン', 'みきとP feat.鏡音リン'],
+            TextNormalizer::splitArtistTokens('みきとP feat.鏡音リン')
+        );
+
+        $this->assertEquals(
+            ['YOASOBI', '初音ミク', 'YOASOBI×初音ミク'],
+            TextNormalizer::splitArtistTokens('YOASOBI×初音ミク')
+        );
+
+        $this->assertEquals(
+            ['ヨルシカ', 'n-buna', 'ヨルシカ・n-buna'],
+            TextNormalizer::splitArtistTokens('ヨルシカ・n-buna')
+        );
+
+        $this->assertEquals(
+            ['Aimer', '澤野弘之', 'Aimer with 澤野弘之'],
+            TextNormalizer::splitArtistTokens('Aimer with 澤野弘之')
+        );
+    }
+
+    /**
+     * splitArtistTokensが接続詞を含まない名前を分割しないことをテスト
+     */
+    public function test_split_artist_tokens_keeps_names_intact(): void
+    {
+        $this->assertEquals(['Official髭男dism'], TextNormalizer::splitArtistTokens('Official髭男dism'));
+        $this->assertEquals(['back number'], TextNormalizer::splitArtistTokens('back number'));
+
+        // ハイフンやアンドを名前の一部として含むケース
+        $this->assertEquals(['AKB-48'], TextNormalizer::splitArtistTokens('AKB-48'));
+    }
+
+    /**
+     * splitArtistTokensが空の入力に対して空配列を返すことをテスト
+     */
+    public function test_split_artist_tokens_returns_empty_for_empty_input(): void
+    {
+        $this->assertEquals([], TextNormalizer::splitArtistTokens(''));
+        $this->assertEquals([], TextNormalizer::splitArtistTokens(null));
+    }
 }
