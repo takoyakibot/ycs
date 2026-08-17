@@ -103,6 +103,16 @@ class AutoLinkSongs extends Command
             $this->table(['信頼度', '件数'], $rows);
         }
 
+        if (! empty($summary['by_source'])) {
+            $this->newLine();
+            $this->info('=== 照合の由来（最有力候補） ===');
+            $rows = [];
+            foreach ($summary['by_source'] as $source => $sourceCount) {
+                $rows[] = [$source === 'dictionary' ? '既存の紐付け表記' : '楽曲マスタ', $sourceCount];
+            }
+            $this->table(['由来', '件数'], $rows);
+        }
+
         if (! empty($summary['samples'])) {
             $this->newLine();
             $this->info('=== 照合サンプル ===');
@@ -112,11 +122,12 @@ class AutoLinkSongs extends Command
                     mb_strimwidth($sample['text'], 0, 40, '…'),
                     mb_strimwidth($sample['title'].' / '.$sample['artist'], 0, 34, '…'),
                     number_format($sample['confidence'], 2),
-                    sprintf('%.0f%%', $sample['coverage'] * 100),
+                    $sample['coverage'] === null ? '-' : sprintf('%.0f%%', $sample['coverage'] * 100),
                     $sample['artist_hit'] ? '○' : '',
+                    $sample['source'] === 'dictionary' ? '既存表記' : 'マスタ',
                 ];
             }
-            $this->table(['元テキスト', '候補', '信頼度', '被覆率', 'artist'], $rows);
+            $this->table(['元テキスト', '候補', '信頼度', '被覆率', 'artist', '由来'], $rows);
         }
 
         if (! empty($summary['no_match_samples'])) {

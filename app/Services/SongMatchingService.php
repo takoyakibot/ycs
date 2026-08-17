@@ -18,9 +18,22 @@ use App\Models\Song;
  * アーティスト名は照合の必須条件にしない。同じ楽曲でも歌唱者・作曲者・グループ名・
  * ボカロ名のどれを書くかは投稿者によって異なるため、一致した場合のみ加点し、
  * 不一致でも減点しない。
+ *
+ * 楽曲マスタで照合できない場合は、紐付け済みマッピングの辞書
+ * （MappingDictionaryService）も照合対象に含める。
  */
 class SongMatchingService
 {
+    /**
+     * 候補の由来: 楽曲マスタとの照合
+     */
+    public const SOURCE_MASTER = 'master';
+
+    /**
+     * 候補の由来: 紐付け済みマッピングの辞書との照合
+     */
+    public const SOURCE_DICTIONARY = 'dictionary';
+
     /**
      * 照合対象とするタイトルキーの最小文字数
      *
@@ -82,17 +95,66 @@ class SongMatchingService
      */
     private ?array $ignoreKeywordKeys = null;
 
+    public function __construct(
+        protected MappingDictionaryService $mappingDictionaryService
+    ) {}
+
     /**
      * テキストに一致する楽曲候補を信頼度の高い順に返す
      *
+     * 楽曲マスタとの照合結果に、紐付け済みマッピングの辞書との照合結果を統合する。
+     * 同じ楽曲が両方から得られた場合は信頼度の高いほうを採用する。
+     *
      * @param  string  $text  タイムスタンプのテキスト（生テキストでも正規化済みでも可）
      * @param  int|null  $limit  返却する候補数の上限
-     * @return array<int, array{song_id: string, title: string, artist: string, confidence: float, coverage: float, artist_hit: bool, matched_key: string}>
+     * @return array<int, array{song_id: string, title: string, artist: string, confidence: float, coverage: float|null, artist_hit: bool|null, matched_key: string|null, source: string, source_text: string|null, similarity: float|null}>
      */
     public function findCandidates(string $text, ?int $limit = null): array
     {
         $limit = $limit ?? (int) config('songs.matching.candidate_limit', 5);
 
+        $candidates = $this->findMasterCandidates($text);
+
+        // 楽曲マスタで得られなかった楽曲を辞書から補う
+        foreach ($this->mappingDictionaryService->findCandidates($text, $limit) as $entry) {
+            if (isset($candidates[$entry['song_id']])
+                && $candidates[$entry['song_id']]['confidence'] >= $entry['confidence']
+            ) {
+                continue;
+            }
+
+            $candidates[$entry['song_id']] = [
+                'song_id' => $entry['song_id'],
+                'title' => $entry['title'],
+                'artist' => $entry['artist'],
+                'confidence' => $entry['confidence'],
+                'coverage' => null,
+                'artist_hit' => null,
+                'matched_key' => null,
+                'source' => self::SOURCE_DICTIONARY,
+                'source_text' => $entry['source_text'],
+                'similarity' => $entry['similarity'],
+            ];
+        }
+
+        $candidates = array_values($candidates);
+
+        // 信頼度 → タイトルキーの長さ（長い一致のほうが確実）の順に並べる
+        usort($candidates, function ($a, $b) {
+            return [$b['confidence'], mb_strlen((string) $b['matched_key'])]
+                <=> [$a['confidence'], mb_strlen((string) $a['matched_key'])];
+        });
+
+        return array_slice($candidates, 0, $limit);
+    }
+
+    /**
+     * 楽曲マスタとの照合候補を楽曲IDをキーにして返す
+     *
+     * @return array<string, array{song_id: string, title: string, artist: string, confidence: float, coverage: float, artist_hit: bool, matched_key: string, source: string, source_text: null, similarity: null}>
+     */
+    private function findMasterCandidates(string $text): array
+    {
         $textKey = TextNormalizer::matchKey($text);
         if ($textKey === '') {
             return [];
@@ -115,25 +177,28 @@ class SongMatchingService
 
             $coverage = min(1.0, $entry['title_key_length'] / $effectiveLength);
             $artistHit = $this->hasArtistHit($textKey, $entry['artist_token_keys']);
+            $confidence = $this->scoreCandidate($coverage, $entry['title_key_length'], $artistHit);
 
-            $candidates[] = [
+            // 同じ楽曲が複数のキーで一致した場合は信頼度の高いほうを残す
+            if (isset($candidates[$entry['id']]) && $candidates[$entry['id']]['confidence'] >= $confidence) {
+                continue;
+            }
+
+            $candidates[$entry['id']] = [
                 'song_id' => $entry['id'],
                 'title' => $entry['title'],
                 'artist' => $entry['artist'],
-                'confidence' => $this->scoreCandidate($coverage, $entry['title_key_length'], $artistHit),
+                'confidence' => $confidence,
                 'coverage' => round($coverage, 4),
                 'artist_hit' => $artistHit,
                 'matched_key' => $entry['title_key'],
+                'source' => self::SOURCE_MASTER,
+                'source_text' => null,
+                'similarity' => null,
             ];
         }
 
-        // 信頼度 → タイトルキーの長さ（長い一致のほうが確実）の順に並べる
-        usort($candidates, function ($a, $b) {
-            return [$b['confidence'], mb_strlen($b['matched_key'])]
-                <=> [$a['confidence'], mb_strlen($a['matched_key'])];
-        });
-
-        return array_slice($candidates, 0, $limit);
+        return $candidates;
     }
 
     /**

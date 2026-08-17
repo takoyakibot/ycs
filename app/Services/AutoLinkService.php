@@ -54,13 +54,14 @@ class AutoLinkService
 
                     $result['linked']++;
                     $onProgress && $onProgress(sprintf(
-                        '[%d/%d] 紐付け成功: %s → %s / %s (信頼度 %.2f)',
+                        '[%d/%d] 紐付け成功: %s → %s / %s (信頼度 %.2f, %s)',
                         $index + 1,
                         $total,
                         $item['text'],
                         $match['title'],
                         $match['artist'],
-                        $match['confidence']
+                        $match['confidence'],
+                        $match['source'] === SongMatchingService::SOURCE_DICTIONARY ? '既存表記' : 'マスタ'
                     ));
                 } else {
                     $result['skipped']++;
@@ -91,7 +92,8 @@ class AutoLinkService
      *     no_match: int,
      *     ambiguous: int,
      *     by_confidence: array<string, int>,
-     *     samples: array<int, array{text: string, title: string, artist: string, confidence: float, coverage: float, artist_hit: bool}>,
+     *     by_source: array<string, int>,
+     *     samples: array<int, array{text: string, title: string, artist: string, confidence: float, coverage: float|null, artist_hit: bool|null, source: string}>,
      *     no_match_samples: string[]
      * }
      */
@@ -109,6 +111,7 @@ class AutoLinkService
             'no_match' => 0,
             'ambiguous' => 0,
             'by_confidence' => [],
+            'by_source' => [],
             'samples' => [],
             'no_match_samples' => [],
         ];
@@ -128,6 +131,7 @@ class AutoLinkService
             $best = $candidates[0];
             $confidenceKey = number_format($best['confidence'], 2);
             $summary['by_confidence'][$confidenceKey] = ($summary['by_confidence'][$confidenceKey] ?? 0) + 1;
+            $summary['by_source'][$best['source']] = ($summary['by_source'][$best['source']] ?? 0) + 1;
 
             // 同信頼度で別楽曲が並ぶ場合は自動紐付けの対象外となる
             $isAmbiguous = isset($candidates[1])
@@ -154,6 +158,7 @@ class AutoLinkService
                     'confidence' => $best['confidence'],
                     'coverage' => $best['coverage'],
                     'artist_hit' => $best['artist_hit'],
+                    'source' => $best['source'],
                 ];
             }
         }

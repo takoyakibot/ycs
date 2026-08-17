@@ -282,6 +282,60 @@ class AutoLinkServiceTest extends TestCase
         $this->assertDatabaseCount('timestamp_song_mappings', 0);
     }
 
+    public function test_auto_link_uses_manually_linked_text_as_dictionary(): void
+    {
+        // マスタは英語表記だが、実際のタイムスタンプはカナ表記で書かれている。
+        // 過去に人間が紐付けた表記を辞書として利用することで紐付けられる。
+        $song = Song::factory()->create([
+            'title' => 'Lost Umbrella',
+            'artist' => 'Inabakumori',
+        ]);
+
+        TimestampSongMapping::create([
+            'normalized_text' => \App\Helpers\TextNormalizer::normalize('ロストアンブレラ'),
+            'song_id' => $song->id,
+            'is_not_song' => false,
+            'status' => TimestampSongMapping::STATUS_LINKED,
+            'is_manual' => true,
+            'confidence' => 1.0,
+        ]);
+
+        $this->createTsItem('♪ロストアンブレラ♪');
+
+        $result = $this->service->autoLinkUnlinkedTimestamps(10);
+
+        $this->assertEquals(1, $result['linked']);
+        $this->assertDatabaseHas('timestamp_song_mappings', [
+            'normalized_text' => \App\Helpers\TextNormalizer::normalize('♪ロストアンブレラ♪'),
+            'song_id' => $song->id,
+            'is_manual' => false,
+        ]);
+    }
+
+    public function test_auto_link_ignores_auto_linked_text_as_dictionary(): void
+    {
+        // 自動紐付けの結果は辞書に使わない（誤りが連鎖するのを防ぐ）
+        $song = Song::factory()->create([
+            'title' => 'Lost Umbrella',
+            'artist' => 'Inabakumori',
+        ]);
+
+        TimestampSongMapping::create([
+            'normalized_text' => \App\Helpers\TextNormalizer::normalize('ロストアンブレラ'),
+            'song_id' => $song->id,
+            'is_not_song' => false,
+            'status' => TimestampSongMapping::STATUS_LINKED,
+            'is_manual' => false,
+            'confidence' => 0.9,
+        ]);
+
+        $this->createTsItem('♪ロストアンブレラ♪');
+
+        $result = $this->service->autoLinkUnlinkedTimestamps(10);
+
+        $this->assertEquals(0, $result['linked']);
+    }
+
     public function test_analyze_counts_candidate_only_matches(): void
     {
         Song::factory()->create(['title' => '夜', 'artist' => 'ヨルシカ']);

@@ -53,5 +53,11 @@ return [
         'auto_link_threshold' => env('SONG_AUTO_LINK_THRESHOLD', 0.85),
         'candidate_threshold' => env('SONG_CANDIDATE_THRESHOLD', 0.5),
         'candidate_limit' => env('SONG_CANDIDATE_LIMIT', 5),
+
+        /*
+        | 紐付け済みマッピングを辞書として照合する際の類似度の閾値です。
+        | 装飾を除いたキーがこの値以上に似ている場合、同じ楽曲の候補とみなします。
+        */
+        'dictionary_similarity_threshold' => env('SONG_DICTIONARY_SIMILARITY_THRESHOLD', 0.8),
     ],
 ];

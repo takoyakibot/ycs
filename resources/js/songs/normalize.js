@@ -307,13 +307,25 @@ class TimestampNormalization {
         button.className = `text-xs px-2 py-0.5 border rounded transition-colors truncate ${colorClass}`;
         button.style.maxWidth = '18rem';
         button.textContent = `${candidate.title} / ${candidate.artist} (${Math.round(candidate.confidence * 100)}%)`;
-        button.title = [
+
+        // 候補の由来ごとに、判断の根拠となった情報を表示する
+        const tooltipLines = [
             `${candidate.title} / ${candidate.artist}`,
-            `信頼度: ${Math.round(candidate.confidence * 100)}%`,
-            `一致部分: ${candidate.matched_key ?? ''}`,
-            `被覆率: ${Math.round((candidate.coverage ?? 0) * 100)}%`,
-            candidate.artist_hit ? 'アーティスト名も一致' : 'アーティスト名は不一致'
-        ].join('\n');
+            `信頼度: ${Math.round(candidate.confidence * 100)}%`
+        ];
+
+        if (candidate.source === 'dictionary') {
+            tooltipLines.push('由来: 既存の紐付け表記');
+            tooltipLines.push(`類似表記: ${candidate.source_text ?? ''}`);
+            tooltipLines.push(`類似度: ${Math.round((candidate.similarity ?? 0) * 100)}%`);
+        } else {
+            tooltipLines.push('由来: 楽曲マスタ');
+            tooltipLines.push(`一致部分: ${candidate.matched_key ?? ''}`);
+            tooltipLines.push(`被覆率: ${Math.round((candidate.coverage ?? 0) * 100)}%`);
+            tooltipLines.push(candidate.artist_hit ? 'アーティスト名も一致' : 'アーティスト名は不一致');
+        }
+
+        button.title = tooltipLines.join('\n');
 
         button.addEventListener('click', (e) => {
             e.stopPropagation();
