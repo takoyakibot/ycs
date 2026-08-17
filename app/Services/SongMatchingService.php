@@ -406,10 +406,12 @@ class SongMatchingService
     /**
      * メモリキャッシュを破棄する
      *
-     * 楽曲マスタを更新したあとに再照合する場合に使用する。
+     * 楽曲マスタやマッピングを更新したあとに再照合する場合に使用する。
+     * 辞書側のキャッシュも同時に破棄する。
      */
     public function flushIndex(): void
     {
         $this->index = null;
+        $this->mappingDictionaryService->flushIndex();
     }
 }

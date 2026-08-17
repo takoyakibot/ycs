@@ -34,6 +34,14 @@ class MappingDictionaryServiceTest extends TestCase
         ], $overrides));
     }
 
+    /**
+     * @return array{song_id: string, title: string, artist: string, confidence: float, source_text: string, similarity: float}|null
+     */
+    private function findBestMatch(string $normalizedText): ?array
+    {
+        return $this->service->findCandidates($normalizedText, 1)[0] ?? null;
+    }
+
     #[Test]
     public function 装飾を除いたキーが一致する既存表記から楽曲を特定できる(): void
     {
@@ -41,7 +49,7 @@ class MappingDictionaryServiceTest extends TestCase
         $this->createMapping('ロキ（みきとP）', $song);
 
         // 装飾が異なるため normalized_text は一致しないが、照合キーは同一になる
-        $match = $this->service->findBestMatch(TextNormalizer::normalize('♪ロキ (みきとP)'));
+        $match = $this->findBestMatch(TextNormalizer::normalize('♪ロキ (みきとP)'));
 
         $this->assertNotNull($match);
         $this->assertSame($song->id, $match['song_id']);
@@ -54,7 +62,7 @@ class MappingDictionaryServiceTest extends TestCase
         $song = Song::factory()->create(['title' => 'ロキ', 'artist' => 'みきとP']);
         $this->createMapping('ロキ / みきとピー', $song);
 
-        $match = $this->service->findBestMatch(TextNormalizer::normalize('ロキ / みきとピ'));
+        $match = $this->findBestMatch(TextNormalizer::normalize('ロキ / みきとピ'));
 
         $this->assertNotNull($match);
         $this->assertSame($song->id, $match['song_id']);
@@ -70,7 +78,7 @@ class MappingDictionaryServiceTest extends TestCase
         $song = Song::factory()->create(['title' => 'ロキ', 'artist' => 'みきとP']);
         $this->createMapping('ロキ（みきとP）', $song, isManual: false);
 
-        $match = $this->service->findBestMatch(TextNormalizer::normalize('♪ロキ (みきとP)'));
+        $match = $this->findBestMatch(TextNormalizer::normalize('♪ロキ (みきとP)'));
 
         $this->assertNull($match);
     }
@@ -81,7 +89,7 @@ class MappingDictionaryServiceTest extends TestCase
         $song = Song::factory()->create(['title' => 'ロキ', 'artist' => 'みきとP']);
         $this->createMapping('ロキ（みきとP）', $song, overrides: ['is_not_song' => true]);
 
-        $match = $this->service->findBestMatch(TextNormalizer::normalize('♪ロキ (みきとP)'));
+        $match = $this->findBestMatch(TextNormalizer::normalize('♪ロキ (みきとP)'));
 
         $this->assertNull($match);
     }
@@ -94,7 +102,7 @@ class MappingDictionaryServiceTest extends TestCase
             'status' => TimestampSongMapping::STATUS_PENDING,
         ]);
 
-        $match = $this->service->findBestMatch(TextNormalizer::normalize('♪ロキ (みきとP)'));
+        $match = $this->findBestMatch(TextNormalizer::normalize('♪ロキ (みきとP)'));
 
         $this->assertNull($match);
     }
@@ -105,7 +113,7 @@ class MappingDictionaryServiceTest extends TestCase
         $song = Song::factory()->create(['title' => 'ロキ', 'artist' => 'みきとP']);
         $this->createMapping('ロキ / みきとP', $song);
 
-        $this->assertNull($this->service->findBestMatch('まったく関係のない文字列'));
+        $this->assertNull($this->findBestMatch('まったく関係のない文字列'));
     }
 
     #[Test]
@@ -115,7 +123,7 @@ class MappingDictionaryServiceTest extends TestCase
         $this->createMapping('ロキ', $song);
 
         // 先頭は一致するが文字数の差が大きい
-        $match = $this->service->findBestMatch('ロキシーミュージックの長い曲名です');
+        $match = $this->findBestMatch('ロキシーミュージックの長い曲名です');
 
         $this->assertNull($match);
     }
@@ -148,11 +156,11 @@ class MappingDictionaryServiceTest extends TestCase
     {
         $song = Song::factory()->create(['title' => 'ロキ', 'artist' => 'みきとP']);
 
-        $this->assertNull($this->service->findBestMatch(TextNormalizer::normalize('♪ロキ (みきとP)')));
+        $this->assertNull($this->findBestMatch(TextNormalizer::normalize('♪ロキ (みきとP)')));
 
         $this->createMapping('ロキ（みきとP）', $song);
         $this->service->flushIndex();
 
-        $this->assertNotNull($this->service->findBestMatch(TextNormalizer::normalize('♪ロキ (みきとP)')));
+        $this->assertNotNull($this->findBestMatch(TextNormalizer::normalize('♪ロキ (みきとP)')));
     }
 }

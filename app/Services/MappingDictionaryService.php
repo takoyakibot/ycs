@@ -62,35 +62,32 @@ class MappingDictionaryService
     public const CONFIDENCE_SIMILARITY = 0.60;
 
     /**
+     * 楽曲IDごとの楽曲情報
+     *
+     * 1つの楽曲に多数の表記が対応するため、タイトルとアーティスト名は
+     * エントリごとに持たずここで一元管理する（辞書が数万件規模になるため）。
+     *
+     * @var array<string, array{title: string, artist: string}>|null
+     */
+    private ?array $songs = null;
+
+    /**
      * 照合キーが完全一致する辞書エントリ
      *
-     * @var array<string, array{song_id: string, title: string, artist: string, source_text: string}>|null
+     * @var array<string, array{song_id: string, source_text: string}>|null
      */
     private ?array $exactIndex = null;
 
     /**
      * 照合キーの先頭N文字でまとめた辞書エントリ
      *
-     * @var array<string, array<int, array{song_id: string, title: string, artist: string, source_text: string, key: string, key_length: int}>>|null
+     * @var array<string, array<int, array{song_id: string, source_text: string, key: string, key_length: int}>>|null
      */
     private ?array $buckets = null;
 
     public function __construct(
         protected SimilarityService $similarityService
     ) {}
-
-    /**
-     * 辞書から最有力の候補を返す
-     *
-     * @param  string  $normalizedText  照合対象の正規化済みテキスト
-     * @return array{song_id: string, title: string, artist: string, confidence: float, source_text: string, similarity: float}|null
-     */
-    public function findBestMatch(string $normalizedText): ?array
-    {
-        $candidates = $this->findCandidates($normalizedText, 1);
-
-        return $candidates[0] ?? null;
-    }
 
     /**
      * 辞書から候補を信頼度の高い順に返す
@@ -117,14 +114,12 @@ class MappingDictionaryService
         // 装飾を除けば同一のテキストである、というケースを拾う
         if (isset($this->exactIndex[$key])) {
             $entry = $this->exactIndex[$key];
-            $candidates[$entry['song_id']] = [
-                'song_id' => $entry['song_id'],
-                'title' => $entry['title'],
-                'artist' => $entry['artist'],
-                'confidence' => self::CONFIDENCE_KEY_MATCH,
-                'source_text' => $entry['source_text'],
-                'similarity' => 1.0,
-            ];
+            $candidates[$entry['song_id']] = $this->buildCandidate(
+                $entry['song_id'],
+                self::CONFIDENCE_KEY_MATCH,
+                $entry['source_text'],
+                1.0
+            );
         }
 
         // 2. 表記の揺らぎを類似度で拾う
@@ -187,19 +182,32 @@ class MappingDictionaryService
                 continue;
             }
 
-            $results[] = [
-                'song_id' => $entry['song_id'],
-                'title' => $entry['title'],
-                'artist' => $entry['artist'],
-                'confidence' => $similarity >= 0.9
-                    ? self::CONFIDENCE_HIGH_SIMILARITY
-                    : self::CONFIDENCE_SIMILARITY,
-                'source_text' => $entry['source_text'],
-                'similarity' => round($similarity, 4),
-            ];
+            $results[] = $this->buildCandidate(
+                $entry['song_id'],
+                $similarity >= 0.9 ? self::CONFIDENCE_HIGH_SIMILARITY : self::CONFIDENCE_SIMILARITY,
+                $entry['source_text'],
+                round($similarity, 4)
+            );
         }
 
         return $results;
+    }
+
+    /**
+     * 候補の配列を組み立てる
+     *
+     * @return array{song_id: string, title: string, artist: string, confidence: float, source_text: string, similarity: float}
+     */
+    private function buildCandidate(string $songId, float $confidence, string $sourceText, float $similarity): array
+    {
+        return [
+            'song_id' => $songId,
+            'title' => $this->songs[$songId]['title'] ?? '',
+            'artist' => $this->songs[$songId]['artist'] ?? '',
+            'confidence' => $confidence,
+            'source_text' => $sourceText,
+            'similarity' => $similarity,
+        ];
     }
 
     /**
@@ -211,6 +219,7 @@ class MappingDictionaryService
             return;
         }
 
+        $this->songs = [];
         $this->exactIndex = [];
         $this->buckets = [];
 
@@ -237,10 +246,13 @@ class MappingDictionaryService
                         continue;
                     }
 
-                    $entry = [
-                        'song_id' => $mapping->song_id,
+                    $this->songs[$mapping->song_id] ??= [
                         'title' => (string) $mapping->title,
                         'artist' => (string) $mapping->artist,
+                    ];
+
+                    $entry = [
+                        'song_id' => $mapping->song_id,
                         'source_text' => (string) $mapping->normalized_text,
                     ];
 
@@ -263,6 +275,7 @@ class MappingDictionaryService
      */
     public function flushIndex(): void
     {
+        $this->songs = null;
         $this->exactIndex = null;
         $this->buckets = null;
     }

@@ -45,17 +45,16 @@ class SongMatchCandidatesApiTest extends TestCase
 
         $response->assertStatus(200);
         $response->assertJsonStructure([
-            'candidates',
+            'results',
             'auto_link_threshold',
             'candidate_threshold',
         ]);
 
-        // normalized_text には "." や "/" が含まれるため、
-        // ドット記法のパス指定ではなく配列として取得する
-        $candidates = $response->json('candidates');
-        $this->assertArrayHasKey($normalizedText, $candidates);
+        $results = $response->json('results');
+        $this->assertCount(1, $results);
+        $this->assertSame($normalizedText, $results[0]['normalized_text']);
 
-        $matches = $candidates[$normalizedText];
+        $matches = $results[0]['candidates'];
         $this->assertNotEmpty($matches);
         $this->assertEquals($song->id, $matches[0]['song_id']);
         $this->assertEquals('ロキ', $matches[0]['title']);
@@ -71,7 +70,7 @@ class SongMatchCandidatesApiTest extends TestCase
         ]);
 
         $response->assertStatus(200);
-        $this->assertSame([], $response->json('candidates'));
+        $this->assertSame([], $response->json('results'));
     }
 
     public function test_match_candidates_excludes_low_confidence_candidates(): void
@@ -84,7 +83,7 @@ class SongMatchCandidatesApiTest extends TestCase
         ]);
 
         $response->assertStatus(200);
-        $this->assertSame([], $response->json('candidates'));
+        $this->assertSame([], $response->json('results'));
     }
 
     public function test_match_candidates_handles_multiple_texts(): void
@@ -97,11 +96,13 @@ class SongMatchCandidatesApiTest extends TestCase
         ]);
 
         $response->assertStatus(200);
-        $candidates = $response->json('candidates');
+        $results = $response->json('results');
 
-        $this->assertCount(2, $candidates);
-        $this->assertArrayHasKey('♪ロキ / みきとp', $candidates);
-        $this->assertArrayHasKey('愛して愛して愛して', $candidates);
+        $this->assertCount(2, $results);
+        $this->assertEqualsCanonicalizing(
+            ['♪ロキ / みきとp', '愛して愛して愛して'],
+            array_column($results, 'normalized_text')
+        );
     }
 
     public function test_match_candidates_validates_empty_input(): void

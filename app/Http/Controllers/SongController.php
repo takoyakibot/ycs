@@ -612,7 +612,9 @@ class SongController extends Controller
         $candidateThreshold = (float) config('songs.matching.candidate_threshold', 0.5);
         $autoLinkThreshold = (float) config('songs.matching.auto_link_threshold', 0.85);
 
-        $candidates = [];
+        // normalized_text をキーにした連想配列で返すと、数字のみのテキストが
+        // 整数キーに変換されJSONの構造が変わってしまうため、リストとして返す
+        $results = [];
 
         // 同一テキストが複数渡された場合に無駄な照合をしないよう重複を除く
         foreach (array_unique($validated['normalized_texts']) as $normalizedText) {
@@ -622,12 +624,15 @@ class SongController extends Controller
             ));
 
             if (! empty($matches)) {
-                $candidates[$normalizedText] = $matches;
+                $results[] = [
+                    'normalized_text' => $normalizedText,
+                    'candidates' => $matches,
+                ];
             }
         }
 
         return response()->json([
-            'candidates' => $candidates,
+            'results' => $results,
             'auto_link_threshold' => $autoLinkThreshold,
             'candidate_threshold' => $candidateThreshold,
         ]);

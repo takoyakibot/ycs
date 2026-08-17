@@ -237,8 +237,12 @@ class TimestampNormalization {
             const data = await timestampApiService.fetchMatchCandidates(normalizedTexts);
             this.autoLinkThreshold = data.auto_link_threshold ?? null;
 
+            const candidatesByText = new Map(
+                (data.results ?? []).map(result => [result.normalized_text, result.candidates])
+            );
+
             targets.forEach(ts => {
-                const candidates = data.candidates?.[ts.normalized_text];
+                const candidates = candidatesByText.get(ts.normalized_text);
                 if (candidates && candidates.length > 0) {
                     this.renderMatchCandidates(ts, candidates);
                 }
