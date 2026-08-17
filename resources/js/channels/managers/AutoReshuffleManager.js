@@ -67,8 +67,10 @@ export class AutoReshuffleManager {
         this.saveSettings();
 
         if (this.enabled) {
-            // ONにした場合、現在再生中で終了時刻が設定されていれば監視開始
-            if (isPlaying && this.currentSongEndTime !== null) {
+            // ONにした場合、再生中であれば監視開始。
+            // 終了時刻がない（＝アーカイブ内の最後の楽曲）場合も
+            // 末尾検知のために監視する必要があるため条件に含めない
+            if (isPlaying) {
                 this.startMonitor();
             }
             toast.success('自動再抽選をONにしました');
