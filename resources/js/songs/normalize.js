@@ -859,7 +859,9 @@ class TimestampNormalization {
         this.lastDisplayedSongsTotal = total;
 
         container.innerHTML = '';
-        this.updateSongsCount(total !== null ? total : songs.length);
+        // 絞り込み条件がないときは検索していないので、「0件」と出すと
+        // 検索してヒットしなかったように見えてしまう
+        this.updateSongsCount(this.hasSongsQuery() ? (total !== null ? total : songs.length) : null);
 
         if (!Array.isArray(songs)) {
             console.error('songs is not an array:', songs);
@@ -965,10 +967,14 @@ class TimestampNormalization {
         return div;
     }
 
+    /**
+     * 楽曲マスタ一覧の件数表示を更新
+     * @param {number|null} count - 件数。nullを渡すと件数を表示しない
+     */
     updateSongsCount(count) {
         const countDiv = document.getElementById('songsCount');
         if (countDiv) {
-            countDiv.textContent = `${count}件`;
+            countDiv.textContent = count === null ? '' : `${count}件`;
         }
     }
 
@@ -1456,12 +1462,10 @@ class TimestampNormalization {
             // 一覧タブに戻ってきたタイミングで再検索する。
             // 「検索→見つからず登録→一覧に戻る」の流れで、登録したばかりの
             // 楽曲が古い検索結果のせいで表示されない問題を防ぐ。
-            // ただし検索文字列が空の場合は古い検索結果が残る心配がなく、
-            // タブを切り替えるたびに一覧が再取得されて邪魔なので何もしない
+            // 絞り込み条件がないときは loadSongs() がAPIを叩かずに
+            // 検索を促すメッセージを描画する（初回表示時もここを通る）。
             const songsSearch = document.getElementById('songsSearch')?.value ?? '';
-            if (songsSearch.trim() !== '') {
-                this.loadSongs(songsSearch);
-            }
+            this.loadSongs(songsSearch);
         }
     }
 
