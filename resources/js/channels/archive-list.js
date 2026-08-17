@@ -122,7 +122,6 @@ function registerArchiveListComponent() {
                 publishedTo: '',
                 loading: false,
                 error: null,
-                isFiltered: false,
                 filterExpanded: false,
                 recentFilters: JSON.parse(localStorage.getItem('recentFilters') || '[]'),
 
@@ -234,9 +233,6 @@ function registerArchiveListComponent() {
                         query: this.archiveQuery,
                         tsFilter: this.tsFlg
                     });
-
-                    const hasQuery = this.archiveQuery.length > 0;
-                    this.$dispatch('filter-changed', hasQuery);
 
                     this.fetchData(this.firstUrl(params.toString()));
                     this.updateURL();

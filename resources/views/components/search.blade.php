@@ -52,7 +52,6 @@
                     params.append('visible', this.visibleFlg);
                     params.append('ts', this.tsFlg);
 
-                    this.$dispatch('filter-changed', this.query.length > 0);
                     this.$dispatch('search-results', params.toString());
 
                 } catch (error) {
