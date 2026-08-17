@@ -555,30 +555,32 @@
 
 .channel-archive-header {
     display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    padding: 1rem 1rem 0.75rem;
-}
-
-.channel-archive-header-compact {
     flex-direction: row;
     align-items: flex-start;
+    gap: 0.75rem;
+    padding: 1rem 1rem 0.75rem;
 }
 
 .channel-archive-thumb-wrap {
     position: relative;
     display: block;
+    /* サムネイルの実体はYouTubeのmedium（320x180）なので、
+       拡大表示すると粗が目立つ。表示幅は元画像より小さく保つ */
+    width: 120px;
     border-radius: 0.625rem;
     overflow: hidden;
     flex-shrink: 0;
 }
 
-.channel-archive-thumb-compact {
-    width: 120px;
+@media (min-width: 640px) {
+    .channel-archive-thumb-wrap {
+        width: 200px;
+    }
 }
 
 .channel-archive-thumb {
     width: 100%;
+    aspect-ratio: 16 / 9;
     object-fit: cover;
     display: block;
     transition: transform 0.3s ease;
@@ -615,6 +617,7 @@
 
 .channel-archive-info {
     min-width: 0;
+    flex: 1;
 }
 
 .channel-archive-title {

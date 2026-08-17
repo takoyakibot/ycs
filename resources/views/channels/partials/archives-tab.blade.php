@@ -5,17 +5,16 @@
         :current-page="1"
         :last-page="1"
     ></x-pagination>
-    <div id="archives" x-data="{ isFiltered : false }"
-         @filter-changed.window="isFiltered = $event.detail"
-         class="flex flex-col items-center w-[100%] gap-4">
+    <div id="archives" class="flex flex-col items-center w-[100%] gap-4">
         {{-- アーカイブリスト --}}
         <template x-for="archive in (archives.data || [])" :key="archive.id">
             <div class="channel-archive-card w-[100%] max-w-5xl">
                 {{-- ヘッダー: サムネイル + タイトル --}}
-                <div class="channel-archive-header" :class="isFiltered ? 'channel-archive-header-compact' : ''">
+                <div class="channel-archive-header">
                     <a :href="getArchiveUrl(archive.video_id || '')" target="_blank" rel="noopener noreferrer"
-                       class="channel-archive-thumb-wrap" :class="isFiltered ? 'channel-archive-thumb-compact' : ''">
+                       class="channel-archive-thumb-wrap">
                         <img :src="escapeHTML(archive.thumbnail || '')" alt="サムネイル" loading="lazy"
+                            width="320" height="180"
                             class="channel-archive-thumb"/>
                         <div class="channel-archive-thumb-overlay">
                             <svg class="w-8 h-8 text-white drop-shadow-lg" viewBox="0 0 24 24" fill="currentColor">
@@ -23,7 +22,7 @@
                             </svg>
                         </div>
                     </a>
-                    <div class="channel-archive-info" :class="isFiltered ? 'flex-1' : ''">
+                    <div class="channel-archive-info">
                         <h4 class="channel-archive-title"
                             x-data="{ expanded: false }"
                             :class="expanded ? '' : 'truncate'"
