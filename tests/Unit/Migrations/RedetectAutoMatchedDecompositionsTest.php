@@ -153,17 +153,25 @@ class RedetectAutoMatchedDecompositionsTest extends TestCase
      */
     public function test_is_idempotent(): void
     {
-        $decomposition = $this->createAutoMatched(
+        $columns = ['status', 'derived_title', 'derived_artist', 'title_part_index', 'artist_part_index'];
+
+        // 手動選別に戻るもの / 自動確定が維持されるものの両方を対象にする
+        $toPending = $this->createAutoMatched(
             'Pretender / Official髭男dism',
             ['Pretender', 'Official髭男dism']
         );
+        $kept = $this->createAutoMatched(
+            '曲名 / cover',
+            ['曲名', 'cover']
+        );
 
         $this->migration()->up();
-        $first = $decomposition->fresh()->only(['status', 'derived_title', 'derived_artist', 'artist_part_index']);
+        $firstToPending = $toPending->fresh()->only($columns);
+        $firstKept = $kept->fresh()->only($columns);
 
         $this->migration()->up();
-        $second = $decomposition->fresh()->only(['status', 'derived_title', 'derived_artist', 'artist_part_index']);
 
-        $this->assertEquals($first, $second);
+        $this->assertEquals($firstToPending, $toPending->fresh()->only($columns));
+        $this->assertEquals($firstKept, $kept->fresh()->only($columns));
     }
 }
