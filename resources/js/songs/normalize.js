@@ -814,7 +814,25 @@ class TimestampNormalization {
         }
     }
 
+    /**
+     * 楽曲マスタ一覧の絞り込み条件が指定されているか
+     * @returns {boolean} 検索文字列またはreview_statusフィルタが指定されていればtrue
+     */
+    hasSongsQuery() {
+        const search = document.getElementById('songsSearch')?.value ?? '';
+
+        return search.trim() !== '' || this.songReviewStatus !== null;
+    }
+
     async loadSongs(search = '') {
+        // 絞り込み条件がない場合は全件が返ってくるだけで実用的ではないため、
+        // APIを叩かず一覧を空のままにする（ページ表示直後と同じ状態）
+        if (search.trim() === '' && this.songReviewStatus === null) {
+            this.displaySongs([], 0);
+
+            return;
+        }
+
         try {
             const response = await songApiService.fetchSongs(search, this.songReviewStatus);
 
@@ -850,7 +868,10 @@ class TimestampNormalization {
         }
 
         if (songs.length === 0) {
-            container.innerHTML = '<p class="text-gray-500 dark:text-gray-400 text-sm">楽曲マスタがありません。</p>';
+            const message = this.hasSongsQuery()
+                ? '楽曲マスタがありません。'
+                : '楽曲名・アーティスト名で検索してください。';
+            container.innerHTML = `<p class="text-gray-500 dark:text-gray-400 text-sm">${message}</p>`;
             return;
         }
 
