@@ -113,10 +113,13 @@ class SupplementStripperTest extends TestCase
     /**
      * TS分解のパーツは区切りを含まないため、区切りガード無しで補足を落とせること
      */
-    public function test_strip_part_removes_trailing_supplement_without_separator(): void
+    public function test_strip_parts_removes_trailing_supplement_without_separator(): void
     {
-        // パーツ単体（区切り無し）
-        $this->assertEquals('いきものがかり', SupplementStripper::stripPart('いきものがかり 　エコーかけ忘れ'));
+        // 分解済みのパーツ（区切り無し）
+        $this->assertEquals(
+            ['気まぐれロマンティック', 'いきものがかり'],
+            SupplementStripper::stripParts(['気まぐれロマンティック', 'いきものがかり 　エコーかけ忘れ'])
+        );
 
         // 全体テキストとして渡した場合は区切りガードが効いて変化しない
         $this->assertEquals(
@@ -128,11 +131,66 @@ class SupplementStripperTest extends TestCase
     /**
      * パーツでも括弧・記号ルールは同じように効くこと
      */
-    public function test_strip_part_applies_bracket_and_symbol_rules(): void
+    public function test_strip_parts_applies_bracket_and_symbol_rules(): void
     {
-        $this->assertEquals('気まぐれロマンティック', SupplementStripper::stripPart('気まぐれロマンティック（アンコール）'));
-        $this->assertEquals('気まぐれロマンティック', SupplementStripper::stripPart('♫気まぐれロマンティック'));
-        $this->assertEquals('いきものがかり (Live)', SupplementStripper::stripPart('いきものがかり (Live)'));
+        $this->assertEquals(
+            ['気まぐれロマンティック', 'いきものがかり (Live)'],
+            SupplementStripper::stripParts(['気まぐれロマンティック（アンコール）', 'いきものがかり (Live)'])
+        );
+
+        $this->assertEquals(
+            ['気まぐれロマンティック', '平井大'],
+            SupplementStripper::stripParts(['♫気まぐれロマンティック', '平井大'])
+        );
+    }
+
+    /**
+     * パーツが1つだけのときは区切り以降ルールを適用しないこと
+     *
+     * パーツが1つ = 元テキストが区切り文字で分解されていないので、
+     * 「YOASOBI　アンコール」の後半が補足なのか曲名の一部なのか判別できない。
+     * パーツ数を見ずに区切りガードを外すと曲名を壊してしまう。
+     */
+    public function test_strip_parts_keeps_single_part_without_separator(): void
+    {
+        $this->assertEquals(
+            ['YOASOBI　アンコール'],
+            SupplementStripper::stripParts(['YOASOBI　アンコール'])
+        );
+
+        $this->assertEquals(
+            ['気まぐれロマンティック　アンコール'],
+            SupplementStripper::stripParts(['気まぐれロマンティック　アンコール'])
+        );
+    }
+
+    /**
+     * パーツが1つだけでも括弧・記号ルールは効くこと
+     */
+    public function test_strip_parts_applies_other_rules_to_single_part(): void
+    {
+        $this->assertEquals(
+            ['気まぐれロマンティック'],
+            SupplementStripper::stripParts(['気まぐれロマンティック（アンコール）'])
+        );
+
+        $this->assertEquals(
+            ['気まぐれロマンティック'],
+            SupplementStripper::stripParts(['♫気まぐれロマンティック'])
+        );
+    }
+
+    /**
+     * パーツの並び・要素数を変えないこと（title/artist の index がズレるため）
+     */
+    public function test_strip_parts_preserves_length_and_order(): void
+    {
+        $parts = ['曲名', 'アーティスト　エコーかけ忘れ', '音量注意'];
+
+        $cleaned = SupplementStripper::stripParts($parts);
+
+        $this->assertCount(count($parts), $cleaned);
+        $this->assertEquals(['曲名', 'アーティスト', '音量注意'], $cleaned);
     }
 
     /**

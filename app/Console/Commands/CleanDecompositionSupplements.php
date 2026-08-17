@@ -148,8 +148,7 @@ class CleanDecompositionSupplements extends Command
         $originalParts = $decomposition->parts ?? [];
         $cleanedParts = [];
 
-        foreach ($originalParts as $part) {
-            $analysis = SupplementStripper::analyzePart((string) $part, $rules);
+        foreach (SupplementStripper::analyzeParts($originalParts, $rules) as $analysis) {
             $cleanedParts[] = $analysis['result'];
 
             foreach ($analysis['hits'] as $hit) {
@@ -157,8 +156,12 @@ class CleanDecompositionSupplements extends Command
             }
         }
 
-        $cleanedTitle = $this->cleanDerived($decomposition->derived_title, $rules, $hits);
-        $cleanedArtist = $this->cleanDerived($decomposition->derived_artist, $rules, $hits);
+        // derived_title / derived_artist はパーツから選ばれた値なので、
+        // 区切り必須ガードの扱いもパーツと揃える
+        $requireSeparator = SupplementStripper::requiresSeparatorForParts($originalParts);
+
+        $cleanedTitle = $this->cleanDerived($decomposition->derived_title, $rules, $hits, $requireSeparator);
+        $cleanedArtist = $this->cleanDerived($decomposition->derived_artist, $rules, $hits, $requireSeparator);
 
         $partsChanged = $cleanedParts !== $originalParts;
         $titleChanged = $cleanedTitle !== $decomposition->derived_title;
@@ -199,14 +202,15 @@ class CleanDecompositionSupplements extends Command
      *
      * @param  string[]  $rules
      * @param  array<int, array{rule: string, keyword: ?string, removed: string}>  $hits
+     * @param  bool  $requireSeparator  区切り以降ルールを区切りを含む値に限定するか
      */
-    private function cleanDerived(?string $value, array $rules, array &$hits): ?string
+    private function cleanDerived(?string $value, array $rules, array &$hits, bool $requireSeparator = false): ?string
     {
         if ($value === null || trim($value) === '') {
             return $value;
         }
 
-        $analysis = SupplementStripper::analyzePart($value, $rules);
+        $analysis = SupplementStripper::analyze($value, $rules, ['require_separator' => $requireSeparator]);
 
         foreach ($analysis['hits'] as $hit) {
             $hits[] = $hit;
@@ -391,13 +395,18 @@ class CleanDecompositionSupplements extends Command
 
         DB::transaction(function () use ($rows, &$updated) {
             foreach ($rows as $row) {
+                // updated_at / updated_by は意図的に更新しない。
+                // TimestampDecompositionService::undoAction() は
+                // 「同じ updated_by かつ updated_at が近いもの」をカスケード操作の
+                // まとまりとみなして一緒に戻すため、表記の掃除でこれらを書き換えると
+                // 無関係なレコードが巻き込まれて戻されてしまう。
+                // 掃除の記録は --csv で残す。
                 DB::table('timestamp_decompositions')
                     ->where('id', $row['id'])
                     ->update([
                         'parts' => json_encode($row['new_parts'], JSON_UNESCAPED_UNICODE),
                         'derived_title' => $row['new_title'],
                         'derived_artist' => $row['new_artist'],
-                        'updated_at' => now(),
                     ]);
                 $updated++;
             }
