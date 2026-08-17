@@ -122,7 +122,6 @@ function registerArchiveListComponent() {
                 publishedTo: '',
                 loading: false,
                 error: null,
-                isFiltered: false,
                 filterExpanded: false,
                 recentFilters: JSON.parse(localStorage.getItem('recentFilters') || '[]'),
 
@@ -234,9 +233,6 @@ function registerArchiveListComponent() {
                         query: this.archiveQuery,
                         tsFilter: this.tsFlg
                     });
-
-                    const hasQuery = this.archiveQuery.length > 0;
-                    this.$dispatch('filter-changed', hasQuery);
 
                     this.fetchData(this.firstUrl(params.toString()));
                     this.updateURL();
@@ -667,13 +663,10 @@ function registerArchiveListComponent() {
                         this.loadAndPlayVideo(timestamp.video_id, timestamp.ts_num || 0);
                     }
 
-                    // 次のタイムスタンプがある場合は表示更新用の監視を開始
+                    // 表示更新・アーカイブ末尾検知用の監視を開始
                     if (timestamp) {
-                        const endTime = autoReshuffleManager.calculateEndTime(timestamp);
-                        autoReshuffleManager.setEndTime(endTime);
-                        if (endTime !== null) {
-                            autoReshuffleManager.startMonitor();
-                        }
+                        autoReshuffleManager.setEndTime(autoReshuffleManager.calculateEndTime(timestamp));
+                        autoReshuffleManager.startMonitor();
                     }
                 },
 
@@ -716,13 +709,10 @@ function registerArchiveListComponent() {
                         this.loadAndPlayVideo(timestamp.video_id, timestamp.ts_num || 0);
                     }
 
-                    // 次のタイムスタンプがある場合は表示更新用の監視を開始
+                    // 表示更新・アーカイブ末尾検知用の監視を開始
                     if (timestamp) {
-                        const endTime = autoReshuffleManager.calculateEndTime(timestamp);
-                        autoReshuffleManager.setEndTime(endTime);
-                        if (endTime !== null) {
-                            autoReshuffleManager.startMonitor();
-                        }
+                        autoReshuffleManager.setEndTime(autoReshuffleManager.calculateEndTime(timestamp));
+                        autoReshuffleManager.startMonitor();
                     }
                 },
 
@@ -849,6 +839,11 @@ function registerArchiveListComponent() {
                     autoReshuffleManager.onNextTimestampReached = () => {
                         this.updateDisplayForNextTimestamp();
                     };
+
+                    // 自動再抽選OFFでアーカイブ末尾に到達したとき
+                    autoReshuffleManager.onArchiveEndWithoutReshuffle = () => {
+                        toast.info('アーカイブの再生が終わりました。自動再抽選をONにすると次の曲を自動で選びます');
+                    };
                 },
 
                 // YouTube IFrame APIの読み込み
@@ -896,6 +891,8 @@ function registerArchiveListComponent() {
 
                 // 動画プレイヤーを閉じる
                 closeVideoPlayer() {
+                    // 停止時のENDEDで再抽選が走らないよう、先に監視を中断する
+                    autoReshuffleManager.suspend();
                     videoPlayerManager.close(() => this.resetPlayerPosition());
                     updateDocumentTitle(null);
                 },
@@ -996,8 +993,7 @@ function registerArchiveListComponent() {
                         }
 
                         // 自動再抽選用: 終了時刻を計算・設定
-                        const endTime = autoReshuffleManager.calculateEndTime(timestamp);
-                        autoReshuffleManager.setEndTime(endTime);
+                        autoReshuffleManager.setEndTime(autoReshuffleManager.calculateEndTime(timestamp));
 
                         // 動画を再生
                         if (timestamp.video_id) {
@@ -1035,10 +1031,8 @@ function registerArchiveListComponent() {
                         this.showGachaShare = true;
                         this.startGachaShareTimer();
 
-                        // 次のタイムスタンプがある場合は表示更新用の監視を開始
-                        if (endTime !== null) {
-                            autoReshuffleManager.startMonitor();
-                        }
+                        // 表示更新・アーカイブ末尾検知用の監視を開始
+                        autoReshuffleManager.startMonitor();
                     } catch (error) {
                         console.error('ランダム再生に失敗しました:', error);
                         toast.error(error.message || 'ランダム再生に失敗しました');
@@ -1221,16 +1215,19 @@ function registerArchiveListComponent() {
                             updateDocumentTitle(this.selectedSong);
 
                             // 次のタイムスタンプまでの監視を再設定
-                            const endTime = autoReshuffleManager.calculateEndTime(nextTimestamp);
-                            autoReshuffleManager.setEndTime(endTime);
-                            if (endTime !== null) {
-                                autoReshuffleManager.startMonitor();
-                            }
+                            autoReshuffleManager.setEndTime(autoReshuffleManager.calculateEndTime(nextTimestamp));
+                            autoReshuffleManager.startMonitor();
                         } else {
+                            // アーカイブ内に次の楽曲がない場合は末尾検知のみの監視に切り替える
                             console.debug('[DisplayUpdate] no next timestamp found (last in archive)');
+                            autoReshuffleManager.setEndTime(null);
+                            autoReshuffleManager.startMonitor();
                         }
                     } catch (error) {
                         console.error('[DisplayUpdate] API error:', error);
+                        // 取得に失敗しても末尾検知は継続する
+                        autoReshuffleManager.setEndTime(null);
+                        autoReshuffleManager.startMonitor();
                     }
                 },
 
@@ -1272,8 +1269,7 @@ function registerArchiveListComponent() {
                         }
 
                         // 自動再抽選用: 終了時刻を計算・設定
-                        const endTime = autoReshuffleManager.calculateEndTime(timestamp);
-                        autoReshuffleManager.setEndTime(endTime);
+                        autoReshuffleManager.setEndTime(autoReshuffleManager.calculateEndTime(timestamp));
 
                         // 動画を再生（同じアーカイブ内なのでシーク）
                         if (timestamp.video_id) {
@@ -1288,10 +1284,8 @@ function registerArchiveListComponent() {
                             toast.success('次の曲を再生します');
                         }
 
-                        // 次のタイムスタンプがある場合は表示更新用の監視を開始
-                        if (endTime !== null) {
-                            autoReshuffleManager.startMonitor();
-                        }
+                        // 表示更新・アーカイブ末尾検知用の監視を開始
+                        autoReshuffleManager.startMonitor();
                     } finally {
                         this.isPlaybackTransitioning = false;
                     }

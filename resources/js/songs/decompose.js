@@ -21,6 +21,7 @@ class TimestampDecomposition {
         this.selectedArtistIndices = []; // 複数選択対応（配列）
         this.statistics = null;
         this.lastProcessedItem = null;   // 直前に処理したアイテム（undo用）
+        this.cleanupOpen = false;        // 補足除去候補パネルの表示状態
 
         this.init();
     }
@@ -54,12 +55,47 @@ class TimestampDecomposition {
 
         // 戻るボタン
         document.getElementById('undoBtn').addEventListener('click', () => this.undo());
+
+        // 補足除去候補パネル
+        document.getElementById('cleanupConfirmBtn').addEventListener('click', () => this.confirmCleanup());
+        document.getElementById('cleanupCancelBtn').addEventListener('click', () => this.closeCleanup());
+
+        // パネル内の入力欄では Enter で確定 / Esc でキャンセル
+        ['cleanupTitle', 'cleanupArtist'].forEach((id) => {
+            document.getElementById(id).addEventListener('keydown', (e) => {
+                // 日本語入力の変換確定のEnterで送信してしまわないようにする
+                // （keyCode 229 は isComposing 未対応環境向けのフォールバック）
+                if (e.isComposing || e.keyCode === 229) {
+                    return;
+                }
+
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this.confirmCleanup();
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    this.closeCleanup();
+                }
+            });
+        });
     }
 
     bindKeyboard() {
         document.addEventListener('keydown', (e) => {
             // フォーカスが入力フィールドの場合はスキップ
             if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) {
+                return;
+            }
+
+            // 補足除去候補パネルを開いている間は、そのパネルの操作を優先する
+            if (this.cleanupOpen) {
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    this.closeCleanup();
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this.confirmCleanup();
+                }
                 return;
             }
 
@@ -96,6 +132,13 @@ class TimestampDecomposition {
             if (titleIndex !== -1 && titleIndex < parts.length) {
                 e.preventDefault();
                 this.selectPart(titleIndex, 'title');
+                return;
+            }
+
+            // ]: 補足除去候補を表示（Enterの近くに置いて確定まで指を動かさずに済むようにする）
+            if (e.key === ']') {
+                e.preventDefault();
+                this.openCleanup();
                 return;
             }
 
@@ -173,6 +216,7 @@ class TimestampDecomposition {
      */
     async loadNext() {
         try {
+            this.closeCleanup();
             this.showLoading();
             const response = await axios.get('/api/songs/decompose/next');
 
@@ -347,16 +391,21 @@ class TimestampDecomposition {
 
     /**
      * 選択されたパーツを元の区切り文字を維持して連結
+     *
+     * @param {number[]} indices 選択されたパーツのインデックス
+     * @param {string[]} [parts] 連結対象のパーツ配列（省略時は元のパーツ）
      */
-    joinSelectedParts(indices) {
+    joinSelectedParts(indices, parts = null) {
         if (!indices || indices.length === 0) return '';
+
+        parts = parts || this.currentItem.parts;
+
         if (indices.length === 1) {
-            return this.currentItem.parts[indices[0]] || '';
+            return parts[indices[0]] || '';
         }
 
         const sortedIndices = [...indices].sort((a, b) => a - b);
         const originalText = this.currentItem.original_text;
-        const parts = this.currentItem.parts;
 
         // 連続するインデックスのグループを作成
         const groups = [];
@@ -456,6 +505,7 @@ class TimestampDecomposition {
      * 選択をリセット
      */
     reset() {
+        this.closeCleanup();
         this.selectedTitleIndices = [];
         this.selectedArtistIndices = [];
         this.displayParts();
@@ -464,22 +514,115 @@ class TimestampDecomposition {
     }
 
     /**
-     * 確定
+     * 補足除去候補を表示（] キー）
+     *
+     * 現在の選択から「曲名ではない補足」を落とした候補を作り、
+     * そのまま確定するか、入力欄で微調整できるようにする。
      */
-    async confirm() {
-        if (this.selectedTitleIndices.length === 0) {
+    openCleanup() {
+        if (!this.currentItem) return;
+
+        if (this.selectedTitleIndices.length === 0 && this.selectedArtistIndices.length === 0) {
+            toast.warning('先にパーツを選択してください');
+            return;
+        }
+
+        const cleanedParts = this.currentItem.cleaned_parts || this.currentItem.parts;
+
+        const currentTitle = this.joinSelectedParts(this.selectedTitleIndices);
+        const currentArtist = this.joinSelectedParts(this.selectedArtistIndices);
+        const cleanedTitle = this.joinSelectedParts(this.selectedTitleIndices, cleanedParts);
+        const cleanedArtist = this.joinSelectedParts(this.selectedArtistIndices, cleanedParts);
+
+        document.getElementById('cleanupTitle').value = cleanedTitle;
+        document.getElementById('cleanupArtist').value = cleanedArtist;
+
+        this.displayRemoved('cleanupTitleRemoved', currentTitle, cleanedTitle);
+        this.displayRemoved('cleanupArtistRemoved', currentArtist, cleanedArtist);
+
+        const noChange = currentTitle === cleanedTitle && currentArtist === cleanedArtist;
+        document.getElementById('cleanupNoChange').classList.toggle('hidden', !noChange);
+
+        document.getElementById('cleanupPanel').classList.remove('hidden');
+        this.cleanupOpen = true;
+
+        // 微調整しやすいよう、変化があった方の入力欄にフォーカスする
+        const focusTarget = currentTitle !== cleanedTitle ? 'cleanupTitle' : 'cleanupArtist';
+        const input = document.getElementById(focusTarget);
+        input.focus();
+        input.setSelectionRange(input.value.length, input.value.length);
+    }
+
+    /**
+     * 除去された部分を表示
+     */
+    displayRemoved(elementId, before, after) {
+        const el = document.getElementById(elementId);
+
+        if (before === after) {
+            el.textContent = '';
+            el.classList.add('hidden');
+            return;
+        }
+
+        el.textContent = `除去前: ${before}`;
+        el.classList.remove('hidden');
+    }
+
+    /**
+     * 補足除去候補を閉じる
+     */
+    closeCleanup() {
+        const panel = document.getElementById('cleanupPanel');
+        if (panel) {
+            panel.classList.add('hidden');
+        }
+        this.cleanupOpen = false;
+    }
+
+    /**
+     * 補足除去候補の内容で確定
+     */
+    async confirmCleanup() {
+        const title = document.getElementById('cleanupTitle').value.trim();
+        const artist = document.getElementById('cleanupArtist').value.trim();
+
+        if (title === '') {
+            toast.warning('楽曲名を入力してください');
+            return;
+        }
+
+        await this.confirm({ title, artist });
+    }
+
+    /**
+     * 確定
+     *
+     * @param {{title: string, artist: string}|null} overrides
+     *        パーツ連結ではなくこの値で確定する（補足除去候補・微調整用）
+     */
+    async confirm(overrides = null) {
+        if (!overrides && this.selectedTitleIndices.length === 0) {
             toast.warning('楽曲名を選択してください');
             return;
         }
 
         try {
             this.showLoading();
-            const response = await axios.post('/api/songs/decompose/select', {
+
+            const payload = {
                 id: this.currentItem.id,
                 title_indices: this.selectedTitleIndices,
                 artist_indices: this.selectedArtistIndices,
                 link_to_song: true
-            });
+            };
+
+            if (overrides) {
+                payload.title = overrides.title;
+                payload.artist = overrides.artist;
+            }
+
+            const response = await axios.post('/api/songs/decompose/select', payload);
 
             // undo用に処理したアイテムを保存
             this.lastProcessedItem = {

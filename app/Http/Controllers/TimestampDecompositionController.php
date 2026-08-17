@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Helpers\SupplementStripper;
 use App\Services\TimestampDecompositionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -36,11 +37,15 @@ class TimestampDecompositionController extends Controller
             ]);
         }
 
+        $parts = $item->parts ?? [];
+
         return response()->json([
             'item' => [
                 'id' => $item->id,
                 'original_text' => $item->original_text,
-                'parts' => $item->parts,
+                'parts' => $parts,
+                // 補足を除去した候補。パーツと同じ並び・同じ要素数を保つ
+                'cleaned_parts' => SupplementStripper::stripParts($parts),
                 'separator_count' => $item->separator_count,
                 'title_part_index' => $item->title_part_index,
                 'artist_part_index' => $item->artist_part_index,
@@ -68,15 +73,28 @@ class TimestampDecompositionController extends Controller
             'title_indices.*' => ['integer', 'min:0', 'max:'.$maxIndex],
             'artist_indices' => ['nullable', 'array'],
             'artist_indices.*' => ['integer', 'min:0', 'max:'.$maxIndex],
+            // 補足除去候補の確定・画面上での微調整で送られる確定値
+            'title' => ['nullable', 'string', 'max:255'],
+            'artist' => ['nullable', 'string', 'max:255'],
             'link_to_song' => 'boolean',
         ]);
 
+        // 送られてきたキーだけを上書き対象にする（未送信と空文字を区別する）
+        $overrides = [];
+        foreach (['title', 'artist'] as $key) {
+            if ($request->has($key)) {
+                $overrides[$key] = $validated[$key] ?? '';
+            }
+        }
+
         // トランザクションで囲んでエラー時にロールバックする
-        $data = DB::transaction(function () use ($validated, $request) {
+        $data = DB::transaction(function () use ($validated, $request, $overrides) {
             $result = $this->service->saveSelection(
                 $validated['id'],
                 $validated['title_indices'] ?? [],
-                $validated['artist_indices'] ?? []
+                $validated['artist_indices'] ?? [],
+                true,
+                $overrides
             );
 
             $decomposition = $result['decomposition'];

@@ -814,7 +814,25 @@ class TimestampNormalization {
         }
     }
 
+    /**
+     * 楽曲マスタ一覧の絞り込み条件が指定されているか
+     * @returns {boolean} 検索文字列またはreview_statusフィルタが指定されていればtrue
+     */
+    hasSongsQuery() {
+        const search = document.getElementById('songsSearch')?.value ?? '';
+
+        return search.trim() !== '' || this.songReviewStatus !== null;
+    }
+
     async loadSongs(search = '') {
+        // 絞り込み条件がない場合は全件が返ってくるだけで実用的ではないため、
+        // APIを叩かず一覧を空のままにする（ページ表示直後と同じ状態）
+        if (search.trim() === '' && this.songReviewStatus === null) {
+            this.displaySongs([], 0);
+
+            return;
+        }
+
         try {
             const response = await songApiService.fetchSongs(search, this.songReviewStatus);
 
@@ -841,7 +859,9 @@ class TimestampNormalization {
         this.lastDisplayedSongsTotal = total;
 
         container.innerHTML = '';
-        this.updateSongsCount(total !== null ? total : songs.length);
+        // 絞り込み条件がないときは検索していないので、「0件」と出すと
+        // 検索してヒットしなかったように見えてしまう
+        this.updateSongsCount(this.hasSongsQuery() ? (total !== null ? total : songs.length) : null);
 
         if (!Array.isArray(songs)) {
             console.error('songs is not an array:', songs);
@@ -850,7 +870,10 @@ class TimestampNormalization {
         }
 
         if (songs.length === 0) {
-            container.innerHTML = '<p class="text-gray-500 dark:text-gray-400 text-sm">楽曲マスタがありません。</p>';
+            const message = this.hasSongsQuery()
+                ? '楽曲マスタがありません。'
+                : '楽曲名・アーティスト名で検索してください。';
+            container.innerHTML = `<p class="text-gray-500 dark:text-gray-400 text-sm">${message}</p>`;
             return;
         }
 
@@ -944,10 +967,14 @@ class TimestampNormalization {
         return div;
     }
 
+    /**
+     * 楽曲マスタ一覧の件数表示を更新
+     * @param {number|null} count - 件数。nullを渡すと件数を表示しない
+     */
     updateSongsCount(count) {
         const countDiv = document.getElementById('songsCount');
         if (countDiv) {
-            countDiv.textContent = `${count}件`;
+            countDiv.textContent = count === null ? '' : `${count}件`;
         }
     }
 
@@ -1434,8 +1461,11 @@ class TimestampNormalization {
 
             // 一覧タブに戻ってきたタイミングで再検索する。
             // 「検索→見つからず登録→一覧に戻る」の流れで、登録したばかりの
-            // 楽曲が古い検索結果のせいで表示されない問題を防ぐ
-            this.loadSongs(document.getElementById('songsSearch')?.value ?? '');
+            // 楽曲が古い検索結果のせいで表示されない問題を防ぐ。
+            // 絞り込み条件がないときは loadSongs() がAPIを叩かずに
+            // 検索を促すメッセージを描画する（初回表示時もここを通る）。
+            const songsSearch = document.getElementById('songsSearch')?.value ?? '';
+            this.loadSongs(songsSearch);
         }
     }
 

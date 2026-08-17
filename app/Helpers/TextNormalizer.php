@@ -178,17 +178,24 @@ class TextNormalizer
 
     /**
      * 無視すべきキーワード（カバー関連など）
+     *
+     * isIgnorablePart() は「パーツ全体がここに挙げたキーワードと記号だけで
+     * 構成されているか」で判定するため、短い語を入れても語の一部に一致して
+     * アーティスト名を捨ててしまうことはない（例: 'ver' があっても
+     * "Silver" は "sil" が残るので無視対象にならない）。
      */
     private const IGNORE_KEYWORDS = [
         'cover',
         'カバー',
         'mv',
         'music video',
+        'video',
         'オリジナル',
         'original',
         'full',
         'short',
         'shorts',
+        'ver',
         'official',
         '公式',
         '歌ってみた',
@@ -247,19 +254,39 @@ class TextNormalizer
     }
 
     /**
-     * パーツが無視すべきキーワードを含むかどうかを判定
+     * パーツが無視すべき（楽曲名・アーティスト名の候補にならない）かどうかを判定
+     *
+     * 無視キーワードと記号だけで構成されているパーツのみを無視対象とする。
+     * 単純な部分一致で判定すると、キーワードを語の一部に含むアーティスト名
+     * （例: "Official髭男dism" の "official"）まで無視してしまい、
+     * アーティスト名が空の楽曲マスタが作られる原因になるため。
      */
     public static function isIgnorablePart(string $part): bool
     {
-        $lowerPart = mb_strtolower($part, 'UTF-8');
+        $normalizedPart = self::normalize($part);
 
-        foreach (self::IGNORE_KEYWORDS as $keyword) {
-            if (mb_strpos($lowerPart, mb_strtolower($keyword, 'UTF-8')) !== false) {
-                return true;
-            }
+        if ($normalizedPart === '') {
+            return false;
         }
 
-        return false;
+        $remaining = $normalizedPart;
+        $matched = false;
+        foreach (self::getIgnoreKeywordsByLengthDesc() as $keyword) {
+            if ($keyword === '' || ! str_contains($remaining, $keyword)) {
+                continue;
+            }
+
+            $remaining = str_replace($keyword, ' ', $remaining);
+            $matched = true;
+        }
+
+        // キーワードを含まないパーツ（記号・絵文字のみなど）は無視対象にしない
+        if (! $matched) {
+            return false;
+        }
+
+        // 文字・数字が残っていなければ、キーワードと記号だけのパーツ
+        return preg_match('/[\p{L}\p{N}]/u', $remaining) !== 1;
     }
 
     /**
@@ -270,6 +297,35 @@ class TextNormalizer
     public static function getIgnoreKeywords(): array
     {
         return array_map(fn ($keyword) => self::normalize($keyword), self::IGNORE_KEYWORDS);
+    }
+
+    /**
+     * 正規化済み無視キーワードのキャッシュ（文字数の降順）
+     *
+     * IGNORE_KEYWORDS はクラス定数でプロセス内で変わらないため、
+     * 破棄する手段は用意していない。キーワードを設定ファイル等から
+     * 読むようにする場合はこのキャッシュを見直すこと。
+     *
+     * @var string[]|null
+     */
+    private static ?array $ignoreKeywordsByLengthDesc = null;
+
+    /**
+     * 無視キーワードを文字数の降順で取得
+     *
+     * 長いキーワードから除去しないと、"shorts" が "short" の除去で "s" を残してしまう。
+     *
+     * @return string[]
+     */
+    private static function getIgnoreKeywordsByLengthDesc(): array
+    {
+        if (self::$ignoreKeywordsByLengthDesc === null) {
+            $keywords = self::getIgnoreKeywords();
+            usort($keywords, fn ($a, $b) => mb_strlen($b) <=> mb_strlen($a));
+            self::$ignoreKeywordsByLengthDesc = $keywords;
+        }
+
+        return self::$ignoreKeywordsByLengthDesc;
     }
 
     /**

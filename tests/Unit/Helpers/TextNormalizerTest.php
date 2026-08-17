@@ -300,6 +300,76 @@ class TextNormalizerTest extends TestCase
     }
 
     /**
+     * isIgnorablePart: 無視キーワードと記号だけのパーツが無視対象になることをテスト
+     */
+    public function test_is_ignorable_part_detects_noise_parts(): void
+    {
+        $this->assertTrue(TextNormalizer::isIgnorablePart('cover'));
+        $this->assertTrue(TextNormalizer::isIgnorablePart('COVER'));
+        $this->assertTrue(TextNormalizer::isIgnorablePart('【cover】'));
+        $this->assertTrue(TextNormalizer::isIgnorablePart('Official MV'));
+        $this->assertTrue(TextNormalizer::isIgnorablePart('ＭＶ'));
+        $this->assertTrue(TextNormalizer::isIgnorablePart('歌ってみた'));
+        $this->assertTrue(TextNormalizer::isIgnorablePart('shorts'));
+        $this->assertTrue(TextNormalizer::isIgnorablePart('カバー'));
+
+        // 「キーワード＋別の語」の形のノイズ表記も無視対象にする
+        $this->assertTrue(TextNormalizer::isIgnorablePart('Official Video'));
+        $this->assertTrue(TextNormalizer::isIgnorablePart('(Full ver.)'));
+        $this->assertTrue(TextNormalizer::isIgnorablePart('Short ver.'));
+    }
+
+    /**
+     * isIgnorablePart: キーワードを語の一部に含むアーティスト名が無視対象にならないことをテスト
+     *
+     * "Official髭男dism" が無視対象になると、アーティスト名が空の楽曲マスタが作られてしまう
+     */
+    public function test_is_ignorable_part_keeps_names_containing_keywords(): void
+    {
+        $this->assertFalse(TextNormalizer::isIgnorablePart('Official髭男dism'));
+        $this->assertFalse(TextNormalizer::isIgnorablePart('OFFICIAL HIGE DANDISM'));
+        $this->assertFalse(TextNormalizer::isIgnorablePart('ORANGE RANGE'));
+        $this->assertFalse(TextNormalizer::isIgnorablePart('オリジナル曲'));
+        $this->assertFalse(TextNormalizer::isIgnorablePart('Covers'));
+
+        // 短いキーワード（ver）を語の一部に含む名前も残ること
+        $this->assertFalse(TextNormalizer::isIgnorablePart('Silver'));
+        $this->assertFalse(TextNormalizer::isIgnorablePart('Forever'));
+        $this->assertFalse(TextNormalizer::isIgnorablePart('Over The Rainbow'));
+
+        // キーワードを含まないパーツ（記号・絵文字のみ）も無視対象にしない
+        $this->assertFalse(TextNormalizer::isIgnorablePart('🎵'));
+        $this->assertFalse(TextNormalizer::isIgnorablePart('★'));
+    }
+
+    /**
+     * detectTitleArtistPattern: アーティスト名が無視されて自動確定されないことをテスト
+     */
+    public function test_detect_title_artist_pattern_does_not_drop_artist(): void
+    {
+        $detection = TextNormalizer::detectTitleArtistPattern(['ミックスナッツ', 'Official髭男dism']);
+
+        // アーティスト側が無視対象にならないこと
+        $this->assertSame([], $detection['ignore_indices']);
+        $this->assertNotNull($detection['artist_index']);
+
+        // 2候補の判定は確信度が低いため、自動確定されない（手動選別に回る）
+        $this->assertLessThan(0.8, $detection['confidence']);
+    }
+
+    /**
+     * detectTitleArtistPattern: ノイズパーツは従来どおり無視されることをテスト
+     */
+    public function test_detect_title_artist_pattern_ignores_noise_parts(): void
+    {
+        $detection = TextNormalizer::detectTitleArtistPattern(['曲名', 'cover']);
+
+        $this->assertSame([1], $detection['ignore_indices']);
+        $this->assertSame(0, $detection['title_index']);
+        $this->assertNull($detection['artist_index']);
+    }
+
+    /**
      * エッジケースのテスト
      */
     public function test_edge_cases(): void
