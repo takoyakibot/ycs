@@ -262,13 +262,9 @@ class TextNormalizer
             return false;
         }
 
-        // 長いキーワードから除去する（"shorts" が "short" より先に除去されるように）
-        $keywords = self::getIgnoreKeywords();
-        usort($keywords, fn ($a, $b) => mb_strlen($b) <=> mb_strlen($a));
-
         $remaining = $normalizedPart;
         $matched = false;
-        foreach ($keywords as $keyword) {
+        foreach (self::getIgnoreKeywordsByLengthDesc() as $keyword) {
             if ($keyword === '' || ! str_contains($remaining, $keyword)) {
                 continue;
             }
@@ -294,6 +290,31 @@ class TextNormalizer
     public static function getIgnoreKeywords(): array
     {
         return array_map(fn ($keyword) => self::normalize($keyword), self::IGNORE_KEYWORDS);
+    }
+
+    /**
+     * 正規化済み無視キーワードのキャッシュ（文字数の降順）
+     *
+     * @var string[]|null
+     */
+    private static ?array $ignoreKeywordsByLengthDesc = null;
+
+    /**
+     * 無視キーワードを文字数の降順で取得
+     *
+     * 長いキーワードから除去しないと、"shorts" が "short" の除去で "s" を残してしまう。
+     *
+     * @return string[]
+     */
+    private static function getIgnoreKeywordsByLengthDesc(): array
+    {
+        if (self::$ignoreKeywordsByLengthDesc === null) {
+            $keywords = self::getIgnoreKeywords();
+            usort($keywords, fn ($a, $b) => mb_strlen($b) <=> mb_strlen($a));
+            self::$ignoreKeywordsByLengthDesc = $keywords;
+        }
+
+        return self::$ignoreKeywordsByLengthDesc;
     }
 
     /**
