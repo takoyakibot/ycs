@@ -121,6 +121,9 @@ php artisan test tests/Feature/SongControllerTest.php::test_specific_method  # R
 - `ts_items.type`: '1' = 概要欄, '2' = コメント
 - `ts_items.ts_text`: タイムスタンプ文字列 (HH:MM:SS形式)
 - `ts_items.ts_num`: タイムスタンプ秒数
+- `normalized_text` カラムは **`utf8mb4_bin`** を指定すること（`ts_items` / `timestamp_song_mappings` / `timestamp_decompositions`）
+  - デフォルトの `utf8mb4_unicode_ci` は補助面（絵文字）に重みを持たず「🎵A」と「🎶A」を同値と判定するため、バイト完全一致で扱うアプリ側と結果がずれる
+  - JOIN するテーブル間で照合順序が揃っていないと `Illegal mix of collations` エラーになる
 
 ## Workflow
 
