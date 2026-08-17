@@ -1434,8 +1434,13 @@ class TimestampNormalization {
 
             // 一覧タブに戻ってきたタイミングで再検索する。
             // 「検索→見つからず登録→一覧に戻る」の流れで、登録したばかりの
-            // 楽曲が古い検索結果のせいで表示されない問題を防ぐ
-            this.loadSongs(document.getElementById('songsSearch')?.value ?? '');
+            // 楽曲が古い検索結果のせいで表示されない問題を防ぐ。
+            // ただし検索文字列が空の場合は古い検索結果が残る心配がなく、
+            // タブを切り替えるたびに一覧が再取得されて邪魔なので何もしない
+            const songsSearch = document.getElementById('songsSearch')?.value ?? '';
+            if (songsSearch.trim() !== '') {
+                this.loadSongs(songsSearch);
+            }
         }
     }
 
