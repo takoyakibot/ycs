@@ -7,6 +7,7 @@ use App\Helpers\TextNormalizer;
 use App\Http\Requests\FetchTimestampsRequest;
 use App\Http\Requests\LinkTimestampRequest;
 use App\Http\Requests\MarkAsNotSongRequest;
+use App\Http\Requests\MatchCandidatesRequest;
 use App\Http\Requests\NormalizedTextRequest;
 use App\Http\Requests\StoreSongRequest;
 use App\Models\NormalizationLog;
@@ -14,6 +15,7 @@ use App\Models\Song;
 use App\Models\TimestampSongMapping;
 use App\Models\TsItem;
 use App\Services\SongMappingService;
+use App\Services\SongMatchingService;
 use App\Services\SongMergeService;
 use App\Services\SongSearchService;
 use App\Services\SpotifyService;
@@ -38,13 +40,16 @@ class SongController extends Controller
 
     protected VideoUrlService $videoUrlService;
 
+    protected SongMatchingService $songMatchingService;
+
     public function __construct(
         SongSearchService $songSearchService,
         SongMappingService $songMappingService,
         SongMergeService $songMergeService,
         SpotifyService $spotifyService,
         YouTubeApiService $youtubeApiService,
-        VideoUrlService $videoUrlService
+        VideoUrlService $videoUrlService,
+        SongMatchingService $songMatchingService
     ) {
         $this->songSearchService = $songSearchService;
         $this->songMappingService = $songMappingService;
@@ -52,6 +57,7 @@ class SongController extends Controller
         $this->spotifyService = $spotifyService;
         $this->youtubeApiService = $youtubeApiService;
         $this->videoUrlService = $videoUrlService;
+        $this->songMatchingService = $songMatchingService;
     }
 
     /**
@@ -590,6 +596,41 @@ class SongController extends Controller
         $this->songMappingService->markAsPending($validated['normalized_text']);
 
         return response()->json(['message' => '保留状態にしました。']);
+    }
+
+    /**
+     * 未紐付けテキストに対する楽曲マスタの照合候補を取得
+     *
+     * 正規化画面で1件ずつ検索する手間を省くため、表示中のテキストに対して
+     * 「マスタのタイトルが含まれているか」で照合した候補を返す。
+     * 自動紐付けの閾値には達しないが可能性のある候補も含めて提示する。
+     */
+    public function matchCandidates(MatchCandidatesRequest $request)
+    {
+        $validated = $request->validated();
+
+        $candidateThreshold = (float) config('songs.matching.candidate_threshold', 0.5);
+        $autoLinkThreshold = (float) config('songs.matching.auto_link_threshold', 0.85);
+
+        $candidates = [];
+
+        // 同一テキストが複数渡された場合に無駄な照合をしないよう重複を除く
+        foreach (array_unique($validated['normalized_texts']) as $normalizedText) {
+            $matches = array_values(array_filter(
+                $this->songMatchingService->findCandidates($normalizedText),
+                fn ($candidate) => $candidate['confidence'] >= $candidateThreshold
+            ));
+
+            if (! empty($matches)) {
+                $candidates[$normalizedText] = $matches;
+            }
+        }
+
+        return response()->json([
+            'candidates' => $candidates,
+            'auto_link_threshold' => $autoLinkThreshold,
+            'candidate_threshold' => $candidateThreshold,
+        ]);
     }
 
     /**

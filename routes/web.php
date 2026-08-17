@@ -123,6 +123,8 @@ Route::middleware(['auth', 'admin'])->group(function () {
     // Specific routes must come before parameterized routes to avoid parameter capture
     Route::delete('api/songs/unlink', [SongController::class, 'unlinkTimestamp'])->name('songs.unlinkTimestamp');
     Route::get('api/songs/fuzzy-search', [SongController::class, 'fuzzySearch'])->name('songs.fuzzySearch');
+    // 未紐付けテキストに対する楽曲マスタの照合候補
+    Route::post('api/songs/match-candidates', [SongController::class, 'matchCandidates'])->name('songs.matchCandidates');
     Route::get('api/songs/search-spotify', [SongController::class, 'searchSpotify'])->name('songs.searchSpotify')
         ->middleware('throttle:30,1'); // 1分間に30回まで（Spotify API呼び出し）
     Route::post('api/songs/video-duration', [SongController::class, 'fetchVideoDuration'])->name('songs.fetchVideoDuration')

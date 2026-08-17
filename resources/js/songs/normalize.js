@@ -26,6 +26,7 @@ class TimestampNormalization {
         this.operationHistory = []; // 操作履歴
         this.maxHistoryItems = 20; // 最大履歴保持数
         this.songReviewStatus = null; // 楽曲マスタのreview_statusフィルタ
+        this.autoLinkThreshold = null; // 自動紐付けの信頼度閾値（サーバー設定値）
 
         this.init();
     }
@@ -204,9 +205,148 @@ class TimestampNormalization {
             this.currentPage = Number.isNaN(parsedPage) ? 1 : parsedPage;
             this.displayTimestamps(data.data);
             this.displayPagination(data);
+
+            // 候補の取得は一覧表示を待たせないため非同期で行う
+            this.loadMatchCandidates(data.data);
         } catch (error) {
             console.error('タイムスタンプの取得に失敗しました:', error);
             toast.error('タイムスタンプの取得に失敗しました。');
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    /**
+     * 未紐付けのタイムスタンプに対する楽曲マスタの照合候補を取得して表示する
+     * @param {Array} timestamps - 表示中のタイムスタンプ一覧
+     */
+    async loadMatchCandidates(timestamps) {
+        const targets = timestamps.filter(ts => this.needsMatchCandidates(ts));
+
+        if (targets.length === 0) {
+            return;
+        }
+
+        const normalizedTexts = [...new Set(targets.map(ts => ts.normalized_text).filter(Boolean))];
+
+        if (normalizedTexts.length === 0) {
+            return;
+        }
+
+        try {
+            const data = await timestampApiService.fetchMatchCandidates(normalizedTexts);
+            this.autoLinkThreshold = data.auto_link_threshold ?? null;
+
+            targets.forEach(ts => {
+                const candidates = data.candidates?.[ts.normalized_text];
+                if (candidates && candidates.length > 0) {
+                    this.renderMatchCandidates(ts, candidates);
+                }
+            });
+        } catch (error) {
+            // 候補は補助情報のため、取得に失敗しても一覧の操作は継続できる
+            console.error('照合候補の取得に失敗しました:', error);
+        }
+    }
+
+    /**
+     * 照合候補を提示すべきタイムスタンプか判定
+     * @param {Object} ts - タイムスタンプ
+     * @returns {boolean}
+     */
+    needsMatchCandidates(ts) {
+        if (ts.is_not_song || ts.status === 'pending') {
+            return false;
+        }
+
+        // すでに楽曲が紐づいているものは候補を出さない
+        return !ts.song;
+    }
+
+    /**
+     * 照合候補をタイムスタンプ行に描画する
+     * @param {Object} ts - タイムスタンプ
+     * @param {Array} candidates - 候補一覧
+     */
+    renderMatchCandidates(ts, candidates) {
+        const container = document.querySelector(`[data-candidates-for="${ts.id}"]`);
+        if (!container) {
+            return;
+        }
+
+        container.innerHTML = '';
+        // 候補が見つかった時点で hidden を解除して flex レイアウトに切り替える
+        container.classList.remove('hidden');
+        container.classList.add('flex');
+
+        const label = document.createElement('span');
+        label.className = 'text-xs text-gray-500 dark:text-gray-400 flex-shrink-0';
+        label.textContent = '候補:';
+        container.appendChild(label);
+
+        candidates.forEach(candidate => {
+            container.appendChild(this.createCandidateButton(ts, candidate));
+        });
+    }
+
+    /**
+     * 照合候補のボタンを生成する
+     * @param {Object} ts - タイムスタンプ
+     * @param {Object} candidate - 候補
+     * @returns {HTMLButtonElement}
+     */
+    createCandidateButton(ts, candidate) {
+        const button = document.createElement('button');
+
+        // 自動紐付けの閾値に達している候補は確度が高いものとして強調する
+        const isStrong = this.autoLinkThreshold !== null && candidate.confidence >= this.autoLinkThreshold;
+        const colorClass = isStrong
+            ? 'border-green-500 text-green-700 dark:text-green-300 hover:bg-green-50 dark:hover:bg-green-900'
+            : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700';
+
+        button.className = `text-xs px-2 py-0.5 border rounded transition-colors truncate ${colorClass}`;
+        button.style.maxWidth = '18rem';
+        button.textContent = `${candidate.title} / ${candidate.artist} (${Math.round(candidate.confidence * 100)}%)`;
+        button.title = [
+            `${candidate.title} / ${candidate.artist}`,
+            `信頼度: ${Math.round(candidate.confidence * 100)}%`,
+            `一致部分: ${candidate.matched_key ?? ''}`,
+            `被覆率: ${Math.round((candidate.coverage ?? 0) * 100)}%`,
+            candidate.artist_hit ? 'アーティスト名も一致' : 'アーティスト名は不一致'
+        ].join('\n');
+
+        button.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.linkTimestampToCandidate(ts, candidate);
+        });
+
+        return button;
+    }
+
+    /**
+     * 提示した候補でタイムスタンプを紐づける
+     * @param {Object} ts - タイムスタンプ
+     * @param {Object} candidate - 候補
+     */
+    async linkTimestampToCandidate(ts, candidate) {
+        try {
+            this.showLoading();
+
+            await timestampApiService.linkTimestamp(ts.normalized_text, candidate.song_id);
+
+            toast.success(`「${candidate.title}」に紐づけました。`);
+
+            this.addToHistory('link', [ts], {
+                id: candidate.song_id,
+                title: candidate.title,
+                artist: candidate.artist
+            });
+
+            await this.loadTimestamps(this.currentPage, this.currentSearchQuery);
+            this.updateSelectionDisplay();
+        } catch (error) {
+            console.error('紐づけに失敗しました:', error);
+            toast.error('紐づけに失敗しました。');
         } finally {
             this.hideLoading();
         }
@@ -231,9 +371,13 @@ class TimestampNormalization {
         const div = document.createElement('div');
         const isSelected = this.selectedTimestamps.some(t => t.id === ts.id);
 
-        div.className = `p-2 border rounded flex items-center gap-2 ${
+        div.className = `p-2 border rounded ${
             isSelected ? 'bg-blue-100 dark:bg-blue-900 border-blue-500' : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
         }`;
+
+        // 照合候補を2行目に表示するため、既存の行要素を内側に持つ
+        const rowDiv = document.createElement('div');
+        rowDiv.className = 'flex items-center gap-2';
 
         // チェックボックス
         const checkbox = document.createElement('input');
@@ -283,9 +427,18 @@ class TimestampNormalization {
             buttonContainer.appendChild(confirmBtn);
         }
 
-        div.appendChild(checkbox);
-        div.appendChild(contentDiv);
-        div.appendChild(buttonContainer);
+        rowDiv.appendChild(checkbox);
+        rowDiv.appendChild(contentDiv);
+        rowDiv.appendChild(buttonContainer);
+        div.appendChild(rowDiv);
+
+        // 照合候補の描画先（候補が見つかった場合のみ表示される）
+        if (this.needsMatchCandidates(ts)) {
+            const candidatesDiv = document.createElement('div');
+            candidatesDiv.className = 'hidden flex-wrap items-center gap-1 mt-1 pl-5';
+            candidatesDiv.dataset.candidatesFor = ts.id;
+            div.appendChild(candidatesDiv);
+        }
 
         return div;
     }

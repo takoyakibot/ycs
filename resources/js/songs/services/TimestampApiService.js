@@ -24,6 +24,18 @@ export class TimestampApiService {
     }
 
     /**
+     * 未紐付けテキストに対する楽曲マスタの照合候補を取得
+     * @param {string[]} normalizedTexts - 正規化されたテキストの配列
+     * @returns {Promise<Object>} normalized_textをキーにした候補一覧
+     */
+    async fetchMatchCandidates(normalizedTexts) {
+        const response = await axios.post('/api/songs/match-candidates', {
+            normalized_texts: normalizedTexts
+        });
+        return response.data;
+    }
+
+    /**
      * タイムスタンプと楽曲を紐づける
      * @param {string} normalizedText - 正規化されたテキスト
      * @param {string} songId - 楽曲ID
