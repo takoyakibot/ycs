@@ -2004,8 +2004,10 @@ async function getChatContinuation() {
 
 /**
  * 全チャットリプレイを取得
+ * @param {string} initialContinuation - 最初のcontinuationトークン
+ * @param {function(number):void} [onProgress] - 取得済み件数を受け取る進捗コールバック
  */
-async function fetchAllChatReplays(initialContinuation) {
+async function fetchAllChatReplays(initialContinuation, onProgress) {
   const chats = [];
   let continuation = initialContinuation;
   let iterations = 0;
@@ -2018,6 +2020,7 @@ async function fetchAllChatReplays(initialContinuation) {
     if (statusEl) {
       statusEl.textContent = `チャットを取得中... (${chats.length}件)`;
     }
+    if (onProgress) onProgress(chats.length);
 
     const response = await fetchChatReplayPage(continuation);
     if (!response) break;
@@ -7503,18 +7506,47 @@ async function autoDetectSongStarts() {
       return;
     }
 
-    // チャットがIndexedDBに取得済みなら拍手バーストで境界を補強する（未取得なら音量のみ）
+    // チャットの拍手バーストで境界を補強する。IndexedDBのキャッシュを優先し、
+    // 未取得なら自動でチャットリプレイを取得する（失敗・チャットなしなら音量のみで続行）
     // videoIdが取れない場合はスキップ（getAll(null)は全動画のチャットを返してしまうため）
     let chats = [];
+    let chatUnavailable = false; // チャットリプレイ自体が無い/取得できなかった
     const videoId = getVideoId();
     if (videoId) {
       try {
         await initChatDB();
         chats = await loadChatDataForVideo(videoId);
       } catch (e) {
-        console.warn('[YCS 自動検出] チャットDB読込失敗（音量のみで判定します）:', e);
+        console.warn('[YCS 自動検出] チャットDB読込失敗:', e);
+      }
+      if (chats.length === 0) {
+        try {
+          showTsEditorNotice('チャットを取得しています…');
+          const continuation = await getChatContinuation();
+          if (continuation) {
+            const fetched = await fetchAllChatReplays(continuation, (count) => {
+              showTsEditorNotice(`チャットを取得中... (${count}件)`);
+            });
+            if (fetched.length > 0) {
+              await saveChatsToDB(videoId, fetched);
+              chats = fetched;
+            } else {
+              chatUnavailable = true;
+            }
+          } else {
+            // チャットリプレイの無い動画（チャット無効・メンバー限定等）
+            chatUnavailable = true;
+          }
+        } catch (e) {
+          console.warn('[YCS 自動検出] チャット取得失敗（音量のみで判定します）:', e);
+          chatUnavailable = true;
+        }
       }
     }
+    // チャット取得中に別の動画へ遷移していた場合は破棄する
+    // （古い検出結果を新しい動画のマーカーに追加しない）
+    if (videoId && getVideoId() !== videoId) return;
+
     const bursts = detectClapBursts(chats, videoDuration);
     const fused = fuseSegmentsWithChat(segments, bursts);
 
@@ -7536,7 +7568,9 @@ async function autoDetectSongStarts() {
     drawVolumeGraph();
     saveMarkersToStorage();
 
-    const sourceNote = fused.chatActive ? '音量+拍手チャット' : (chats.length > 0 ? '音量のみ（拍手が少ない配信）' : '音量のみ（チャット未取得）');
+    const sourceNote = fused.chatActive
+      ? '音量+拍手チャット'
+      : (chats.length > 0 ? '音量のみ（拍手が少ない配信）' : (chatUnavailable ? '音量のみ（チャットなし）' : '音量のみ'));
     const skippedNote = skippedCount > 0 ? `、既存マーカー付近の${skippedCount}件はスキップ` : '';
     showTsEditorNotice(`${newTimes.length}件の候補マーカーを追加しました（${sourceNote}${skippedNote}）`);
   } finally {
