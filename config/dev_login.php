@@ -9,23 +9,28 @@
 | （ブラウザ自動操作でのUI確認など）ではログインできない。
 | その回避用に、ユーザーを直接ログインさせる経路を用意する。
 |
-| 二重にガードしている:
-|   1. enabled が true であること（既定 false。.env で明示的に有効化する）
-|   2. APP_ENV=local であること（App\Http\Controllers\DevLoginController で判定）
+| 有効化の条件と無効化の手順は .env.example の DEV_LOGIN_ENABLED を参照。
+| ガードの内訳は App\Http\Controllers\DevLoginController のdocblockに書いてある。
 |
-| どちらか一方でも欠けると 404 を返す。
+| 注意: 有効化スイッチをここ以外（storage/ 配下のフラグファイル等）に置かないこと。
+| deploy.sh の rsync は .exclude-list に無いものをすべて本番へ転送するため、
+| storage/ に置いたフラグは本番に配られたうえ config:clear でも消えない。
 |
 */
 
 return [
     /*
-     * 有効にするか。無効化したい場合は .env から DEV_LOGIN_ENABLED を消すか false にする。
+     * 有効にするか。
+     *
+     * env の値が 'true' / '1' / 'on' / 'yes' のいずれでも有効になる点に注意
+     * （Laravel の env() が bool に解釈するため）。無効にしたい場合は
+     * 'false' / '0' / 空 のいずれかにするか、行ごと削除する。
      */
     'enabled' => (bool) env('DEV_LOGIN_ENABLED', false),
 
     /*
      * ログインさせるユーザーのメールアドレス。
-     * 未指定の場合は最初のユーザーを使う。クエリパラメータ ?email= でも指定できる。
+     * 未指定の場合は最初のユーザーを使う。
      */
     'email' => env('DEV_LOGIN_EMAIL'),
 ];
