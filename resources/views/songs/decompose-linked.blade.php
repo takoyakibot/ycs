@@ -123,11 +123,33 @@
             const button = e.target.closest('[data-copy-text]');
             if (!button) return;
 
-            navigator.clipboard.writeText(button.dataset.copyText).then(() => {
-                const original = button.textContent;
-                button.textContent = 'コピーしました';
-                setTimeout(() => { button.textContent = original; }, 1500);
-            });
+            // 連続クリックでも元の文言に戻せるよう、最初の文言を保持しておく
+            if (!button.dataset.copyLabel) {
+                button.dataset.copyLabel = button.textContent.trim();
+            }
+
+            // 表示を戻すタイマーはボタンごとに1つだけにする
+            const scheduleRestore = () => {
+                clearTimeout(Number(button.dataset.copyTimerId));
+                button.dataset.copyTimerId = setTimeout(() => {
+                    button.textContent = button.dataset.copyLabel;
+                }, 1500);
+            };
+
+            const notify = (message) => {
+                button.textContent = message;
+                scheduleRestore();
+            };
+
+            // HTTPなど非セキュアな環境では clipboard API が使えない
+            if (!navigator.clipboard) {
+                notify('コピーできません');
+                return;
+            }
+
+            navigator.clipboard.writeText(button.dataset.copyText)
+                .then(() => notify('コピーしました'))
+                .catch(() => notify('コピーできません'));
         });
     </script>
 </x-app-layout>
