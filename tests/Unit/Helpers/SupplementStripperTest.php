@@ -194,6 +194,88 @@ class SupplementStripperTest extends TestCase
     }
 
     /**
+     * 異体字セレクタ付きの装飾記号も除去されること
+     *
+     * YouTubeのタイムスタンプでは ▶️ や ❤️ のように「基底文字 + U+FE0F」の
+     * 2コードポイントで書かれることが多い。基底文字だけを見ていると、
+     * 先頭ではセレクタが孤児として残り、末尾では除去が一切効かない。
+     */
+    public function test_symbol_rule_removes_variation_selector_forms(): void
+    {
+        $rules = [SupplementStripper::RULE_SYMBOL];
+
+        // 先頭: セレクタが残らないこと
+        $this->assertEquals('君の名は希望', SupplementStripper::strip("▶\u{FE0F}君の名は希望", $rules));
+        $this->assertEquals('君の名は希望', SupplementStripper::strip("❤\u{FE0F}君の名は希望", $rules));
+        $this->assertEquals('君の名は希望', SupplementStripper::strip("🎙\u{FE0F}君の名は希望", $rules));
+
+        // 末尾: 除去が効くこと
+        $this->assertEquals('君の名は希望', SupplementStripper::strip("君の名は希望❤\u{FE0F}", $rules));
+
+        // セレクタ無しの形も従来どおり
+        $this->assertEquals('君の名は希望', SupplementStripper::strip('❤君の名は希望', $rules));
+    }
+
+    /**
+     * 辞書に無い絵文字から異体字セレクタだけを剥がさないこと
+     *
+     * 装飾記号の文字クラスに U+FE0F を直接足すと、辞書に無い絵文字
+     * （🏳️ など）のセレクタだけが落ちて別の文字に化ける。
+     */
+    public function test_symbol_rule_keeps_variation_selector_of_unlisted_emoji(): void
+    {
+        $text = "テスト🏳\u{FE0F}";
+
+        $this->assertEquals($text, SupplementStripper::strip($text, [SupplementStripper::RULE_SYMBOL]));
+    }
+
+    /**
+     * 除去で生まれた連続スペースが1つに詰まること
+     *
+     * 括弧の除去はスペース1つへの置き換えなので、括弧が中間にあると
+     * 2連スペースが残る。この値は画面にもDBにもそのまま流れる。
+     */
+    public function test_consecutive_spaces_are_collapsed_after_removal(): void
+    {
+        $this->assertEquals(
+            '気まぐれロマンティック / いきものがかり',
+            SupplementStripper::strip('気まぐれロマンティック（アンコール） / いきものがかり')
+        );
+
+        $this->assertEquals(
+            ['曲名', '曲名 Ver'],
+            SupplementStripper::stripParts(['曲名', '曲名（アンコール） Ver'])
+        );
+    }
+
+    /**
+     * 何も除去していないテキストの連続スペースは触らないこと
+     *
+     * 触ると、元から2連スペースがあるだけのレコードが
+     * 一括掃除コマンドの変更対象に入ってしまう。
+     */
+    public function test_consecutive_spaces_are_kept_when_nothing_removed(): void
+    {
+        $text = '曲名  Ver / アーティスト';
+
+        $this->assertEquals($text, SupplementStripper::strip($text));
+    }
+
+    /**
+     * 括弧補足のあとに区切り以降ルールが効くこと
+     *
+     * 連続スペースの圧縮を区切り以降ルールより前に置くと、括弧の除去で
+     * 生まれたギャップ境界が消えて後続の補足が取り残される。
+     */
+    public function test_trailing_rule_still_applies_after_bracket_removal(): void
+    {
+        $this->assertEquals(
+            '曲名 / アーティスト',
+            SupplementStripper::strip('曲名 / アーティスト（アンコール） 雑談')
+        );
+    }
+
+    /**
      * ルールを個別に指定できること
      */
     public function test_rules_can_be_applied_selectively(): void
