@@ -214,6 +214,50 @@ class CleanDecompositionSupplementsTest extends TestCase
             ->assertSuccessful();
     }
 
+    /**
+     * ヒット数が同一レコード内で重複カウントされないこと
+     *
+     * derived_title / derived_artist はパーツから選ばれた値なので、
+     * 同じ補足がパーツ側と derived 側で最大3回数えられると、
+     * 辞書調整の判断材料が実際の出現数の2〜3倍に膨らむ。
+     */
+    public function test_keyword_hits_are_not_counted_more_than_once_per_record(): void
+    {
+        // パーツ・derived_title・derived_artist の3箇所に同じ補足が乗っている
+        $this->createDecomposition('気まぐれロマンティック (エコー) / いきものがかり (エコー)', [
+            'status' => TimestampDecomposition::STATUS_SELECTED,
+            'derived_title' => '気まぐれロマンティック (エコー)',
+            'derived_artist' => 'いきものがかり (エコー)',
+        ]);
+
+        // パーツ側の2箇所ぶんだけが数えられる（derived 側は集計に含めない）。
+        // derived を含めると 4 になる
+        $this->artisan('ts-decompositions:clean-supplements --rules=bracket')
+            ->expectsOutputToContain('| bracket | エコー     | 2        |')
+            ->assertSuccessful();
+    }
+
+    /**
+     * 揃う相手が居ないのに「揃う件数」を報告しないこと
+     *
+     * 既存表記の集合に変更対象の行自身が含まれていると、空白差だけで
+     * artist_changed になった行が自分自身にマッチしてしまう
+     * （normalize() が空白差を吸収するため）。
+     */
+    public function test_artist_merges_excludes_the_row_itself(): void
+    {
+        $this->createDecomposition('ブルーバード / いきものがかり', [
+            'status' => TimestampDecomposition::STATUS_SELECTED,
+            'derived_title' => 'ブルーバード',
+            // 全角スペースだけが余分。normalize() では既存表記と同一になる
+            'derived_artist' => 'いきものがかり　',
+        ]);
+
+        $this->artisan('ts-decompositions:clean-supplements')
+            ->doesntExpectOutputToContain('既存のアーティスト表記に揃うもの')
+            ->assertSuccessful();
+    }
+
     public function test_status_filter(): void
     {
         $this->createDecomposition('曲名A / アーティスト (エコー)', [

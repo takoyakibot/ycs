@@ -160,8 +160,12 @@ class CleanDecompositionSupplements extends Command
         // 区切り必須ガードの扱いもパーツと揃える
         $requireSeparator = SupplementStripper::requiresSeparatorForParts($originalParts);
 
-        $cleanedTitle = $this->cleanDerived($decomposition->derived_title, $rules, $hits, $requireSeparator);
-        $cleanedArtist = $this->cleanDerived($decomposition->derived_artist, $rules, $hits, $requireSeparator);
+        // derived_* のヒットは集計に含めない。パーツから選ばれた値なので、
+        // 同じ補足がパーツ側と derived_title / derived_artist で最大3回数えられ、
+        // 辞書調整の判断材料（ヒット数）が実際の出現数の2〜3倍に膨らむ。
+        $derivedHits = [];
+        $cleanedTitle = $this->cleanDerived($decomposition->derived_title, $rules, $derivedHits, $requireSeparator);
+        $cleanedArtist = $this->cleanDerived($decomposition->derived_artist, $rules, $derivedHits, $requireSeparator);
 
         $partsChanged = $cleanedParts !== $originalParts;
         $titleChanged = $cleanedTitle !== $decomposition->derived_title;
@@ -349,7 +353,12 @@ class CleanDecompositionSupplements extends Command
         }
 
         // 既に綺麗な状態で存在するアーティスト表記
+        //
+        // 変更対象の行自身は除外する。含めると、空白差だけで artist_changed に
+        // なった行が自分自身にマッチし、揃う相手が居ないのに「揃う件数」が
+        // 立ってしまう（normalize() が空白差を吸収するため）。
         $existing = TimestampDecomposition::whereNotNull('derived_artist')
+            ->whereNotIn('id', array_column($changed, 'id'))
             ->pluck('derived_artist')
             ->map(fn ($artist) => TextNormalizer::normalize($artist))
             ->filter()
