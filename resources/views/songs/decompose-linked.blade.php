@@ -70,7 +70,17 @@
                                             $artistIsEmpty = $artist === null || trim($artist) === '';
                                         @endphp
                                         <tr class="border-b border-gray-100 dark:border-gray-700 {{ $artistIsEmpty ? 'bg-amber-50 dark:bg-amber-900/20' : '' }}">
-                                            <td class="py-2 pr-4 break-all">{{ $decomposition->original_text }}</td>
+                                            <td class="py-2 pr-4 break-all">
+                                                <div class="flex items-start gap-2">
+                                                    <span>{{ $decomposition->original_text }}</span>
+                                                    <button type="button"
+                                                            data-copy-text="{{ $decomposition->original_text }}"
+                                                            class="shrink-0 px-2 py-0.5 text-xs border border-gray-300 dark:border-gray-600 rounded text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                                            title="元テキストをコピー（正規化画面の検索に貼り付けられます）">
+                                                        コピー
+                                                    </button>
+                                                </div>
+                                            </td>
                                             <td class="py-2 pr-4 break-all">
                                                 <span class="text-blue-600 dark:text-blue-400">{{ $title }}</span>
                                                 <span class="text-gray-400">/</span>
@@ -107,4 +117,17 @@
             </div>
         </div>
     </div>
+
+    <script>
+        document.addEventListener('click', (e) => {
+            const button = e.target.closest('[data-copy-text]');
+            if (!button) return;
+
+            navigator.clipboard.writeText(button.dataset.copyText).then(() => {
+                const original = button.textContent;
+                button.textContent = 'コピーしました';
+                setTimeout(() => { button.textContent = original; }, 1500);
+            });
+        });
+    </script>
 </x-app-layout>

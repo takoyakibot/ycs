@@ -246,6 +246,20 @@ class AutoMatchedLinkListTest extends TestCase
     }
 
     /**
+     * 元テキストをコピーするボタンがあること
+     */
+    public function test_has_copy_button_for_original_text(): void
+    {
+        $this->actingAs(User::factory()->create());
+
+        $this->createDecomposition('コピー対象のテキスト / アーティスト');
+
+        $this->get(route('songs.decompose.linked'))
+            ->assertOk()
+            ->assertSee('data-copy-text="コピー対象のテキスト / アーティスト"', false);
+    }
+
+    /**
      * TS分解画面に一覧ページへのリンクがあること
      */
     public function test_decompose_page_links_to_list(): void
