@@ -665,6 +665,8 @@ function registerArchiveListComponent() {
 
                     // 表示更新・アーカイブ末尾検知用の監視を開始
                     if (timestamp) {
+                        // 一覧からの手動選択なので連続再生ではない
+                        autoReshuffleManager.setContinuousPlayback(false);
                         autoReshuffleManager.setEndTime(autoReshuffleManager.calculateEndTime(timestamp));
                         autoReshuffleManager.startMonitor();
                     }
@@ -711,6 +713,8 @@ function registerArchiveListComponent() {
 
                     // 表示更新・アーカイブ末尾検知用の監視を開始
                     if (timestamp) {
+                        // 一覧からの手動選択なので連続再生ではない
+                        autoReshuffleManager.setContinuousPlayback(false);
                         autoReshuffleManager.setEndTime(autoReshuffleManager.calculateEndTime(timestamp));
                         autoReshuffleManager.startMonitor();
                     }
@@ -841,8 +845,12 @@ function registerArchiveListComponent() {
                     };
 
                     // 自動再抽選OFFでアーカイブ末尾に到達したとき
+                    // 案内は「いま押せる操作」に限定する。ここに到達した時点では
+                    // 動画が停止しており（ENDEDで isPlaying が false になる）、
+                    // 自動再抽選をONにしても監視を開始できないため、
+                    // 「ONにすれば続く」という案内は成立しない
                     autoReshuffleManager.onArchiveEndWithoutReshuffle = () => {
-                        toast.info('アーカイブの再生が終わりました。自動再抽選をONにすると次の曲を自動で選びます');
+                        toast.info('アーカイブの終わりに到達しました。「次の曲」ボタンかガチャで続けられます');
                     };
                 },
 
@@ -993,6 +1001,8 @@ function registerArchiveListComponent() {
                         }
 
                         // 自動再抽選用: 終了時刻を計算・設定
+                        // ガチャ由来なので連続再生として扱う
+                        autoReshuffleManager.setContinuousPlayback(true);
                         autoReshuffleManager.setEndTime(autoReshuffleManager.calculateEndTime(timestamp));
 
                         // 動画を再生
@@ -1269,6 +1279,8 @@ function registerArchiveListComponent() {
                         }
 
                         // 自動再抽選用: 終了時刻を計算・設定
+                        // 曲送り由来なので連続再生として扱う
+                        autoReshuffleManager.setContinuousPlayback(true);
                         autoReshuffleManager.setEndTime(autoReshuffleManager.calculateEndTime(timestamp));
 
                         // 動画を再生（同じアーカイブ内なのでシーク）
