@@ -50,6 +50,7 @@ Route::middleware(['auth', 'admin'])->group(function () {
 
     // タイムスタンプ分解・選別
     Route::get('/songs/decompose', [TimestampDecompositionController::class, 'index'])->name('songs.decompose');
+    Route::get('/songs/decompose/linked', [TimestampDecompositionController::class, 'linked'])->name('songs.decompose.linked');
     Route::get('api/songs/decompose/next', [TimestampDecompositionController::class, 'next'])->name('songs.decompose.next');
     Route::post('api/songs/decompose/select', [TimestampDecompositionController::class, 'select'])->name('songs.decompose.select');
     Route::post('api/songs/decompose/whole-title', [TimestampDecompositionController::class, 'saveAsWholeTitle'])->name('songs.decompose.wholeTitle');

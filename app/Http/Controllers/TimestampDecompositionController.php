@@ -24,6 +24,22 @@ class TimestampDecompositionController extends Controller
     }
 
     /**
+     * 自動判定されたアイテムの一覧を表示
+     *
+     * 一括紐付けで何が紐付いたのかを確認するための画面。
+     * 修正はタイムスタンプ正規化画面で行うため、この画面は参照のみ。
+     */
+    public function linked(Request $request): View
+    {
+        $filter = $request->query('filter');
+
+        return view('songs.decompose-linked', [
+            'decompositions' => $this->service->getAutoMatchedList(is_string($filter) ? $filter : null),
+            'filter' => $filter,
+        ]);
+    }
+
+    /**
      * 次の未処理タイムスタンプを取得
      */
     public function next(): JsonResponse
