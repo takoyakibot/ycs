@@ -192,6 +192,7 @@ class TextNormalizer
         'video',
         'オリジナル',
         'original',
+        'soundtrack',
         'full',
         'short',
         'shorts',
@@ -285,8 +286,13 @@ class TextNormalizer
             return false;
         }
 
-        // 文字・数字が残っていなければ、キーワードと記号だけのパーツ
-        return preg_match('/[\p{L}\p{N}]/u', $remaining) !== 1;
+        // 文字が残っていなければ、キーワードと記号（と数字）だけのパーツ。
+        //
+        // 数字の残留は許容する。"cover2" や "ver.2" のように連番を添えただけの
+        // 表記ゆれを無視対象から外してしまうため。文字が残る場合は
+        // "Silver"（ver を含む）や "Official髭男dism" のように
+        // アーティスト名・曲名の一部なので無視しない。
+        return preg_match('/\p{L}/u', $remaining) !== 1;
     }
 
     /**

@@ -317,6 +317,13 @@ class TextNormalizerTest extends TestCase
         $this->assertTrue(TextNormalizer::isIgnorablePart('Official Video'));
         $this->assertTrue(TextNormalizer::isIgnorablePart('(Full ver.)'));
         $this->assertTrue(TextNormalizer::isIgnorablePart('Short ver.'));
+
+        // キーワードに連番を添えただけの表記ゆれ（数字の残留は許容する）
+        $this->assertTrue(TextNormalizer::isIgnorablePart('cover2'));
+        $this->assertTrue(TextNormalizer::isIgnorablePart('ver.2'));
+        $this->assertTrue(TextNormalizer::isIgnorablePart('MV2'));
+
+        $this->assertTrue(TextNormalizer::isIgnorablePart('ORIGINAL SOUNDTRACK'));
     }
 
     /**

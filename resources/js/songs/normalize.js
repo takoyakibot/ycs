@@ -26,6 +26,8 @@ class TimestampNormalization {
         this.operationHistory = []; // 操作履歴
         this.maxHistoryItems = 20; // 最大履歴保持数
         this.songReviewStatus = null; // 楽曲マスタのreview_statusフィルタ
+        this.songsRequestSeq = 0; // 楽曲マスタ取得の世代番号（応答の追い越し防止）
+        this.songsQueryActive = false; // 直近の loadSongs が絞り込み条件ありと判断したか
 
         this.init();
     }
@@ -816,18 +818,32 @@ class TimestampNormalization {
 
     /**
      * 楽曲マスタ一覧の絞り込み条件が指定されているか
+     *
+     * @param {string|null} [search] 判定に使う検索文字列（省略時は入力欄の値）
      * @returns {boolean} 検索文字列またはreview_statusフィルタが指定されていればtrue
      */
-    hasSongsQuery() {
-        const search = document.getElementById('songsSearch')?.value ?? '';
+    hasSongsQuery(search = null) {
+        const value = search ?? (document.getElementById('songsSearch')?.value ?? '');
 
-        return search.trim() !== '' || this.songReviewStatus !== null;
+        return value.trim() !== '' || this.songReviewStatus !== null;
     }
 
     async loadSongs(search = '') {
+        // 応答の追い越しを防ぐための世代番号。
+        // 絞り込み条件がないパスは await を含まず同期的に確定するため、
+        // ここで世代を進めておかないと、先行して飛んだ検索の応答が後から届いて
+        // 「検索してください」の案内を上書きし、古い一覧だけが残る。
+        const seq = ++this.songsRequestSeq;
+
+        // この呼び出しが判断した絞り込み状態を displaySongs に渡す。
+        // displaySongs 側で入力欄を読み直すと、await の間に値が変わったときに
+        // 「APIを叩いたのに案内を表示」「検索していないのに0件」といった
+        // 食い違いが起きる
+        this.songsQueryActive = this.hasSongsQuery(search);
+
         // 絞り込み条件がない場合は全件が返ってくるだけで実用的ではないため、
         // APIを叩かず一覧を空のままにする（ページ表示直後と同じ状態）
-        if (search.trim() === '' && this.songReviewStatus === null) {
+        if (! this.songsQueryActive) {
             this.displaySongs([], 0);
 
             return;
@@ -836,12 +852,21 @@ class TimestampNormalization {
         try {
             const response = await songApiService.fetchSongs(search, this.songReviewStatus);
 
+            // 後発の呼び出しが既に表示を確定させていれば何もしない
+            if (seq !== this.songsRequestSeq) {
+                return;
+            }
+
             if (response.data) {
                 this.displaySongs(response.data, response.total);
             } else {
                 this.displaySongs(response, response.length);
             }
         } catch (error) {
+            if (seq !== this.songsRequestSeq) {
+                return;
+            }
+
             console.error('楽曲マスタの取得に失敗しました:', error);
             toast.error('楽曲マスタの取得に失敗しました。');
         }
@@ -861,7 +886,7 @@ class TimestampNormalization {
         container.innerHTML = '';
         // 絞り込み条件がないときは検索していないので、「0件」と出すと
         // 検索してヒットしなかったように見えてしまう
-        this.updateSongsCount(this.hasSongsQuery() ? (total !== null ? total : songs.length) : null);
+        this.updateSongsCount(this.songsQueryActive ? (total !== null ? total : songs.length) : null);
 
         if (!Array.isArray(songs)) {
             console.error('songs is not an array:', songs);
@@ -870,7 +895,7 @@ class TimestampNormalization {
         }
 
         if (songs.length === 0) {
-            const message = this.hasSongsQuery()
+            const message = this.songsQueryActive
                 ? '楽曲マスタがありません。'
                 : '楽曲名・アーティスト名で検索してください。';
             container.innerHTML = `<p class="text-gray-500 dark:text-gray-400 text-sm">${message}</p>`;
