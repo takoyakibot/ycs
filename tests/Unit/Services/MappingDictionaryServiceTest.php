@@ -139,6 +139,46 @@ class MappingDictionaryServiceTest extends TestCase
         $this->assertEmpty($this->service->findCandidates(''));
     }
 
+    /**
+     * 先勝ちで1件に絞ると衝突が候補から見えなくなり、
+     * 「同信頼度の候補が並んだら自動紐付けしない」判定が機能しなくなる。
+     */
+    #[Test]
+    public function 同じキーが異なる楽曲を指す場合は両方が候補になる(): void
+    {
+        $songA = Song::factory()->create(['title' => 'ロキ', 'artist' => 'みきとP']);
+        $songB = Song::factory()->create(['title' => 'ロキ(cover)', 'artist' => 'だれか']);
+
+        // 照合キーはどちらも「ロキみきとp」になる
+        $this->createMapping('ロキ / みきとP', $songA);
+        $this->createMapping('ロキ・みきとP', $songB);
+
+        $candidates = $this->service->findCandidates(TextNormalizer::normalize('♪ロキ／みきとP'));
+
+        $this->assertCount(2, $candidates);
+        $this->assertEqualsCanonicalizing(
+            [$songA->id, $songB->id],
+            array_column($candidates, 'song_id')
+        );
+        // 両方とも同じ信頼度（呼び出し側で曖昧と判定される）
+        $this->assertSame($candidates[0]['confidence'], $candidates[1]['confidence']);
+    }
+
+    #[Test]
+    public function キーが衝突する場合は自動紐付けされない(): void
+    {
+        $songA = Song::factory()->create(['title' => 'Song A', 'artist' => 'Artist A']);
+        $songB = Song::factory()->create(['title' => 'Song B', 'artist' => 'Artist B']);
+
+        $this->createMapping('カタルシス / うた', $songA);
+        $this->createMapping('カタルシス・うた', $songB);
+
+        $matchingService = app(\App\Services\SongMatchingService::class);
+        $match = $matchingService->findBestMatch(TextNormalizer::normalize('♪カタルシス うた'));
+
+        $this->assertNull($match, 'キーが衝突している場合は候補提示に留めるべき');
+    }
+
     #[Test]
     public function 同じ楽曲は候補内で重複しない(): void
     {

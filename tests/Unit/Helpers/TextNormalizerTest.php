@@ -539,6 +539,17 @@ class TextNormalizerTest extends TestCase
     }
 
     /**
+     * 文字列"0"が空入力扱いされないことをテスト
+     *
+     * empty()は"0"を真と評価するため、明示的なnull/空文字判定が必要。
+     */
+    public function test_match_key_handles_zero_string(): void
+    {
+        $this->assertEquals('0', TextNormalizer::matchKey('0'));
+        $this->assertEquals(['0'], TextNormalizer::splitArtistTokens('0'));
+    }
+
+    /**
      * matchKeyが日本語以外の文字を保持することをテスト
      */
     public function test_match_key_keeps_non_japanese_letters(): void

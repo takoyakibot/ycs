@@ -140,11 +140,18 @@ class TextNormalizer
      */
     public static function matchKey(?string $text): string
     {
-        if (empty($text)) {
+        // empty() は "0" を空扱いしてしまうため明示的に判定する
+        if ($text === null || $text === '') {
             return '';
         }
 
         $normalized = static::normalize($text);
+
+        // normalize() が空を返すケース（"0" や区切り文字のみ等）は
+        // 元テキストを小文字化して使う（TsItem の正規化フォールバックと同じ扱い）
+        if ($normalized === '' && trim($text) !== '') {
+            $normalized = mb_strtolower(trim($text), 'UTF-8');
+        }
 
         // 結合文字（濁点・半濁点の分解表記）を合成済みの表記に統一する
         // 例: "か\u{3099}" (2文字) → "が" (1文字)
@@ -193,7 +200,8 @@ class TextNormalizer
      */
     public static function splitArtistTokens(?string $artist): array
     {
-        if (empty($artist)) {
+        // empty() は "0" を空扱いしてしまうため明示的に判定する
+        if ($artist === null || trim($artist) === '') {
             return [];
         }
 

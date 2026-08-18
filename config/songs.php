@@ -61,6 +61,13 @@ return [
         'dictionary_similarity_threshold' => env('SONG_DICTIONARY_SIMILARITY_THRESHOLD', 0.8),
 
         /*
+        | 照合キー一覧（楽曲マスタ・辞書）のキャッシュ保持秒数です。
+        | 楽曲マスタやマッピングの保存・削除時には自動的に無効化されるため、
+        | この値は保険としての上限です。
+        */
+        'index_cache_ttl' => env('SONG_MATCHING_INDEX_CACHE_TTL', 600),
+
+        /*
         | 候補の絞り込みに n-gram 全文検索インデックスを使用するかの設定です。
         |
         | 現在の照合は楽曲マスタの照合キーを全件メモリに載せた総当たりで行っています。

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Helpers\TextNormalizer;
 use App\Models\Song;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * タイムスタンプのテキストと楽曲マスタを照合するサービス
@@ -33,6 +34,15 @@ class SongMatchingService
      * 候補の由来: 紐付け済みマッピングの辞書との照合
      */
     public const SOURCE_DICTIONARY = 'dictionary';
+
+    /**
+     * 照合キー一覧のキャッシュキー
+     *
+     * 正規化画面の候補提示はリクエストごとに実行されるため、
+     * 毎回楽曲マスタ全件を読み直さないようキャッシュ層を挟む。
+     * Songモデルの保存・削除時に無効化される。
+     */
+    public const CACHE_KEY = 'song_matching.master_index';
 
     /**
      * 照合対象とするタイトルキーの最小文字数
@@ -312,10 +322,12 @@ class SongMatchingService
     }
 
     /**
-     * 楽曲マスタの照合キー一覧を取得（初回のみDBから読み込む）
+     * 楽曲マスタの照合キー一覧を取得
      *
      * 楽曲マスタの規模では全件をメモリに載せて総当たりで照合しても
      * 十分に高速なため、候補絞り込み用のインデックスは持たない。
+     * ただしWebリクエストはプロセスをまたぐため、構築結果はキャッシュに保持し、
+     * リクエストごとに全件をDBから読み直さないようにする。
      *
      * @return array<int, array{id: string, title: string, artist: string, title_key: string, title_key_length: int, artist_token_keys: string[]}>
      */
@@ -325,12 +337,24 @@ class SongMatchingService
             return $this->index;
         }
 
-        $this->index = [];
+        $ttl = (int) config('songs.matching.index_cache_ttl', 600);
+
+        return $this->index = Cache::remember(self::CACHE_KEY, $ttl, fn () => $this->buildIndex());
+    }
+
+    /**
+     * 楽曲マスタの照合キー一覧をDBから構築
+     *
+     * @return array<int, array{id: string, title: string, artist: string, title_key: string, title_key_length: int, artist_token_keys: string[]}>
+     */
+    private function buildIndex(): array
+    {
+        $index = [];
 
         Song::query()
             ->select(['id', 'title', 'artist', 'match_key_title', 'match_key_artist'])
             ->orderBy('id')
-            ->chunk(500, function ($songs) {
+            ->chunk(500, function ($songs) use (&$index) {
                 foreach ($songs as $song) {
                     // カラムが未設定の場合（マイグレーション前に作られた行など）は都度算出する
                     $titleKey = $song->match_key_title ?? TextNormalizer::matchKey($song->title);
@@ -339,7 +363,7 @@ class SongMatchingService
                         continue;
                     }
 
-                    $this->index[] = [
+                    $index[] = [
                         'id' => $song->id,
                         'title' => (string) $song->title,
                         'artist' => (string) $song->artist,
@@ -350,7 +374,7 @@ class SongMatchingService
                 }
             });
 
-        return $this->index;
+        return $index;
     }
 
     /**
@@ -412,6 +436,7 @@ class SongMatchingService
     public function flushIndex(): void
     {
         $this->index = null;
+        Cache::forget(self::CACHE_KEY);
         $this->mappingDictionaryService->flushIndex();
     }
 }

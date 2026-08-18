@@ -53,6 +53,13 @@ class TimestampSongMapping extends Model
                 $model->id = Str::ulid();
             }
         });
+
+        // 手動マッピングは照合辞書の材料になるため、変更時にキャッシュを無効化する
+        $flushDictionaryCache = function () {
+            \Illuminate\Support\Facades\Cache::forget(\App\Services\MappingDictionaryService::CACHE_KEY);
+        };
+        static::saved($flushDictionaryCache);
+        static::deleted($flushDictionaryCache);
     }
 
     /**

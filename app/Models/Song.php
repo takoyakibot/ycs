@@ -56,6 +56,15 @@ class Song extends Model
                 $song->match_key_artist = TextNormalizer::matchKey($song->artist);
             }
         });
+
+        // 照合キーのキャッシュを無効化する。
+        // 辞書側もタイトル・アーティスト名を楽曲マスタから引いているため両方を破棄する
+        $flushMatchingCache = function () {
+            \Illuminate\Support\Facades\Cache::forget(\App\Services\SongMatchingService::CACHE_KEY);
+            \Illuminate\Support\Facades\Cache::forget(\App\Services\MappingDictionaryService::CACHE_KEY);
+        };
+        static::saved($flushMatchingCache);
+        static::deleted($flushMatchingCache);
     }
 
     public function mappings()

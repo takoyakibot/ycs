@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Helpers\TextNormalizer;
 use App\Models\TimestampSongMapping;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * 既存の紐付け済みマッピングを辞書として照合するサービス
@@ -18,6 +19,15 @@ use App\Models\TimestampSongMapping;
  */
 class MappingDictionaryService
 {
+    /**
+     * 辞書のキャッシュキー
+     *
+     * 正規化画面の候補提示はリクエストごとに実行されるため、
+     * 毎回マッピング全件を読み直さないようキャッシュ層を挟む。
+     * TimestampSongMapping・Songモデルの保存・削除時に無効化される。
+     */
+    public const CACHE_KEY = 'song_matching.dictionary_index';
+
     /**
      * 類似度判定の対象とするキーの最小文字数
      */
@@ -72,9 +82,21 @@ class MappingDictionaryService
     private ?array $songs = null;
 
     /**
+     * 1つの照合キーに対して保持する楽曲数の上限
+     *
+     * 同じキーが多数の楽曲を指す状態は照合として意味を持たないため打ち切る。
+     */
+    private const MAX_SONGS_PER_KEY = 5;
+
+    /**
      * 照合キーが完全一致する辞書エントリ
      *
-     * @var array<string, array{song_id: string, source_text: string}>|null
+     * 同じキーが異なる楽曲を指す場合はすべて保持する。
+     * 先勝ちで1件に絞ると、キーが衝突していること自体が候補から見えなくなり、
+     * 呼び出し側の「同信頼度の候補が並んだら自動紐付けしない」という
+     * 曖昧性の判定が機能しなくなるため。
+     *
+     * @var array<string, array<int, array{song_id: string, source_text: string}>>|null
      */
     private ?array $exactIndex = null;
 
@@ -112,8 +134,7 @@ class MappingDictionaryService
         // 1. 装飾を除いたキーの完全一致
         // 元テキストの表記が違うため既存のJOINでは紐付かないが、
         // 装飾を除けば同一のテキストである、というケースを拾う
-        if (isset($this->exactIndex[$key])) {
-            $entry = $this->exactIndex[$key];
+        foreach ($this->exactIndex[$key] ?? [] as $entry) {
             $candidates[$entry['song_id']] = $this->buildCandidate(
                 $entry['song_id'],
                 self::CONFIDENCE_KEY_MATCH,
@@ -219,9 +240,25 @@ class MappingDictionaryService
             return;
         }
 
-        $this->songs = [];
-        $this->exactIndex = [];
-        $this->buckets = [];
+        $ttl = (int) config('songs.matching.index_cache_ttl', 600);
+
+        $cached = Cache::remember(self::CACHE_KEY, $ttl, fn () => $this->buildIndex());
+
+        $this->songs = $cached['songs'];
+        $this->exactIndex = $cached['exact_index'];
+        $this->buckets = $cached['buckets'];
+    }
+
+    /**
+     * 辞書をDBから構築
+     *
+     * @return array{songs: array, exact_index: array, buckets: array}
+     */
+    private function buildIndex(): array
+    {
+        $songs = [];
+        $exactIndex = [];
+        $buckets = [];
 
         TimestampSongMapping::query()
             ->select([
@@ -237,7 +274,7 @@ class MappingDictionaryService
             // 自動紐付けの結果は辞書に含めない（誤りの連鎖を防ぐ）
             ->where('timestamp_song_mappings.is_manual', true)
             ->orderBy('timestamp_song_mappings.normalized_text')
-            ->chunk(1000, function ($mappings) {
+            ->chunk(1000, function ($mappings) use (&$songs, &$exactIndex, &$buckets) {
                 foreach ($mappings as $mapping) {
                     $key = TextNormalizer::matchKey($mapping->normalized_text);
                     $keyLength = mb_strlen($key, 'UTF-8');
@@ -246,7 +283,7 @@ class MappingDictionaryService
                         continue;
                     }
 
-                    $this->songs[$mapping->song_id] ??= [
+                    $songs[$mapping->song_id] ??= [
                         'title' => (string) $mapping->title,
                         'artist' => (string) $mapping->artist,
                     ];
@@ -256,18 +293,30 @@ class MappingDictionaryService
                         'source_text' => (string) $mapping->normalized_text,
                     ];
 
-                    // 同じキーに複数の表記が該当する場合は先に読み込んだものを保持する
-                    if (! isset($this->exactIndex[$key])) {
-                        $this->exactIndex[$key] = $entry;
+                    // 同じキーが異なる楽曲を指す場合はすべて保持する（曖昧性の検出に必要）。
+                    // 先勝ちで1件に絞ると、呼び出し側の「同信頼度の候補が並んだら
+                    // 自動紐付けしない」という判定が機能しなくなる。
+                    // 同じ楽曲の表記違いは1件で足りるため追加しない
+                    $existing = $exactIndex[$key] ?? [];
+                    if (count($existing) < self::MAX_SONGS_PER_KEY
+                        && ! in_array($mapping->song_id, array_column($existing, 'song_id'), true)
+                    ) {
+                        $exactIndex[$key][] = $entry;
                     }
 
                     $bucketKey = mb_substr($key, 0, self::BUCKET_PREFIX_LENGTH, 'UTF-8');
-                    $this->buckets[$bucketKey][] = $entry + [
+                    $buckets[$bucketKey][] = $entry + [
                         'key' => $key,
                         'key_length' => $keyLength,
                     ];
                 }
             });
+
+        return [
+            'songs' => $songs,
+            'exact_index' => $exactIndex,
+            'buckets' => $buckets,
+        ];
     }
 
     /**
@@ -278,5 +327,6 @@ class MappingDictionaryService
         $this->songs = null;
         $this->exactIndex = null;
         $this->buckets = null;
+        Cache::forget(self::CACHE_KEY);
     }
 }
