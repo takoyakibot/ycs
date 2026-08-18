@@ -730,7 +730,8 @@ class TimestampDecompositionService
     {
         $query = TimestampDecomposition::with('song')
             ->where('status', TimestampDecomposition::STATUS_AUTO_MATCHED)
-            ->orderByDesc('updated_at');
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id');
 
         if ($filter === 'linked') {
             $query->whereNotNull('song_id');

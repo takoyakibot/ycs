@@ -153,6 +153,46 @@ class AutoMatchedListTest extends TestCase
     }
 
     /**
+     * updated_at が同値でも、id を第2キーにしてページ間で重複・欠落が起きないこと
+     *
+     * スキャンや一括紐付けは同一リクエスト内で大量の行を作成・更新するため、
+     * updated_at が秒精度で同値になるのが普通。ORDER BY updated_at のみだと
+     * MySQL は同値キーの LIMIT/OFFSET の順序を保証しないため、id を降順の
+     * 第2キーに加えて決定的な並びにする。
+     */
+    public function test_orders_deterministically_when_updated_at_ties(): void
+    {
+        $items = [];
+        for ($i = 0; $i < 6; $i++) {
+            $items[] = $this->createDecomposition("同時刻{$i} / アーティスト");
+        }
+
+        // 全レコードの updated_at を同一時刻に揃える（スキャン・一括紐付けで実際に起こる状況を再現）
+        $sameTime = now();
+        foreach ($items as $item) {
+            $item->timestamps = false;
+            $item->updated_at = $sameTime;
+            $item->save();
+        }
+
+        \Illuminate\Pagination\Paginator::currentPageResolver(fn () => 1);
+        $page1 = $this->service->getAutoMatchedList(null, 3);
+
+        \Illuminate\Pagination\Paginator::currentPageResolver(fn () => 2);
+        $page2 = $this->service->getAutoMatchedList(null, 3);
+
+        $page1Ids = $page1->pluck('id')->all();
+        $page2Ids = $page2->pluck('id')->all();
+
+        // ページ間で重複がないこと
+        $this->assertEmpty(array_intersect($page1Ids, $page2Ids));
+
+        // 全件が過不足なく id の降順でページに分配されること
+        $expectedIds = collect($items)->pluck('id')->sortDesc()->values()->all();
+        $this->assertEquals($expectedIds, array_merge($page1Ids, $page2Ids));
+    }
+
+    /**
      * ページングされること
      */
     public function test_paginates(): void

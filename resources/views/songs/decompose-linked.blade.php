@@ -27,7 +27,7 @@
 
                     <div class="mt-3 flex flex-wrap gap-2">
                         @foreach ($filters as $value => $label)
-                            @php $active = (string) $filter === (string) $value; @endphp
+                            @php $active = $filter === ($value === '' ? null : $value); @endphp
                             <a href="{{ route('songs.decompose.linked', $value === '' ? [] : ['filter' => $value]) }}"
                                class="px-3 py-1 text-sm rounded border {{ $active
                                    ? 'bg-purple-600 text-white border-purple-600'
@@ -93,7 +93,7 @@
                                             <td class="py-2 pr-4 whitespace-nowrap">
                                                 {{ $decomposition->confidence === null ? '-' : round($decomposition->confidence * 100).'%' }}
                                             </td>
-                                            <td class="py-2 pr-4 whitespace-nowrap">
+                                            <td class="py-2 pr-4 whitespace-nowrap" data-status="{{ $decomposition->song_id ? 'linked' : 'unlinked' }}">
                                                 @if ($decomposition->song_id)
                                                     <span class="text-green-600 dark:text-green-400">紐付け済み</span>
                                                 @else

@@ -64,7 +64,7 @@ class AutoMatchedLinkListTest extends TestCase
         $response->assertSee('紐付け済みの元テキスト');
         $response->assertSee('マスタの曲名');
         $response->assertSee('マスタのアーティスト');
-        $response->assertSee('紐付け済み');
+        $response->assertSee('data-status="linked"', false);
     }
 
     /**
@@ -88,7 +88,7 @@ class AutoMatchedLinkListTest extends TestCase
         $response->assertSee('未紐付けの元テキスト');
         $response->assertSee('判定された曲名');
         $response->assertSee('判定されたアーティスト');
-        $response->assertSee('未紐付け');
+        $response->assertSee('data-status="unlinked"', false);
     }
 
     /**
@@ -98,12 +98,14 @@ class AutoMatchedLinkListTest extends TestCase
     {
         $this->actingAs(User::factory()->create());
 
+        $this->createDecomposition('自動判定のテキスト / アーティスト');
         $this->createDecomposition('処理待ちのテキスト / アーティスト', [
             'status' => TimestampDecomposition::STATUS_PENDING,
         ]);
 
         $this->get(route('songs.decompose.linked'))
             ->assertOk()
+            ->assertSee('自動判定のテキスト')
             ->assertDontSee('処理待ちのテキスト');
     }
 
@@ -242,7 +244,7 @@ class AutoMatchedLinkListTest extends TestCase
 
         $this->get(route('songs.decompose.linked', ['filter' => 'unlinked']))
             ->assertOk()
-            ->assertSee('filter=unlinked', false);
+            ->assertSee('filter=unlinked&amp;page=2', false);
     }
 
     /**
