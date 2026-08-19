@@ -14,17 +14,36 @@ use Illuminate\Support\Facades\Log;
  * 本番のログインはGoogle OAuthのみのため、OAuthを通せない環境では
  * 画面の動作確認ができない。その回避用の経路。
  *
- * config/dev_login.php の enabled が true、かつ APP_ENV=local の場合のみ動作する。
- * どちらか一方でも欠ければ 404 を返すので、本番環境では有効化できない。
+ * 有効化の条件と無効化の手順は .env.example の DEV_LOGIN_ENABLED を参照。
+ *
+ * ガードは3段:
+ *   1. 設定/ルートキャッシュが存在しない（キャッシュは .env より優先されるため、
+ *      キャッシュがあると 2. と 3. の入力を信用できない）
+ *   2. config('dev_login.enabled') === true
+ *   3. APP_ENV=local
+ *
+ * 2. と 3. は同じ bootstrap/cache/config.php に固定されるため独立していない。
+ * ローカルで生成したキャッシュが配布されると2つ同時に貫通するので、
+ * 1. で無条件に閉じる（fail-closed）。
  */
 class DevLoginController extends Controller
 {
     public function __invoke(Request $request): RedirectResponse
     {
+        // キャッシュされた設定・ルートは .env を読まずに使われる。
+        // そのため下の2つのガードの入力を信用できない。キャッシュがあれば閉じる。
+        if (app()->configurationIsCached() || app()->routesAreCached()) {
+            Log::warning('[DevLogin] 設定/ルートキャッシュが有効なため無効化されています。php artisan config:clear route:clear を実行してください');
+            abort(404);
+        }
+
         abort_unless(config('dev_login.enabled') === true, 404);
         abort_unless(app()->environment('local'), 404);
 
-        $email = $request->query('email') ?: config('dev_login.email');
+        // ログイン先はサーバー側の設定のみで決める。
+        // リクエストで指定できるようにすると、この経路が到達可能な環境で
+        // 任意ユーザーになりきれてしまう（登録ユーザーは全員が管理機能を使える）
+        $email = config('dev_login.email');
 
         $user = $email
             ? User::where('email', $email)->first()

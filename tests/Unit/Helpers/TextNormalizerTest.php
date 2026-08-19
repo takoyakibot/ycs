@@ -300,7 +300,7 @@ class TextNormalizerTest extends TestCase
     }
 
     /**
-     * isIgnorablePart: 無視キーワードと記号だけのパーツが無視対象になることをテスト
+     * isIgnorablePart: 無視キーワードと記号（と数字）だけのパーツが無視対象になることをテスト
      */
     public function test_is_ignorable_part_detects_noise_parts(): void
     {
@@ -317,6 +317,11 @@ class TextNormalizerTest extends TestCase
         $this->assertTrue(TextNormalizer::isIgnorablePart('Official Video'));
         $this->assertTrue(TextNormalizer::isIgnorablePart('(Full ver.)'));
         $this->assertTrue(TextNormalizer::isIgnorablePart('Short ver.'));
+
+        // キーワードに連番を添えただけの表記ゆれ（数字の残留は許容する）
+        $this->assertTrue(TextNormalizer::isIgnorablePart('cover2'));
+        $this->assertTrue(TextNormalizer::isIgnorablePart('ver.2'));
+        $this->assertTrue(TextNormalizer::isIgnorablePart('MV2'));
     }
 
     /**
@@ -336,6 +341,20 @@ class TextNormalizerTest extends TestCase
         $this->assertFalse(TextNormalizer::isIgnorablePart('Silver'));
         $this->assertFalse(TextNormalizer::isIgnorablePart('Forever'));
         $this->assertFalse(TextNormalizer::isIgnorablePart('Over The Rainbow'));
+
+        // 数字の残留は許容するが、文字が残るなら候補として残すこと。
+        // 数字入りのアーティスト名・曲名を捨ててしまわないための境界
+        $this->assertFalse(TextNormalizer::isIgnorablePart('AKB48'));
+        $this->assertFalse(TextNormalizer::isIgnorablePart('乃木坂46'));
+        $this->assertFalse(TextNormalizer::isIgnorablePart('175R'));
+        $this->assertFalse(TextNormalizer::isIgnorablePart('2 covers'));
+        $this->assertFalse(TextNormalizer::isIgnorablePart('MV 4K'));
+        $this->assertFalse(TextNormalizer::isIgnorablePart('original 1st'));
+
+        // 単体で曲名になりうる語は辞書に入れていないこと。
+        // 入れると候補が1つに減って自動確定し、アーティストが空の楽曲マスタが作られる
+        $this->assertFalse(TextNormalizer::isIgnorablePart('Soundtrack'));
+        $this->assertFalse(TextNormalizer::isIgnorablePart('ORIGINAL SOUNDTRACK'));
 
         // キーワードを含まないパーツ（記号・絵文字のみ）も無視対象にしない
         $this->assertFalse(TextNormalizer::isIgnorablePart('🎵'));
