@@ -18,6 +18,12 @@ class SongMatchingServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        // 自動紐付けは既定で無効（config/songs.php の auto_link_threshold = 1.0）。
+        // ここは照合ロジック自体を検証するので、無効化する前の既定値だった 0.85 を
+        // 明示的に設定する。既定値の変更でこのテストの意味が変わらないようにするため。
+        config(['songs.matching.auto_link_threshold' => 0.85]);
+
         $this->service = app(SongMatchingService::class);
     }
 

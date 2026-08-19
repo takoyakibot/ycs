@@ -87,8 +87,14 @@ class SongSearchService
         // "title / artist" 形式でテキストを生成
         $searchText = $normalizedTitle.' / '.$normalizedArtist;
 
-        // 類似検索でマッピングを探す
-        $mapping = TimestampSongMapping::fuzzySearch($searchText);
+        // 類似検索でマッピングを探す。
+        // 閾値は明示的に渡すこと。fuzzySearch() の既定値 0.7 はあいまい検索用で、
+        // 同一性の判定には緩すぎる（別アーティストの別楽曲が「既に登録済み」として
+        // 返り、正当な新規登録が阻止される）。
+        $mapping = TimestampSongMapping::fuzzySearch(
+            $searchText,
+            (float) config('songs.matching.identity_match_threshold', 0.95)
+        );
         if ($mapping && $mapping->song_id && ! $mapping->is_not_song) {
             return $mapping->song;
         }

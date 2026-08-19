@@ -48,11 +48,37 @@ return [
     | 信頼度の水準は SongMatchingService の CONFIDENCE_* 定数を参照してください。
     | 閾値を下げると紐付け件数は増えますが誤爆も増えます。
     |
+    | 自動紐付けは既定で無効にしている（1.0）。信頼度の最大値は
+    | SongMatchingService::CONFIDENCE_EXACT と
+    | MappingDictionaryService::CONFIDENCE_KEY_MATCH の 0.95 なので、
+    | 1.0 では findBestMatch() が必ず null を返し、自動での書き込みは発生しない。
+    | 候補の「表示」は candidate_threshold が独立に制御するため影響を受けない。
+    |
+    | 無効にしている理由は、現在の信頼度の付け方では誤った紐付けを自動で
+    | 書き込んでしまうため。実測された誤爆（Issue #672）:
+    |   愛言葉Ⅲ / DECO*27 → 愛言葉 / DECO*27  被覆率0.30 信頼度0.90
+    |   Full Moon         → Moon              信頼度0.95
+    |   カバーガール       → ガール             信頼度0.95
+    |   愛言葉Ⅲ           → 愛言葉Ⅱ（辞書経由） 信頼度0.85
+    | 被覆率は正当な一致（0.1429）より誤爆（0.30）のほうが高くなるため、
+    | 閾値の調整では分離できない。信頼度の設計を作り直してから有効化すること。
+    |
     */
     'matching' => [
-        'auto_link_threshold' => env('SONG_AUTO_LINK_THRESHOLD', 0.85),
+        'auto_link_threshold' => env('SONG_AUTO_LINK_THRESHOLD', 1.0),
         'candidate_threshold' => env('SONG_CANDIDATE_THRESHOLD', 0.5),
         'candidate_limit' => env('SONG_CANDIDATE_LIMIT', 5),
+
+        /*
+        | 新規登録時に「既に登録済みの楽曲か」を判定する際の類似度の閾値です。
+        |
+        | この判定は検索ではなく同一性の判定なので、あいまい検索より厳しくする。
+        | TimestampSongMapping::fuzzySearch() の既定値 0.7 は距離をバイト単位で
+        | 数えていた頃に調整された値で、文字単位に変えた後は緩すぎる（実測:
+        | 「…カウントダウン / ぴのぴ」と「…カウントダウン / あるふぁきゅん」が
+        | 0.75 で一致し、別アーティストの別楽曲が「既に登録済み」として返る）。
+        */
+        'identity_match_threshold' => env('SONG_IDENTITY_MATCH_THRESHOLD', 0.95),
 
         /*
         | 紐付け済みマッピングを辞書として照合する際の類似度の閾値です。
