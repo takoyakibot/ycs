@@ -39,6 +39,8 @@
 
                     <p class="mt-3 text-xs text-gray-500 dark:text-gray-400">
                         紐付けが誤っている場合はタイムスタンプ正規化画面で修正してください。
+                        ただしこの一覧はTS分解時の自動判定の紐付けを表示しているため、
+                        正規化画面での解除・付け替えは反映されません。
                     </p>
                 </div>
             </div>
@@ -47,7 +49,15 @@
                 <div class="p-4 text-gray-900 dark:text-gray-100">
                     @if ($decompositions->isEmpty())
                         <p class="text-sm text-gray-500 dark:text-gray-400 py-4">
-                            該当するアイテムがありません。
+                            {{-- 出し分けは total() で決める。currentPage() で分けると、総件数が
+                                 0 に減ったあとに範囲外ページを再読込したとき（一覧を開いたまま
+                                 別タブで一括紐付けした場合に起きる）「他のページには行がある」と
+                                 読める文言だけが残る。 --}}
+                            @if ($decompositions->total() === 0)
+                                該当するアイテムがありません。
+                            @else
+                                このページには表示する行がありません。
+                            @endif
                         </p>
                     @else
                         <div class="overflow-x-auto">
@@ -67,9 +77,10 @@
                                             // 紐付け済みなら楽曲マスタの値、未紐付けなら判定結果を表示する
                                             $title = $decomposition->song ? $decomposition->song->title : $decomposition->derived_title;
                                             $artist = $decomposition->song ? $decomposition->song->artist : $decomposition->derived_artist;
+                                            $titleIsEmpty = $title === null || trim($title) === '';
                                             $artistIsEmpty = $artist === null || trim($artist) === '';
                                         @endphp
-                                        <tr class="border-b border-gray-100 dark:border-gray-700 {{ $artistIsEmpty ? 'bg-amber-50 dark:bg-amber-900/20' : '' }}">
+                                        <tr class="border-b border-gray-100 dark:border-gray-700 {{ $titleIsEmpty || $artistIsEmpty ? 'bg-amber-50 dark:bg-amber-900/20' : '' }}">
                                             <td class="py-2 pr-4 break-all">
                                                 <div class="flex items-start gap-2">
                                                     <span>{{ $decomposition->original_text }}</span>
@@ -82,7 +93,13 @@
                                                 </div>
                                             </td>
                                             <td class="py-2 pr-4 break-all">
-                                                <span class="text-blue-600 dark:text-blue-400">{{ $title }}</span>
+                                                {{-- アーティスト側と文言を分けること。同じ文言にすると
+                                                     どちらが欠けているのか画面から判別できなくなる。 --}}
+                                                @if ($titleIsEmpty)
+                                                    <span class="text-amber-700 dark:text-amber-400 font-medium">⚠ 曲名なし</span>
+                                                @else
+                                                    <span class="text-blue-600 dark:text-blue-400">{{ $title }}</span>
+                                                @endif
                                                 <span class="text-gray-400">/</span>
                                                 @if ($artistIsEmpty)
                                                     <span class="text-amber-700 dark:text-amber-400 font-medium">⚠ 未設定</span>
@@ -109,6 +126,12 @@
                             </table>
                         </div>
 
+                    @endif
+
+                    {{-- ページャは isEmpty() の分岐の外に置くこと。内側に入れると、範囲外ページ
+                         （paginator は hasPages() = true で1ページ目へのリンクを持っている）で
+                         ページャごと捨てられる。 --}}
+                    @if ($decompositions->total() > 0)
                         <div class="mt-4">
                             {{ $decompositions->withQueryString()->links() }}
                         </div>
