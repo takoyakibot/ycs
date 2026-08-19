@@ -51,11 +51,11 @@
                         </p>
                     @else
                         <div class="overflow-x-auto">
-                            <table class="min-w-full text-sm">
+                            <table class="w-full min-w-[880px] text-sm">
                                 <thead>
                                     <tr class="text-left text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
-                                        <th class="py-2 pr-4 font-medium">元テキスト</th>
-                                        <th class="py-2 pr-4 font-medium">曲名 / アーティスト</th>
+                                        <th class="py-2 pr-4 font-medium w-2/5">元テキスト</th>
+                                        <th class="py-2 pr-4 font-medium w-2/5">曲名 / アーティスト</th>
                                         <th class="py-2 pr-4 font-medium whitespace-nowrap">確信度</th>
                                         <th class="py-2 pr-4 font-medium whitespace-nowrap">状態</th>
                                         <th class="py-2 font-medium whitespace-nowrap">日時</th>
