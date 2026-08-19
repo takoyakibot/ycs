@@ -14,7 +14,9 @@ TS分解画面の「自動判定を一括紐付け」ボタンは、実行後に
 
 ただし本画面の紐付け状態は `timestamp_decompositions.song_id` を根拠にしており、正規化画面の解除・付け替え（`SongMappingService::unlinkTimestamp()` / `linkTimestamp()`）は `timestamp_song_mappings` しか更新しない。したがって正規化画面で直した内容は本画面に反映されず、状態列・曲名・アーティスト・絞り込みは古い紐付けを表示し続ける。自動で追随する経路は存在しない。
 
-判定元を `timestamp_song_mappings` 側に付け替えることはしない。`bulkLinkAutoMatched()` の対象条件が `song_id IS NULL` なので、`song_id` を根拠にしている限り「未紐付け」は「これから一括紐付けされる集合」と厳密に一致する（§3 の目的）。mappings 基準に変えると、一覧が「未紐付け」と表示するのに一括紐付けが拾わない行が出て、実行されない予告を出すことになる。乖離の解消は Issue #660 で扱う。
+判定元を `timestamp_song_mappings` 側に付け替えることはしない。`bulkLinkAutoMatched()` の対象条件は `status = auto_matched` かつ `song_id IS NULL` かつ `derived_title IS NOT NULL` の3つで、`song_id` を根拠にしている限り一覧の「未紐付け」は一括紐付けの対象集合を**包含する**（§3 の目的）。厳密には一致しない — `derived_title` が空の行は「未紐付け」と表示されるが一括紐付けは拾わない（`linkToSong()` も早期 return する）。この行が滞留する問題は Issue #670 で扱う。
+
+mappings 基準に変えるとこの包含関係すら崩れ、`song_id` はあるがマッピングが無い行が「未紐付け」に出るのに一括紐付けは拾わない（`song_id` が非NULLのため）ので、実行されない予告の範囲がさらに広がる。乖離の解消は Issue #660 で扱う。
 
 ## スコープ
 
@@ -67,7 +69,7 @@ Route::get('/songs/decompose/linked', [TimestampDecompositionController::class, 
 | 状態 | 「紐付け済み」または「未紐付け」 |
 | 日時 | `updated_at` |
 
-アーティスト名が空の行（紐付け済みなら `songs.artist`、未紐付けなら `derived_artist` が空）は警告として強調表示する。
+曲名またはアーティスト名が空の行（紐付け済みなら `songs.title` / `songs.artist`、未紐付けなら `derived_title` / `derived_artist` が空）は警告として強調表示する。文言は `⚠ 曲名なし` と `⚠ 未設定` に分ける（同じ文言にするとどちらが欠けているのか画面から判別できない）。
 
 ### 5. 絞り込み
 
@@ -109,6 +111,7 @@ TS分解画面（`resources/views/songs/decompose.blade.php`）の統計表示�
 - 各絞り込み（`linked` / `unlinked` / `empty_artist`）が正しく効くこと
 - 不正な `filter` 値が「すべて」として扱われること
 - アーティスト名が空の行が警告として表示されること
+- 曲名が空の行が警告として表示されること（アーティストだけが空のときは曲名側の警告を出さないこと）
 - 未認証のアクセスがログイン画面にリダイレクトされること
 - ページングが機能すること（51件で2ページになる）
 

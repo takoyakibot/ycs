@@ -50,9 +50,9 @@
                     @if ($decompositions->isEmpty())
                         <p class="text-sm text-gray-500 dark:text-gray-400 py-4">
                             {{-- 出し分けは total() で決める。currentPage() で分けると、総件数が
-                                 0 に減ったあとに範囲外ページを再読込したとき（一覧を開いたまま
-                                 別タブで一括紐付けした場合に起きる）「他のページには行がある」と
-                                 読める文言だけが残る。 --}}
+                                 0 に減ったあとに範囲外ページを再読込したとき
+                                 （filter=unlinked を開いたまま別タブで一括紐付けすると起きる）
+                                 「他のページには行がある」と読める文言だけが残る。 --}}
                             @if ($decompositions->total() === 0)
                                 該当するアイテムがありません。
                             @else

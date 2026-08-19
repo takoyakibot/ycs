@@ -298,7 +298,9 @@ class AutoMatchedLinkListTest extends TestCase
     /**
      * 総件数があるのに範囲外のページを開いたときは、専用の文言とページャが出ること
      *
-     * 一覧を開いたまま別タブで一括紐付けすると総件数が減り、この状態になる。
+     * filter=unlinked を開いたまま別タブで一括紐付けすると総件数が減り、
+     * この状態になる（絞り込みなしの総件数は減らない。linkToSong() は
+     * status を変えないため)。
      * ページャが @if/@else の内側にあると1ページ目へ戻るリンクごと消える。
      */
     public function test_out_of_range_page_keeps_pager(): void
@@ -390,9 +392,10 @@ class AutoMatchedLinkListTest extends TestCase
      * 紐付け状態は song_id を根拠にすること
      *
      * マッピングが無くても song_id があれば「紐付け済み」と表示する。
-     * bulkLinkAutoMatched() の対象条件が song_id IS NULL なので、
-     * 「未紐付け」を一括紐付けの対象集合と一致させるための意図的な選択。
-     * 判定元を timestamp_song_mappings に付け替えるとこの一致が崩れる。
+     * bulkLinkAutoMatched() の対象条件に song_id IS NULL が含まれるため、
+     * 「未紐付け」が一括紐付けの対象集合を包含する（厳密な一致ではない。
+     * derived_title が空の行は拾われない）。判定元を timestamp_song_mappings に
+     * 付け替えるとこの包含関係すら崩れる。
      */
     public function test_status_is_based_on_song_id_not_mapping(): void
     {
