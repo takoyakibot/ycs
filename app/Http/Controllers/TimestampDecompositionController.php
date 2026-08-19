@@ -24,6 +24,31 @@ class TimestampDecompositionController extends Controller
     }
 
     /**
+     * 自動判定されたアイテムの一覧を表示
+     *
+     * 一括紐付けで何が紐付いたのかを確認するための画面。
+     * 修正はタイムスタンプ正規化画面で行うため、この画面は参照のみ。
+     *
+     * 紐付け状態は timestamp_decompositions.song_id を根拠にしている。
+     * 正規化画面の解除・付け替えは timestamp_song_mappings しか更新しないため、
+     * そこで直した内容はこの画面に反映されない（追随する経路は無い。Issue #660）。
+     * それでも song_id を根拠にしているのは、bulkLinkAutoMatched() の対象条件に
+     * song_id IS NULL が含まれるため、「未紐付け」が一括紐付けの対象集合を
+     * 包含するから。厳密な一致ではない（derived_title が空の行は未紐付けに出るが
+     * 拾われない。Issue #670）。mappings 基準にすると包含関係すら崩れる。
+     */
+    public function linked(Request $request): View
+    {
+        $filter = $request->query('filter');
+        $filter = in_array($filter, ['linked', 'unlinked', 'empty_artist'], true) ? $filter : null;
+
+        return view('songs.decompose-linked', [
+            'decompositions' => $this->service->getAutoMatchedList($filter),
+            'filter' => $filter,
+        ]);
+    }
+
+    /**
      * 次の未処理タイムスタンプを取得
      */
     public function next(): JsonResponse

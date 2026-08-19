@@ -14,9 +14,11 @@
                                 <span class="text-gray-500 dark:text-gray-400">
                                     処理済: <span id="statSelected" class="font-medium text-green-600">-</span>件
                                 </span>
-                                <span class="text-gray-500 dark:text-gray-400">
+                                <a href="{{ route('songs.decompose.linked') }}"
+                                   class="text-gray-500 dark:text-gray-400 hover:underline"
+                                   title="自動判定の紐付け内容を確認する">
                                     自動: <span id="statAutoMatched" class="font-medium text-blue-600">-</span>件
-                                </span>
+                                </a>
                                 <span class="text-gray-500 dark:text-gray-400">
                                     スキップ: <span id="statSkipped" class="font-medium text-gray-600">-</span>件
                                 </span>
