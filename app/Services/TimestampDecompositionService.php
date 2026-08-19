@@ -7,6 +7,7 @@ use App\Models\Song;
 use App\Models\TimestampDecomposition;
 use App\Models\TimestampSongMapping;
 use App\Models\TsItem;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -398,19 +399,21 @@ class TimestampDecompositionService
      */
     private function findArtistInParts(array $parts, string $normalizedArtist): ?array
     {
-        $ignoreKeywords = TextNormalizer::getIgnoreKeywords();
-
         foreach ($parts as $index => $part) {
             $normalizedPart = TextNormalizer::normalize($part);
 
-            // 無視キーワードはスキップ
-            if (in_array($normalizedPart, $ignoreKeywords, true)) {
+            // 無視すべきパーツはスキップ。
+            // 判定は分解画面と同じ isIgnorablePart() に寄せる。
+            // キーワードとの完全一致で判定していたため、画面ではノイズとして
+            // 捨てるパーツ（"cover2" 等）を曲名として採用し、そのまま
+            // 楽曲マスタを作ってしまっていた
+            if (TextNormalizer::isIgnorablePart($part)) {
                 continue;
             }
 
             if ($normalizedPart === $normalizedArtist) {
                 // アーティストが見つかった場合、楽曲名を推定
-                $titleIndex = $this->guessTitleIndex($parts, $index, $ignoreKeywords);
+                $titleIndex = $this->guessTitleIndex($parts, $index);
 
                 return [
                     'artist_index' => $index,
@@ -427,10 +430,9 @@ class TimestampDecompositionService
      *
      * @param  array  $parts  パーツ配列
      * @param  int  $artistIndex  アーティストのインデックス
-     * @param  array  $ignoreKeywords  無視キーワード
      * @return int|null 楽曲名のインデックス
      */
-    private function guessTitleIndex(array $parts, int $artistIndex, array $ignoreKeywords): ?int
+    private function guessTitleIndex(array $parts, int $artistIndex): ?int
     {
         $candidateIndices = [];
 
@@ -439,10 +441,8 @@ class TimestampDecompositionService
                 continue;
             }
 
-            $normalizedPart = TextNormalizer::normalize($part);
-
-            // 無視キーワードはスキップ
-            if (in_array($normalizedPart, $ignoreKeywords, true)) {
+            // 無視すべきパーツはスキップ（判定は findArtistInParts と揃える）
+            if (TextNormalizer::isIgnorablePart($part)) {
                 continue;
             }
 
@@ -715,5 +715,44 @@ class TimestampDecompositionService
             });
 
         return $count;
+    }
+
+    /**
+     * 自動判定されたアイテムの一覧を取得
+     *
+     * 紐付け済み（song_id あり）と未紐付けの両方を返す。
+     * TS分解画面の統計「自動: N件」と件数を一致させるため。
+     *
+     * @param  string|null  $filter  'linked' | 'unlinked' | 'empty_artist' | それ以外は絞り込みなし
+     */
+    public function getAutoMatchedList(?string $filter = null, int $perPage = 50): LengthAwarePaginator
+    {
+        $query = TimestampDecomposition::with('song')
+            ->where('status', TimestampDecomposition::STATUS_AUTO_MATCHED)
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id');
+
+        if ($filter === 'linked') {
+            $query->whereNotNull('song_id');
+        } elseif ($filter === 'unlinked') {
+            $query->whereNull('song_id');
+        } elseif ($filter === 'empty_artist') {
+            // 紐付け済みなら楽曲マスタのアーティスト名、未紐付けなら判定結果を見る
+            $query->where(function ($outer) {
+                $outer->where(function ($q) {
+                    $q->whereNull('song_id')
+                        ->where(function ($inner) {
+                            $inner->whereNull('derived_artist')->orWhere('derived_artist', '');
+                        });
+                })->orWhere(function ($q) {
+                    $q->whereNotNull('song_id')
+                        ->whereHas('song', function ($songQuery) {
+                            $songQuery->whereNull('artist')->orWhere('artist', '');
+                        });
+                });
+            });
+        }
+
+        return $query->paginate($perPage);
     }
 }

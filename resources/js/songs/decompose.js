@@ -89,6 +89,13 @@ class TimestampDecomposition {
 
             // 補足除去候補パネルを開いている間は、そのパネルの操作を優先する
             if (this.cleanupOpen) {
+                // ボタンにフォーカスがあるときはボタン本来の動作に任せる。
+                // ここで拾うと、キャンセルボタンにフォーカスして Enter を押した
+                // ときに確定が走ってしまう（操作と逆の結果になる）。
+                if (e.target.tagName === 'BUTTON') {
+                    return;
+                }
+
                 if (e.key === 'Escape') {
                     e.preventDefault();
                     this.closeCleanup();
@@ -398,14 +405,14 @@ class TimestampDecomposition {
     joinSelectedParts(indices, parts = null) {
         if (!indices || indices.length === 0) return '';
 
-        parts = parts || this.currentItem.parts;
+        const originalParts = this.currentItem.parts;
+        parts = parts || originalParts;
 
         if (indices.length === 1) {
             return parts[indices[0]] || '';
         }
 
         const sortedIndices = [...indices].sort((a, b) => a - b);
-        const originalText = this.currentItem.original_text;
 
         // 連続するインデックスのグループを作成
         const groups = [];
@@ -421,47 +428,72 @@ class TimestampDecomposition {
         }
         groups.push(currentGroup);
 
-        // 各グループを元テキストから抽出して連結
+        // 各グループを、元テキストの区切り文字で連結する。
+        //
+        // 値は parts を使う。parts には補足除去済みの配列が渡ることがあり、
+        // 元テキストを範囲でスライスすると除去した補足が復活してしまう
+        // （画面は「変化なし」と表示したまま、確定すると補足付きの値が入る）。
+        // 一方で区切り文字は8種類（/／-−－:：|｜）あるため固定文字で連結すると
+        // 「曲名 - アーティスト」が「曲名 / アーティスト」に化ける。
+        // そこで区切りだけを元テキストから取り、値は parts のものを使う。
+        const separators = this.extractSeparatorsFromOriginal(
+            this.currentItem.original_text,
+            originalParts
+        );
+
         const result = groups.map(group => {
-            return this.extractRangeFromOriginal(originalText, parts, group[0], group[group.length - 1]);
+            let joined = parts[group[0]] || '';
+
+            for (let i = 1; i < group.length; i++) {
+                const index = group[i];
+                const separator = separators[index - 1] ?? ' / ';
+                joined += separator + (parts[index] || '');
+            }
+
+            return joined.trim();
         });
 
         return result.join(' / ');
     }
 
     /**
-     * 元テキストから指定範囲のパーツを抽出（区切り文字を維持）
+     * 元テキストから、隣り合うパーツの間にある区切り文字を取り出す
+     *
+     * 戻り値の i 番目は originalParts[i] と originalParts[i + 1] の間の文字列。
+     * 位置を特定できなかった場合は ' / ' で代替する。
+     *
+     * @param {string} originalText 分解元のテキスト
+     * @param {string[]} originalParts 元のパーツ配列（掃除前）
+     * @returns {string[]}
      */
-    extractRangeFromOriginal(originalText, parts, startIndex, endIndex) {
-        if (startIndex === endIndex) {
-            return parts[startIndex] || '';
-        }
-
-        // 各パーツの位置を特定
+    extractSeparatorsFromOriginal(originalText, originalParts) {
+        const ranges = [];
         let currentPos = 0;
-        let startPos = -1;
-        let endPos = -1;
 
-        for (let i = 0; i < parts.length; i++) {
-            const partPos = originalText.indexOf(parts[i], currentPos);
-            if (partPos === -1) continue;
+        for (let i = 0; i < originalParts.length; i++) {
+            const partPos = originalText.indexOf(originalParts[i], currentPos);
 
-            if (i === startIndex) {
-                startPos = partPos;
+            if (partPos === -1) {
+                ranges.push(null);
+                continue;
             }
-            if (i === endIndex) {
-                endPos = partPos + parts[i].length;
-                break;
-            }
-            currentPos = partPos + parts[i].length;
+
+            ranges.push({ start: partPos, end: partPos + originalParts[i].length });
+            currentPos = partPos + originalParts[i].length;
         }
 
-        if (startPos !== -1 && endPos !== -1) {
-            return originalText.substring(startPos, endPos).trim();
+        const separators = [];
+
+        for (let i = 0; i + 1 < originalParts.length; i++) {
+            const current = ranges[i];
+            const next = ranges[i + 1];
+
+            separators.push(
+                current && next ? originalText.substring(current.end, next.start) : ' / '
+            );
         }
 
-        // フォールバック: 単純に連結
-        return parts.slice(startIndex, endIndex + 1).join(' / ');
+        return separators;
     }
 
     /**

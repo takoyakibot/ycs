@@ -179,6 +179,24 @@ class SupplementStripper
             $result = self::stripDecorativeSymbols($result, $hits);
         }
 
+        // 除去で生まれた連続スペースを1つに詰める。
+        //
+        // 括弧の除去はスペース1つに置き換えるため、括弧が中間にあると
+        // 「曲名  / アーティスト」のように2連スペースが残る。この値は
+        // cleaned_parts として画面に返り、--apply では parts / derived_title /
+        // derived_artist に直接書き込まれる（どちらの経路も normalize() を通らない）。
+        //
+        // 圧縮は必ず stripTrailingSupplement() の後に置くこと。GAP_PATTERN が
+        // 半角2連スペースを区切り以降ルールのギャップ境界として使っているため、
+        // 前に置くと「曲名 / アーティスト（アンコール） 雑談」の後続補足が
+        // 取り残される。
+        //
+        // 何も除去していないレコードには触らない。触ると、元から2連スペースが
+        // あるだけのレコードが --apply の変更対象に入ってしまう。
+        if ($hits !== []) {
+            $result = preg_replace('/ {2,}/', ' ', $result) ?? $result;
+        }
+
         $result = trim($result);
 
         // 全部消えてしまった場合は除去しなかったことにする（安全側に倒す）
@@ -214,7 +232,10 @@ class SupplementStripper
                     'removed' => $matches[0],
                 ];
 
-                // 前後が繋がらないようスペースに置き換える（正規化で圧縮される）
+                // 前後が繋がらないようスペースに置き換える。
+                // ここで2連スペースになることがあるが、analyze() の最後で1つに詰める
+                // （このスペースは区切り以降ルールのギャップ境界として使われるため、
+                // ここで詰めてはいけない）
                 return ' ';
             }, $text);
 
@@ -290,14 +311,29 @@ class SupplementStripper
      */
     private static function stripDecorativeSymbols(string $text, array &$hits): string
     {
-        $symbols = implode('', config('supplement_strip.symbols', []));
+        $symbols = array_filter(
+            array_map('strval', (array) config('supplement_strip.symbols', [])),
+            fn (string $symbol) => $symbol !== ''
+        );
 
-        if ($symbols === '') {
+        if ($symbols === []) {
             return $text;
         }
 
-        $class = '[\s\x{3000}'.preg_quote($symbols, '/').']';
-        $pattern = '/^'.$class.'+|'.$class.'+$/u';
+        // 各記号の直後に異体字セレクタ（U+FE0F / U+FE0E）が付いた形も1単位として扱う。
+        // YouTubeのタイムスタンプでは ▶️ や ❤️ のように「基底文字 + U+FE0F」の
+        // 2コードポイントで書かれることが多く、基底文字だけを文字クラスに入れると
+        // 先頭ではセレクタが孤児として残り、末尾では末尾文字がセレクタのため
+        // 除去が一切効かない。
+        //
+        // 文字クラスに U+FE0F を足す形にはしないこと。辞書に無い絵文字（🏳️ など）
+        // からセレクタだけを剥がしてしまい、装飾でないものを壊す。
+        $alternatives = array_map(
+            fn (string $symbol) => preg_quote($symbol, '/').'[\x{FE0E}\x{FE0F}]?',
+            array_values($symbols)
+        );
+        $unit = '(?:[\s\x{3000}]|'.implode('|', $alternatives).')';
+        $pattern = '/^'.$unit.'+|'.$unit.'+$/u';
 
         $replaced = preg_replace_callback($pattern, function (array $matches) use (&$hits) {
             // 空白だけの場合は trim 相当なのでヒット扱いしない

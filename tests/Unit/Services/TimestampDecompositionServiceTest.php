@@ -268,6 +268,56 @@ class TimestampDecompositionServiceTest extends TestCase
     }
 
     /**
+     * カスケードの無視判定が分解画面と一致することをテスト
+     *
+     * 以前はキーワードとの完全一致で判定していたため、"cover2" のように
+     * 分解画面ではノイズとして捨てるパーツが曲名として採用され、
+     * そのまま楽曲マスタが作られていた。
+     */
+    public function test_cascade_ignores_parts_that_the_screen_ignores(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        // 画面側では無視対象になるパーツ（キーワード＋連番）
+        $this->assertTrue(TextNormalizer::isIgnorablePart('cover2'));
+
+        // カスケードの起点（除外される側）
+        $source = TimestampDecomposition::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize('アイドル / YOASOBI'),
+            'original_text' => 'アイドル / YOASOBI',
+            'parts' => ['アイドル', 'YOASOBI'],
+            'separator_count' => 1,
+            'status' => TimestampDecomposition::STATUS_PENDING,
+            'confidence' => 0.5,
+        ]);
+
+        $target = TimestampDecomposition::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize('YOASOBI / cover2'),
+            'original_text' => 'YOASOBI / cover2',
+            'parts' => ['YOASOBI', 'cover2'],
+            'separator_count' => 1,
+            'status' => TimestampDecomposition::STATUS_PENDING,
+            'confidence' => 0.5,
+        ]);
+
+        $this->service->cascadeArtistSelection('YOASOBI', $source->id);
+
+        // 対象がカスケードで実際に処理されたことを確かめる
+        // （処理されていなければ以下の assert は無条件に通ってしまう）
+        $this->assertSame(TimestampDecomposition::STATUS_AUTO_MATCHED, $target->fresh()->status);
+
+        $fresh = $target->fresh();
+
+        // cover2 を曲名として採用してはいけない（採用すると
+        // title=cover2 / artist=YOASOBI のゴミマスタが作られる）
+        $this->assertNotEquals('cover2', $fresh->derived_title);
+        $this->assertNull($fresh->title_part_index);
+    }
+
+    /**
      * 無視キーワードがアーティストとしてマッチしないことをテスト
      */
     public function test_cascade_ignores_ignore_keywords(): void

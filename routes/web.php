@@ -29,11 +29,18 @@ use Illuminate\Support\Facades\Route;
  */
 
 // ローカル開発用ログイン（Google OAuthを通せない環境でのUI確認用）
-// DEV_LOGIN_ENABLED=true かつ APP_ENV=local のときだけ動作し、それ以外は404。
-// 無効化するには .env の DEV_LOGIN_ENABLED を消すか false にする。
-Route::get('/dev-login', DevLoginController::class)
-    ->middleware('throttle:10,1')
-    ->name('dev.login');
+// 有効化の条件と無効化の手順は .env.example の DEV_LOGIN_ENABLED を参照。
+//
+// この条件は route:cache 実行時に一度だけ評価され、結果が
+// bootstrap/cache/routes-v7.php に焼き込まれる。焼いた環境が local かつ
+// 有効だった場合、配布先では条件を満たさなくてもルートが登録された状態になる。
+// したがってこれは防御ではなく攻撃面の削減であり、実際の防御は
+// DevLoginController のキャッシュガードである。
+if (app()->environment('local') && config('dev_login.enabled') === true) {
+    Route::get('/dev-login', DevLoginController::class)
+        ->middleware('throttle:10,1')
+        ->name('dev.login');
+}
 
 // 管理者（Channel Admin以上）専用機能
 Route::middleware(['auth', 'admin'])->group(function () {
@@ -50,6 +57,7 @@ Route::middleware(['auth', 'admin'])->group(function () {
 
     // タイムスタンプ分解・選別
     Route::get('/songs/decompose', [TimestampDecompositionController::class, 'index'])->name('songs.decompose');
+    Route::get('/songs/decompose/linked', [TimestampDecompositionController::class, 'linked'])->name('songs.decompose.linked');
     Route::get('api/songs/decompose/next', [TimestampDecompositionController::class, 'next'])->name('songs.decompose.next');
     Route::post('api/songs/decompose/select', [TimestampDecompositionController::class, 'select'])->name('songs.decompose.select');
     Route::post('api/songs/decompose/whole-title', [TimestampDecompositionController::class, 'saveAsWholeTitle'])->name('songs.decompose.wholeTitle');

@@ -121,6 +121,13 @@ php artisan test tests/Feature/SongControllerTest.php::test_specific_method  # R
 - `ts_items.type`: '1' = 概要欄, '2' = コメント
 - `ts_items.ts_text`: タイムスタンプ文字列 (HH:MM:SS形式)
 - `ts_items.ts_num`: タイムスタンプ秒数
+- `normalized_text` カラムは **`utf8mb4_bin`** を指定すること（`ts_items` / `timestamp_song_mappings` / `timestamp_decompositions`）
+  - デフォルトの `utf8mb4_unicode_ci` は補助面（絵文字）に重みを持たず「🎵A」と「🎶A」を同値と判定するため、バイト完全一致で扱うアプリ側と結果がずれる
+  - 同値扱いされるのは絵文字だけではない。半角/全角カナ（`ｲｴｽﾀﾃﾞｲ` = `イエスタデイ`）とアクセント記号（`cafe` = `café`）も同値で、これらは `TextNormalizer::normalize()` が揃えない（`mb_convert_kana` に `'as'` しか渡していない）
+  - **揃え忘れはエラーにならない。** 同一 charset で片方が `_bin` の場合、MySQL は `_bin` を優先するため JOIN は通り、意味論が黙って変わる。`Illegal mix of collations` が出るのは非バイナリ照合同士が食い違う場合のみ
+  - `utf8mb4_bin` は PAD SPACE。末尾スペースの有無は DB 側では無視される（NO PAD が必要なら `utf8mb4_0900_bin`）
+  - `MODIFY` で照合順序を指定するときは、`CHARACTER SET` / `COLLATE` を**型の直後・NULL 可否より前**に置くこと。順序を誤ると `ERROR 1064` になる。テストは SQLite なのでこの誤りは実行では検知できない（`tests/Unit/Migrations/ChangeNormalizedTextCollationTest.php` で生成SQLを固定している）
+  - `songs.normalized_title` / `normalized_artist` は未対応（同じ「SQL曖昧比較 → PHP 厳密比較」の構造が残っている）
 
 ## Workflow
 

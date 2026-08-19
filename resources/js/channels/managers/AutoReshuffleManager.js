@@ -34,6 +34,12 @@ export class AutoReshuffleManager {
         // 1回の再生につき1度だけ末尾処理を実行する
         this.archiveEndHandled = false;
 
+        // 連続再生（ガチャ・曲送り）由来の再生かどうか
+        // 末尾に到達したときの案内を出すかの判定に使う。一覧クリックや
+        // シェアリンク（?play=）単独の再生では案内しても続ける手段がないため、
+        // 再生の起点側で明示的に設定する（起点が分かるのは呼び出し側だけ）
+        this.continuousPlayback = false;
+
         // コールバック
         this.onSongEnd = null;          // 動画終了時に呼び出される（自動再抽選用）
         this.onStallDetected = null;    // スタック検知時に呼び出される
@@ -71,6 +77,15 @@ export class AutoReshuffleManager {
             // 終了時刻がない（＝アーカイブ内の最後の楽曲）場合も
             // 末尾検知のために監視する必要があるため条件に含めない
             if (isPlaying) {
+                // 末尾処理済みフラグを解除する。終端付近で末尾処理が走った後は
+                // 監視ループの解除条件（終端から離れたら解除）が成立しないため、
+                // 解除しないと監視を再開しても handleArchiveEnd() が空振りする。
+                //
+                // この代入は必ず isPlaying の内側に置くこと。外に出すと、
+                // プレイヤーを閉じたあと（suspend() がフラグを立てて stopVideo() 由来の
+                // ENDED を抑止している状態）にトグルを操作しただけで抑止が解け、
+                // 閉じた動画の ENDED で再抽選が走る。
+                this.archiveEndHandled = false;
                 this.startMonitor();
             }
             toast.success('自動再抽選をONにしました');
@@ -129,6 +144,18 @@ export class AutoReshuffleManager {
         this.currentSongEndTime = endTime;
         // 新しい再生位置に移ったので末尾処理フラグをリセット
         this.archiveEndHandled = false;
+    }
+
+    /**
+     * この再生が連続再生（ガチャ・曲送り）由来かどうかを設定する
+     *
+     * 末尾に到達したときに案内を出すかの判定に使う。起点が分かるのは
+     * 呼び出し側だけなので、再生を開始する各経路で明示的に設定する。
+     *
+     * @param {boolean} isContinuous
+     */
+    setContinuousPlayback(isContinuous) {
+        this.continuousPlayback = isContinuous;
     }
 
     /**
@@ -259,9 +286,12 @@ export class AutoReshuffleManager {
 
         if (!this.enabled) {
             // 自動再抽選OFFのときは何も選ばずに停止する（仕様）
-            // ただし無言で止まると不具合に見えるため呼び出し元に通知する
+            // ただし無言で止まると不具合に見えるため呼び出し元に通知する。
+            // 通知するのは連続再生（ガチャ・曲送り）由来のときだけ。一覧クリックや
+            // シェアリンク単独の再生では selectedTimestamp が無く「次の曲」も押せないため、
+            // 案内しても実行できる操作がない
             console.debug('[Monitor] archiveEnd (auto reshuffle off)');
-            if (this.onArchiveEndWithoutReshuffle) {
+            if (this.continuousPlayback && this.onArchiveEndWithoutReshuffle) {
                 this.onArchiveEndWithoutReshuffle();
             }
             return;
