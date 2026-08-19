@@ -16,7 +16,9 @@ TS分解画面の「自動判定を一括紐付け」ボタンは、実行後に
 
 判定元を `timestamp_song_mappings` 側に付け替えることはしない。`bulkLinkAutoMatched()` の対象条件は `status = auto_matched` かつ `song_id IS NULL` かつ `derived_title IS NOT NULL` の3つで、`song_id` を根拠にしている限り一覧の「未紐付け」は一括紐付けの対象集合を**包含する**（§3 の目的）。厳密には一致しない — `derived_title` が空の行は「未紐付け」と表示されるが一括紐付けは拾わない（`linkToSong()` も早期 return する）。この行が滞留する問題は Issue #670 で扱う。
 
-mappings 基準に変えるとこの包含関係すら崩れ、`song_id` はあるがマッピングが無い行が「未紐付け」に出るのに一括紐付けは拾わない（`song_id` が非NULLのため）ので、実行されない予告の範囲がさらに広がる。乖離の解消は Issue #660 で扱う。
+mappings 基準に変えるとこの包含関係すら崩れる。正規化画面で紐付けた行（`SongMappingService::linkTimestamp()` は `timestamp_song_mappings` だけを作る）は `song_id` が NULL のままなので、mappings 基準では「紐付け済み」と表示されるのに一括紐付けは拾ってしまう。つまり**予告に出ない紐付けが起きる**（実測: 一括紐付けの対象集合から mappings 基準の未紐付けを引くと、この行が残る）。
+
+なお `song_id` はあるがマッピングが無い行は、mappings 基準では「未紐付け」に出るのに一括紐付けは拾わない（`song_id` が非NULL のため）。これは包含関係を保ったまま差を広げる方向で、上の「包含が崩れる」とは別のケース。乖離の解消は Issue #660 で扱う。
 
 ## スコープ
 
