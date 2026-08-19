@@ -9,6 +9,7 @@ use App\Models\TimestampSongMapping;
 use App\Models\TsItem;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -484,9 +485,11 @@ class TimestampDecompositionService
     {
         $decomposition = TimestampDecomposition::findOrFail($id);
         $undoneCount = 1;
+        $unlinkedMapping = false;
 
         // 紐付けられた楽曲マッピングを解除
         if ($decomposition->song_id) {
+            $unlinkedMapping = true;
             TimestampSongMapping::where('normalized_text', $decomposition->normalized_text)
                 ->update([
                     'song_id' => null,
@@ -509,6 +512,7 @@ class TimestampDecompositionService
         foreach ($cascadedItems as $item) {
             // マッピングを解除
             if ($item->song_id) {
+                $unlinkedMapping = true;
                 TimestampSongMapping::where('normalized_text', $item->normalized_text)
                     ->update([
                         'song_id' => null,
@@ -542,6 +546,14 @@ class TimestampDecompositionService
             'song_id' => null,
             'updated_by' => Auth::id(),
         ]);
+
+        // 上のマッピング解除はクエリビルダの一括UPDATEなのでモデルイベントが
+        // 発火せず、TimestampSongMapping::saved のフックによる照合辞書キャッシュの
+        // 破棄が走らない。明示的に落とすこと。落とさないと、取り消した紐付けが
+        // 最大 index_cache_ttl 秒のあいだ照合の根拠として使われ続ける。
+        if ($unlinkedMapping) {
+            Cache::forget(MappingDictionaryService::CACHE_KEY);
+        }
 
         return [
             'undone_count' => $undoneCount,
