@@ -179,10 +179,19 @@ class TextNormalizer
     /**
      * 無視すべきキーワード（カバー関連など）
      *
-     * isIgnorablePart() は「パーツ全体がここに挙げたキーワードと記号だけで
+     * isIgnorablePart() は「パーツ全体がここに挙げたキーワードと記号と数字だけで
      * 構成されているか」で判定するため、短い語を入れても語の一部に一致して
      * アーティスト名を捨ててしまうことはない（例: 'ver' があっても
      * "Silver" は "sil" が残るので無視対象にならない）。
+     *
+     * ただし数字の残留は許容するので、キーワードに連番を添えた形は
+     * 丸ごと無視対象になる（'mv' があれば "MV2" も無視される）。
+     *
+     * 単体で曲名になりうる語は入れないこと。無視対象を増やすと候補が1つに減り、
+     * detectTitleArtistPattern() が confidence 0.8 を返して自動確定するため、
+     * 生き残ったパーツがアーティスト名だった場合にアーティストが空の
+     * 楽曲マスタが作られる（例: 'soundtrack' を入れると
+     * "Soundtrack / YOASOBI" が title=YOASOBI / artist=空 で確定してしまう）。
      */
     private const IGNORE_KEYWORDS = [
         'cover',
@@ -192,7 +201,6 @@ class TextNormalizer
         'video',
         'オリジナル',
         'original',
-        'soundtrack',
         'full',
         'short',
         'shorts',
@@ -257,10 +265,20 @@ class TextNormalizer
     /**
      * パーツが無視すべき（楽曲名・アーティスト名の候補にならない）かどうかを判定
      *
-     * 無視キーワードと記号だけで構成されているパーツのみを無視対象とする。
+     * 無視キーワードと記号、および残留した数字だけで構成されているパーツのみを
+     * 無視対象とする。
      * 単純な部分一致で判定すると、キーワードを語の一部に含むアーティスト名
      * （例: "Official髭男dism" の "official"）まで無視してしまい、
      * アーティスト名が空の楽曲マスタが作られる原因になるため。
+     *
+     * この判定を緩める変更（無視対象を増やす方向）は遡及しない。
+     * 2026_08_17_000001_redetect_auto_matched_decompositions で pending に
+     * 戻したレコードを再度自動判定し直すマイグレーションは追加しない。
+     * 無視対象が増えると候補が1つに減り detectTitleArtistPattern() が
+     * confidence 0.8 を返して自動確定するため、遡って走らせると
+     * アーティストが空の楽曲マスタを量産する側になる。
+     * pending は分解画面（getPendingDecompositions()）に出る人手の選別待ち行列
+     * なので、そのまま人が判断すればよい。
      */
     public static function isIgnorablePart(string $part): bool
     {

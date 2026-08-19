@@ -398,19 +398,21 @@ class TimestampDecompositionService
      */
     private function findArtistInParts(array $parts, string $normalizedArtist): ?array
     {
-        $ignoreKeywords = TextNormalizer::getIgnoreKeywords();
-
         foreach ($parts as $index => $part) {
             $normalizedPart = TextNormalizer::normalize($part);
 
-            // 無視キーワードはスキップ
-            if (in_array($normalizedPart, $ignoreKeywords, true)) {
+            // 無視すべきパーツはスキップ。
+            // 判定は分解画面と同じ isIgnorablePart() に寄せる。
+            // キーワードとの完全一致で判定していたため、画面ではノイズとして
+            // 捨てるパーツ（"cover2" 等）を曲名として採用し、そのまま
+            // 楽曲マスタを作ってしまっていた
+            if (TextNormalizer::isIgnorablePart($part)) {
                 continue;
             }
 
             if ($normalizedPart === $normalizedArtist) {
                 // アーティストが見つかった場合、楽曲名を推定
-                $titleIndex = $this->guessTitleIndex($parts, $index, $ignoreKeywords);
+                $titleIndex = $this->guessTitleIndex($parts, $index);
 
                 return [
                     'artist_index' => $index,
@@ -427,10 +429,9 @@ class TimestampDecompositionService
      *
      * @param  array  $parts  パーツ配列
      * @param  int  $artistIndex  アーティストのインデックス
-     * @param  array  $ignoreKeywords  無視キーワード
      * @return int|null 楽曲名のインデックス
      */
-    private function guessTitleIndex(array $parts, int $artistIndex, array $ignoreKeywords): ?int
+    private function guessTitleIndex(array $parts, int $artistIndex): ?int
     {
         $candidateIndices = [];
 
@@ -439,10 +440,8 @@ class TimestampDecompositionService
                 continue;
             }
 
-            $normalizedPart = TextNormalizer::normalize($part);
-
-            // 無視キーワードはスキップ
-            if (in_array($normalizedPart, $ignoreKeywords, true)) {
+            // 無視すべきパーツはスキップ（判定は findArtistInParts と揃える）
+            if (TextNormalizer::isIgnorablePart($part)) {
                 continue;
             }
 
