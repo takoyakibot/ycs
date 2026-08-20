@@ -51,16 +51,39 @@ const MARKER_SNAP_THRESHOLD_SEC = 3; // マーカー選択の判定距離（秒�
 const MARKER_SNAP_THRESHOLD_PX = 8; // マーカー選択の判定距離（ピクセル）。長時間動画では秒基準が1px未満になるため併用
 
 // 楽曲開始の自動検出設定
-// 閾値は配信ごとの音量差を吸収するため絶対値ではなく基準音量（上位パーセンタイル）比で決める
+// 平均音量ではなく「基準音量に近いサンプルの密度（活動率）」で歌区間を判定する。
+// アカペラは歌唱中でもフレーズ間で音量がゼロ近くまで落ちる櫛状の波形になるため、
+// 平滑平均+閾値では判定できない（谷で平均が下がり閾値を行き来してしまう）
 const SONG_DETECT_CONFIG = {
-  SMOOTH_WINDOW_SEC: 10, // 平滑化（移動平均）の窓幅
-  REF_PERCENTILE: 0.95, // 基準音量とするパーセンタイル（≒その配信の「歌のピーク」水準）
-  ENTER_RATIO: 0.5, // 歌区間の開始とみなす閾値（基準音量比）
-  EXIT_RATIO: 0.3, // 歌区間の終了とみなす閾値（基準音量比）。開始より低くして間奏での分断を防ぐ
-  EXIT_TOLERANCE_SEC: 12, // 終了閾値を下回ってもこの時間内に戻れば同一区間として継続
+  REF_PERCENTILE: 0.99, // 全体基準音量のパーセンタイル。歌が短い配信でもトーク帯に食われないよう高めに取る
+  LOCAL_REF_WINDOW_SEC: 300, // 局所基準音量を測るスライディング窓幅。曲ごとの音量差・途中の音量調整に追従する
+  LOCAL_REF_PERCENTILE: 0.90, // 局所基準音量のパーセンタイル
+  ACTIVE_LEVEL_RATIO: 0.45, // 「歌唱中サンプル」とみなす音量（局所基準比）
+  ABS_ACTIVE_FLOOR_RATIO: 0.35, // 判定閾値の下限（全体基準比）。トークだけの時間帯で局所基準が潰れて誤検出するのを防ぐ
+  ACTIVITY_WINDOW_SEC: 30, // 活動率（歌唱中サンプルの割合）を測る窓幅
+  ENTER_ACTIVITY: 0.4, // 歌区間の開始とみなす活動率
+  EXIT_ACTIVITY: 0.2, // 歌区間の終了とみなす活動率。トークの活動率(ほぼ0)より高く、櫛状の谷では切れない値
+  EXIT_TOLERANCE_SEC: 20, // 活動率が終了閾値を下回ってもこの時間内に戻れば同一区間として継続
   MIN_SEGMENT_SEC: 60, // 歌とみなす最小継続時間。笑い声・SE等の短いスパイクを除外する
-  START_BACKTRACK_MAX_SEC: 8, // 平滑化で鈍った立ち上がりを実データで遡る最大時間
+  START_ADJUST_MAX_SEC: 20, // 活動率交差点から実データの立ち上がりへ開始位置を補正する最大幅
 };
+
+// チャット（拍手バースト）による境界補強の設定
+const CHAT_SIGNAL_CONFIG = {
+  CHAT_DELAY_SEC: 5, // 視聴者がチャットを打って届くまでのラグ補正（数秒の遅れがある）
+  CLUSTER_GAP_SEC: 20, // この間隔以内の拍手コメントは同一クラスタとみなす
+  MIN_CLAPS_PER_BURST: 3, // バーストとみなす最小コメント数
+  MIN_BURSTS_TO_TRUST: 3, // 配信全体でこの数以上のバーストがあれば「拍手文化あり」とみなしチャット融合を有効化
+  MERGE_MAX_GAP_SEC: 60, // 拍手なしギャップがこの秒数以内なら同一曲のブレイクとみなして結合
+  SPLIT_MIN_HEAD_SEC: 45, // 区間分割に使う拍手は区間先頭からこの秒数以降のもののみ（曲頭の拍手を除外）
+  SPLIT_MIN_TAIL_SEC: 30, // 同じく区間末尾からこの秒数以前のもののみ（曲末の拍手は区間終了と重複）
+  SPLIT_START_OFFSET_SEC: 5, // 拍手バースト位置から次曲開始候補までのオフセット
+  DEDUPE_SEC: 30, // 候補同士がこの秒数以内なら重複として先の候補のみ残す
+};
+
+// 拍手系コメントの判定（88連打・絵文字・カスタム絵文字ショートカット）
+const CLAP_PATTERN = /8{3,}|８{3,}|👏|拍手|ぱちぱち|パチパチ|clap/i;
+
 const AUTO_DETECT_SKIP_NEAR_MARKER_SEC = 60; // 既存マーカーからこの秒数以内の候補は追加しない
 let videoListenerTarget = null; // イベント登録済みのvideo要素（SPA遷移での重複登録防止）
 
@@ -1981,8 +2004,10 @@ async function getChatContinuation() {
 
 /**
  * 全チャットリプレイを取得
+ * @param {string} initialContinuation - 最初のcontinuationトークン
+ * @param {function(number):void} [onProgress] - 取得済み件数を受け取る進捗コールバック
  */
-async function fetchAllChatReplays(initialContinuation) {
+async function fetchAllChatReplays(initialContinuation, onProgress) {
   const chats = [];
   let continuation = initialContinuation;
   let iterations = 0;
@@ -1995,6 +2020,7 @@ async function fetchAllChatReplays(initialContinuation) {
     if (statusEl) {
       statusEl.textContent = `チャットを取得中... (${chats.length}件)`;
     }
+    if (onProgress) onProgress(chats.length);
 
     const response = await fetchChatReplayPage(continuation);
     if (!response) break;
@@ -5333,7 +5359,7 @@ function createVolumeGraph() {
         </div>
         <span class="vdg-ts-notice" id="vdg-ts-notice"></span>
         <div class="vdg-ts-editor-actions">
-          <button class="vdg-btn vdg-btn-detect" id="vdg-ts-detect-btn" title="音量の変化から楽曲の開始位置を検出し、候補マーカーを一括追加（既存マーカー付近は除く）">自動検出</button>
+          <button class="vdg-btn vdg-btn-detect" id="vdg-ts-detect-btn" title="音量とチャット（拍手）から楽曲の開始位置を検出し、候補マーカーを一括追加（既存マーカー付近は除く）">自動検出</button>
           <button class="vdg-btn" id="vdg-ts-undo-btn" title="元に戻す (Ctrl+Z)" disabled>↶ 戻る</button>
           <button class="vdg-btn" id="vdg-ts-redo-btn" title="やり直す (Ctrl+Y)" disabled>↷ 進む</button>
           <button class="vdg-btn vdg-btn-copy" id="vdg-ts-copy-btn" title="テキストとしてコピー">コピー</button>
@@ -7209,24 +7235,66 @@ function movingAverageCentered(values, windowSize) {
 }
 
 /**
- * 音量データから楽曲の開始位置候補を検出する
+ * ソート済み配列から指定パーセンタイルの値を取得する
+ * @param {number[]} sortedValues - 昇順ソート済みの値
+ * @param {number} p - パーセンタイル（0..1）
+ * @returns {number}
+ */
+function percentileOf(sortedValues, p) {
+  if (sortedValues.length === 0) return 0;
+  const index = Math.min(sortedValues.length - 1, Math.floor(sortedValues.length * p));
+  return sortedValues[index];
+}
+
+/**
+ * 局所基準音量: 各サンプルを中心とするスライディング窓の上位パーセンタイル
+ * （曲ごとの音量差や途中の音量調整に追従する。ブロック分割だと隣の大音量曲が
+ * 小音量曲の基準を吊り上げてしまうため、サンプル中心の窓で計算する）
+ * @param {number[]} values - 音量データ
+ * @param {number} intervalSec - 1サンプルあたりの秒数
+ * @returns {{ref: number[], globalRef: number}}
+ */
+function buildLocalReference(values, intervalSec) {
+  const cfg = SONG_DETECT_CONFIG;
+  const globalRef = percentileOf(values.filter(v => v > 0).sort((a, b) => a - b), cfg.REF_PERCENTILE);
+  const half = Math.max(1, Math.round(cfg.LOCAL_REF_WINDOW_SEC / intervalSec / 2));
+
+  const ref = new Array(values.length);
+  for (let i = 0; i < values.length; i++) {
+    const from = Math.max(0, i - half);
+    const to = Math.min(values.length - 1, i + half);
+    const windowNonzero = [];
+    for (let j = from; j <= to; j++) {
+      if (values[j] > 0) windowNonzero.push(values[j]);
+    }
+    ref[i] = windowNonzero.length >= 5
+      ? percentileOf(windowNonzero.sort((a, b) => a - b), cfg.LOCAL_REF_PERCENTILE)
+      : globalRef;
+  }
+  return { ref, globalRef };
+}
+
+/**
+ * 音量データから楽曲区間を検出する
  *
  * 検出戦略:
- *   1. スキャン済み範囲（末尾の未取得0を除く）を平滑化する
- *   2. 配信全体の基準音量（上位パーセンタイル）から開始/終了の2段閾値を決める
- *   3. ヒステリシスで「高音量が持続する区間」を切り出す
- *      （終了閾値を開始より低くし、下回っても許容時間内の復帰は同一区間とする）
+ *   1. スキャン済み範囲（末尾の未取得0を除く）を対象に、局所基準音量を計算する
+ *   2. 「局所基準の一定割合以上のサンプル」を歌唱中サンプル（active）とみなす
+ *      （閾値には全体基準比の下限を設け、トークだけの時間帯での誤検出を防ぐ）
+ *   3. activeの密度（活動率）をヒステリシスで区間化する
+ *      オケありは活動率がほぼ1、アカペラは櫛状（フレーズ間の谷）でも0.6前後になるため、
+ *      平均音量と違い波形の歯抜けに影響されない
  *   4. 最小継続時間に満たない区間（笑い声・SE等）を除外する
- *   5. 各区間の開始を、平滑化前のデータで立ち上がりまで遡って補正する
+ *   5. 各区間の開始位置を、activeの実データで立ち上がりまで補正する
  *
  * トークもある程度の音量を持つため誤検出は残る前提で、
  * 「候補マーカーを一括生成し、ユーザーが微調整・削除する」用途に割り切っている。
  *
  * @param {number[]} data - 音量データ（0..1。0は未スキャンまたは無音）
  * @param {number} intervalSec - 1サンプルあたりの秒数
- * @returns {number[]} 開始候補の秒数（昇順）
+ * @returns {Array<{start: number, end: number}>} 楽曲区間（秒、昇順）
  */
-function detectSongStartCandidates(data, intervalSec) {
+function detectSongSegments(data, intervalSec) {
   if (!Array.isArray(data) || data.length === 0 || !intervalSec || intervalSec <= 0) return [];
 
   // 末尾の未スキャン領域（0埋め）を解析対象から外す
@@ -7244,54 +7312,61 @@ function detectSongStartCandidates(data, intervalSec) {
   const minSegmentSamples = Math.max(1, Math.round(cfg.MIN_SEGMENT_SEC / intervalSec));
 
   // 有効サンプルが1曲分に満たなければ判定不能
-  const nonzeroSorted = values.filter(v => v > 0).sort((a, b) => a - b);
-  if (nonzeroSorted.length < minSegmentSamples) return [];
+  if (values.filter(v => v > 0).length < minSegmentSamples) return [];
 
-  const smoothWindow = Math.max(1, Math.round(cfg.SMOOTH_WINDOW_SEC / intervalSec));
-  const smoothed = movingAverageCentered(values, smoothWindow);
-
-  const refIndex = Math.min(nonzeroSorted.length - 1, Math.floor(nonzeroSorted.length * cfg.REF_PERCENTILE));
-  const refVolume = nonzeroSorted[refIndex];
-  const enterThreshold = refVolume * cfg.ENTER_RATIO;
-  const exitThreshold = refVolume * cfg.EXIT_RATIO;
+  const { ref, globalRef } = buildLocalReference(values, intervalSec);
+  const absFloor = globalRef * cfg.ABS_ACTIVE_FLOOR_RATIO;
+  const active = values.map((v, i) => (v >= Math.max(ref[i] * cfg.ACTIVE_LEVEL_RATIO, absFloor) ? 1 : 0));
+  const windowSamples = Math.max(1, Math.round(cfg.ACTIVITY_WINDOW_SEC / intervalSec));
+  const activity = movingAverageCentered(active, windowSamples);
 
   const exitToleranceSamples = Math.max(1, Math.round(cfg.EXIT_TOLERANCE_SEC / intervalSec));
-  const backtrackMaxSamples = Math.max(1, Math.round(cfg.START_BACKTRACK_MAX_SEC / intervalSec));
+  const adjustMaxSamples = Math.max(1, Math.round(cfg.START_ADJUST_MAX_SEC / intervalSec));
 
-  // 平滑化で開始が後ろへ鈍るため、元データが終了閾値以上の間は立ち上がりまで遡る
-  const refineStart = (startIndex) => {
-    let refined = startIndex;
-    while (
-      refined > 0 &&
-      startIndex - (refined - 1) <= backtrackMaxSamples &&
-      values[refined - 1] >= exitThreshold
-    ) {
-      refined--;
+  // 活動率の立ち上がりは実際の開始と数サンプルずれるため、activeの実データで開始位置を合わせる
+  // 櫛状（アカペラ）の谷を許容できるよう、単純な連続ではなく密度50%以上を保てる範囲で遡る
+  const refineStartIndex = (crossIndex) => {
+    let best = active[crossIndex] ? crossIndex : -1;
+    let activeCount = active[crossIndex] ? 1 : 0;
+    let total = 1;
+    for (let j = crossIndex - 1; j >= 0 && crossIndex - j <= adjustMaxSamples; j--) {
+      total++;
+      if (active[j]) {
+        activeCount++;
+        if (activeCount / total >= 0.5) best = j;
+      }
     }
-    return refined;
+    if (best >= 0) return best;
+    // 交差位置の周辺に活動サンプルが無い場合は前方の最初の活動サンプルへ
+    let forward = crossIndex;
+    while (forward < active.length - 1 && forward - crossIndex < adjustMaxSamples && !active[forward]) forward++;
+    return forward;
   };
 
-  const candidates = [];
+  const segments = [];
   let inSegment = false;
   let segStart = 0;
-  let segLastAbove = 0; // 最後に終了閾値以上だったサンプル（区間長は許容時間の垂れ流し分を含めない）
+  let segLastAbove = 0; // 最後に終了閾値以上だったサンプル（区間長に許容時間分を含めない）
   let belowCount = 0;
 
   const flushSegment = () => {
     if (segLastAbove - segStart + 1 >= minSegmentSamples) {
-      candidates.push(Math.floor(refineStart(segStart) * intervalSec));
+      segments.push({
+        start: Math.floor(refineStartIndex(segStart) * intervalSec),
+        end: Math.ceil((segLastAbove + 1) * intervalSec),
+      });
     }
   };
 
-  for (let i = 0; i < smoothed.length; i++) {
+  for (let i = 0; i < activity.length; i++) {
     if (!inSegment) {
-      if (smoothed[i] >= enterThreshold) {
+      if (activity[i] >= cfg.ENTER_ACTIVITY) {
         inSegment = true;
         segStart = i;
         segLastAbove = i;
         belowCount = 0;
       }
-    } else if (smoothed[i] < exitThreshold) {
+    } else if (activity[i] < cfg.EXIT_ACTIVITY) {
       belowCount++;
       if (belowCount >= exitToleranceSamples) {
         flushSegment();
@@ -7304,14 +7379,112 @@ function detectSongStartCandidates(data, intervalSec) {
   }
   if (inSegment) flushSegment();
 
-  return candidates;
+  return segments;
 }
 
 /**
+ * チャットから拍手バースト（曲の終わりの合図）を検出する
+ * タイムスタンプは送信ラグ分（CHAT_DELAY_SEC）だけ前へ補正する
+ * @param {Array<{message: string, timestamp: number}>} chats - チャット（timestampはミリ秒オフセット）
+ * @param {number} videoDurationSec - 動画長（秒）。範囲外の補正結果を除外する
+ * @returns {number[]} バースト開始時刻（秒、昇順）
+ */
+function detectClapBursts(chats, videoDurationSec) {
+  const cfg = CHAT_SIGNAL_CONFIG;
+  const clapTimes = (chats || [])
+    .filter(c => typeof c.message === 'string' && CLAP_PATTERN.test(c.message))
+    .map(c => (Number(c.timestamp) || 0) / 1000 - cfg.CHAT_DELAY_SEC)
+    .filter(t => t >= 0 && (!videoDurationSec || t <= videoDurationSec))
+    .sort((a, b) => a - b);
+
+  const bursts = [];
+  let clusterStart = null;
+  let clusterCount = 0;
+  let lastTime = null;
+  for (const t of clapTimes) {
+    if (lastTime !== null && t - lastTime <= cfg.CLUSTER_GAP_SEC) {
+      clusterCount++;
+    } else {
+      if (clusterCount >= cfg.MIN_CLAPS_PER_BURST) bursts.push(clusterStart);
+      clusterStart = t;
+      clusterCount = 1;
+    }
+    lastTime = t;
+  }
+  if (clusterCount >= cfg.MIN_CLAPS_PER_BURST) bursts.push(clusterStart);
+  return bursts;
+}
+
+/**
+ * 音量区間と拍手バーストを融合して楽曲開始候補を決定する
+ *
+ * 拍手文化のある配信（バーストが一定数以上）でのみチャット融合を有効化し、
+ *   - 結合: 短いギャップに拍手が無ければ同一曲のブレイクとみなして区間を繋ぐ
+ *   - 分割: 区間内部の拍手は曲の切れ目（途切れず次の曲へ行くケース）とみなして候補を追加
+ * チャットが無い・少ない配信では音量区間の開始をそのまま使う
+ *
+ * @param {Array<{start: number, end: number}>} segments - 音量から検出した楽曲区間
+ * @param {number[]} bursts - 拍手バースト時刻
+ * @returns {{starts: number[], mergedCount: number, splitCount: number, chatActive: boolean}}
+ */
+function fuseSegmentsWithChat(segments, bursts) {
+  const cfg = CHAT_SIGNAL_CONFIG;
+  const chatActive = bursts.length >= cfg.MIN_BURSTS_TO_TRUST;
+
+  let merged = segments.map(s => ({ ...s }));
+  let mergedCount = 0;
+  let splitCount = 0;
+
+  if (chatActive) {
+    const out = [];
+    for (const seg of merged) {
+      const prev = out[out.length - 1];
+      if (
+        prev &&
+        seg.start - prev.end <= cfg.MERGE_MAX_GAP_SEC &&
+        !bursts.some(b => b >= prev.end - 15 && b <= seg.start + 5)
+      ) {
+        prev.end = seg.end;
+        mergedCount++;
+      } else {
+        out.push(seg);
+      }
+    }
+    merged = out;
+  }
+
+  const starts = [];
+  for (const seg of merged) {
+    starts.push(seg.start);
+    if (chatActive) {
+      for (const b of bursts) {
+        if (b >= seg.start + cfg.SPLIT_MIN_HEAD_SEC && b <= seg.end - cfg.SPLIT_MIN_TAIL_SEC) {
+          starts.push(Math.floor(b + cfg.SPLIT_START_OFFSET_SEC));
+          splitCount++;
+        }
+      }
+    }
+  }
+
+  starts.sort((a, b) => a - b);
+  const deduped = [];
+  for (const t of starts) {
+    if (deduped.length === 0 || t - deduped[deduped.length - 1] > cfg.DEDUPE_SEC) deduped.push(t);
+  }
+
+  return { starts: deduped, mergedCount, splitCount, chatActive };
+}
+
+let isAutoDetectRunning = false; // 連打での二重実行防止
+
+/**
  * 自動検出を実行し、候補マーカーを一括追加する
+ * 音量区間検出に加え、チャット（拍手バースト）が取得済みなら境界の結合・分割に使う。
  * 既存マーカーの近く（前後 AUTO_DETECT_SKIP_NEAR_MARKER_SEC 秒）の候補はスキップする
  */
-function autoDetectSongStarts() {
+async function autoDetectSongStarts() {
+  if (isAutoDetectRunning) return;
+
   // 数値以外の要素が混ざっていた場合の防御（ハイライト送信側と同じ正規化）
   const numericData = volumeData.map(v => {
     if (typeof v === 'number' && Number.isFinite(v)) return v;
@@ -7323,34 +7496,86 @@ function autoDetectSongStarts() {
     return;
   }
 
-  // 保存データは動画長とサンプル数から間隔を逆算する（旧形式の500分割データにも対応）
-  const intervalSec = videoDuration / numericData.length;
-  const candidates = detectSongStartCandidates(numericData, intervalSec);
-  if (candidates.length === 0) {
-    showTsEditorNotice('楽曲らしい区間が見つかりませんでした', true);
-    return;
-  }
+  isAutoDetectRunning = true;
+  try {
+    // 保存データは動画長とサンプル数から間隔を逆算する（旧形式の500分割データにも対応）
+    const intervalSec = videoDuration / numericData.length;
+    const segments = detectSongSegments(numericData, intervalSec);
+    if (segments.length === 0) {
+      showTsEditorNotice('楽曲らしい区間が見つかりませんでした', true);
+      return;
+    }
 
-  const newTimes = candidates.filter(
-    t => !tsMarkers.some(m => Math.abs(m.time - t) <= AUTO_DETECT_SKIP_NEAR_MARKER_SEC)
-  );
-  const skippedCount = candidates.length - newTimes.length;
-  if (newTimes.length === 0) {
-    showTsEditorNotice(`候補${candidates.length}件はすべて既存マーカー付近のためスキップしました`, true);
-    return;
-  }
+    // チャットの拍手バーストで境界を補強する。IndexedDBのキャッシュを優先し、
+    // 未取得なら自動でチャットリプレイを取得する（失敗・チャットなしなら音量のみで続行）
+    // videoIdが取れない場合はスキップ（getAll(null)は全動画のチャットを返してしまうため）
+    let chats = [];
+    let chatUnavailable = false; // チャットリプレイ自体が無い/取得できなかった
+    const videoId = getVideoId();
+    if (videoId) {
+      try {
+        await initChatDB();
+        chats = await loadChatDataForVideo(videoId);
+      } catch (e) {
+        console.warn('[YCS 自動検出] チャットDB読込失敗:', e);
+      }
+      if (chats.length === 0) {
+        try {
+          showTsEditorNotice('チャットを取得しています…');
+          const continuation = await getChatContinuation();
+          if (continuation) {
+            const fetched = await fetchAllChatReplays(continuation, (count) => {
+              showTsEditorNotice(`チャットを取得中... (${count}件)`);
+            });
+            if (fetched.length > 0) {
+              await saveChatsToDB(videoId, fetched);
+              chats = fetched;
+            } else {
+              chatUnavailable = true;
+            }
+          } else {
+            // チャットリプレイの無い動画（チャット無効・メンバー限定等）
+            chatUnavailable = true;
+          }
+        } catch (e) {
+          console.warn('[YCS 自動検出] チャット取得失敗（音量のみで判定します）:', e);
+          chatUnavailable = true;
+        }
+      }
+    }
+    // チャット取得中に別の動画へ遷移していた場合は破棄する
+    // （古い検出結果を新しい動画のマーカーに追加しない）
+    if (videoId && getVideoId() !== videoId) return;
 
-  pushMarkerHistory();
-  for (const time of newTimes) {
-    tsMarkers.push({ id: nextMarkerId++, time, text: '' });
-  }
-  tsMarkers.sort((a, b) => a.time - b.time);
-  updateTimestampList();
-  drawVolumeGraph();
-  saveMarkersToStorage();
+    const bursts = detectClapBursts(chats, videoDuration);
+    const fused = fuseSegmentsWithChat(segments, bursts);
 
-  const skippedNote = skippedCount > 0 ? `（既存マーカー付近の${skippedCount}件はスキップ）` : '';
-  showTsEditorNotice(`${newTimes.length}件の候補マーカーを追加しました${skippedNote}`);
+    const newTimes = fused.starts.filter(
+      t => !tsMarkers.some(m => Math.abs(m.time - t) <= AUTO_DETECT_SKIP_NEAR_MARKER_SEC)
+    );
+    const skippedCount = fused.starts.length - newTimes.length;
+    if (newTimes.length === 0) {
+      showTsEditorNotice(`候補${fused.starts.length}件はすべて既存マーカー付近のためスキップしました`, true);
+      return;
+    }
+
+    pushMarkerHistory();
+    for (const time of newTimes) {
+      tsMarkers.push({ id: nextMarkerId++, time, text: '' });
+    }
+    tsMarkers.sort((a, b) => a.time - b.time);
+    updateTimestampList();
+    drawVolumeGraph();
+    saveMarkersToStorage();
+
+    const sourceNote = fused.chatActive
+      ? '音量+拍手チャット'
+      : (chats.length > 0 ? '音量のみ（拍手が少ない配信）' : (chatUnavailable ? '音量のみ（チャットなし）' : '音量のみ'));
+    const skippedNote = skippedCount > 0 ? `、既存マーカー付近の${skippedCount}件はスキップ` : '';
+    showTsEditorNotice(`${newTimes.length}件の候補マーカーを追加しました（${sourceNote}${skippedNote}）`);
+  } finally {
+    isAutoDetectRunning = false;
+  }
 }
 
 let tsEditorNoticeTimer = null;
