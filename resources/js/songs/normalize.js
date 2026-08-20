@@ -36,6 +36,7 @@ class TimestampNormalization {
         this.candidateSelectedIndices = new Set(); // 選択中のチップの位置
         this.candidateTextKey = null;          // どのタイムスタンプのチップかを判別する元テキスト
         this.candidateRequestSeq = 0;          // 候補取得の世代番号（応答の追い越し防止）
+        this.lastCandidateSelectionKey = null; // 候補を作り直すかの判定用（前回の選択）
 
         this.init();
     }
@@ -496,9 +497,15 @@ class TimestampNormalization {
         this.updateSpotifySelectedDisplay();
         document.getElementById('linkSongBtn').disabled = !(this.selectedTimestamps.length > 0 && this.selectedSong);
 
-        // 候補は選択中のタイムスタンプに対するものなので、選択が変わったら作り直す
+        // 候補は選択中のタイムスタンプに対するものなので、選択が変わったら作り直す。
+        // 楽曲を選んだだけのときは作り直さない（同じ条件での再検索が無駄に走るため）
         if (this.isCandidateTabActive()) {
-            this.loadCandidates();
+            const selectionKey = this.selectedTimestamps.map(t => t.id).join(',');
+
+            if (this.lastCandidateSelectionKey !== selectionKey) {
+                this.lastCandidateSelectionKey = selectionKey;
+                this.loadCandidates();
+            }
         }
     }
 
@@ -1011,6 +1018,13 @@ class TimestampNormalization {
             // 選択が変わったので、進行中の取得の応答は適用しない
             this.candidateRequestSeq++;
 
+            // 対象が無くなったので、チップの状態も破棄する。
+            // 残したままだと、全解除後に同じタイムスタンプを選び直したときに
+            // 前のチップ選択が残っているのか新規取得なのか読みにくくなる
+            this.candidateTextKey = null;
+            this.candidateParts = [];
+            this.candidateSelectedIndices = new Set();
+
             notice.textContent = 'タイムスタンプを1件選ぶと候補を表示します。';
             chipsArea.classList.add('hidden');
             results.innerHTML = '';
@@ -1102,9 +1116,10 @@ class TimestampNormalization {
         button.textContent = '最後に選んだ1件に絞る';
         button.addEventListener('click', () => {
             this.selectedTimestamps = this.selectedTimestamps.slice(-1);
+            // 選択が複数→単一に変わるので、updateSelectionDisplay() の判定キーの
+            // 差分検知により候補は自動的に作り直される（ここで明示的に呼ぶと二重取得になる）
             this.updateSelectionDisplay();
             this.loadTimestamps(this.currentPage, this.currentSearchQuery);
-            this.loadCandidates();
         });
 
         notice.appendChild(message);
@@ -1839,6 +1854,12 @@ class TimestampNormalization {
 
             // ラジオ/チェックボックスの表示を選択状態に合わせて切り替える
             this.loadTimestamps(this.currentPage, this.currentSearchQuery);
+
+            // ここで直接 loadCandidates() を呼ぶため、updateSelectionDisplay() 側の
+            // 判定用キーもここで揃えておく。揃えないと、タブを開いた直後に候補内の
+            // 楽曲を1件クリックしただけで（選択自体は変わっていないのに）
+            // updateSelectionDisplay() 経由で無駄な再取得が走ってしまう
+            this.lastCandidateSelectionKey = this.selectedTimestamps.map(t => t.id).join(',');
             this.loadCandidates();
         }
 
