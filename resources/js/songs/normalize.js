@@ -35,6 +35,7 @@ class TimestampNormalization {
         this.candidateParts = [];              // 候補タブのチップ（元テキストの分割結果）
         this.candidateSelectedIndices = new Set(); // 選択中のチップの位置
         this.candidateTextKey = null;          // どのタイムスタンプのチップかを判別する元テキスト
+        this.candidateRequestSeq = 0;          // 候補取得の世代番号（応答の追い越し防止）
 
         this.init();
     }
@@ -1000,8 +1001,10 @@ class TimestampNormalization {
         // 同じテキストのチップが既にあるなら、選択状態を保ったまま再検索する
         if (this.candidateTextKey === text) {
             // 複数選択中はチップ欄を隠すため、1件に絞られた直後は
-            // このタイミングで表示状態に戻す必要がある
-            chipsArea.classList.remove('hidden');
+            // このタイミングで表示状態を復元する必要がある。
+            // 可視性のルールを1箇所に閉じるため、hiddenクラスを直接操作せず
+            // renderCandidateChips() 経由にする（パーツが空なら隠したままになる）
+            this.renderCandidateChips();
             await this.searchCandidatesByChips();
             return;
         }
@@ -1009,8 +1012,19 @@ class TimestampNormalization {
         notice.textContent = '候補を探しています…';
         results.innerHTML = '';
 
+        // 応答の追い越しを防ぐための世代番号。
+        // タイムスタンプを素早く切り替えると複数のリクエストが並行して飛び、
+        // 先に選んだ方の遅い応答が後から届いて候補を巻き戻すと、
+        // 表示中のタイムスタンプと無関係な楽曲が紐づく事故につながる
+        const seq = ++this.candidateRequestSeq;
+
         try {
             const data = await songApiService.fetchCandidates(text);
+
+            // 待っている間に選択が変わって新しい取得が始まっていたら、古い応答は捨てる
+            if (seq !== this.candidateRequestSeq) {
+                return;
+            }
 
             this.candidateTextKey = text;
             this.candidateParts = data.parts;
@@ -1022,6 +1036,10 @@ class TimestampNormalization {
             notice.textContent = '';
             this.displayCandidates(data.songs, data.total);
         } catch (error) {
+            if (seq !== this.candidateRequestSeq) {
+                return;
+            }
+
             console.error('候補の取得に失敗しました:', error);
             notice.textContent = '候補の取得に失敗しました。';
             chipsArea.classList.add('hidden');
@@ -1132,6 +1150,12 @@ class TimestampNormalization {
     async searchCandidatesByChips() {
         const results = document.getElementById('candidateResults');
 
+        // タイムスタンプ切り替えと同じ世代番号を使う。
+        // ここで進めておくことで、チップ連打中に飛んだ古いリクエストや、
+        // 検索中にタイムスタンプ自体が切り替わったケースの遅い応答を
+        // 後から無効化できる
+        const seq = ++this.candidateRequestSeq;
+
         const words = this.candidateParts.filter((_, i) => this.candidateSelectedIndices.has(i));
 
         if (words.length === 0) {
@@ -1146,9 +1170,18 @@ class TimestampNormalization {
                 null,
                 CONSTANTS.SONG_SEARCH_MODE_FUZZY
             );
+
+            if (seq !== this.candidateRequestSeq) {
+                return;
+            }
+
             const songs = response.data ?? response;
             this.displayCandidates(songs, response.total ?? songs.length);
         } catch (error) {
+            if (seq !== this.candidateRequestSeq) {
+                return;
+            }
+
             console.error('候補の検索に失敗しました:', error);
             document.getElementById('candidateNotice').textContent = '候補の検索に失敗しました。';
         }
