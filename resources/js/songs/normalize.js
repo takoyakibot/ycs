@@ -1779,6 +1779,11 @@ class TimestampNormalization {
             return;
         }
 
+        // 候補タブではタイムスタンプをラジオボタンで描画するため、
+        // 他のタブへ移るときはチェックボックスに戻す必要がある。
+        // タブ内容を隠す前に判定しておく
+        const leavingCandidateTab = this.isCandidateTabActive() && tabId !== 'candidatesTab';
+
         document.querySelectorAll('.tab-button').forEach(btn => {
             btn.classList.remove('border-green-500', 'text-green-600', 'border-blue-500', 'text-blue-600', 'border-purple-500', 'text-purple-600', 'border-amber-500', 'text-amber-600');
             btn.classList.add('border-transparent', 'text-gray-500');
@@ -1821,6 +1826,14 @@ class TimestampNormalization {
             // ラジオ/チェックボックスの表示を選択状態に合わせて切り替える
             this.loadTimestamps(this.currentPage, this.currentSearchQuery);
             this.loadCandidates();
+        }
+
+        // 候補タブから離れるときは一覧を再描画し、ラジオボタンを
+        // チェックボックスに戻す（#timestampsList はタブと独立した
+        // 常時表示領域のため、離脱時に明示的に再描画しないと
+        // input の type が radio のまま取り残されてしまう）
+        if (leavingCandidateTab) {
+            this.loadTimestamps(this.currentPage, this.currentSearchQuery);
         }
     }
 
