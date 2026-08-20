@@ -20,7 +20,7 @@
                         <!-- 全選択・選択解除ボタンと絞り込み -->
                         <div class="flex flex-col gap-2 mb-3 pt-3 border-t border-gray-200 dark:border-gray-700">
                             <div class="flex items-center gap-2 flex-wrap">
-                                <button id="selectAllBtn" class="px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600">
+                                <button id="selectAllBtn" class="px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed">
                                     全選択
                                 </button>
                                 <button id="deselectAllBtn" class="px-3 py-1 bg-gray-500 text-white text-sm rounded hover:bg-gray-600">
@@ -138,6 +138,9 @@
                                 <button id="songsTab" class="tab-button px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 -mb-px">
                                     楽曲マスタ
                                 </button>
+                                <button id="candidatesTab" class="tab-button px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 -mb-px">
+                                    候補
+                                </button>
                             </nav>
                         </div>
 
@@ -218,6 +221,18 @@
                             <div id="songsResults" class="space-y-2 max-h-64 overflow-y-auto">
                                 <!-- 楽曲マスタリストがここに表示される -->
                             </div>
+                        </div>
+
+                        <!-- 選択したタイムスタンプに対する候補 -->
+                        <div id="candidatesList" class="tab-content hidden">
+                            <div id="candidateNotice" class="text-sm text-gray-500 dark:text-gray-400 mb-3"></div>
+
+                            <div id="candidateChipsArea" class="mb-3 hidden">
+                                <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">絞り込み（押した語で検索します）</div>
+                                <div id="candidateChips" class="flex flex-wrap gap-2"></div>
+                            </div>
+
+                            <div id="candidateResults" class="space-y-2 max-h-64 overflow-y-auto"></div>
                         </div>
 
                         <!-- アクションボタン -->

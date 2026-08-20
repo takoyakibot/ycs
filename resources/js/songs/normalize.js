@@ -32,6 +32,11 @@ class TimestampNormalization {
         this.songSearchMode = sessionStorage.getItem('songSearchMode') === CONSTANTS.SONG_SEARCH_MODE_EXACT
             ? CONSTANTS.SONG_SEARCH_MODE_EXACT
             : CONSTANTS.SONG_SEARCH_MODE_FUZZY;
+        this.candidateParts = [];              // 候補タブのチップ（元テキストの分割結果）
+        this.candidateSelectedIndices = new Set(); // 選択中のチップの位置
+        this.candidateTextKey = null;          // どのタイムスタンプのチップかを判別する元テキスト
+        this.candidateRequestSeq = 0;          // 候補取得の世代番号（応答の追い越し防止）
+        this.lastCandidateSelectionKey = null; // 候補を作り直すかの判定用（前回の選択）
 
         this.init();
     }
@@ -249,9 +254,16 @@ class TimestampNormalization {
             isSelected ? 'bg-blue-100 dark:bg-blue-900 border-blue-500' : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
         }`;
 
-        // チェックボックス
+        // 候補タブは1件のテキストに対する候補を出すため単一選択にする。
+        // ただし複数選択中は、複数がチェックされたラジオボタンという矛盾した表示に
+        // ならないようチェックボックスのまま描画する（選択を保持したまま案内を出す）
+        const singleSelect = this.isCandidateTabActive() && this.selectedTimestamps.length <= 1;
+
         const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
+        checkbox.type = singleSelect ? 'radio' : 'checkbox';
+        if (singleSelect) {
+            checkbox.name = 'candidateTimestamp';
+        }
         checkbox.checked = isSelected;
         checkbox.className = 'flex-shrink-0';
         checkbox.addEventListener('change', (e) => {
@@ -422,7 +434,13 @@ class TimestampNormalization {
     toggleTimestampSelection(timestamp) {
         const index = this.selectedTimestamps.findIndex(t => t.id === timestamp.id);
 
-        if (index >= 0) {
+        if (this.isCandidateTabActive() && this.selectedTimestamps.length <= 1) {
+            // 候補タブでは単一選択。同じ行を選び直したときは解除できるようにする
+            this.selectedTimestamps = index >= 0 ? [] : [timestamp];
+            // 対象のタイムスタンプが変わるので、選んでいた候補の曲は無効化する。
+            // 残したままだと、別のタイムスタンプに誤って紐づく事故につながる
+            this.selectedSong = null;
+        } else if (index >= 0) {
             this.selectedTimestamps.splice(index, 1);
         } else {
             this.selectedTimestamps.push(timestamp);
@@ -438,6 +456,11 @@ class TimestampNormalization {
     }
 
     selectAll() {
+        // 候補タブは単一選択なので全選択はしない
+        if (this.isCandidateTabActive()) {
+            return;
+        }
+
         const timestampItems = document.querySelectorAll('#timestampsList > div');
         timestampItems.forEach((item) => {
             const checkbox = item.querySelector('input[type="checkbox"]');
@@ -473,6 +496,17 @@ class TimestampNormalization {
 
         this.updateSpotifySelectedDisplay();
         document.getElementById('linkSongBtn').disabled = !(this.selectedTimestamps.length > 0 && this.selectedSong);
+
+        // 候補は選択中のタイムスタンプに対するものなので、選択が変わったら作り直す。
+        // 楽曲を選んだだけのときは作り直さない（同じ条件での再検索が無駄に走るため）
+        if (this.isCandidateTabActive()) {
+            const selectionKey = this.selectedTimestamps.map(t => t.id).join(',');
+
+            if (this.lastCandidateSelectionKey !== selectionKey) {
+                this.lastCandidateSelectionKey = selectionKey;
+                this.loadCandidates();
+            }
+        }
     }
 
     displayNoSelection(countSpan, textSpan, normalizedSpan, linkedSongSpan, confirmBtn) {
@@ -962,7 +996,261 @@ class TimestampNormalization {
         });
     }
 
-    createSongElement(song, songs, total) {
+    /**
+     * 候補タブが開いているか
+     */
+    isCandidateTabActive() {
+        return !document.getElementById('candidatesList').classList.contains('hidden');
+    }
+
+    /**
+     * 候補タブの内容を読み込む
+     *
+     * タイムスタンプが1件だけ選択されているときに候補を取得する。
+     * 複数選択中は選択に触らず案内だけ出す（一括紐付けの選択を壊さないため）。
+     */
+    async loadCandidates() {
+        const notice = document.getElementById('candidateNotice');
+        const chipsArea = document.getElementById('candidateChipsArea');
+        const results = document.getElementById('candidateResults');
+
+        if (this.selectedTimestamps.length === 0) {
+            // 選択が変わったので、進行中の取得の応答は適用しない
+            this.candidateRequestSeq++;
+
+            // 対象が無くなったので、チップの状態も破棄する。
+            // 残したままだと、全解除後に同じタイムスタンプを選び直したときに
+            // 前のチップ選択が残っているのか新規取得なのか読みにくくなる
+            this.candidateTextKey = null;
+            this.candidateParts = [];
+            this.candidateSelectedIndices = new Set();
+
+            notice.textContent = 'タイムスタンプを1件選ぶと候補を表示します。';
+            chipsArea.classList.add('hidden');
+            results.innerHTML = '';
+            return;
+        }
+
+        if (this.selectedTimestamps.length > 1) {
+            // 選択が変わったので、進行中の取得の応答は適用しない
+            this.candidateRequestSeq++;
+
+            this.renderMultiSelectionNotice();
+            chipsArea.classList.add('hidden');
+            results.innerHTML = '';
+            return;
+        }
+
+        const text = this.selectedTimestamps[0].text;
+
+        // 同じテキストのチップが既にあるなら、選択状態を保ったまま再検索する
+        if (this.candidateTextKey === text) {
+            // 複数選択中はチップ欄を隠すため、1件に絞られた直後は
+            // このタイミングで表示状態を復元する必要がある。
+            // 可視性のルールを1箇所に閉じるため、hiddenクラスを直接操作せず
+            // renderCandidateChips() 経由にする（パーツが空なら隠したままになる）
+            this.renderCandidateChips();
+            await this.searchCandidatesByChips();
+            return;
+        }
+
+        notice.textContent = '候補を探しています…';
+        results.innerHTML = '';
+
+        // 取得中に前のタイムスタンプのチップが押されると、進行中の取得が
+        // 打ち消されて candidateTextKey が古いまま固定されてしまうため、
+        // 先にチップを消して押せない状態にする
+        this.candidateTextKey = null;
+        this.candidateParts = [];
+        this.candidateSelectedIndices = new Set();
+        this.renderCandidateChips();
+
+        // 応答の追い越しを防ぐための世代番号。
+        // タイムスタンプを素早く切り替えると複数のリクエストが並行して飛び、
+        // 先に選んだ方の遅い応答が後から届いて候補を巻き戻すと、
+        // 表示中のタイムスタンプと無関係な楽曲が紐づく事故につながる
+        const seq = ++this.candidateRequestSeq;
+
+        try {
+            const data = await songApiService.fetchCandidates(text);
+
+            // 待っている間に選択が変わって新しい取得が始まっていたら、古い応答は捨てる
+            if (seq !== this.candidateRequestSeq) {
+                return;
+            }
+
+            this.candidateTextKey = text;
+            this.candidateParts = data.parts;
+            this.candidateSelectedIndices = new Set(
+                data.parts.map((_, i) => i).filter(i => !data.ignored_indices.includes(i))
+            );
+
+            this.renderCandidateChips();
+            notice.textContent = '';
+            this.displayCandidates(data.songs, data.total);
+        } catch (error) {
+            if (seq !== this.candidateRequestSeq) {
+                return;
+            }
+
+            console.error('候補の取得に失敗しました:', error);
+            notice.textContent = '候補の取得に失敗しました。';
+            chipsArea.classList.add('hidden');
+        }
+    }
+
+    /**
+     * 複数選択中の案内を表示する
+     */
+    renderMultiSelectionNotice() {
+        const notice = document.getElementById('candidateNotice');
+        notice.textContent = '';
+
+        const message = document.createElement('p');
+        message.className = 'mb-2';
+        message.textContent = `${this.selectedTimestamps.length}件選択中です。候補を見るには1件だけ選んでください。`;
+
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'px-3 py-1 bg-amber-600 text-white text-sm rounded hover:bg-amber-700';
+        button.textContent = '最後に選んだ1件に絞る';
+        button.addEventListener('click', () => {
+            this.selectedTimestamps = this.selectedTimestamps.slice(-1);
+            // 選択が複数→単一に変わるので、updateSelectionDisplay() の判定キーの
+            // 差分検知により候補は自動的に作り直される（ここで明示的に呼ぶと二重取得になる）
+            this.updateSelectionDisplay();
+            this.loadTimestamps(this.currentPage, this.currentSearchQuery);
+        });
+
+        notice.appendChild(message);
+        notice.appendChild(button);
+    }
+
+    /**
+     * チップを描画する
+     */
+    renderCandidateChips() {
+        const chipsArea = document.getElementById('candidateChipsArea');
+        const container = document.getElementById('candidateChips');
+
+        container.innerHTML = '';
+
+        if (this.candidateParts.length === 0) {
+            chipsArea.classList.add('hidden');
+            return;
+        }
+
+        chipsArea.classList.remove('hidden');
+
+        this.candidateParts.forEach((part, index) => {
+            const selected = this.candidateSelectedIndices.has(index);
+            const chip = document.createElement('button');
+            chip.type = 'button';
+            chip.textContent = part;
+            chip.className = `px-2 py-1 text-xs rounded border ${
+                selected
+                    ? 'bg-amber-600 text-white border-amber-600'
+                    : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+            }`;
+            chip.addEventListener('click', () => this.toggleCandidateChip(index));
+            container.appendChild(chip);
+        });
+    }
+
+    /**
+     * 候補一覧を描画する
+     *
+     * 候補の見た目と選択の扱いは楽曲マスタ一覧と揃える（createSongElement を再利用する）
+     */
+    displayCandidates(songs, total) {
+        const results = document.getElementById('candidateResults');
+        const notice = document.getElementById('candidateNotice');
+
+        results.innerHTML = '';
+
+        if (!Array.isArray(songs) || songs.length === 0) {
+            notice.textContent = this.candidateSelectedIndices.size === 0
+                ? '絞り込みの語を1つ以上選んでください。'
+                : '候補が見つかりませんでした。チップを外して条件を緩めてください。';
+            return;
+        }
+
+        notice.textContent = songs.length < total
+            ? `${total}件の候補（上位${songs.length}件を表示）`
+            : `${total}件の候補`;
+
+        songs.forEach(song => {
+            results.appendChild(this.createSongElement(song, songs, total, () => {
+                this.displayCandidates(songs, total);
+            }));
+        });
+    }
+
+    /**
+     * チップの選択を切り替えて再検索する
+     */
+    async toggleCandidateChip(index) {
+        if (this.candidateSelectedIndices.has(index)) {
+            this.candidateSelectedIndices.delete(index);
+        } else {
+            this.candidateSelectedIndices.add(index);
+        }
+
+        this.renderCandidateChips();
+        await this.searchCandidatesByChips();
+    }
+
+    /**
+     * 選択中のチップの語で候補を再検索する
+     */
+    async searchCandidatesByChips() {
+        // チップは選択中のタイムスタンプに対するものなので、
+        // 食い違っていたら何もしない（古いチップの取り残し対策）
+        if (this.candidateTextKey === null
+            || this.candidateTextKey !== this.selectedTimestamps[0]?.text) {
+            return;
+        }
+
+        const results = document.getElementById('candidateResults');
+
+        // タイムスタンプ切り替えと同じ世代番号を使う。
+        // ここで進めておくことで、チップ連打中に飛んだ古いリクエストや、
+        // 検索中にタイムスタンプ自体が切り替わったケースの遅い応答を
+        // 後から無効化できる
+        const seq = ++this.candidateRequestSeq;
+
+        const words = this.candidateParts.filter((_, i) => this.candidateSelectedIndices.has(i));
+
+        if (words.length === 0) {
+            results.innerHTML = '';
+            this.displayCandidates([], 0);
+            return;
+        }
+
+        try {
+            const response = await songApiService.fetchSongs(
+                words.join(' '),
+                null,
+                CONSTANTS.SONG_SEARCH_MODE_FUZZY
+            );
+
+            if (seq !== this.candidateRequestSeq) {
+                return;
+            }
+
+            const songs = response.data ?? response;
+            this.displayCandidates(songs, response.total ?? songs.length);
+        } catch (error) {
+            if (seq !== this.candidateRequestSeq) {
+                return;
+            }
+
+            console.error('候補の検索に失敗しました:', error);
+            document.getElementById('candidateNotice').textContent = '候補の検索に失敗しました。';
+        }
+    }
+
+    createSongElement(song, songs, total, onSelectionChange = null) {
         const div = document.createElement('div');
         const isSelected = this.selectedSong?.id === song.id;
         div.className = `p-2 border rounded cursor-pointer flex items-center justify-between ${
@@ -1040,7 +1328,11 @@ class TimestampNormalization {
         div.addEventListener('click', () => {
             // 選択済みの楽曲をもう一度クリックしたら選択を解除する
             this.selectedSong = this.selectedSong?.id === song.id ? null : song;
-            this.displaySongs(songs, total);
+            if (onSelectionChange) {
+                onSelectionChange();
+            } else {
+                this.displaySongs(songs, total);
+            }
             this.updateSelectionDisplay();
         });
 
@@ -1516,14 +1808,22 @@ class TimestampNormalization {
             return;
         }
 
+        // 候補タブではタイムスタンプをラジオボタンで描画するため、
+        // 他のタブへ移るときはチェックボックスに戻す必要がある。
+        // タブ内容を隠す前に判定しておく
+        const leavingCandidateTab = this.isCandidateTabActive() && tabId !== 'candidatesTab';
+
         document.querySelectorAll('.tab-button').forEach(btn => {
-            btn.classList.remove('border-green-500', 'text-green-600', 'border-blue-500', 'text-blue-600', 'border-purple-500', 'text-purple-600');
+            btn.classList.remove('border-green-500', 'text-green-600', 'border-blue-500', 'text-blue-600', 'border-purple-500', 'text-purple-600', 'border-amber-500', 'text-amber-600');
             btn.classList.add('border-transparent', 'text-gray-500');
         });
 
         document.querySelectorAll('.tab-content').forEach(content => {
             content.classList.add('hidden');
         });
+
+        // 候補タブ以外では全選択を使えるようにする
+        document.getElementById('selectAllBtn').disabled = false;
 
         const activeTab = document.getElementById(tabId);
         if (tabId === 'spotifyTab') {
@@ -1546,6 +1846,29 @@ class TimestampNormalization {
             // 検索を促すメッセージを描画する（初回表示時もここを通る）。
             const songsSearch = document.getElementById('songsSearch')?.value ?? '';
             this.loadSongs(songsSearch);
+        } else if (tabId === 'candidatesTab') {
+            activeTab.classList.remove('border-transparent', 'text-gray-500');
+            activeTab.classList.add('border-amber-500', 'text-amber-600');
+            document.getElementById('candidatesList').classList.remove('hidden');
+            document.getElementById('selectAllBtn').disabled = true;
+
+            // ラジオ/チェックボックスの表示を選択状態に合わせて切り替える
+            this.loadTimestamps(this.currentPage, this.currentSearchQuery);
+
+            // ここで直接 loadCandidates() を呼ぶため、updateSelectionDisplay() 側の
+            // 判定用キーもここで揃えておく。揃えないと、タブを開いた直後に候補内の
+            // 楽曲を1件クリックしただけで（選択自体は変わっていないのに）
+            // updateSelectionDisplay() 経由で無駄な再取得が走ってしまう
+            this.lastCandidateSelectionKey = this.selectedTimestamps.map(t => t.id).join(',');
+            this.loadCandidates();
+        }
+
+        // 候補タブから離れるときは一覧を再描画し、ラジオボタンを
+        // チェックボックスに戻す（#timestampsList はタブと独立した
+        // 常時表示領域のため、離脱時に明示的に再描画しないと
+        // input の type が radio のまま取り残されてしまう）
+        if (leavingCandidateTab) {
+            this.loadTimestamps(this.currentPage, this.currentSearchQuery);
         }
     }
 

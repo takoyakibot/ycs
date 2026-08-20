@@ -19,6 +19,7 @@ use App\Services\SongSearchService;
 use App\Services\SpotifyService;
 use App\Services\VideoUrlService;
 use App\Services\YouTubeApiService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -35,6 +36,11 @@ class SongController extends Controller
      * 楽曲マスタ検索モード: 完全一致検索（入力文字列をそのまま部分一致検索）
      */
     public const SEARCH_MODE_EXACT = 'exact';
+
+    /**
+     * 候補として返す最大件数
+     */
+    private const CANDIDATE_LIMIT = 50;
 
     protected SongSearchService $songSearchService;
 
@@ -349,6 +355,63 @@ class SongController extends Controller
 
         return response()->json([
             'data' => $songs,
+            'total' => $total,
+        ]);
+    }
+
+    /**
+     * 選択したタイムスタンプに対する楽曲マスタの候補を返す
+     *
+     * 元テキストを区切り文字で分割したパーツと、そのうちノイズと判定した位置、
+     * ノイズを除いたパーツで検索した候補をまとめて返す。
+     * 正規化画面の「候補」タブが、タイムスタンプを選んだ時点で1回だけ叩く。
+     */
+    public function candidates(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'text' => 'required|string|max:500',
+        ]);
+
+        $parts = TextNormalizer::splitBySeparators($validated['text'])['parts'];
+
+        $ignoredIndices = [];
+        $searchParts = [];
+
+        foreach ($parts as $index => $part) {
+            if (TextNormalizer::isIgnorablePart($part)) {
+                $ignoredIndices[] = $index;
+
+                continue;
+            }
+
+            $searchParts[] = $part;
+        }
+
+        $search = implode(' ', $searchParts);
+
+        $songs = [];
+        $total = 0;
+
+        // 検索語が作れない場合は検索しない。
+        // 記号だけのパーツは isIgnorablePart() では無視対象にならないが、
+        // あいまい検索のキーワードにもならないため、そのまま検索すると
+        // WHERE 句が1つも付かず全件が返ってしまう
+        if ($searchParts !== [] && QueryHelper::splitFuzzyKeywords($search) !== []) {
+            $query = Song::query();
+            QueryHelper::applyFuzzySearch(
+                $query,
+                $search,
+                ['normalized_title', 'normalized_artist']
+            );
+
+            $total = $query->count();
+            $songs = $query->orderBy('title')->limit(self::CANDIDATE_LIMIT)->get();
+        }
+
+        return response()->json([
+            'parts' => $parts,
+            'ignored_indices' => $ignoredIndices,
+            'songs' => $songs,
             'total' => $total,
         ]);
     }

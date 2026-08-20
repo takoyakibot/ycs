@@ -24,6 +24,17 @@ export class SongApiService {
     }
 
     /**
+     * 選択したタイムスタンプに対する楽曲マスタの候補を取得
+     * @param {string} text - タイムスタンプの元テキスト
+     * @returns {Promise<Object>} { parts, ignored_indices, songs, total }
+     */
+    async fetchCandidates(text) {
+        const response = await axios.get('/api/songs/candidates', { params: { text } });
+
+        return response.data;
+    }
+
+    /**
      * 楽曲マスタを登録
      * @param {Object} songData - 楽曲データ
      * @param {string} songData.title - 楽曲名
