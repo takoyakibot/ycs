@@ -122,6 +122,7 @@ Route::middleware(['auth', 'admin'])->group(function () {
     // 楽曲マスタAPI
     Route::get('api/songs/timestamps', [SongController::class, 'fetchTimestamps'])->name('songs.fetchTimestamps');
     Route::get('api/songs', [SongController::class, 'fetchSongs'])->name('songs.fetchSongs');
+    Route::get('api/songs/candidates', [SongController::class, 'candidates'])->name('songs.candidates');
     Route::post('api/songs', [SongController::class, 'storeSong'])->name('songs.storeSong');
     Route::post('api/songs/link', [SongController::class, 'linkTimestamp'])->name('songs.linkTimestamp');
     Route::post('api/songs/mark-not-song', [SongController::class, 'markAsNotSong'])->name('songs.markAsNotSong');
