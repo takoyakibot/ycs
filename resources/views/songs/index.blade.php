@@ -20,7 +20,7 @@
                         <!-- 全選択・選択解除ボタンと絞り込み -->
                         <div class="flex flex-col gap-2 mb-3 pt-3 border-t border-gray-200 dark:border-gray-700">
                             <div class="flex items-center gap-2 flex-wrap">
-                                <button id="selectAllBtn" class="px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600">
+                                <button id="selectAllBtn" class="px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed">
                                     全選択
                                 </button>
                                 <button id="deselectAllBtn" class="px-3 py-1 bg-gray-500 text-white text-sm rounded hover:bg-gray-600">
@@ -232,7 +232,7 @@
                                 <div id="candidateChips" class="flex flex-wrap gap-2"></div>
                             </div>
 
-                            <div id="candidateResults"></div>
+                            <div id="candidateResults" class="space-y-2 max-h-64 overflow-y-auto"></div>
                         </div>
 
                         <!-- アクションボタン -->

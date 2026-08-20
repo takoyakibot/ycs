@@ -433,9 +433,12 @@ class TimestampNormalization {
     toggleTimestampSelection(timestamp) {
         const index = this.selectedTimestamps.findIndex(t => t.id === timestamp.id);
 
-        if (this.isCandidateTabActive()) {
+        if (this.isCandidateTabActive() && this.selectedTimestamps.length <= 1) {
             // 候補タブでは単一選択。同じ行を選び直したときは解除できるようにする
             this.selectedTimestamps = index >= 0 ? [] : [timestamp];
+            // 対象のタイムスタンプが変わるので、選んでいた候補の曲は無効化する。
+            // 残したままだと、別のタイムスタンプに誤って紐づく事故につながる
+            this.selectedSong = null;
         } else if (index >= 0) {
             this.selectedTimestamps.splice(index, 1);
         } else {
@@ -448,11 +451,6 @@ class TimestampNormalization {
         // 最初のタイムスタンプが選択された時、Spotify検索窓に反映（Spotify有効時のみ）
         if (this.spotifyEnabled && this.selectedTimestamps.length === 1) {
             document.getElementById('spotifySearch').value = this.selectedTimestamps[0].text;
-        }
-
-        // 候補タブを開いている場合は候補を更新する
-        if (this.isCandidateTabActive()) {
-            this.loadCandidates();
         }
     }
 
@@ -475,11 +473,6 @@ class TimestampNormalization {
         this.selectedTimestamps = [];
         this.updateSelectionDisplay();
         this.loadTimestamps(this.currentPage, this.currentSearchQuery);
-
-        // 候補タブを開いている場合は候補を更新する
-        if (this.isCandidateTabActive()) {
-            this.loadCandidates();
-        }
     }
 
     updateSelectionDisplay() {
@@ -502,6 +495,11 @@ class TimestampNormalization {
 
         this.updateSpotifySelectedDisplay();
         document.getElementById('linkSongBtn').disabled = !(this.selectedTimestamps.length > 0 && this.selectedSong);
+
+        // 候補は選択中のタイムスタンプに対するものなので、選択が変わったら作り直す
+        if (this.isCandidateTabActive()) {
+            this.loadCandidates();
+        }
     }
 
     displayNoSelection(countSpan, textSpan, normalizedSpan, linkedSongSpan, confirmBtn) {
@@ -692,11 +690,6 @@ class TimestampNormalization {
         this.selectedSpotifyTrack = null;
         this.updateSelectionDisplay();
         this.loadTimestamps(this.currentPage, this.currentSearchQuery);
-
-        // 候補タブを開いている場合は候補を更新する
-        if (this.isCandidateTabActive()) {
-            this.loadCandidates();
-        }
     }
 
     async searchSpotify() {
@@ -1050,6 +1043,14 @@ class TimestampNormalization {
         notice.textContent = '候補を探しています…';
         results.innerHTML = '';
 
+        // 取得中に前のタイムスタンプのチップが押されると、進行中の取得が
+        // 打ち消されて candidateTextKey が古いまま固定されてしまうため、
+        // 先にチップを消して押せない状態にする
+        this.candidateTextKey = null;
+        this.candidateParts = [];
+        this.candidateSelectedIndices = new Set();
+        this.renderCandidateChips();
+
         // 応答の追い越しを防ぐための世代番号。
         // タイムスタンプを素早く切り替えると複数のリクエストが並行して飛び、
         // 先に選んだ方の遅い応答が後から届いて候補を巻き戻すと、
@@ -1164,7 +1165,9 @@ class TimestampNormalization {
             : `${total}件の候補`;
 
         songs.forEach(song => {
-            results.appendChild(this.createSongElement(song, songs, total));
+            results.appendChild(this.createSongElement(song, songs, total, () => {
+                this.displayCandidates(songs, total);
+            }));
         });
     }
 
@@ -1186,6 +1189,13 @@ class TimestampNormalization {
      * 選択中のチップの語で候補を再検索する
      */
     async searchCandidatesByChips() {
+        // チップは選択中のタイムスタンプに対するものなので、
+        // 食い違っていたら何もしない（古いチップの取り残し対策）
+        if (this.candidateTextKey === null
+            || this.candidateTextKey !== this.selectedTimestamps[0]?.text) {
+            return;
+        }
+
         const results = document.getElementById('candidateResults');
 
         // タイムスタンプ切り替えと同じ世代番号を使う。
@@ -1225,7 +1235,7 @@ class TimestampNormalization {
         }
     }
 
-    createSongElement(song, songs, total) {
+    createSongElement(song, songs, total, onSelectionChange = null) {
         const div = document.createElement('div');
         const isSelected = this.selectedSong?.id === song.id;
         div.className = `p-2 border rounded cursor-pointer flex items-center justify-between ${
@@ -1303,7 +1313,11 @@ class TimestampNormalization {
         div.addEventListener('click', () => {
             // 選択済みの楽曲をもう一度クリックしたら選択を解除する
             this.selectedSong = this.selectedSong?.id === song.id ? null : song;
-            this.displaySongs(songs, total);
+            if (onSelectionChange) {
+                onSelectionChange();
+            } else {
+                this.displaySongs(songs, total);
+            }
             this.updateSelectionDisplay();
         });
 
