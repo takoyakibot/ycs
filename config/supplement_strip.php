@@ -9,7 +9,16 @@
 | 付いたタイムスタンプを正規化前に掃除するための辞書。
 |
 | App\Helpers\SupplementStripper が参照する。
-| 影響の確認は `php artisan ts-items:analyze-supplements` で行える。
+| 影響の確認は `php artisan ts-decompositions:clean-supplements`（dry-run が
+| デフォルト）で行える。
+|
+| 【他の辞書との棲み分け（#669）】
+| この辞書は「括弧内・区切り以降の補足」の部分一致除去にのみ効く。
+| - パーツ全体の無視判定は TextNormalizer::IGNORE_KEYWORDS（コード定数）
+| - チャンネルごとの除去パターンは config/strip_pattern_templates.php ＋
+|   channel_strip_patterns テーブル（管理画面で編集）
+| 語を追加するときは、どの経路に効かせたいかを確認して該当する系統だけに
+| 追加すること（詳細は TextNormalizer::IGNORE_KEYWORDS のコメントを参照）。
 |
 */
 
