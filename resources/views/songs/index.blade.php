@@ -138,6 +138,9 @@
                                 <button id="songsTab" class="tab-button px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 -mb-px">
                                     楽曲マスタ
                                 </button>
+                                <button id="candidatesTab" class="tab-button px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 -mb-px">
+                                    候補
+                                </button>
                             </nav>
                         </div>
 
@@ -218,6 +221,18 @@
                             <div id="songsResults" class="space-y-2 max-h-64 overflow-y-auto">
                                 <!-- 楽曲マスタリストがここに表示される -->
                             </div>
+                        </div>
+
+                        <!-- 選択したタイムスタンプに対する候補 -->
+                        <div id="candidatesList" class="tab-content hidden">
+                            <div id="candidateNotice" class="text-sm text-gray-500 dark:text-gray-400 mb-3"></div>
+
+                            <div id="candidateChipsArea" class="mb-3 hidden">
+                                <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">絞り込み（押した語で検索します）</div>
+                                <div id="candidateChips" class="flex flex-wrap gap-2"></div>
+                            </div>
+
+                            <div id="candidateResults"></div>
                         </div>
 
                         <!-- アクションボタン -->

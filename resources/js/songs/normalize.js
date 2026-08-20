@@ -32,6 +32,9 @@ class TimestampNormalization {
         this.songSearchMode = sessionStorage.getItem('songSearchMode') === CONSTANTS.SONG_SEARCH_MODE_EXACT
             ? CONSTANTS.SONG_SEARCH_MODE_EXACT
             : CONSTANTS.SONG_SEARCH_MODE_FUZZY;
+        this.candidateParts = [];              // 候補タブのチップ（元テキストの分割結果）
+        this.candidateSelectedIndices = new Set(); // 選択中のチップの位置
+        this.candidateTextKey = null;          // どのタイムスタンプのチップかを判別する元テキスト
 
         this.init();
     }
@@ -434,6 +437,11 @@ class TimestampNormalization {
         // 最初のタイムスタンプが選択された時、Spotify検索窓に反映（Spotify有効時のみ）
         if (this.spotifyEnabled && this.selectedTimestamps.length === 1) {
             document.getElementById('spotifySearch').value = this.selectedTimestamps[0].text;
+        }
+
+        // 候補タブを開いている場合は候補を更新する
+        if (!document.getElementById('candidatesList').classList.contains('hidden')) {
+            this.loadCandidates();
         }
     }
 
@@ -960,6 +968,190 @@ class TimestampNormalization {
         songs.forEach(song => {
             container.appendChild(this.createSongElement(song, songs, total));
         });
+    }
+
+    /**
+     * 候補タブの内容を読み込む
+     *
+     * タイムスタンプが1件だけ選択されているときに候補を取得する。
+     * 複数選択中は選択に触らず案内だけ出す（一括紐付けの選択を壊さないため）。
+     */
+    async loadCandidates() {
+        const notice = document.getElementById('candidateNotice');
+        const chipsArea = document.getElementById('candidateChipsArea');
+        const results = document.getElementById('candidateResults');
+
+        if (this.selectedTimestamps.length === 0) {
+            notice.textContent = 'タイムスタンプを1件選ぶと候補を表示します。';
+            chipsArea.classList.add('hidden');
+            results.innerHTML = '';
+            return;
+        }
+
+        if (this.selectedTimestamps.length > 1) {
+            this.renderMultiSelectionNotice();
+            chipsArea.classList.add('hidden');
+            results.innerHTML = '';
+            return;
+        }
+
+        const text = this.selectedTimestamps[0].text;
+
+        // 同じテキストのチップが既にあるなら、選択状態を保ったまま再検索する
+        if (this.candidateTextKey === text) {
+            // 複数選択中はチップ欄を隠すため、1件に絞られた直後は
+            // このタイミングで表示状態に戻す必要がある
+            chipsArea.classList.remove('hidden');
+            await this.searchCandidatesByChips();
+            return;
+        }
+
+        notice.textContent = '候補を探しています…';
+        results.innerHTML = '';
+
+        try {
+            const data = await songApiService.fetchCandidates(text);
+
+            this.candidateTextKey = text;
+            this.candidateParts = data.parts;
+            this.candidateSelectedIndices = new Set(
+                data.parts.map((_, i) => i).filter(i => !data.ignored_indices.includes(i))
+            );
+
+            this.renderCandidateChips();
+            notice.textContent = '';
+            this.displayCandidates(data.songs, data.total);
+        } catch (error) {
+            console.error('候補の取得に失敗しました:', error);
+            notice.textContent = '候補の取得に失敗しました。';
+            chipsArea.classList.add('hidden');
+        }
+    }
+
+    /**
+     * 複数選択中の案内を表示する
+     */
+    renderMultiSelectionNotice() {
+        const notice = document.getElementById('candidateNotice');
+        notice.textContent = '';
+
+        const message = document.createElement('p');
+        message.className = 'mb-2';
+        message.textContent = `${this.selectedTimestamps.length}件選択中です。候補を見るには1件だけ選んでください。`;
+
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'px-3 py-1 bg-amber-600 text-white text-sm rounded hover:bg-amber-700';
+        button.textContent = '最後に選んだ1件に絞る';
+        button.addEventListener('click', () => {
+            this.selectedTimestamps = this.selectedTimestamps.slice(-1);
+            this.updateSelectionDisplay();
+            this.loadTimestamps(this.currentPage, this.currentSearchQuery);
+            this.loadCandidates();
+        });
+
+        notice.appendChild(message);
+        notice.appendChild(button);
+    }
+
+    /**
+     * チップを描画する
+     */
+    renderCandidateChips() {
+        const chipsArea = document.getElementById('candidateChipsArea');
+        const container = document.getElementById('candidateChips');
+
+        container.innerHTML = '';
+
+        if (this.candidateParts.length === 0) {
+            chipsArea.classList.add('hidden');
+            return;
+        }
+
+        chipsArea.classList.remove('hidden');
+
+        this.candidateParts.forEach((part, index) => {
+            const selected = this.candidateSelectedIndices.has(index);
+            const chip = document.createElement('button');
+            chip.type = 'button';
+            chip.textContent = part;
+            chip.className = `px-2 py-1 text-xs rounded border ${
+                selected
+                    ? 'bg-amber-600 text-white border-amber-600'
+                    : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+            }`;
+            chip.addEventListener('click', () => this.toggleCandidateChip(index));
+            container.appendChild(chip);
+        });
+    }
+
+    /**
+     * 候補一覧を描画する
+     *
+     * 候補の見た目と選択の扱いは楽曲マスタ一覧と揃える（createSongElement を再利用する）
+     */
+    displayCandidates(songs, total) {
+        const results = document.getElementById('candidateResults');
+        const notice = document.getElementById('candidateNotice');
+
+        results.innerHTML = '';
+
+        if (!Array.isArray(songs) || songs.length === 0) {
+            notice.textContent = this.candidateSelectedIndices.size === 0
+                ? '絞り込みの語を1つ以上選んでください。'
+                : '候補が見つかりませんでした。チップを外して条件を緩めてください。';
+            return;
+        }
+
+        notice.textContent = songs.length < total
+            ? `${total}件の候補（上位${songs.length}件を表示）`
+            : `${total}件の候補`;
+
+        songs.forEach(song => {
+            results.appendChild(this.createSongElement(song, songs, total));
+        });
+    }
+
+    /**
+     * チップの選択を切り替えて再検索する
+     */
+    async toggleCandidateChip(index) {
+        if (this.candidateSelectedIndices.has(index)) {
+            this.candidateSelectedIndices.delete(index);
+        } else {
+            this.candidateSelectedIndices.add(index);
+        }
+
+        this.renderCandidateChips();
+        await this.searchCandidatesByChips();
+    }
+
+    /**
+     * 選択中のチップの語で候補を再検索する
+     */
+    async searchCandidatesByChips() {
+        const results = document.getElementById('candidateResults');
+
+        const words = this.candidateParts.filter((_, i) => this.candidateSelectedIndices.has(i));
+
+        if (words.length === 0) {
+            results.innerHTML = '';
+            this.displayCandidates([], 0);
+            return;
+        }
+
+        try {
+            const response = await songApiService.fetchSongs(
+                words.join(' '),
+                null,
+                CONSTANTS.SONG_SEARCH_MODE_FUZZY
+            );
+            const songs = response.data ?? response;
+            this.displayCandidates(songs, response.total ?? songs.length);
+        } catch (error) {
+            console.error('候補の検索に失敗しました:', error);
+            document.getElementById('candidateNotice').textContent = '候補の検索に失敗しました。';
+        }
     }
 
     createSongElement(song, songs, total) {
@@ -1517,7 +1709,7 @@ class TimestampNormalization {
         }
 
         document.querySelectorAll('.tab-button').forEach(btn => {
-            btn.classList.remove('border-green-500', 'text-green-600', 'border-blue-500', 'text-blue-600', 'border-purple-500', 'text-purple-600');
+            btn.classList.remove('border-green-500', 'text-green-600', 'border-blue-500', 'text-blue-600', 'border-purple-500', 'text-purple-600', 'border-amber-500', 'text-amber-600');
             btn.classList.add('border-transparent', 'text-gray-500');
         });
 
@@ -1546,6 +1738,12 @@ class TimestampNormalization {
             // 検索を促すメッセージを描画する（初回表示時もここを通る）。
             const songsSearch = document.getElementById('songsSearch')?.value ?? '';
             this.loadSongs(songsSearch);
+        } else if (tabId === 'candidatesTab') {
+            activeTab.classList.remove('border-transparent', 'text-gray-500');
+            activeTab.classList.add('border-amber-500', 'text-amber-600');
+            document.getElementById('candidatesList').classList.remove('hidden');
+
+            this.loadCandidates();
         }
     }
 
