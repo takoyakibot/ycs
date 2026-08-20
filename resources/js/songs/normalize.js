@@ -253,9 +253,16 @@ class TimestampNormalization {
             isSelected ? 'bg-blue-100 dark:bg-blue-900 border-blue-500' : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
         }`;
 
-        // チェックボックス
+        // 候補タブは1件のテキストに対する候補を出すため単一選択にする。
+        // ただし複数選択中は、複数がチェックされたラジオボタンという矛盾した表示に
+        // ならないようチェックボックスのまま描画する（選択を保持したまま案内を出す）
+        const singleSelect = this.isCandidateTabActive() && this.selectedTimestamps.length <= 1;
+
         const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
+        checkbox.type = singleSelect ? 'radio' : 'checkbox';
+        if (singleSelect) {
+            checkbox.name = 'candidateTimestamp';
+        }
         checkbox.checked = isSelected;
         checkbox.className = 'flex-shrink-0';
         checkbox.addEventListener('change', (e) => {
@@ -426,7 +433,10 @@ class TimestampNormalization {
     toggleTimestampSelection(timestamp) {
         const index = this.selectedTimestamps.findIndex(t => t.id === timestamp.id);
 
-        if (index >= 0) {
+        if (this.isCandidateTabActive()) {
+            // 候補タブでは単一選択。同じ行を選び直したときは解除できるようにする
+            this.selectedTimestamps = index >= 0 ? [] : [timestamp];
+        } else if (index >= 0) {
             this.selectedTimestamps.splice(index, 1);
         } else {
             this.selectedTimestamps.push(timestamp);
@@ -441,12 +451,17 @@ class TimestampNormalization {
         }
 
         // 候補タブを開いている場合は候補を更新する
-        if (!document.getElementById('candidatesList').classList.contains('hidden')) {
+        if (this.isCandidateTabActive()) {
             this.loadCandidates();
         }
     }
 
     selectAll() {
+        // 候補タブは単一選択なので全選択はしない
+        if (this.isCandidateTabActive()) {
+            return;
+        }
+
         const timestampItems = document.querySelectorAll('#timestampsList > div');
         timestampItems.forEach((item) => {
             const checkbox = item.querySelector('input[type="checkbox"]');
@@ -460,6 +475,11 @@ class TimestampNormalization {
         this.selectedTimestamps = [];
         this.updateSelectionDisplay();
         this.loadTimestamps(this.currentPage, this.currentSearchQuery);
+
+        // 候補タブを開いている場合は候補を更新する
+        if (this.isCandidateTabActive()) {
+            this.loadCandidates();
+        }
     }
 
     updateSelectionDisplay() {
@@ -672,6 +692,11 @@ class TimestampNormalization {
         this.selectedSpotifyTrack = null;
         this.updateSelectionDisplay();
         this.loadTimestamps(this.currentPage, this.currentSearchQuery);
+
+        // 候補タブを開いている場合は候補を更新する
+        if (this.isCandidateTabActive()) {
+            this.loadCandidates();
+        }
     }
 
     async searchSpotify() {
@@ -969,6 +994,13 @@ class TimestampNormalization {
         songs.forEach(song => {
             container.appendChild(this.createSongElement(song, songs, total));
         });
+    }
+
+    /**
+     * 候補タブが開いているか
+     */
+    isCandidateTabActive() {
+        return !document.getElementById('candidatesList').classList.contains('hidden');
     }
 
     /**
@@ -1756,6 +1788,9 @@ class TimestampNormalization {
             content.classList.add('hidden');
         });
 
+        // 候補タブ以外では全選択を使えるようにする
+        document.getElementById('selectAllBtn').disabled = false;
+
         const activeTab = document.getElementById(tabId);
         if (tabId === 'spotifyTab') {
             activeTab.classList.remove('border-transparent', 'text-gray-500');
@@ -1781,7 +1816,10 @@ class TimestampNormalization {
             activeTab.classList.remove('border-transparent', 'text-gray-500');
             activeTab.classList.add('border-amber-500', 'text-amber-600');
             document.getElementById('candidatesList').classList.remove('hidden');
+            document.getElementById('selectAllBtn').disabled = true;
 
+            // ラジオ/チェックボックスの表示を選択状態に合わせて切り替える
+            this.loadTimestamps(this.currentPage, this.currentSearchQuery);
             this.loadCandidates();
         }
     }
