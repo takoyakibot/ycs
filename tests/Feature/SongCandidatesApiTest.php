@@ -125,6 +125,28 @@ class SongCandidatesApiTest extends TestCase
     }
 
     /**
+     * 区切り文字ではない記号・絵文字だけのパーツは無視対象にならないが、
+     * あいまい検索のキーワードも作れないため、全件が返らないこと
+     */
+    public function test_returns_empty_candidates_for_symbol_only_part_that_is_not_ignorable(): void
+    {
+        $this->actingAs(User::factory()->create());
+
+        Song::factory()->create(['title' => '今日から思い出', 'artist' => 'Aimer']);
+        Song::factory()->create(['title' => '全く別の曲', 'artist' => '別のアーティスト']);
+
+        $response = $this->getJson('/api/songs/candidates?'.http_build_query([
+            'text' => '♪♪♪',
+        ]));
+
+        $response->assertOk();
+        $response->assertJsonPath('parts', ['♪♪♪']);
+        $response->assertJsonPath('ignored_indices', []);
+        $this->assertEquals(0, $response->json('total'));
+        $this->assertEquals([], $response->json('songs'));
+    }
+
+    /**
      * text が無いと422になること
      */
     public function test_requires_text(): void

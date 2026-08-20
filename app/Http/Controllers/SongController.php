@@ -387,15 +387,20 @@ class SongController extends Controller
             $searchParts[] = $part;
         }
 
+        $search = implode(' ', $searchParts);
+
         $songs = [];
         $total = 0;
 
-        // 検索語が無い状態で検索すると全件がヒットしてしまうため、その場合は空で返す
-        if ($searchParts !== []) {
+        // 検索語が作れない場合は検索しない。
+        // 記号だけのパーツは isIgnorablePart() では無視対象にならないが、
+        // あいまい検索のキーワードにもならないため、そのまま検索すると
+        // WHERE 句が1つも付かず全件が返ってしまう
+        if ($searchParts !== [] && QueryHelper::splitFuzzyKeywords($search) !== []) {
             $query = Song::query();
             QueryHelper::applyFuzzySearch(
                 $query,
-                implode(' ', $searchParts),
+                $search,
                 ['normalized_title', 'normalized_artist']
             );
 
