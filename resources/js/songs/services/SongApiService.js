@@ -8,12 +8,16 @@ export class SongApiService {
      * 楽曲マスタ一覧を取得
      * @param {string} search - 検索クエリ
      * @param {string|null} reviewStatus - review_statusフィルタ (safe/needs_review/null)
+     * @param {string|null} searchMode - 検索モード (fuzzy/exact/null=サーバー既定)
      * @returns {Promise<Object>} 楽曲一覧データ
      */
-    async fetchSongs(search = '', reviewStatus = null) {
+    async fetchSongs(search = '', reviewStatus = null, searchMode = null) {
         const params = { search };
         if (reviewStatus) {
             params.review_status = reviewStatus;
+        }
+        if (searchMode) {
+            params.search_mode = searchMode;
         }
         const response = await axios.get('/api/songs', { params });
         return response.data;

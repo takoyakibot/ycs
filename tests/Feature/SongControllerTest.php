@@ -462,6 +462,106 @@ class SongControllerTest extends TestCase
     }
 
     /**
+     * 楽曲マスタ一覧取得のテスト（あいまい検索: タイムスタンプをそのまま貼り付け）
+     */
+    public function test_fetch_songs_fuzzy_search_ignores_separators(): void
+    {
+        Song::factory()->create(['title' => 'ロキ', 'artist' => 'みきとP']);
+        Song::factory()->create(['title' => '夜に駆ける', 'artist' => 'YOASOBI']);
+
+        $response = $this->actingAs($this->user)->getJson(route('songs.fetchSongs', [
+            'search' => 'ロキ / みきとP',
+        ]));
+
+        $response->assertOk();
+        $this->assertEquals(1, $response->json('total'));
+        $this->assertEquals('ロキ', $response->json('data.0.title'));
+    }
+
+    /**
+     * 楽曲マスタ一覧取得のテスト（あいまい検索: 楽曲名とアーティスト名の順序は問わない）
+     */
+    public function test_fetch_songs_fuzzy_search_ignores_order(): void
+    {
+        Song::factory()->create(['title' => 'ロキ', 'artist' => 'みきとP']);
+
+        $response = $this->actingAs($this->user)->getJson(route('songs.fetchSongs', [
+            'search' => 'みきとP／ロキ',
+        ]));
+
+        $response->assertOk();
+        $this->assertEquals(1, $response->json('total'));
+    }
+
+    /**
+     * 楽曲マスタ一覧取得のテスト（あいまい検索: 全角・大文字小文字の差異を吸収）
+     */
+    public function test_fetch_songs_fuzzy_search_normalizes_input(): void
+    {
+        Song::factory()->create(['title' => 'Lemon', 'artist' => '米津玄師']);
+
+        $response = $this->actingAs($this->user)->getJson(route('songs.fetchSongs', [
+            'search' => 'ＬＥＭＯＮ － 米津玄師',
+        ]));
+
+        $response->assertOk();
+        $this->assertEquals(1, $response->json('total'));
+    }
+
+    /**
+     * 楽曲マスタ一覧取得のテスト（あいまい検索: 楽曲名に区切り文字を含む場合もヒットする）
+     */
+    public function test_fetch_songs_fuzzy_search_matches_title_with_separator(): void
+    {
+        Song::factory()->create(['title' => 'A/B', 'artist' => 'Artist']);
+
+        $response = $this->actingAs($this->user)->getJson(route('songs.fetchSongs', [
+            'search' => 'A/B / Artist',
+        ]));
+
+        $response->assertOk();
+        $this->assertEquals(1, $response->json('total'));
+    }
+
+    /**
+     * 楽曲マスタ一覧取得のテスト（完全一致検索: 入力文字列をそのまま検索する）
+     */
+    public function test_fetch_songs_exact_search_keeps_input_as_is(): void
+    {
+        Song::factory()->create(['title' => 'ロキ', 'artist' => 'みきとP']);
+
+        // 完全一致検索では区切り文字を含むテキストはヒットしない
+        $response = $this->actingAs($this->user)->getJson(route('songs.fetchSongs', [
+            'search' => 'ロキ / みきとP',
+            'search_mode' => 'exact',
+        ]));
+
+        $response->assertOk();
+        $this->assertEquals(0, $response->json('total'));
+
+        // 記号を含めて厳密に絞り込める
+        $response = $this->actingAs($this->user)->getJson(route('songs.fetchSongs', [
+            'search' => 'ロキ',
+            'search_mode' => 'exact',
+        ]));
+
+        $response->assertOk();
+        $this->assertEquals(1, $response->json('total'));
+    }
+
+    /**
+     * 楽曲マスタ一覧取得のテスト（不正な検索モードはバリデーションエラー）
+     */
+    public function test_fetch_songs_rejects_invalid_search_mode(): void
+    {
+        $response = $this->actingAs($this->user)->getJson(route('songs.fetchSongs', [
+            'search_mode' => 'invalid',
+        ]));
+
+        $response->assertStatus(422);
+    }
+
+    /**
      * 楽曲マスタ登録のテスト（新規作成）
      */
     public function test_store_song_creates_new(): void

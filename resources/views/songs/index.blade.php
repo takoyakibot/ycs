@@ -197,7 +197,7 @@
                         <!-- 楽曲マスタ一覧 -->
                         <div id="songsList" class="tab-content hidden">
                             <div class="flex gap-2 mb-2">
-                                <input type="text" id="songsSearch" placeholder="楽曲名やアーティスト名で検索..." class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <input type="text" id="songsSearch" placeholder="楽曲名やアーティスト名で検索（タイムスタンプの貼り付けも可）" class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
                                 <button id="clearSongsSearchBtn" class="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600">
                                     クリア
                                 </button>
@@ -205,11 +205,16 @@
                                     <!-- JavaScriptで動的に更新 -->
                                 </div>
                             </div>
-                            <div class="flex gap-1 mb-3">
+                            <div class="flex flex-wrap items-center gap-1 mb-2">
                                 <button type="button" data-review-status="" class="song-review-filter px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-600 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300">全て</button>
                                 <button type="button" data-review-status="needs_review" class="song-review-filter px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700">要確認</button>
                                 <button type="button" data-review-status="safe" class="song-review-filter px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700">安全</button>
+
+                                <span class="ml-2 text-xs text-gray-500 dark:text-gray-400">検索方式:</span>
+                                <button type="button" data-search-mode="fuzzy" class="song-search-mode px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" title="「/」「-」などの区切り文字を無視し、単語ごとに検索します。タイムスタンプをそのまま貼り付けて検索できます。">あいまい</button>
+                                <button type="button" data-search-mode="exact" class="song-search-mode px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" title="入力した文字列をそのまま検索します。記号を含めて厳密に絞り込みたい場合に使用します。">完全一致</button>
                             </div>
+                            <p id="songSearchModeHint" class="text-xs text-gray-500 dark:text-gray-400 mb-3"></p>
                             <div id="songsResults" class="space-y-2 max-h-64 overflow-y-auto">
                                 <!-- 楽曲マスタリストがここに表示される -->
                             </div>
