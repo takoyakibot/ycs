@@ -983,6 +983,9 @@ class TimestampNormalization {
         const results = document.getElementById('candidateResults');
 
         if (this.selectedTimestamps.length === 0) {
+            // 選択が変わったので、進行中の取得の応答は適用しない
+            this.candidateRequestSeq++;
+
             notice.textContent = 'タイムスタンプを1件選ぶと候補を表示します。';
             chipsArea.classList.add('hidden');
             results.innerHTML = '';
@@ -990,6 +993,9 @@ class TimestampNormalization {
         }
 
         if (this.selectedTimestamps.length > 1) {
+            // 選択が変わったので、進行中の取得の応答は適用しない
+            this.candidateRequestSeq++;
+
             this.renderMultiSelectionNotice();
             chipsArea.classList.add('hidden');
             results.innerHTML = '';
