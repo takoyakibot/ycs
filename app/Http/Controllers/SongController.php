@@ -328,8 +328,14 @@ class SongController extends Controller
         }
 
         // 検索条件（キーワードごとのAND検索・各キーワードはtitleまたはartistのいずれかに含まれる）
-        if ($search) {
-            if ($searchMode === self::SEARCH_MODE_EXACT) {
+        if ($search !== '') {
+            $keywords = $searchMode === self::SEARCH_MODE_EXACT
+                ? []
+                : QueryHelper::splitFuzzyKeywords($search);
+
+            if ($searchMode === self::SEARCH_MODE_EXACT || $keywords === []) {
+                // 記号・装飾のみであいまい検索のキーワードが作れない場合は、
+                // 絞り込みが消えて全件返しになるのを避けるため入力文字列をそのまま検索する
                 QueryHelper::applyAndSearchAny($query, $search, ['title', 'artist']);
             } else {
                 QueryHelper::applyFuzzySearch($query, $search, ['normalized_title', 'normalized_artist']);

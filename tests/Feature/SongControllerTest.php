@@ -562,6 +562,62 @@ class SongControllerTest extends TestCase
     }
 
     /**
+     * 楽曲マスタ一覧取得のテスト（「(Music Video)」付きのテキストでも楽曲マスタが見つかること）
+     *
+     * 複合語のノイズワードが除去されないと検索語に 'music' が残り0件になる
+     */
+    public function test_fetch_songs_finds_song_with_compound_noise_in_search(): void
+    {
+        Song::factory()->create(['title' => '夜に駆ける', 'artist' => 'YOASOBI']);
+
+        $response = $this->actingAs($this->user)->getJson(route('songs.fetchSongs', [
+            'search' => '夜に駆ける / YOASOBI (Music Video)',
+        ]));
+
+        $response->assertOk();
+        $this->assertEquals(1, $response->json('total'));
+        $this->assertEquals('夜に駆ける', $response->json('data.0.title'));
+    }
+
+    /**
+     * 楽曲マスタ一覧取得のテスト（記号・装飾のみの検索では全件を返さないこと）
+     *
+     * splitFuzzyKeywords() は記号のみの入力に対して空配列を返すため、
+     * 対策をしないとWHERE句が1つも付かず全件が返ってしまう
+     */
+    public function test_fetch_songs_symbol_only_search_does_not_return_all(): void
+    {
+        Song::factory()->create(['title' => 'ロキ', 'artist' => 'みきとP']);
+        Song::factory()->create(['title' => '夜に駆ける', 'artist' => 'YOASOBI']);
+
+        $response = $this->actingAs($this->user)->getJson(route('songs.fetchSongs', [
+            'search' => '/ - /',
+        ]));
+
+        $response->assertOk();
+        $this->assertEquals(0, $response->json('total'));
+    }
+
+    /**
+     * 楽曲マスタ一覧取得のテスト（search=0 でも全件を返さないこと）
+     *
+     * PHPの if ($search) は文字列の真偽値判定のため、"0" がfalse扱いになり
+     * 検索条件が適用されず全件が返ってしまう
+     */
+    public function test_fetch_songs_search_zero_does_not_return_all(): void
+    {
+        Song::factory()->create(['title' => 'ロキ', 'artist' => 'みきとP']);
+        Song::factory()->create(['title' => '夜に駆ける', 'artist' => 'YOASOBI']);
+
+        $response = $this->actingAs($this->user)->getJson(route('songs.fetchSongs', [
+            'search' => '0',
+        ]));
+
+        $response->assertOk();
+        $this->assertEquals(0, $response->json('total'));
+    }
+
+    /**
      * 楽曲マスタ登録のテスト（新規作成）
      */
     public function test_store_song_creates_new(): void
@@ -1874,25 +1930,5 @@ class SongControllerTest extends TestCase
         $response->assertStatus(200);
         $data = $response->json('data');
         $this->assertEquals(TimestampSongMapping::STATUS_PENDING, $data[0]['status']);
-    }
-
-    /**
-     * 「(Music Video)」付きのテキストでも楽曲マスタが見つかること
-     *
-     * 複合語のノイズワードが除去されないと検索語に 'music' が残り0件になる
-     */
-    public function test_fetch_songs_finds_song_with_compound_noise_in_search(): void
-    {
-        $this->actingAs(User::factory()->create());
-
-        Song::factory()->create(['title' => '夜に駆ける', 'artist' => 'YOASOBI']);
-
-        $response = $this->getJson('/api/songs?'.http_build_query([
-            'search' => '夜に駆ける / YOASOBI (Music Video)',
-        ]));
-
-        $response->assertOk();
-        $this->assertEquals(1, $response->json('total'));
-        $this->assertEquals('夜に駆ける', $response->json('data.0.title'));
     }
 }
