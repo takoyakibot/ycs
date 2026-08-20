@@ -82,4 +82,150 @@ class QueryHelperTest extends TestCase
         $this->assertEquals(['keyword'], QueryHelper::splitSearchKeywords('keyword'));
         $this->assertEquals(['キーワード'], QueryHelper::splitSearchKeywords('キーワード'));
     }
+
+    /**
+     * あいまい検索: 区切り文字で分割される
+     */
+    public function test_split_fuzzy_keywords_splits_by_separators(): void
+    {
+        // スラッシュ
+        $this->assertEquals(['ロキ', 'みきとp'], QueryHelper::splitFuzzyKeywords('ロキ / みきとP'));
+
+        // 全角スラッシュ・全角英字（正規化される）
+        $this->assertEquals(['ロキ', 'みきとp'], QueryHelper::splitFuzzyKeywords('ロキ／みきとＰ'));
+
+        // ハイフン
+        $this->assertEquals(['lemon', '米津玄師'], QueryHelper::splitFuzzyKeywords('Lemon - 米津玄師'));
+
+        // コロン
+        $this->assertEquals(['曲名', 'アーティスト'], QueryHelper::splitFuzzyKeywords('曲名 : アーティスト'));
+
+        // 区切り文字前後にスペースがない場合
+        $this->assertEquals(['a', 'b'], QueryHelper::splitFuzzyKeywords('A/B'));
+    }
+
+    /**
+     * あいまい検索: 括弧・記号・絵文字はノイズとして除去される
+     */
+    public function test_split_fuzzy_keywords_removes_symbols(): void
+    {
+        $this->assertEquals(['曲名', 'アーティスト'], QueryHelper::splitFuzzyKeywords('曲名（アーティスト）'));
+        $this->assertEquals(['ロキ', 'みきとp'], QueryHelper::splitFuzzyKeywords('🎵 ロキ / みきとP 🎤'));
+        $this->assertEquals(['夜に駆ける', 'yoasobi'], QueryHelper::splitFuzzyKeywords('1. 夜に駆ける / YOASOBI'));
+    }
+
+    /**
+     * あいまい検索: 先頭の曲番号は除去される
+     */
+    public function test_split_fuzzy_keywords_removes_leading_track_number(): void
+    {
+        $this->assertEquals(['ロキ', 'みきとp'], QueryHelper::splitFuzzyKeywords('01. ロキ / みきとP'));
+        $this->assertEquals(['ロキ', 'みきとp'], QueryHelper::splitFuzzyKeywords('①ロキ / みきとP'));
+
+        // 曲番号以外にキーワードがない場合は除去しない
+        $this->assertEquals(['45510'], QueryHelper::splitFuzzyKeywords('45510'));
+
+        // 先頭以外の数字は除去しない
+        $this->assertEquals(['テスト', '2000', 'artist'], QueryHelper::splitFuzzyKeywords('テスト 2000 / Artist'));
+    }
+
+    /**
+     * あいまい検索: 長音記号・繰り返し記号は保持される
+     */
+    public function test_split_fuzzy_keywords_keeps_japanese_word_characters(): void
+    {
+        $this->assertEquals(['コーヒー', '人々'], QueryHelper::splitFuzzyKeywords('コーヒー / 人々'));
+    }
+
+    /**
+     * あいまい検索: ノイズワード（cover等）は除去される
+     */
+    public function test_split_fuzzy_keywords_removes_noise_words(): void
+    {
+        $this->assertEquals(
+            ['夜に駆ける', 'yoasobi'],
+            QueryHelper::splitFuzzyKeywords('夜に駆ける / YOASOBI (cover)')
+        );
+
+        // 全てノイズワードの場合は除去しない（検索条件がなくなるのを防ぐ）
+        $this->assertEquals(['cover'], QueryHelper::splitFuzzyKeywords('cover'));
+    }
+
+    /**
+     * あいまい検索: 重複キーワードは1つにまとめられる
+     */
+    public function test_split_fuzzy_keywords_deduplicates(): void
+    {
+        $this->assertEquals(['song'], QueryHelper::splitFuzzyKeywords('Song / SONG'));
+    }
+
+    /**
+     * あいまい検索: 空文字・記号のみの場合は空配列を返す
+     */
+    public function test_split_fuzzy_keywords_empty(): void
+    {
+        $this->assertEquals([], QueryHelper::splitFuzzyKeywords(''));
+        $this->assertEquals([], QueryHelper::splitFuzzyKeywords('   '));
+        $this->assertEquals([], QueryHelper::splitFuzzyKeywords('/ - /'));
+    }
+
+    /**
+     * スペースを含む複合語のノイズワードも除去されること
+     *
+     * IGNORE_KEYWORDS の 'music video' は複合語だが、検索キーワードは単語単位に
+     * 分割されるため、分解して比較しないと 'music' が検索語として残ってしまう
+     */
+    public function test_split_fuzzy_keywords_removes_compound_ignore_keyword(): void
+    {
+        $this->assertEquals(
+            ['夜に駆ける', 'yoasobi'],
+            QueryHelper::splitFuzzyKeywords('夜に駆ける / YOASOBI (Music Video)')
+        );
+
+        $this->assertEquals(
+            ['ロキ', 'みきとp'],
+            QueryHelper::splitFuzzyKeywords('ロキ / みきとP【Official Music Video】')
+        );
+    }
+
+    /**
+     * 全てがノイズワードのときは除去前のキーワードを使うこと
+     *
+     * 除去した結果が空になると全件がヒットしてしまうため
+     */
+    public function test_split_fuzzy_keywords_keeps_all_when_everything_is_noise(): void
+    {
+        $this->assertEquals(
+            ['music', 'video'],
+            QueryHelper::splitFuzzyKeywords('Music Video')
+        );
+    }
+
+    /**
+     * 先頭に連続する数値トークンをまとめて除去すること
+     *
+     * "00:12:34 曲名 / アーティスト" のようにタイムスタンプ込みで
+     * 貼り付けられても検索できるようにする
+     */
+    public function test_split_fuzzy_keywords_removes_leading_number_tokens(): void
+    {
+        $this->assertEquals(
+            ['ロキ', 'みきとp'],
+            QueryHelper::splitFuzzyKeywords('00:12:34 ロキ / みきとP')
+        );
+
+        $this->assertEquals(
+            ['ロキ', 'みきとp'],
+            QueryHelper::splitFuzzyKeywords('1. ロキ / みきとP')
+        );
+    }
+
+    /**
+     * 数字だけの検索は潰さないこと
+     */
+    public function test_split_fuzzy_keywords_keeps_number_only_search(): void
+    {
+        $this->assertEquals(['123'], QueryHelper::splitFuzzyKeywords('123'));
+        $this->assertEquals(['34'], QueryHelper::splitFuzzyKeywords('00:12:34'));
+    }
 }

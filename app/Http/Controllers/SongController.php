@@ -26,6 +26,16 @@ use Illuminate\Support\Str;
 
 class SongController extends Controller
 {
+    /**
+     * 楽曲マスタ検索モード: あいまい検索（区切り文字を無視した単語検索）
+     */
+    public const SEARCH_MODE_FUZZY = 'fuzzy';
+
+    /**
+     * 楽曲マスタ検索モード: 完全一致検索（入力文字列をそのまま部分一致検索）
+     */
+    public const SEARCH_MODE_EXACT = 'exact';
+
     protected SongSearchService $songSearchService;
 
     protected SongMappingService $songMappingService;
@@ -290,6 +300,12 @@ class SongController extends Controller
 
     /**
      * 楽曲マスタ一覧を取得
+     *
+     * search_mode:
+     * - fuzzy（デフォルト）: 区切り文字（/ - : | 等）をノイズとして無視し、
+     *   正規化した単語ごとのAND検索を行う。
+     *   タイムスタンプの「楽曲名 / アーティスト名」をそのまま貼り付けても検索できる。
+     * - exact: 入力された文字列をそのままスペース区切りでAND検索する（従来の挙動）
      */
     public function fetchSongs(Request $request)
     {
@@ -297,10 +313,12 @@ class SongController extends Controller
         $validated = $request->validate([
             'search' => 'nullable|string|max:255',
             'review_status' => 'nullable|string|in:safe,needs_review',
+            'search_mode' => 'nullable|string|in:fuzzy,exact',
         ]);
 
         $search = $validated['search'] ?? '';
         $reviewStatus = $validated['review_status'] ?? null;
+        $searchMode = $validated['search_mode'] ?? self::SEARCH_MODE_FUZZY;
 
         $query = Song::query();
 
@@ -309,16 +327,18 @@ class SongController extends Controller
             $query->where('review_status', $reviewStatus);
         }
 
-        // 検索条件（スペース区切りでAND検索）
-        // 各キーワードがtitleまたはartistのいずれかに含まれる
-        if ($search) {
-            $keywords = QueryHelper::splitSearchKeywords($search);
-            foreach ($keywords as $keyword) {
-                $escaped = QueryHelper::escapeLikeString($keyword);
-                $query->where(function ($q) use ($escaped) {
-                    $q->where('title', 'like', "%{$escaped}%")
-                        ->orWhere('artist', 'like', "%{$escaped}%");
-                });
+        // 検索条件（キーワードごとのAND検索・各キーワードはtitleまたはartistのいずれかに含まれる）
+        if ($search !== '') {
+            $keywords = $searchMode === self::SEARCH_MODE_EXACT
+                ? []
+                : QueryHelper::splitFuzzyKeywords($search);
+
+            if ($searchMode === self::SEARCH_MODE_EXACT || $keywords === []) {
+                // 記号・装飾のみであいまい検索のキーワードが作れない場合は、
+                // 絞り込みが消えて全件返しになるのを避けるため入力文字列をそのまま検索する
+                QueryHelper::applyAndSearchAny($query, $search, ['title', 'artist']);
+            } else {
+                QueryHelper::applyFuzzySearch($query, $search, ['normalized_title', 'normalized_artist']);
             }
         }
 

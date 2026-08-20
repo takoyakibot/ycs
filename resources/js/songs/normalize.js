@@ -28,6 +28,10 @@ class TimestampNormalization {
         this.songReviewStatus = null; // 楽曲マスタのreview_statusフィルタ
         this.songsRequestSeq = 0; // 楽曲マスタ取得の世代番号（応答の追い越し防止）
         this.songsQueryActive = false; // 直近の loadSongs が絞り込み条件ありと判断したか
+        // 楽曲マスタの検索方式（fuzzy: 区切り文字を無視した単語検索 / exact: 入力そのままで検索）
+        this.songSearchMode = sessionStorage.getItem('songSearchMode') === CONSTANTS.SONG_SEARCH_MODE_EXACT
+            ? CONSTANTS.SONG_SEARCH_MODE_EXACT
+            : CONSTANTS.SONG_SEARCH_MODE_FUZZY;
 
         this.init();
     }
@@ -36,6 +40,7 @@ class TimestampNormalization {
         this.spotifyEnabled = window.spotifyEnabled ?? false;
         this.bindEvents();
         this.updateFilterButtons();
+        this.updateSongSearchModeButtons();
         this.loadTimestamps();
         this.showTab(this.spotifyEnabled ? 'spotifyTab' : 'manualTab');
         this.updateSelectionDisplay();
@@ -122,6 +127,13 @@ class TimestampNormalization {
                 btn.classList.add('bg-blue-100', 'dark:bg-blue-900', 'text-blue-700', 'dark:text-blue-300');
                 btn.classList.remove('text-gray-600', 'dark:text-gray-400', 'hover:bg-gray-100', 'dark:hover:bg-gray-700');
                 this.loadSongs(document.getElementById('songsSearch').value);
+            });
+        });
+
+        // 楽曲マスタ 検索方式（あいまい / 完全一致）
+        document.querySelectorAll('.song-search-mode').forEach(btn => {
+            btn.addEventListener('click', () => {
+                this.setSongSearchMode(btn.dataset.searchMode);
             });
         });
 
@@ -828,6 +840,49 @@ class TimestampNormalization {
         return value.trim() !== '' || this.songReviewStatus !== null;
     }
 
+    /**
+     * 楽曲マスタの検索方式を切り替える
+     * @param {string} mode - fuzzy（あいまい） または exact（完全一致）
+     */
+    setSongSearchMode(mode) {
+        const nextMode = mode === CONSTANTS.SONG_SEARCH_MODE_EXACT
+            ? CONSTANTS.SONG_SEARCH_MODE_EXACT
+            : CONSTANTS.SONG_SEARCH_MODE_FUZZY;
+
+        if (this.songSearchMode === nextMode) {
+            return;
+        }
+
+        this.songSearchMode = nextMode;
+        sessionStorage.setItem('songSearchMode', nextMode);
+        this.updateSongSearchModeButtons();
+        this.loadSongs(document.getElementById('songsSearch')?.value ?? '');
+    }
+
+    /**
+     * 検索方式ボタンのアクティブ状態と説明文を更新
+     */
+    updateSongSearchModeButtons() {
+        document.querySelectorAll('.song-search-mode').forEach(btn => {
+            const isActive = btn.dataset.searchMode === this.songSearchMode;
+            btn.classList.toggle('bg-blue-100', isActive);
+            btn.classList.toggle('dark:bg-blue-900', isActive);
+            btn.classList.toggle('text-blue-700', isActive);
+            btn.classList.toggle('dark:text-blue-300', isActive);
+            btn.classList.toggle('text-gray-600', !isActive);
+            btn.classList.toggle('dark:text-gray-400', !isActive);
+            btn.classList.toggle('hover:bg-gray-100', !isActive);
+            btn.classList.toggle('dark:hover:bg-gray-700', !isActive);
+        });
+
+        const hint = document.getElementById('songSearchModeHint');
+        if (hint) {
+            hint.textContent = this.songSearchMode === CONSTANTS.SONG_SEARCH_MODE_EXACT
+                ? '入力した文字列をそのまま検索します。'
+                : '「/」「-」などの区切り文字を無視して単語ごとに検索します。タイムスタンプをそのまま貼り付けられます。';
+        }
+    }
+
     async loadSongs(search = '') {
         // 応答の追い越しを防ぐための世代番号。
         // 絞り込み条件がないパスは await を含まず同期的に確定するため、
@@ -850,7 +905,7 @@ class TimestampNormalization {
         }
 
         try {
-            const response = await songApiService.fetchSongs(search, this.songReviewStatus);
+            const response = await songApiService.fetchSongs(search, this.songReviewStatus, this.songSearchMode);
 
             // 後発の呼び出しが既に表示を確定させていれば何もしない
             if (seq !== this.songsRequestSeq) {
