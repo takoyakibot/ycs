@@ -7,6 +7,11 @@ use Illuminate\Database\Eloquent\Builder;
 class QueryHelper
 {
     /**
+     * あいまい検索でキーワードを区切る文字（文字・数字以外すべて）
+     */
+    private const FUZZY_TOKEN_PATTERN = '/[^\p{L}\p{Nd}]+/u';
+
+    /**
      * LIKEクエリ用の文字列エスケープ
      *
      * SQLのLIKE句で使用される特殊文字（%, _, \）をエスケープする
@@ -69,7 +74,7 @@ class QueryHelper
 
         // 文字・数字以外を区切りとして分割
         // （"/" "-" ":" などの区切り文字、括弧、記号、絵文字、丸数字などを除去）
-        $tokens = preg_split('/[^\p{L}\p{Nd}]+/u', $normalized, -1, PREG_SPLIT_NO_EMPTY);
+        $tokens = preg_split(self::FUZZY_TOKEN_PATTERN, $normalized, -1, PREG_SPLIT_NO_EMPTY);
         if ($tokens === false) {
             return [];
         }
@@ -83,14 +88,46 @@ class QueryHelper
         $keywords = array_values(array_unique($tokens));
 
         // ノイズワード（cover、mv など）を除去
-        $ignoreKeywords = TextNormalizer::getIgnoreKeywords();
+        $ignoreTokens = self::tokenizeIgnoreKeywords();
         $filtered = array_values(array_filter(
             $keywords,
-            fn ($keyword) => ! in_array($keyword, $ignoreKeywords, true)
+            fn ($keyword) => ! in_array($keyword, $ignoreTokens, true)
         ));
 
         // 全てノイズワードだった場合は除去前のキーワードを使う
         return $filtered !== [] ? $filtered : $keywords;
+    }
+
+    /**
+     * 無視キーワードを検索キーワードと同じ単位に分解する
+     *
+     * IGNORE_KEYWORDS には 'music video' のようにスペースを含む複合語がある。
+     * 検索キーワードは単語単位に分割されているため、そのまま比較すると
+     * 'music' がどのエントリとも一致せず検索語として残ってしまう。
+     *
+     * 分解の副作用として 'music' 単独もノイズ扱いになるが、
+     * 全てがノイズだった場合は除去前のキーワードを使うフォールバックがあるため、
+     * 「Music」だけで検索した場合は潰れない。
+     *
+     * @return string[]
+     */
+    private static function tokenizeIgnoreKeywords(): array
+    {
+        $tokens = [];
+
+        foreach (TextNormalizer::getIgnoreKeywords() as $keyword) {
+            $split = preg_split(self::FUZZY_TOKEN_PATTERN, $keyword, -1, PREG_SPLIT_NO_EMPTY);
+
+            if ($split === false) {
+                continue;
+            }
+
+            foreach ($split as $token) {
+                $tokens[] = $token;
+            }
+        }
+
+        return array_values(array_unique($tokens));
     }
 
     /**

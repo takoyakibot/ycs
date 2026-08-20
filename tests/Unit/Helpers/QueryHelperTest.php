@@ -168,4 +168,36 @@ class QueryHelperTest extends TestCase
         $this->assertEquals([], QueryHelper::splitFuzzyKeywords('   '));
         $this->assertEquals([], QueryHelper::splitFuzzyKeywords('/ - /'));
     }
+
+    /**
+     * スペースを含む複合語のノイズワードも除去されること
+     *
+     * IGNORE_KEYWORDS の 'music video' は複合語だが、検索キーワードは単語単位に
+     * 分割されるため、分解して比較しないと 'music' が検索語として残ってしまう
+     */
+    public function test_split_fuzzy_keywords_removes_compound_ignore_keyword(): void
+    {
+        $this->assertEquals(
+            ['夜に駆ける', 'yoasobi'],
+            QueryHelper::splitFuzzyKeywords('夜に駆ける / YOASOBI (Music Video)')
+        );
+
+        $this->assertEquals(
+            ['ロキ', 'みきとp'],
+            QueryHelper::splitFuzzyKeywords('ロキ / みきとP【Official Music Video】')
+        );
+    }
+
+    /**
+     * 全てがノイズワードのときは除去前のキーワードを使うこと
+     *
+     * 除去した結果が空になると全件がヒットしてしまうため
+     */
+    public function test_split_fuzzy_keywords_keeps_all_when_everything_is_noise(): void
+    {
+        $this->assertEquals(
+            ['music', 'video'],
+            QueryHelper::splitFuzzyKeywords('Music Video')
+        );
+    }
 }
