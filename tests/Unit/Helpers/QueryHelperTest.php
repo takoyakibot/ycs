@@ -200,4 +200,32 @@ class QueryHelperTest extends TestCase
             QueryHelper::splitFuzzyKeywords('Music Video')
         );
     }
+
+    /**
+     * 先頭に連続する数値トークンをまとめて除去すること
+     *
+     * "00:12:34 曲名 / アーティスト" のようにタイムスタンプ込みで
+     * 貼り付けられても検索できるようにする
+     */
+    public function test_split_fuzzy_keywords_removes_leading_number_tokens(): void
+    {
+        $this->assertEquals(
+            ['ロキ', 'みきとp'],
+            QueryHelper::splitFuzzyKeywords('00:12:34 ロキ / みきとP')
+        );
+
+        $this->assertEquals(
+            ['ロキ', 'みきとp'],
+            QueryHelper::splitFuzzyKeywords('1. ロキ / みきとP')
+        );
+    }
+
+    /**
+     * 数字だけの検索は潰さないこと
+     */
+    public function test_split_fuzzy_keywords_keeps_number_only_search(): void
+    {
+        $this->assertEquals(['123'], QueryHelper::splitFuzzyKeywords('123'));
+        $this->assertEquals(['34'], QueryHelper::splitFuzzyKeywords('00:12:34'));
+    }
 }

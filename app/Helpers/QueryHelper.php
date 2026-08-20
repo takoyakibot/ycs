@@ -79,9 +79,9 @@ class QueryHelper
             return [];
         }
 
-        // 先頭の曲番号（"1." "01" など）を除去
-        // 他にキーワードがある場合のみ除去する（数字だけの検索を潰さないため）
-        if (count($tokens) >= 2 && preg_match('/^\p{Nd}+$/u', $tokens[0]) === 1) {
+        // 先頭の数値トークン（曲番号の "1." や "00:12:34" のようなタイムスタンプ）を除去
+        // 他にキーワードが残る場合のみ除去する（数字だけの検索を潰さないため）
+        while (count($tokens) >= 2 && preg_match('/^\p{Nd}+$/u', $tokens[0]) === 1) {
             array_shift($tokens);
         }
 
