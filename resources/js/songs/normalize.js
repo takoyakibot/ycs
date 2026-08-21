@@ -1497,6 +1497,10 @@ class TimestampNormalization {
                 this.selectedSong = null;
                 this.updateSelectionDisplay();
             }
+
+            if (this.isCandidateTabActive()) {
+                await this.loadCandidates();
+            }
         } catch (error) {
             console.error('削除に失敗しました:', error);
             toast.error('削除に失敗しました。');
