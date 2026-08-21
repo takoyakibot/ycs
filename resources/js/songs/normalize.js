@@ -1493,13 +1493,13 @@ class TimestampNormalization {
             await this.loadSongs(document.getElementById('songsSearch').value);
             await this.loadTimestamps(this.currentPage, this.currentSearchQuery);
 
-            if (this.isCandidateTabActive()) {
-                await this.loadCandidates();
-            }
-
             if (this.selectedSong?.id === songId) {
                 this.selectedSong = null;
                 this.updateSelectionDisplay();
+            }
+
+            if (this.isCandidateTabActive()) {
+                await this.loadCandidates();
             }
         } catch (error) {
             console.error('削除に失敗しました:', error);
