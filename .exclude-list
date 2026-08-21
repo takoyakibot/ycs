@@ -11,7 +11,9 @@ tests
 phpunit.xml
 README.md
 storage/logs
+storage/framework
 browser-extension
 deploy.sh
 pre-commit-check.sh
 setup-git-hooks.sh
+node_modules
