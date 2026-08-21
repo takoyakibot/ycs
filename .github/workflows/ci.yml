@@ -1,0 +1,117 @@
+# テスト・整形チェック・フロントエンドビルド・MySQLマイグレーションのCI（#671）
+#
+# - php-tests: SQLite in-memory（phpunit.xml の設定どおり）なので DB サービス不要。
+#   ページ描画テストが @vite を通るため、フロントエンドのビルドも同 job で行う
+#   （JS のユニットテスト基盤は未整備（#665）のため build までが検証範囲）
+# - mysql-migrate: RefreshArchiveService やマイグレーションが MySQL / SQLite で
+#   分岐しており、SQLite だけでは MySQL 固有の失敗を拾えない（#653 / #641 が実例）
+#   ため、空の MySQL に migrate を通す job を別に置く
+name: CI
+
+on:
+  push:
+    branches: [develop]
+  pull_request:
+
+jobs:
+  php-tests:
+    name: PHP tests (SQLite) / Pint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+
+      # Feature テストの多くがページ描画で @vite を通るため、
+      # Vite マニフェスト（public/build/manifest.json）が無いと 500 になる
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Build frontend assets (required by page-render tests)
+        run: |
+          npm ci
+          npm run build
+
+      - name: Get composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache composer packages
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
+
+      - name: Install composer dependencies
+        run: composer install --prefer-dist --no-progress --no-interaction
+
+      - name: Run tests
+        run: php artisan test
+
+      - name: Check code style (Pint)
+        run: ./vendor/bin/pint --test
+
+  mysql-migrate:
+    name: MySQL migrate
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_DATABASE: ycs_ci
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      APP_ENV: testing
+      # phpunit.xml と同じテスト用キー（本番の値ではない）
+      APP_KEY: base64:sg2ERaVrvPZq1uApES4n4XCDDlV5XvyWFCxKMxxvT7E=
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: '3306'
+      DB_DATABASE: ycs_ci
+      DB_USERNAME: root
+      DB_PASSWORD: root
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+
+      - name: Get composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache composer packages
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
+
+      - name: Install composer dependencies
+        run: composer install --prefer-dist --no-progress --no-interaction
+
+      # 新規MySQL環境の再現（#653 のような「空のDBで migrate が止まる」退行を検知する）
+      - name: Run migrations on empty MySQL
+        run: php artisan migrate --force
+
+      # migrate:fresh 相当（全テーブル drop → 再実行）も通ることを確認
+      - name: Run migrate:fresh
+        run: php artisan migrate:fresh --force
