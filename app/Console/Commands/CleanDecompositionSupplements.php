@@ -340,8 +340,6 @@ class CleanDecompositionSupplements extends Command
     /**
      * クリーニングによってアーティスト名が既存の表記に揃う件数を出す
      *
-     * 揃った分だけ cascadeArtistSelection がまとめて効くようになる
-     *
      * @param  array<int, array<string, mixed>>  $rows
      */
     private function renderArtistMerges(array $rows): void
@@ -381,7 +379,6 @@ class CleanDecompositionSupplements extends Command
         arsort($merges);
 
         $this->line('<comment>=== 既存のアーティスト表記に揃うもの ===</comment>');
-        $this->line('揃った分だけアーティストのカスケード選別がまとめて効くようになります');
 
         $table = [];
 
@@ -404,11 +401,7 @@ class CleanDecompositionSupplements extends Command
 
         DB::transaction(function () use ($rows, &$updated) {
             foreach ($rows as $row) {
-                // updated_at / updated_by は意図的に更新しない。
-                // TimestampDecompositionService::undoAction() は
-                // 「同じ updated_by かつ updated_at が近いもの」をカスケード操作の
-                // まとまりとみなして一緒に戻すため、表記の掃除でこれらを書き換えると
-                // 無関係なレコードが巻き込まれて戻されてしまう。
+                // updated_at / updated_by は意図的に更新しない（人による確定操作の記録を保つ）。
                 // 掃除の記録は --csv で残す。
                 DB::table('timestamp_decompositions')
                     ->where('id', $row['id'])

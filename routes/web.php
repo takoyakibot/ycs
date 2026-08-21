@@ -65,7 +65,6 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::post('api/songs/decompose/{id}/undo', [TimestampDecompositionController::class, 'undo'])->name('songs.decompose.undo');
     Route::get('api/songs/decompose/statistics', [TimestampDecompositionController::class, 'statistics'])->name('songs.decompose.statistics');
     Route::post('api/songs/decompose/scan', [TimestampDecompositionController::class, 'scan'])->name('songs.decompose.scan');
-    Route::post('api/songs/decompose/bulk-link', [TimestampDecompositionController::class, 'bulkLink'])->name('songs.decompose.bulkLink');
 
     Route::get('api/manage/channels', [ManageChannelApiController::class, 'fetchChannel'])->name('manage.fetchChannel');
     Route::post('api/manage/channels', [ManageChannelApiController::class, 'addChannel'])->name('manage.addChannel')

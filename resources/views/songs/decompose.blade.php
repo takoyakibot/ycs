@@ -28,9 +28,6 @@
                             <button id="scanBtn" class="px-3 py-1 bg-purple-600 text-white text-sm rounded hover:bg-purple-700">
                                 スキャン
                             </button>
-                            <button id="bulkLinkBtn" class="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700">
-                                自動判定を一括紐付け
-                            </button>
                         </div>
                     </div>
                 </div>

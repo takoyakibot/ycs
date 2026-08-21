@@ -236,59 +236,6 @@ class DecomposeSupplementCleanupTest extends TestCase
     }
 
     /**
-     * 補足を除去した確定値でアーティストのカスケード選別が効くこと
-     */
-    public function test_cleaned_artist_cascades_to_other_items(): void
-    {
-        $source = $this->createDecomposition(
-            '気まぐれロマンティック / いきものがかり (エコーかけ忘れ)',
-            ['気まぐれロマンティック', 'いきものがかり (エコーかけ忘れ)']
-        );
-
-        $target = $this->createDecomposition(
-            'ブルーバード / いきものがかり',
-            ['ブルーバード', 'いきものがかり']
-        );
-
-        $response = $this->postJson('/api/songs/decompose/select', [
-            'id' => $source->id,
-            'title_indices' => [0],
-            'artist_indices' => [1],
-            'title' => '気まぐれロマンティック',
-            'artist' => 'いきものがかり',
-        ]);
-
-        $response->assertOk();
-        $this->assertGreaterThan(0, $response->json('cascaded_count'));
-
-        $target->refresh();
-        $this->assertEquals('いきものがかり', $target->derived_artist);
-        $this->assertEquals('ブルーバード', $target->derived_title);
-    }
-
-    /**
-     * 補足付きのまま確定した場合はカスケードが効かないこと（この機能の必要性の裏付け）
-     */
-    public function test_uncleaned_artist_does_not_cascade(): void
-    {
-        $source = $this->createDecomposition(
-            '気まぐれロマンティック / いきものがかり (エコーかけ忘れ)',
-            ['気まぐれロマンティック', 'いきものがかり (エコーかけ忘れ)']
-        );
-
-        $this->createDecomposition('ブルーバード / いきものがかり', ['ブルーバード', 'いきものがかり']);
-
-        $response = $this->postJson('/api/songs/decompose/select', [
-            'id' => $source->id,
-            'title_indices' => [0],
-            'artist_indices' => [1],
-        ]);
-
-        $response->assertOk();
-        $this->assertEquals(0, $response->json('cascaded_count'));
-    }
-
-    /**
      * 補足付きの表記で既にマスタができている場合でも、綺麗な方に寄せられること
      */
     public function test_cleaned_values_link_to_existing_song(): void

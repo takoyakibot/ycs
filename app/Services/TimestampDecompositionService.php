@@ -16,6 +16,11 @@ class TimestampDecompositionService
 {
     /**
      * 自動選択の確信度閾値
+     *
+     * 現在の自動判定（createDecomposition）はマスタとの完全一致でのみ確定するため、
+     * この閾値はもう参照していない。database/migrations/2026_08_17_000001_redetect_auto_matched_decompositions.php
+     * が過去に実行された前提で定数と detectTitleArtistPattern() を直接参照しているため、
+     * 新規インストール時の再実行に備えて残す。
      */
     public const AUTO_SELECT_THRESHOLD = 0.8;
 
@@ -106,44 +111,115 @@ class TimestampDecompositionService
 
     /**
      * 分解結果をDBに保存
+     *
+     * 自動確定（auto_matched）は、無視パーツを除いた候補が2個のときに
+     * マスタの楽曲と完全一致する場合のみ行う。類推や部分一致は行わない。
      */
     private function createDecomposition(string $originalText, string $normalizedText, array $decomposition): TimestampDecomposition
     {
-        $detection = $decomposition['detection'];
+        $parts = $decomposition['parts'];
+        $match = $this->findExactMasterMatch($parts);
 
-        // 確信度が閾値以上の場合は自動選択状態にする
         $status = TimestampDecomposition::STATUS_PENDING;
-        $titleIndex = null;
-        $artistIndex = null;
+        $titleIndex = $match['title_index'] ?? null;
+        $artistIndex = $match['artist_index'] ?? null;
         $derivedTitle = null;
         $derivedArtist = null;
+        $confidence = null;
 
-        if ($detection['confidence'] >= self::AUTO_SELECT_THRESHOLD) {
+        if ($match !== null) {
             $status = TimestampDecomposition::STATUS_AUTO_MATCHED;
-            $titleIndex = $detection['title_index'];
-            $artistIndex = $detection['artist_index'];
-
-            if ($titleIndex !== null) {
-                $derivedTitle = $decomposition['parts'][$titleIndex] ?? null;
-            }
-            if ($artistIndex !== null) {
-                $derivedArtist = $decomposition['parts'][$artistIndex] ?? null;
-            }
+            $derivedTitle = $parts[$titleIndex];
+            $derivedArtist = $parts[$artistIndex];
+            $confidence = 1.0;
         }
 
-        return TimestampDecomposition::create([
+        $record = TimestampDecomposition::create([
             'id' => (string) Str::ulid(),
             'normalized_text' => $normalizedText,
             'original_text' => $originalText,
-            'parts' => $decomposition['parts'],
+            'parts' => $parts,
             'separator_count' => $decomposition['separator_count'],
             'title_part_index' => $titleIndex,
             'artist_part_index' => $artistIndex,
             'derived_title' => $derivedTitle,
             'derived_artist' => $derivedArtist,
             'status' => $status,
-            'confidence' => $detection['confidence'],
+            'confidence' => $confidence,
         ]);
+
+        if ($match !== null) {
+            $this->attachSongToMapping($record, $match['song']);
+        }
+
+        return $record;
+    }
+
+    /**
+     * 分解パーツがマスタの楽曲と完全一致するか判定
+     *
+     * 無視パーツ（isIgnorablePart）を除いた候補がちょうど2個のときのみ判定する。
+     * どちらが曲名でどちらがアーティストかは分からないため両方の順序を試し、
+     * 片方の順序だけがマスタに完全一致する場合のみ自動確定する
+     * （両方一致・どちらも一致しない場合は判断できないため確定しない）。
+     *
+     * @param  string[]  $parts
+     * @return array{song: Song, title_index: int, artist_index: int}|null
+     */
+    private function findExactMasterMatch(array $parts): ?array
+    {
+        $candidateIndices = array_values(array_filter(
+            array_keys($parts),
+            fn ($index) => ! TextNormalizer::isIgnorablePart($parts[$index])
+        ));
+
+        if (count($candidateIndices) !== 2) {
+            return null;
+        }
+
+        [$firstIndex, $secondIndex] = $candidateIndices;
+
+        $orderings = [
+            ['title_index' => $firstIndex, 'artist_index' => $secondIndex],
+            ['title_index' => $secondIndex, 'artist_index' => $firstIndex],
+        ];
+
+        $matches = [];
+        foreach ($orderings as $ordering) {
+            $song = $this->findExactSong($parts[$ordering['title_index']], $parts[$ordering['artist_index']]);
+            if ($song !== null) {
+                $matches[] = array_merge($ordering, ['song' => $song]);
+            }
+        }
+
+        if (count($matches) !== 1) {
+            return null;
+        }
+
+        return $matches[0];
+    }
+
+    /**
+     * 曲名・アーティスト名がマスタと完全一致する楽曲を検索
+     *
+     * songs.normalized_title / normalized_artist はDB照合順序（utf8mb4_unicode_ci）が
+     * 絵文字・半角全角カナ・アクセント記号などを同値と判定するため、DBの検索結果を
+     * PHP側でバイト完全一致に再検証してから返す（類推・あいまい検索を排除するため）。
+     */
+    private function findExactSong(string $titlePart, string $artistPart): ?Song
+    {
+        $normalizedTitle = TextNormalizer::normalize($titlePart);
+        $normalizedArtist = TextNormalizer::normalize($artistPart);
+
+        if ($normalizedTitle === '' || $normalizedArtist === '') {
+            return null;
+        }
+
+        return Song::where('normalized_title', $normalizedTitle)
+            ->where('normalized_artist', $normalizedArtist)
+            ->get()
+            ->first(fn (Song $song) => $song->normalized_title === $normalizedTitle
+                && $song->normalized_artist === $normalizedArtist);
     }
 
     /**
@@ -177,17 +253,15 @@ class TimestampDecompositionService
      *
      * @param  array  $titleIndices  楽曲名パーツのインデックス配列
      * @param  array  $artistIndices  アーティスト名パーツのインデックス配列
-     * @param  bool  $enableCascade  カスケード処理を有効にするか
      * @param  array{title?: ?string, artist?: ?string}  $overrides
      *                                                               パーツ連結の代わりに使う確定値。補足除去候補の確定や画面上での
      *                                                               微調整で使う。キーが存在する場合のみ優先される。
-     * @return array{decomposition: TimestampDecomposition, cascaded_count: int}
+     * @return array{decomposition: TimestampDecomposition}
      */
     public function saveSelection(
         string $id,
         array $titleIndices,
         array $artistIndices,
-        bool $enableCascade = true,
         array $overrides = []
     ): array {
         $decomposition = TimestampDecomposition::findOrFail($id);
@@ -218,16 +292,8 @@ class TimestampDecompositionService
             'updated_by' => Auth::id(),
         ]);
 
-        $cascadedCount = 0;
-
-        // アーティストが設定された場合、同じアーティストを持つ他のタイムスタンプにカスケード処理
-        if ($enableCascade && $derivedArtist) {
-            $cascadedCount = $this->cascadeArtistSelection($derivedArtist, $decomposition->id);
-        }
-
         return [
             'decomposition' => $decomposition->fresh(),
-            'cascaded_count' => $cascadedCount,
         ];
     }
 
@@ -334,135 +400,6 @@ class TimestampDecompositionService
     }
 
     /**
-     * アーティスト選別のカスケード処理
-     * 同じアーティスト名を持つpendingなタイムスタンプを自動的に処理
-     *
-     * @param  string  $artistName  確定したアーティスト名
-     * @param  string  $excludeId  カスケード元のID（除外）
-     * @return int 処理された件数
-     */
-    public function cascadeArtistSelection(string $artistName, string $excludeId): int
-    {
-        $normalizedArtist = TextNormalizer::normalize($artistName);
-        $count = 0;
-
-        // pendingなタイムスタンプを検索
-        TimestampDecomposition::pending()
-            ->where('id', '!=', $excludeId)
-            ->chunk(100, function ($decompositions) use ($normalizedArtist, $artistName, &$count) {
-                foreach ($decompositions as $decomposition) {
-                    $matchResult = $this->findArtistInParts($decomposition->parts, $normalizedArtist);
-
-                    if ($matchResult === null) {
-                        continue;
-                    }
-
-                    $artistIndex = $matchResult['artist_index'];
-                    $titleIndex = $matchResult['title_index'];
-                    $derivedTitle = $titleIndex !== null ? $decomposition->parts[$titleIndex] : null;
-
-                    // カスケード処理で更新
-                    $decomposition->update([
-                        'artist_part_index' => $artistIndex,
-                        'title_part_index' => $titleIndex,
-                        'derived_artist' => $artistName,
-                        'derived_title' => $derivedTitle,
-                        'status' => TimestampDecomposition::STATUS_AUTO_MATCHED,
-                        'confidence' => 0.9,
-                        'updated_by' => Auth::id(),
-                    ]);
-
-                    // 楽曲マスタに紐付け
-                    if ($derivedTitle) {
-                        try {
-                            $this->linkToSong($decomposition->fresh());
-                        } catch (\Exception $e) {
-                            \Illuminate\Support\Facades\Log::warning('Cascade link failed: '.$decomposition->id, [
-                                'error' => $e->getMessage(),
-                            ]);
-                        }
-                    }
-
-                    $count++;
-                }
-            });
-
-        return $count;
-    }
-
-    /**
-     * パーツ配列からアーティスト名を検索
-     *
-     * @param  array  $parts  パーツ配列
-     * @param  string  $normalizedArtist  正規化されたアーティスト名
-     * @return array{artist_index: int, title_index: int|null}|null マッチした場合はインデックス情報、なければnull
-     */
-    private function findArtistInParts(array $parts, string $normalizedArtist): ?array
-    {
-        foreach ($parts as $index => $part) {
-            $normalizedPart = TextNormalizer::normalize($part);
-
-            // 無視すべきパーツはスキップ。
-            // 判定は分解画面と同じ isIgnorablePart() に寄せる。
-            // キーワードとの完全一致で判定していたため、画面ではノイズとして
-            // 捨てるパーツ（"cover2" 等）を曲名として採用し、そのまま
-            // 楽曲マスタを作ってしまっていた
-            if (TextNormalizer::isIgnorablePart($part)) {
-                continue;
-            }
-
-            if ($normalizedPart === $normalizedArtist) {
-                // アーティストが見つかった場合、楽曲名を推定
-                $titleIndex = $this->guessTitleIndex($parts, $index);
-
-                return [
-                    'artist_index' => $index,
-                    'title_index' => $titleIndex,
-                ];
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * アーティストインデックス以外のパーツから楽曲名インデックスを推定
-     *
-     * @param  array  $parts  パーツ配列
-     * @param  int  $artistIndex  アーティストのインデックス
-     * @return int|null 楽曲名のインデックス
-     */
-    private function guessTitleIndex(array $parts, int $artistIndex): ?int
-    {
-        $candidateIndices = [];
-
-        foreach ($parts as $index => $part) {
-            if ($index === $artistIndex) {
-                continue;
-            }
-
-            // 無視すべきパーツはスキップ（判定は findArtistInParts と揃える）
-            if (TextNormalizer::isIgnorablePart($part)) {
-                continue;
-            }
-
-            $candidateIndices[] = $index;
-        }
-
-        // 候補が1つだけならそれを楽曲名とする
-        if (count($candidateIndices) === 1) {
-            return $candidateIndices[0];
-        }
-
-        // 候補が複数ある場合は最初の候補を返す（通常は楽曲名が先に来ることが多い）
-        if (count($candidateIndices) > 1) {
-            return $candidateIndices[0];
-        }
-
-        return null;
-    }
-
-    /**
      * スキップとしてマーク
      */
     public function markAsSkipped(string $id): void
@@ -483,7 +420,6 @@ class TimestampDecompositionService
     public function undoAction(string $id): array
     {
         $decomposition = TimestampDecomposition::findOrFail($id);
-        $undoneCount = 1;
 
         // 紐付けられた楽曲マッピングを解除
         if ($decomposition->song_id) {
@@ -494,42 +430,6 @@ class TimestampDecompositionService
                     'status' => 'pending',
                     'updated_by' => Auth::id(),
                 ]);
-        }
-
-        // カスケード処理されたアイテムも元に戻す（同じupdated_byかつ近い時間に更新されたもの）
-        $cascadedItems = TimestampDecomposition::where('id', '!=', $id)
-            ->where('status', TimestampDecomposition::STATUS_AUTO_MATCHED)
-            ->where('updated_by', $decomposition->updated_by)
-            ->whereBetween('updated_at', [
-                $decomposition->updated_at->subSeconds(5),
-                $decomposition->updated_at->addSeconds(5),
-            ])
-            ->get();
-
-        foreach ($cascadedItems as $item) {
-            // マッピングを解除
-            if ($item->song_id) {
-                TimestampSongMapping::where('normalized_text', $item->normalized_text)
-                    ->update([
-                        'song_id' => null,
-                        'is_manual' => false,
-                        'status' => 'pending',
-                        'updated_by' => Auth::id(),
-                    ]);
-            }
-
-            // ステータスをpendingに戻す
-            $item->update([
-                'title_part_index' => null,
-                'artist_part_index' => null,
-                'derived_title' => null,
-                'derived_artist' => null,
-                'status' => TimestampDecomposition::STATUS_PENDING,
-                'song_id' => null,
-                'confidence' => null,
-                'updated_by' => Auth::id(),
-            ]);
-            $undoneCount++;
         }
 
         // 元のアイテムをpendingに戻す
@@ -544,7 +444,7 @@ class TimestampDecompositionService
         ]);
 
         return [
-            'undone_count' => $undoneCount,
+            'undone_count' => 1,
         ];
     }
 
@@ -585,13 +485,21 @@ class TimestampDecompositionService
             ]);
         }
 
-        // decompositionにsong_idを紐付け
+        $this->attachSongToMapping($decomposition, $song);
+
+        return $song;
+    }
+
+    /**
+     * decompositionとtimestamp_song_mappingsを指定した楽曲に紐付ける
+     */
+    private function attachSongToMapping(TimestampDecomposition $decomposition, Song $song): void
+    {
         $decomposition->update([
             'song_id' => $song->id,
             'updated_by' => Auth::id(),
         ]);
 
-        // timestamp_song_mappingsにマッピングを作成
         $mapping = TimestampSongMapping::firstOrNew(
             ['normalized_text' => $decomposition->normalized_text]
         );
@@ -610,8 +518,6 @@ class TimestampDecompositionService
             'updated_by' => Auth::id(),
         ]);
         $mapping->save();
-
-        return $song;
     }
 
     /**
@@ -681,40 +587,6 @@ class TimestampDecompositionService
             ->groupBy('normalized_text')
             ->get()
             ->count();
-    }
-
-    /**
-     * 自動判定済みのアイテムを一括で楽曲マスタに紐付け
-     *
-     * @return int 紐付けされた件数
-     */
-    public function bulkLinkAutoMatched(): int
-    {
-        $count = 0;
-
-        TimestampDecomposition::where('status', TimestampDecomposition::STATUS_AUTO_MATCHED)
-            ->whereNull('song_id')
-            ->whereNotNull('derived_title')
-            ->chunk(100, function ($decompositions) use (&$count) {
-                foreach ($decompositions as $decomposition) {
-                    try {
-                        if ($this->linkToSong($decomposition)) {
-                            $count++;
-                        }
-                    } catch (\Exception $e) {
-                        \Illuminate\Support\Facades\Log::error('Failed to link decomposition: '.$decomposition->id, [
-                            'error' => $e->getMessage(),
-                            'decomposition_id' => $decomposition->id,
-                            'derived_title' => $decomposition->derived_title,
-                        ]);
-
-                        // エラーをスキップして続行
-                        continue;
-                    }
-                }
-            });
-
-        return $count;
     }
 
     /**

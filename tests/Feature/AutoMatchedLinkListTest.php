@@ -350,9 +350,7 @@ class AutoMatchedLinkListTest extends TestCase
     /**
      * 曲名が空なら警告が出ること
      *
-     * cascadeArtistSelection() は候補が全て無視対象だと derived_title が null のまま
-     * auto_matched にする。この行は bulkLinkAutoMatched() の whereNotNull('derived_title')
-     * で弾かれるため永久に紐付かない（根治は Issue 側）。画面では空欄にせず理由を出す。
+     * 曲名が欠けた auto_matched 行が万一存在しても、画面では空欄にせず理由を出す。
      */
     public function test_warns_when_title_is_empty(): void
     {
@@ -392,10 +390,6 @@ class AutoMatchedLinkListTest extends TestCase
      * 紐付け状態は song_id を根拠にすること
      *
      * マッピングが無くても song_id があれば「紐付け済み」と表示する。
-     * bulkLinkAutoMatched() の対象条件に song_id IS NULL が含まれるため、
-     * 「未紐付け」が一括紐付けの対象集合を包含する（厳密な一致ではない。
-     * derived_title が空の行は拾われない）。判定元を timestamp_song_mappings に
-     * 付け替えるとこの包含関係すら崩れる。
      */
     public function test_status_is_based_on_song_id_not_mapping(): void
     {

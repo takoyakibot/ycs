@@ -38,9 +38,6 @@ class TimestampDecomposition {
         // スキャンボタン
         document.getElementById('scanBtn').addEventListener('click', () => this.scan());
 
-        // 一括紐付けボタン
-        document.getElementById('bulkLinkBtn').addEventListener('click', () => this.bulkLink());
-
         // スキップボタン
         document.getElementById('skipBtn').addEventListener('click', () => this.skip());
 
@@ -654,22 +651,16 @@ class TimestampDecomposition {
                 payload.artist = overrides.artist;
             }
 
-            const response = await axios.post('/api/songs/decompose/select', payload);
+            await axios.post('/api/songs/decompose/select', payload);
 
             // undo用に処理したアイテムを保存
             this.lastProcessedItem = {
                 id: this.currentItem.id,
-                action: 'confirm',
-                cascadedCount: response.data.cascaded_count || 0
+                action: 'confirm'
             };
             this.updateUndoButton();
 
-            const cascadedCount = response.data.cascaded_count || 0;
-            if (cascadedCount > 0) {
-                toast.success(`保存しました（同じアーティストの ${cascadedCount} 件も自動処理）`);
-            } else {
-                toast.success('保存しました');
-            }
+            toast.success('保存しました');
             await this.loadStatistics();
             await this.loadNext();
         } catch (error) {
@@ -693,8 +684,7 @@ class TimestampDecomposition {
             // undo用に処理したアイテムを保存
             this.lastProcessedItem = {
                 id: this.currentItem.id,
-                action: 'skip',
-                cascadedCount: 0
+                action: 'skip'
             };
             this.updateUndoButton();
 
@@ -725,8 +715,7 @@ class TimestampDecomposition {
             // undo用に処理したアイテムを保存
             this.lastProcessedItem = {
                 id: this.currentItem.id,
-                action: 'wholeTitle',
-                cascadedCount: 0
+                action: 'wholeTitle'
             };
             this.updateUndoButton();
 
@@ -754,12 +743,7 @@ class TimestampDecomposition {
             this.showLoading();
             await axios.post(`/api/songs/decompose/${this.lastProcessedItem.id}/undo`);
 
-            const cascadedCount = this.lastProcessedItem.cascadedCount;
-            if (cascadedCount > 0) {
-                toast.success(`操作を取り消しました（カスケード処理された ${cascadedCount} 件も取り消し）`);
-            } else {
-                toast.success('操作を取り消しました');
-            }
+            toast.success('操作を取り消しました');
 
             this.lastProcessedItem = null;
             this.updateUndoButton();
@@ -798,29 +782,6 @@ class TimestampDecomposition {
         } catch (error) {
             console.error('スキャンに失敗しました:', error);
             toast.error('スキャンに失敗しました');
-        } finally {
-            this.hideLoading();
-        }
-    }
-
-    /**
-     * 自動判定を一括紐付け
-     */
-    async bulkLink() {
-        if (!confirm('自動判定済み（確信度80%以上）のアイテムを一括で楽曲マスタに紐付けします。続行しますか？')) {
-            return;
-        }
-
-        try {
-            this.showLoading();
-            const response = await axios.post('/api/songs/decompose/bulk-link');
-
-            toast.success(`${response.data.linked_count}件を楽曲マスタに紐付けました`);
-            this.statistics = response.data.statistics;
-            this.displayStatistics();
-        } catch (error) {
-            console.error('一括紐付けに失敗しました:', error);
-            toast.error('一括紐付けに失敗しました');
         } finally {
             this.hideLoading();
         }
