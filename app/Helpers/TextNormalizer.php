@@ -44,7 +44,7 @@ class TextNormalizer
      */
     public static function normalize(?string $text): string
     {
-        if (empty($text)) {
+        if ($text === null || $text === '') {
             return '';
         }
 

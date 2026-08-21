@@ -389,6 +389,30 @@ class TextNormalizerTest extends TestCase
     }
 
     /**
+     * 文字列 "0" が正しく正規化されることをテスト
+     */
+    public function test_normalize_string_zero(): void
+    {
+        $this->assertEquals('0', TextNormalizer::normalize('0'));
+    }
+
+    /**
+     * null入力が空文字を返すことをテスト
+     */
+    public function test_normalize_null_returns_empty(): void
+    {
+        $this->assertEquals('', TextNormalizer::normalize(null));
+    }
+
+    /**
+     * 空文字列が空文字を返すことをテスト
+     */
+    public function test_normalize_empty_string_returns_empty(): void
+    {
+        $this->assertEquals('', TextNormalizer::normalize(''));
+    }
+
+    /**
      * エッジケースのテスト
      */
     public function test_edge_cases(): void
