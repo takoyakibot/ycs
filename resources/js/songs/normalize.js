@@ -37,6 +37,7 @@ class TimestampNormalization {
         this.candidateTextKey = null;          // どのタイムスタンプのチップかを判別する元テキスト
         this.candidateRequestSeq = 0;          // 候補取得の世代番号（応答の追い越し防止）
         this.lastCandidateSelectionKey = null; // 候補を作り直すかの判定用（前回の選択）
+        this.activeTabId = null;               // 現在表示中のタブ（タブ切り替え判定用）
 
         this.init();
     }
@@ -437,14 +438,16 @@ class TimestampNormalization {
         if (this.isCandidateTabActive() && this.selectedTimestamps.length <= 1) {
             // 候補タブでは単一選択。同じ行を選び直したときは解除できるようにする
             this.selectedTimestamps = index >= 0 ? [] : [timestamp];
-            // 対象のタイムスタンプが変わるので、選んでいた候補の曲は無効化する。
-            // 残したままだと、別のタイムスタンプに誤って紐づく事故につながる
-            this.selectedSong = null;
         } else if (index >= 0) {
             this.selectedTimestamps.splice(index, 1);
         } else {
             this.selectedTimestamps.push(timestamp);
         }
+
+        // 紐付ける対象が変わったので、選んでいた楽曲は無効にする。
+        // 残したままだと「一度も選び直していないのに紐付けボタンが押せる」状態になり、
+        // 直前に選んだ楽曲が別のタイムスタンプに紐づいてしまう
+        this.clearSelectedSong();
 
         this.updateSelectionDisplay();
         this.loadTimestamps(this.currentPage, this.currentSearchQuery);
@@ -472,6 +475,8 @@ class TimestampNormalization {
 
     deselectAll() {
         this.selectedTimestamps = [];
+        // 対象がなくなったので、選んでいた楽曲も無効にする
+        this.clearSelectedSong();
         this.updateSelectionDisplay();
         this.loadTimestamps(this.currentPage, this.currentSearchQuery);
     }
@@ -1425,6 +1430,25 @@ class TimestampNormalization {
     /**
      * 楽曲による絞り込みを解除
      */
+    /**
+     * 選んでいた楽曲を解除する
+     *
+     * 楽曲マスタ一覧のハイライトは selectedSong を見て描画されるため、
+     * 内部状態だけ変えると「選択中に見えるのに紐付けボタンが押せない」状態になる。
+     * 表示中の一覧があれば描き直す（clearSongFilter と同じ扱い）
+     */
+    clearSelectedSong() {
+        if (!this.selectedSong) {
+            return;
+        }
+
+        this.selectedSong = null;
+
+        if (Array.isArray(this.lastDisplayedSongs)) {
+            this.displaySongs(this.lastDisplayedSongs, this.lastDisplayedSongsTotal);
+        }
+    }
+
     clearSongFilter() {
         this.currentSongFilter = null;
 
@@ -1534,6 +1558,10 @@ class TimestampNormalization {
 
             this.selectedTimestamps = [];
             this.selectedSpotifyTrack = null;
+            // 紐付けが済んだので選んでいた楽曲も外す。
+            // 残したままだと、次のタイムスタンプを選んだ時点で紐付けボタンが
+            // 押せる状態になり、同じ楽曲がそのまま紐づいてしまう
+            this.clearSelectedSong();
 
             await this.loadTimestamps(this.currentPage, this.currentSearchQuery);
             this.updateSelectionDisplay();
@@ -1812,6 +1840,17 @@ class TimestampNormalization {
         // 他のタブへ移るときはチェックボックスに戻す必要がある。
         // タブ内容を隠す前に判定しておく
         const leavingCandidateTab = this.isCandidateTabActive() && tabId !== 'candidatesTab';
+
+        // 選んでいた楽曲は切り替え前のタブの文脈でしか意味を持たない。
+        // 残したまま別タブに切り替えると、そこで選んだ全く異なる楽曲が
+        // 選択されたまま紐付けボタンを押せてしまう事故につながるため破棄する。
+        // 同じタブを開き直しただけ（タブ内の再検索トリガーなど）では
+        // 選択中の楽曲を消したくないため、実際にタブが変わった場合のみ行う
+        if (tabId !== this.activeTabId) {
+            this.selectedSong = null;
+            document.getElementById('linkSongBtn').disabled = true;
+        }
+        this.activeTabId = tabId;
 
         document.querySelectorAll('.tab-button').forEach(btn => {
             btn.classList.remove('border-green-500', 'text-green-600', 'border-blue-500', 'text-blue-600', 'border-purple-500', 'text-purple-600', 'border-amber-500', 'text-amber-600');
