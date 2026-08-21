@@ -37,6 +37,26 @@ class CoverSongTitleExtractorServiceTest extends TestCase
         $this->assertEquals('群青（YOASOBI）', $result);
     }
 
+    /**
+     * カッコ除去対象は TextNormalizer::getIgnoreKeywords() を情報源とするが、
+     * カッコ内の部分一致で誤爆する語（ver / video 等）は除外している（#669）。
+     * これらの語を含むだけのカッコは除去されないこと。
+     */
+    public function test_bracket_keyword_exclusions_keep_unrelated_brackets(): void
+    {
+        // 'ver' は無視キーワードだがカッコ除去には使わない（"version" 等に部分一致するため）
+        $result = $this->service->extractWithExcludedWords('群青（ver.2）', []);
+        $this->assertEquals('群青（ver.2）', $result);
+
+        // 'video' も同様（"videogame" 等に部分一致するため）
+        $result = $this->service->extractWithExcludedWords('曲名（videogame song）', []);
+        $this->assertEquals('曲名（videogame song）', $result);
+
+        // 'utawaku' / 'vtuber' / 'vsinger' は従来の bracketKeywords に無かった挙動を維持
+        $result = $this->service->extractWithExcludedWords('曲名【utawaku】', []);
+        $this->assertEquals('曲名【utawaku】', $result);
+    }
+
     public function test_removes_covered_by_pattern(): void
     {
         $result = $this->service->extractWithExcludedWords('アイドル covered by 眠り姫', []);

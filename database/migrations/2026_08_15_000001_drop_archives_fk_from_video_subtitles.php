@@ -16,10 +16,25 @@ return new class extends Migration
      *
      * 既存DB（MySQL）向け。SQLite（テスト）はcreate migration側の修正で
      * 最初からFKなしで作られるため何もしない。
+     *
+     * create migration側がFKを作らないよう編集されたため、新規MySQL環境では
+     * このFKは最初から存在しない。ドライバ判定だけで dropForeign すると
+     * errno 1091 で migrate 全体が停止するので、FKの存在を確認してから落とす（#653）。
      */
     public function up(): void
     {
         if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
+
+        $fkExists = DB::selectOne(
+            'SELECT 1 AS x FROM information_schema.table_constraints
+             WHERE table_schema = DATABASE() AND table_name = ?
+               AND constraint_name = ? AND constraint_type = ?',
+            ['video_subtitles', 'video_subtitles_video_id_foreign', 'FOREIGN KEY']
+        );
+
+        if ($fkExists === null) {
             return;
         }
 

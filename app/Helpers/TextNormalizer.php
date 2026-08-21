@@ -179,6 +179,18 @@ class TextNormalizer
     /**
      * 無視すべきキーワード（カバー関連など）
      *
+     * 【他の辞書との棲み分け（#669）】
+     * 「曲名ではない語」の辞書は複数系統あり、適用対象が異なる。語を追加するときは
+     * どの経路に効かせたいかを確認し、必要な系統だけに追加すること。
+     * - この配列: パーツ全体の無視判定（isIgnorablePart / TimestampDecompositionService）。
+     *   CoverSongTitleExtractorService のカッコ除去もここを参照する（部分一致で
+     *   誤爆する語は同クラスの BRACKET_KEYWORD_EXCLUSIONS で除外）
+     * - config/supplement_strip.php: 括弧内・区切り以降の「補足」の部分一致除去
+     *   （SupplementStripper）
+     * - config/strip_pattern_templates.php + channel_strip_patterns テーブル:
+     *   チャンネルごとの除去パターン。実体はDBで、管理画面から編集する
+     *   （TimestampExtractorService::applyStripPatterns）
+     *
      * isIgnorablePart() は「パーツ全体がここに挙げたキーワードと記号と数字だけで
      * 構成されているか」で判定するため、短い語を入れても語の一部に一致して
      * アーティスト名を捨ててしまうことはない（例: 'ver' があっても

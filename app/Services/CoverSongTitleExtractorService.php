@@ -2,27 +2,50 @@
 
 namespace App\Services;
 
+use App\Helpers\TextNormalizer;
 use App\Models\ChannelExcludedWord;
 
 class CoverSongTitleExtractorService
 {
     /**
-     * カッコ除去対象キーワード（カッコ内にこれらが含まれていたら除去）
+     * カッコ除去判定から除外する無視キーワード（#669）
+     *
+     * カッコ除去対象キーワードは TextNormalizer::getIgnoreKeywords() を
+     * 単一の情報源とするが、こちらは「カッコ内の部分一致」で使うため、
+     * 短い語・一般語の混入は無関係なカッコを丸ごと消す誤爆になる。
+     *
+     * - 'ver': "version" だけでなく "(silver bullet)" 等にも部分一致する
+     * - 'video': "(videogame ...)" 等にも部分一致する
+     * - 'utawaku' / 'vtuber' / 'vsinger': 動画タイトル向けの語で、
+     *   従来の bracketKeywords に含まれていなかった挙動を維持する
+     *
+     * TextNormalizer 側は「パーツ全体がキーワードと記号だけか」の判定なので
+     * これらを持っていても誤爆しない（棲み分けの詳細は
+     * TextNormalizer::IGNORE_KEYWORDS のコメントを参照）。
      */
-    private array $bracketKeywords = [
-        '歌ってみた',
-        'cover',
-        'カバー',
-        'mv',
-        'music video',
-        'オリジナル',
-        'original',
-        'full',
-        'short',
-        'shorts',
-        'official',
-        '公式',
+    private const BRACKET_KEYWORD_EXCLUSIONS = [
+        'ver',
+        'video',
+        'utawaku',
+        'vtuber',
+        'vsinger',
     ];
+
+    /**
+     * カッコ除去対象キーワード（カッコ内にこれらが含まれていたら除去）
+     *
+     * TextNormalizer::getIgnoreKeywords() は正規化済み（小文字・半角）で返るため、
+     * mb_strtolower したカッコ内容との部分一致にそのまま使える。
+     *
+     * @return string[]
+     */
+    private function bracketKeywords(): array
+    {
+        return array_values(array_diff(
+            TextNormalizer::getIgnoreKeywords(),
+            self::BRACKET_KEYWORD_EXCLUSIONS
+        ));
+    }
 
     /**
      * 除去するカバー系パターン（正規表現）
@@ -98,7 +121,7 @@ class CoverSongTitleExtractorService
                 $lowerContent = mb_strtolower($content);
 
                 // カッコ内にキーワードが含まれていたら除去
-                foreach ($this->bracketKeywords as $keyword) {
+                foreach ($this->bracketKeywords() as $keyword) {
                     if (mb_strpos($lowerContent, mb_strtolower($keyword)) !== false) {
                         return '';
                     }
