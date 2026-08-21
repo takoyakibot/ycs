@@ -1602,26 +1602,26 @@ class TimestampNormalization {
                     </h3>
                     <div class="space-y-3 mb-6">
                         <p class="text-sm text-gray-600 dark:text-gray-400">
-                            同じ正規化テキストのタイムスタンプが <strong class="text-blue-600">${info.count}件</strong> あります。
+                            同じ正規化テキストのタイムスタンプが <strong class="text-blue-600" data-field="count"></strong> あります。
                         </p>
                         <div class="bg-gray-50 dark:bg-gray-700 p-3 rounded text-sm">
                             <div class="mb-2">
                                 <span class="text-gray-500 dark:text-gray-400">正規化テキスト:</span>
-                                <span class="font-medium text-gray-900 dark:text-gray-100 ml-2">${ts.normalized_text}</span>
+                                <span class="font-medium text-gray-900 dark:text-gray-100 ml-2" data-field="normalizedText"></span>
                             </div>
                             <div class="mb-2">
                                 <span class="text-gray-500 dark:text-gray-400">現在のマッピング:</span>
-                                <span class="font-medium text-green-600 dark:text-green-400 ml-2">${currentSongText}</span>
+                                <span class="font-medium text-green-600 dark:text-green-400 ml-2" data-field="currentSong"></span>
                             </div>
                             <div>
                                 <span class="text-gray-500 dark:text-gray-400">新しいマッピング:</span>
-                                <span class="font-medium text-blue-600 dark:text-blue-400 ml-2">${newSong.title} / ${newSong.artist}</span>
+                                <span class="font-medium text-blue-600 dark:text-blue-400 ml-2" data-field="newSong"></span>
                             </div>
                         </div>
                     </div>
                     <div class="flex flex-col gap-3">
                         <button id="mappingChoiceAll" class="w-full px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors">
-                            すべて更新 (${info.count}件)
+                            <span data-field="allButtonLabel"></span>
                             <span class="block text-xs font-normal opacity-80 mt-1">同じ正規化テキストの全タイムスタンプを更新</span>
                         </button>
                         <button id="mappingChoiceIndividual" class="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors">
@@ -1634,6 +1634,12 @@ class TimestampNormalization {
                     </div>
                 </div>
             `;
+
+            dialog.querySelector('[data-field="count"]').textContent = `${info.count}件`;
+            dialog.querySelector('[data-field="normalizedText"]').textContent = ts.normalized_text;
+            dialog.querySelector('[data-field="currentSong"]').textContent = currentSongText;
+            dialog.querySelector('[data-field="newSong"]').textContent = `${newSong.title} / ${newSong.artist}`;
+            dialog.querySelector('[data-field="allButtonLabel"]').textContent = `すべて更新 (${info.count}件)`;
 
             document.body.appendChild(dialog);
 
