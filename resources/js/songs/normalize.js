@@ -1493,6 +1493,10 @@ class TimestampNormalization {
             await this.loadSongs(document.getElementById('songsSearch').value);
             await this.loadTimestamps(this.currentPage, this.currentSearchQuery);
 
+            if (this.isCandidateTabActive()) {
+                await this.loadCandidates();
+            }
+
             if (this.selectedSong?.id === songId) {
                 this.selectedSong = null;
                 this.updateSelectionDisplay();
