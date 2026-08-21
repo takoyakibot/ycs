@@ -77,8 +77,6 @@ jobs:
           --health-retries=10
     env:
       APP_ENV: testing
-      # phpunit.xml と同じテスト用キー（本番の値ではない）
-      APP_KEY: base64:sg2ERaVrvPZq1uApES4n4XCDDlV5XvyWFCxKMxxvT7E=
       DB_CONNECTION: mysql
       DB_HOST: 127.0.0.1
       DB_PORT: '3306'
@@ -107,6 +105,13 @@ jobs:
 
       - name: Install composer dependencies
         run: composer install --prefer-dist --no-progress --no-interaction
+
+      # APP_KEY をワークフローに書くと secret scanning に検出されるため、
+      # 実行時に生成する。値は使い捨てで、他のジョブや本番とは無関係
+      - name: Generate app key
+        run: |
+          php -r "copy('.env.example', '.env');"
+          php artisan key:generate
 
       # 新規MySQL環境の再現（#653 のような「空のDBで migrate が止まる」退行を検知する）
       - name: Run migrations on empty MySQL
