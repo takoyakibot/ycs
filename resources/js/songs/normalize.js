@@ -37,6 +37,7 @@ class TimestampNormalization {
         this.candidateTextKey = null;          // どのタイムスタンプのチップかを判別する元テキスト
         this.candidateRequestSeq = 0;          // 候補取得の世代番号（応答の追い越し防止）
         this.lastCandidateSelectionKey = null; // 候補を作り直すかの判定用（前回の選択）
+        this.activeTabId = null;               // 現在表示中のタブ（タブ切り替え判定用）
 
         this.init();
     }
@@ -1812,6 +1813,17 @@ class TimestampNormalization {
         // 他のタブへ移るときはチェックボックスに戻す必要がある。
         // タブ内容を隠す前に判定しておく
         const leavingCandidateTab = this.isCandidateTabActive() && tabId !== 'candidatesTab';
+
+        // 選んでいた楽曲は切り替え前のタブの文脈でしか意味を持たない。
+        // 残したまま別タブに切り替えると、そこで選んだ全く異なる楽曲が
+        // 選択されたまま紐付けボタンを押せてしまう事故につながるため破棄する。
+        // 同じタブを開き直しただけ（タブ内の再検索トリガーなど）では
+        // 選択中の楽曲を消したくないため、実際にタブが変わった場合のみ行う
+        if (tabId !== this.activeTabId) {
+            this.selectedSong = null;
+            document.getElementById('linkSongBtn').disabled = true;
+        }
+        this.activeTabId = tabId;
 
         document.querySelectorAll('.tab-button').forEach(btn => {
             btn.classList.remove('border-green-500', 'text-green-600', 'border-blue-500', 'text-blue-600', 'border-purple-500', 'text-purple-600', 'border-amber-500', 'text-amber-600');
