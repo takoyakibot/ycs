@@ -447,7 +447,7 @@ class TimestampNormalization {
         // 紐付ける対象が変わったので、選んでいた楽曲は無効にする。
         // 残したままだと「一度も選び直していないのに紐付けボタンが押せる」状態になり、
         // 直前に選んだ楽曲が別のタイムスタンプに紐づいてしまう
-        this.selectedSong = null;
+        this.clearSelectedSong();
 
         this.updateSelectionDisplay();
         this.loadTimestamps(this.currentPage, this.currentSearchQuery);
@@ -476,7 +476,7 @@ class TimestampNormalization {
     deselectAll() {
         this.selectedTimestamps = [];
         // 対象がなくなったので、選んでいた楽曲も無効にする
-        this.selectedSong = null;
+        this.clearSelectedSong();
         this.updateSelectionDisplay();
         this.loadTimestamps(this.currentPage, this.currentSearchQuery);
     }
@@ -1430,6 +1430,25 @@ class TimestampNormalization {
     /**
      * 楽曲による絞り込みを解除
      */
+    /**
+     * 選んでいた楽曲を解除する
+     *
+     * 楽曲マスタ一覧のハイライトは selectedSong を見て描画されるため、
+     * 内部状態だけ変えると「選択中に見えるのに紐付けボタンが押せない」状態になる。
+     * 表示中の一覧があれば描き直す（clearSongFilter と同じ扱い）
+     */
+    clearSelectedSong() {
+        if (!this.selectedSong) {
+            return;
+        }
+
+        this.selectedSong = null;
+
+        if (Array.isArray(this.lastDisplayedSongs)) {
+            this.displaySongs(this.lastDisplayedSongs, this.lastDisplayedSongsTotal);
+        }
+    }
+
     clearSongFilter() {
         this.currentSongFilter = null;
 
@@ -1542,7 +1561,7 @@ class TimestampNormalization {
             // 紐付けが済んだので選んでいた楽曲も外す。
             // 残したままだと、次のタイムスタンプを選んだ時点で紐付けボタンが
             // 押せる状態になり、同じ楽曲がそのまま紐づいてしまう
-            this.selectedSong = null;
+            this.clearSelectedSong();
 
             await this.loadTimestamps(this.currentPage, this.currentSearchQuery);
             this.updateSelectionDisplay();
