@@ -127,7 +127,7 @@ class TextNormalizer
      */
     public static function trimFullwidthSpace(?string $text): string
     {
-        if (empty($text)) {
+        if ($text === null || $text === '') {
             return '';
         }
 
@@ -237,7 +237,7 @@ class TextNormalizer
      */
     public static function splitBySeparators(?string $text): array
     {
-        if (empty($text)) {
+        if ($text === null || $text === '') {
             return [
                 'parts' => [],
                 'separator_count' => 0,
@@ -267,7 +267,7 @@ class TextNormalizer
      */
     public static function hasSeparators(?string $text): bool
     {
-        if (empty($text)) {
+        if ($text === null || $text === '') {
             return false;
         }
 
@@ -462,7 +462,7 @@ class TextNormalizer
      */
     private static function calculateJapaneseRatio(string $text): float
     {
-        if (empty($text)) {
+        if ($text === null || $text === '') {
             return 0.0;
         }
 
