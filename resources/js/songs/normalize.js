@@ -1513,7 +1513,7 @@ class TimestampNormalization {
     }
 
     removeSongFromDisplayedLists(songId) {
-        if (this.lastDisplayedSongs) {
+        if (Array.isArray(this.lastDisplayedSongs)) {
             const before = this.lastDisplayedSongs.length;
             this.lastDisplayedSongs = this.lastDisplayedSongs.filter(s => s.id !== songId);
             const removed = before - this.lastDisplayedSongs.length;
@@ -1523,7 +1523,7 @@ class TimestampNormalization {
             this.displaySongs(this.lastDisplayedSongs, this.lastDisplayedSongsTotal);
         }
 
-        if (this.isCandidateTabActive() && this.lastDisplayedCandidates) {
+        if (this.isCandidateTabActive() && Array.isArray(this.lastDisplayedCandidates)) {
             const before = this.lastDisplayedCandidates.length;
             const filtered = this.lastDisplayedCandidates.filter(s => s.id !== songId);
             if (filtered.length < before) {
