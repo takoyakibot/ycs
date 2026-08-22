@@ -546,4 +546,58 @@ class TextNormalizerTest extends TestCase
         $this->assertEquals('🎵 テスト', TextNormalizer::trimFullwidthSpace('　🎵 テスト'));
         $this->assertEquals('🎶 曲名', TextNormalizer::trimFullwidthSpace('🎶 曲名'));
     }
+
+    public function test_split_for_chips_splits_by_brackets_and_spaces(): void
+    {
+        $result = TextNormalizer::splitForChips(
+            '【生歌ワンコーラス】2022年秋アニメ『恋愛フロップス』オープニング / 鈴木このみさん「Love? Reason why!!」'
+        );
+        $this->assertEquals([
+            '生歌ワンコーラス',
+            '2022年秋アニメ',
+            '恋愛フロップス',
+            'オープニング',
+            '鈴木このみさん',
+            'Love?',
+            'Reason',
+            'why!!',
+        ], $result);
+    }
+
+    public function test_split_for_chips_handles_mixed_brackets(): void
+    {
+        $result = TextNormalizer::splitForChips('(cover) アーティスト / 曲名');
+        $this->assertEquals(['cover', 'アーティスト', '曲名'], $result);
+    }
+
+    public function test_split_for_chips_handles_fullwidth_brackets(): void
+    {
+        $result = TextNormalizer::splitForChips('（歌枠）曲名　アーティスト');
+        $this->assertEquals(['歌枠', '曲名', 'アーティスト'], $result);
+    }
+
+    public function test_split_for_chips_returns_empty_for_null_and_empty(): void
+    {
+        $this->assertEquals([], TextNormalizer::splitForChips(null));
+        $this->assertEquals([], TextNormalizer::splitForChips(''));
+    }
+
+    public function test_split_for_chips_does_not_break_long_dash(): void
+    {
+        $result = TextNormalizer::splitForChips('コーヒー / カフェラテ');
+        $this->assertEquals(['コーヒー', 'カフェラテ'], $result);
+    }
+
+    public function test_split_for_chips_existing_separators_still_work(): void
+    {
+        $result = TextNormalizer::splitForChips('アーティスト | 曲名:サブタイトル');
+        $this->assertEquals(['アーティスト', '曲名', 'サブタイトル'], $result);
+    }
+
+    public function test_split_by_separators_unchanged_for_brackets(): void
+    {
+        $result = TextNormalizer::splitBySeparators('【生歌】曲名');
+        $this->assertEquals(['【生歌】曲名'], $result['parts']);
+        $this->assertEquals(0, $result['separator_count']);
+    }
 }
