@@ -40,6 +40,7 @@ class TimestampNormalization {
         this.lastDisplayedCandidatesTotal = 0; // 表示中の候補楽曲の総件数
         this.lastCandidateSelectionKey = null; // 候補を作り直すかの判定用（前回の選択）
         this.activeTabId = null;               // 現在表示中のタブ（タブ切り替え判定用）
+        this.currentPageTimestamps = [];       // 現在ページのタイムスタンプ（選択操作用）
 
         this.init();
     }
@@ -235,6 +236,7 @@ class TimestampNormalization {
     }
 
     displayTimestamps(timestamps) {
+        this.currentPageTimestamps = timestamps;
         const container = document.getElementById('timestampsList');
         container.innerHTML = '';
 
@@ -251,6 +253,7 @@ class TimestampNormalization {
 
     createTimestampElement(ts) {
         const div = document.createElement('div');
+        div.dataset.tsId = ts.id;
         const isSelected = this.selectedTimestamps.some(t => t.id === ts.id);
 
         div.className = `p-2 border rounded flex items-center gap-2 ${
@@ -438,7 +441,6 @@ class TimestampNormalization {
         const index = this.selectedTimestamps.findIndex(t => t.id === timestamp.id);
 
         if (this.isCandidateTabActive() && this.selectedTimestamps.length <= 1) {
-            // 候補タブでは単一選択。同じ行を選び直したときは解除できるようにする
             this.selectedTimestamps = index >= 0 ? [] : [timestamp];
         } else if (index >= 0) {
             this.selectedTimestamps.splice(index, 1);
@@ -446,41 +448,57 @@ class TimestampNormalization {
             this.selectedTimestamps.push(timestamp);
         }
 
-        // 紐付ける対象が変わったので、選んでいた楽曲は無効にする。
-        // 残したままだと「一度も選び直していないのに紐付けボタンが押せる」状態になり、
-        // 直前に選んだ楽曲が別のタイムスタンプに紐づいてしまう
         this.clearSelectedSong();
-
+        this.refreshTimestampSelectionStyles();
         this.updateSelectionDisplay();
-        this.loadTimestamps(this.currentPage, this.currentSearchQuery);
 
-        // 最初のタイムスタンプが選択された時、Spotify検索窓に反映（Spotify有効時のみ）
         if (this.spotifyEnabled && this.selectedTimestamps.length === 1) {
             document.getElementById('spotifySearch').value = this.selectedTimestamps[0].text;
         }
     }
 
     selectAll() {
-        // 候補タブは単一選択なので全選択はしない
         if (this.isCandidateTabActive()) {
             return;
         }
 
-        const timestampItems = document.querySelectorAll('#timestampsList > div');
-        timestampItems.forEach((item) => {
-            const checkbox = item.querySelector('input[type="checkbox"]');
-            if (checkbox && !checkbox.checked) {
-                checkbox.click();
+        this.currentPageTimestamps.forEach((ts) => {
+            if (!this.selectedTimestamps.some(t => t.id === ts.id)) {
+                this.selectedTimestamps.push(ts);
             }
         });
+
+        this.refreshTimestampSelectionStyles();
+        this.updateSelectionDisplay();
     }
 
     deselectAll() {
         this.selectedTimestamps = [];
-        // 対象がなくなったので、選んでいた楽曲も無効にする
         this.clearSelectedSong();
+        this.refreshTimestampSelectionStyles();
         this.updateSelectionDisplay();
-        this.loadTimestamps(this.currentPage, this.currentSearchQuery);
+    }
+
+    refreshTimestampSelectionStyles() {
+        const container = document.getElementById('timestampsList');
+        const items = container.querySelectorAll('[data-ts-id]');
+        const selectedIds = new Set(this.selectedTimestamps.map(t => t.id));
+
+        items.forEach((item) => {
+            const isSelected = selectedIds.has(item.dataset.tsId);
+            const checkbox = item.querySelector('input[type="checkbox"], input[type="radio"]');
+            if (checkbox) {
+                checkbox.checked = isSelected;
+            }
+
+            if (isSelected) {
+                item.classList.remove('border-gray-300', 'dark:border-gray-600', 'hover:bg-gray-50', 'dark:hover:bg-gray-700');
+                item.classList.add('bg-blue-100', 'dark:bg-blue-900', 'border-blue-500');
+            } else {
+                item.classList.remove('bg-blue-100', 'dark:bg-blue-900', 'border-blue-500');
+                item.classList.add('border-gray-300', 'dark:border-gray-600', 'hover:bg-gray-50', 'dark:hover:bg-gray-700');
+            }
+        });
     }
 
     updateSelectionDisplay() {
