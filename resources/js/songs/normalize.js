@@ -468,6 +468,7 @@ class TimestampNormalization {
             }
         });
 
+        this.clearSelectedSong();
         this.refreshTimestampSelectionStyles();
         this.updateSelectionDisplay();
     }
@@ -1000,7 +1001,11 @@ class TimestampNormalization {
         container.innerHTML = '';
         // 絞り込み条件がないときは検索していないので、「0件」と出すと
         // 検索してヒットしなかったように見えてしまう
-        this.updateSongsCount(this.songsQueryActive ? (total !== null ? total : songs.length) : null);
+        if (this.songsQueryActive && total !== null && songs.length < total) {
+            this.updateSongsCount(`${total}件（上位${songs.length}件を表示）`);
+        } else {
+            this.updateSongsCount(this.songsQueryActive ? (total !== null ? total : songs.length) : null);
+        }
 
         if (!Array.isArray(songs)) {
             console.error('songs is not an array:', songs);
@@ -1375,7 +1380,13 @@ class TimestampNormalization {
     updateSongsCount(count) {
         const countDiv = document.getElementById('songsCount');
         if (countDiv) {
-            countDiv.textContent = count === null ? '' : `${count}件`;
+            if (count === null) {
+                countDiv.textContent = '';
+            } else if (typeof count === 'string') {
+                countDiv.textContent = count;
+            } else {
+                countDiv.textContent = `${count}件`;
+            }
         }
     }
 
