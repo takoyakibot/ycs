@@ -36,6 +36,8 @@ class TimestampNormalization {
         this.candidateSelectedIndices = new Set(); // 選択中のチップの位置
         this.candidateTextKey = null;          // どのタイムスタンプのチップかを判別する元テキスト
         this.candidateRequestSeq = 0;          // 候補取得の世代番号（応答の追い越し防止）
+        this.lastDisplayedCandidates = [];     // 表示中の候補楽曲リスト
+        this.lastDisplayedCandidatesTotal = 0; // 表示中の候補楽曲の総件数
         this.lastCandidateSelectionKey = null; // 候補を作り直すかの判定用（前回の選択）
         this.activeTabId = null;               // 現在表示中のタブ（タブ切り替え判定用）
 
@@ -1168,6 +1170,9 @@ class TimestampNormalization {
      * 候補の見た目と選択の扱いは楽曲マスタ一覧と揃える（createSongElement を再利用する）
      */
     displayCandidates(songs, total) {
+        this.lastDisplayedCandidates = songs;
+        this.lastDisplayedCandidatesTotal = total;
+
         const results = document.getElementById('candidateResults');
         const notice = document.getElementById('candidateNotice');
 
@@ -1257,6 +1262,7 @@ class TimestampNormalization {
 
     createSongElement(song, songs, total, onSelectionChange = null) {
         const div = document.createElement('div');
+        div.dataset.songId = song.id;
         const isSelected = this.selectedSong?.id === song.id;
         div.className = `p-2 border rounded cursor-pointer flex items-center justify-between ${
             isSelected
@@ -1490,22 +1496,40 @@ class TimestampNormalization {
             this.showLoading();
             await songApiService.deleteSong(songId);
             toast.success('楽曲マスタを削除しました。');
-            await this.loadSongs(document.getElementById('songsSearch').value);
-            await this.loadTimestamps(this.currentPage, this.currentSearchQuery);
 
             if (this.selectedSong?.id === songId) {
                 this.selectedSong = null;
                 this.updateSelectionDisplay();
             }
 
-            if (this.isCandidateTabActive()) {
-                await this.loadCandidates();
-            }
+            this.removeSongFromDisplayedLists(songId);
+            await this.loadTimestamps(this.currentPage, this.currentSearchQuery);
         } catch (error) {
             console.error('削除に失敗しました:', error);
             toast.error('削除に失敗しました。');
         } finally {
             this.hideLoading();
+        }
+    }
+
+    removeSongFromDisplayedLists(songId) {
+        if (Array.isArray(this.lastDisplayedSongs)) {
+            const before = this.lastDisplayedSongs.length;
+            this.lastDisplayedSongs = this.lastDisplayedSongs.filter(s => s.id !== songId);
+            const removed = before - this.lastDisplayedSongs.length;
+            if (removed > 0) {
+                this.lastDisplayedSongsTotal = Math.max(0, (this.lastDisplayedSongsTotal ?? 0) - removed);
+            }
+            this.displaySongs(this.lastDisplayedSongs, this.lastDisplayedSongsTotal);
+        }
+
+        if (this.isCandidateTabActive() && Array.isArray(this.lastDisplayedCandidates)) {
+            const before = this.lastDisplayedCandidates.length;
+            const filtered = this.lastDisplayedCandidates.filter(s => s.id !== songId);
+            if (filtered.length < before) {
+                const totalDiff = before - filtered.length;
+                this.displayCandidates(filtered, Math.max(0, (this.lastDisplayedCandidatesTotal ?? 0) - totalDiff));
+            }
         }
     }
 

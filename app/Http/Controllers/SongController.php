@@ -372,7 +372,7 @@ class SongController extends Controller
             'text' => 'required|string|max:500',
         ]);
 
-        $parts = TextNormalizer::splitBySeparators($validated['text'])['parts'];
+        $parts = TextNormalizer::splitForChips($validated['text']);
 
         $ignoredIndices = [];
         $searchParts = [];

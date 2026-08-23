@@ -177,6 +177,12 @@ class TextNormalizer
     private const SEPARATOR_PATTERN = '/[\/／\-−－:：|｜]/u';
 
     /**
+     * 候補チップ用の区切り文字パターン
+     * SEPARATOR_PATTERN に加え、括弧類・スペースでも分割する
+     */
+    private const CHIP_SEPARATOR_PATTERN = '/[\s\x{3000}\/／\-−－:：|｜【】『』「」\(\)（）\[\]［］\{\}＜＞<>〈〉《》]+/u';
+
+    /**
      * 無視すべきキーワード（カバー関連など）
      *
      * 【他の辞書との棲み分け（#669）】
@@ -260,6 +266,27 @@ class TextNormalizer
             'has_separators' => $separatorCount > 0,
             'original' => $text,
         ];
+    }
+
+    /**
+     * 候補チップ用にテキストを細かく分割する
+     *
+     * splitBySeparators() よりも積極的に分割する。括弧やスペースも区切りとして扱い、
+     * 括弧文字自体はチップに含めない。候補タブのチップ表示専用。
+     *
+     * @return string[]
+     */
+    public static function splitForChips(?string $text): array
+    {
+        if ($text === null || $text === '') {
+            return [];
+        }
+
+        $parts = preg_split(self::CHIP_SEPARATOR_PATTERN, $text, -1, PREG_SPLIT_NO_EMPTY);
+        $parts = array_map('trim', $parts);
+        $parts = array_filter($parts, fn ($part) => $part !== '');
+
+        return array_values($parts);
     }
 
     /**
