@@ -423,8 +423,9 @@ class SongControllerTest extends TestCase
         $response = $this->actingAs($this->user)->getJson(route('songs.fetchSongs', ['review_status' => 'needs_review']));
 
         $response->assertOk();
-        $this->assertEquals(1, $response->json('total'));
-        $this->assertEquals('Review Song', $response->json('data.0.title'));
+        $this->assertEquals(2, $response->json('total'));
+        $titles = collect($response->json('data'))->pluck('title')->sort()->values()->all();
+        $this->assertEquals(['No Status', 'Review Song'], $titles);
     }
 
     /**
