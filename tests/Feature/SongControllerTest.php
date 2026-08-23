@@ -818,6 +818,36 @@ class SongControllerTest extends TestCase
         $response->assertJsonValidationErrors(['spotify_track_id']);
     }
 
+    public function test_store_song_strips_decorations(): void
+    {
+        $response = $this->actingAs($this->user)->postJson(route('songs.storeSong'), [
+            'title' => '✦ アイドル ✨',
+            'artist' => '♪ YOASOBI ♫',
+        ]);
+
+        $response->assertStatus(201);
+        $this->assertDatabaseHas('songs', [
+            'title' => 'アイドル',
+            'artist' => 'YOASOBI',
+        ]);
+    }
+
+    public function test_store_song_detects_duplicate_with_decorations(): void
+    {
+        Song::factory()->create([
+            'title' => 'アイドル',
+            'artist' => 'YOASOBI',
+        ]);
+
+        $response = $this->actingAs($this->user)->postJson(route('songs.storeSong'), [
+            'title' => '✦ アイドル',
+            'artist' => 'YOASOBI',
+        ]);
+
+        $response->assertOk();
+        $response->assertJson(['status' => 'exact_match']);
+    }
+
     /**
      * タイムスタンプと楽曲を紐づけるテスト（新規作成）
      */

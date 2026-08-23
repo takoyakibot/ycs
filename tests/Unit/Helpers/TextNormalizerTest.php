@@ -616,4 +616,36 @@ class TextNormalizerTest extends TestCase
         $this->assertEquals(['【生歌】曲名'], $result['parts']);
         $this->assertEquals(0, $result['separator_count']);
     }
+
+    public function test_strip_decorations_removes_music_notes(): void
+    {
+        $this->assertEquals('アイドル', TextNormalizer::stripDecorations('♪ アイドル ♫'));
+    }
+
+    public function test_strip_decorations_removes_stars_and_sparkles(): void
+    {
+        $this->assertEquals('アイドル', TextNormalizer::stripDecorations('✦ アイドル ✨'));
+        $this->assertEquals('YOASOBI', TextNormalizer::stripDecorations('⭐YOASOBI🌟'));
+    }
+
+    public function test_strip_decorations_removes_hearts(): void
+    {
+        $this->assertEquals('曲名', TextNormalizer::stripDecorations('❤ 曲名 💜'));
+    }
+
+    public function test_strip_decorations_preserves_normal_text(): void
+    {
+        $this->assertEquals('アイドル / YOASOBI', TextNormalizer::stripDecorations('アイドル / YOASOBI'));
+    }
+
+    public function test_strip_decorations_handles_null_and_empty(): void
+    {
+        $this->assertEquals('', TextNormalizer::stripDecorations(null));
+        $this->assertEquals('', TextNormalizer::stripDecorations(''));
+    }
+
+    public function test_strip_decorations_collapses_spaces(): void
+    {
+        $this->assertEquals('A B', TextNormalizer::stripDecorations('A ✦ B'));
+    }
 }

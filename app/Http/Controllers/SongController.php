@@ -426,8 +426,8 @@ class SongController extends Controller
     {
         $validated = $request->validated();
 
-        $title = trim($validated['title']);
-        $artist = trim($validated['artist']);
+        $title = TextNormalizer::stripDecorations(trim($validated['title']));
+        $artist = TextNormalizer::stripDecorations(trim($validated['artist']));
 
         // 既存曲を使用する場合
         if (! empty($validated['use_existing_id'])) {
