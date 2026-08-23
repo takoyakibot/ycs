@@ -6,7 +6,6 @@ import { videoPlayerManager } from './VideoPlayerManager.js';
  *
  * 責務:
  * - 再生位置の監視
- * - フェードイン・フェードアウト制御
  * - バッファリングタイムアウト検知
  * - 終了時刻の計算
  * - スタック検知
@@ -16,13 +15,9 @@ export class AutoReshuffleManager {
         // 状態
         this.enabled = false;
         this.currentSongEndTime = null;
-        this.originalVolume = 100;
-        this.needsFadeIn = false;
 
         // モニタリング用ID
         this.reshuffleMonitorId = null;
-        this.fadeOutIntervalId = null;
-        this.fadeInIntervalId = null;
         this.bufferingTimeoutId = null;
 
         // スタック検知用
@@ -238,7 +233,6 @@ export class AutoReshuffleManager {
             this.lastPlaybackTime = currentTime;
 
             // 次のタイムスタンプに到達（表示更新のみ、動画は継続再生）
-            // フェードアウトは行わない
             if (this.currentSongEndTime !== null && currentTime >= this.currentSongEndTime) {
                 console.debug('[Monitor] nextTimestampReached: currentTime=%s, endTime=%s',
                     currentTime, this.currentSongEndTime);
@@ -325,7 +319,6 @@ export class AutoReshuffleManager {
             clearInterval(this.reshuffleMonitorId);
             this.reshuffleMonitorId = null;
         }
-        this.stopFadeOut();
     }
 
     /**
@@ -358,91 +351,6 @@ export class AutoReshuffleManager {
     }
 
     /**
-     * フェードアウトを開始
-     */
-    startFadeOut() {
-        if (this.fadeOutIntervalId || !videoPlayerManager.isInitialized()) return;
-
-        // 現在の音量を保存
-        this.originalVolume = videoPlayerManager.getVolume();
-
-        const FADE_STEPS = 10;
-        const FADE_INTERVAL = 300; // 3秒 / 10ステップ = 300ms
-        let step = 0;
-
-        this.fadeOutIntervalId = setInterval(() => {
-            step++;
-            const newVolume = Math.max(0, this.originalVolume * (1 - step / FADE_STEPS));
-
-            videoPlayerManager.setVolume(newVolume);
-
-            if (step >= FADE_STEPS) {
-                this.stopFadeOut();
-            }
-        }, FADE_INTERVAL);
-    }
-
-    /**
-     * フェードアウトを停止（音量は復元しない）
-     */
-    stopFadeOut() {
-        if (this.fadeOutIntervalId) {
-            clearInterval(this.fadeOutIntervalId);
-            this.fadeOutIntervalId = null;
-            // フェードアウト中だった場合、次の曲でフェードインが必要
-            this.needsFadeIn = true;
-        }
-    }
-
-    /**
-     * フェードインを開始
-     */
-    startFadeIn() {
-        if (this.fadeInIntervalId || !videoPlayerManager.isInitialized()) return;
-        if (!this.needsFadeIn) return;
-
-        this.needsFadeIn = false;
-
-        // 音量0から開始
-        videoPlayerManager.setVolume(0);
-
-        const FADE_STEPS = 10;
-        const FADE_INTERVAL = 200; // 2秒 / 10ステップ = 200ms（フェードアウトより短め）
-        let step = 0;
-
-        this.fadeInIntervalId = setInterval(() => {
-            step++;
-            const newVolume = Math.min(this.originalVolume, this.originalVolume * (step / FADE_STEPS));
-
-            videoPlayerManager.setVolume(newVolume);
-
-            if (step >= FADE_STEPS) {
-                this.stopFadeIn();
-            }
-        }, FADE_INTERVAL);
-    }
-
-    /**
-     * フェードインを停止
-     */
-    stopFadeIn() {
-        if (this.fadeInIntervalId) {
-            clearInterval(this.fadeInIntervalId);
-            this.fadeInIntervalId = null;
-        }
-        // 最終的に元の音量に設定
-        videoPlayerManager.setVolume(this.originalVolume);
-    }
-
-    /**
-     * フェードインが必要かどうか
-     * @returns {boolean}
-     */
-    needsFadeInOnPlay() {
-        return this.needsFadeIn;
-    }
-
-    /**
      * プレイヤー状態変更時の処理
      * @param {Object} event - YouTube Player State Change Event
      */
@@ -458,10 +366,6 @@ export class AutoReshuffleManager {
             // スタック検知用の初期化
             this.lastPlaybackTime = videoPlayerManager.getCurrentTime();
             this.stallCount = 0;
-            // フェードインが必要な場合は開始
-            if (this.needsFadeIn) {
-                this.startFadeIn();
-            }
             // 一時停止から再開した場合、監視を再開
             // 次のタイムスタンプがない（最後の楽曲）場合も末尾検知のため監視する
             if (!this.reshuffleMonitorId) {
@@ -495,7 +399,6 @@ export class AutoReshuffleManager {
     cleanup() {
         this.stopMonitor();
         this.clearBufferingTimeout();
-        this.stopFadeIn();
     }
 }
 
