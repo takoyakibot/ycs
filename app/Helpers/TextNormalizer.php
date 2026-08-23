@@ -284,9 +284,23 @@ class TextNormalizer
 
         $parts = preg_split(self::CHIP_SEPARATOR_PATTERN, $text, -1, PREG_SPLIT_NO_EMPTY);
         $parts = array_map('trim', $parts);
+        $parts = array_map([self::class, 'stripHonorific'], $parts);
         $parts = array_filter($parts, fn ($part) => $part !== '');
 
         return array_values($parts);
+    }
+
+    private const HONORIFIC_SUFFIXES = ['先生', 'さま', 'さん', 'くん', 'ちゃん', '様'];
+
+    private static function stripHonorific(string $part): string
+    {
+        foreach (self::HONORIFIC_SUFFIXES as $suffix) {
+            if (mb_strlen($part) > mb_strlen($suffix) && str_ends_with($part, $suffix)) {
+                return mb_substr($part, 0, mb_strlen($part) - mb_strlen($suffix));
+            }
+        }
+
+        return $part;
     }
 
     /**
