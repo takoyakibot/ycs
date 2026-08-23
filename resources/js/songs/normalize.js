@@ -32,9 +32,8 @@ class TimestampNormalization {
         this.songSearchMode = sessionStorage.getItem('songSearchMode') === CONSTANTS.SONG_SEARCH_MODE_EXACT
             ? CONSTANTS.SONG_SEARCH_MODE_EXACT
             : CONSTANTS.SONG_SEARCH_MODE_FUZZY;
-        this.candidateParts = [];              // 候補タブのチップ（元テキストの分割結果）
-        this.candidateSelectedIndices = new Set(); // 選択中のチップの位置
-        this.candidateTextKey = null;          // どのタイムスタンプのチップかを判別する元テキスト
+        this.candidateKeywords = [];           // 候補タブの検索キーワード
+        this.candidateTextKey = null;          // どのタイムスタンプのテキストかを判別する元テキスト
         this.candidateRequestSeq = 0;          // 候補取得の世代番号（応答の追い越し防止）
         this.lastDisplayedCandidates = [];     // 表示中の候補楽曲リスト
         this.lastDisplayedCandidatesTotal = 0; // 表示中の候補楽曲の総件数
@@ -1041,81 +1040,71 @@ class TimestampNormalization {
      */
     async loadCandidates() {
         const notice = document.getElementById('candidateNotice');
-        const chipsArea = document.getElementById('candidateChipsArea');
+        const textArea = document.getElementById('candidateTextArea');
+        const keywordsArea = document.getElementById('candidateKeywordsArea');
         const results = document.getElementById('candidateResults');
 
         if (this.selectedTimestamps.length === 0) {
-            // 選択が変わったので、進行中の取得の応答は適用しない
             this.candidateRequestSeq++;
-
-            // 対象が無くなったので、チップの状態も破棄する。
-            // 残したままだと、全解除後に同じタイムスタンプを選び直したときに
-            // 前のチップ選択が残っているのか新規取得なのか読みにくくなる
             this.candidateTextKey = null;
-            this.candidateParts = [];
-            this.candidateSelectedIndices = new Set();
+            this.candidateKeywords = [];
 
             notice.textContent = 'タイムスタンプを1件選ぶと候補を表示します。';
-            chipsArea.classList.add('hidden');
+            textArea.classList.add('hidden');
+            keywordsArea.classList.add('hidden');
             results.innerHTML = '';
             return;
         }
 
         if (this.selectedTimestamps.length > 1) {
-            // 選択が変わったので、進行中の取得の応答は適用しない
             this.candidateRequestSeq++;
-
             this.renderMultiSelectionNotice();
-            chipsArea.classList.add('hidden');
+            textArea.classList.add('hidden');
+            keywordsArea.classList.add('hidden');
             results.innerHTML = '';
             return;
         }
 
         const text = this.selectedTimestamps[0].text;
 
-        // 同じテキストのチップが既にあるなら、選択状態を保ったまま再検索する
         if (this.candidateTextKey === text) {
-            // 複数選択中はチップ欄を隠すため、1件に絞られた直後は
-            // このタイミングで表示状態を復元する必要がある。
-            // 可視性のルールを1箇所に閉じるため、hiddenクラスを直接操作せず
-            // renderCandidateChips() 経由にする（パーツが空なら隠したままになる）
-            this.renderCandidateChips();
-            await this.searchCandidatesByChips();
+            textArea.classList.remove('hidden');
+            this.renderCandidateKeywords();
+            await this.searchCandidatesByKeywords();
             return;
         }
 
         notice.textContent = '候補を探しています…';
         results.innerHTML = '';
 
-        // 取得中に前のタイムスタンプのチップが押されると、進行中の取得が
-        // 打ち消されて candidateTextKey が古いまま固定されてしまうため、
-        // 先にチップを消して押せない状態にする
         this.candidateTextKey = null;
-        this.candidateParts = [];
-        this.candidateSelectedIndices = new Set();
-        this.renderCandidateChips();
+        this.candidateKeywords = [];
+        textArea.classList.add('hidden');
+        keywordsArea.classList.add('hidden');
 
-        // 応答の追い越しを防ぐための世代番号。
-        // タイムスタンプを素早く切り替えると複数のリクエストが並行して飛び、
-        // 先に選んだ方の遅い応答が後から届いて候補を巻き戻すと、
-        // 表示中のタイムスタンプと無関係な楽曲が紐づく事故につながる
         const seq = ++this.candidateRequestSeq;
 
         try {
             const data = await songApiService.fetchCandidates(text);
 
-            // 待っている間に選択が変わって新しい取得が始まっていたら、古い応答は捨てる
             if (seq !== this.candidateRequestSeq) {
                 return;
             }
 
             this.candidateTextKey = text;
-            this.candidateParts = data.parts;
-            this.candidateSelectedIndices = new Set(
-                data.parts.map((_, i) => i).filter(i => !data.ignored_indices.includes(i))
-            );
 
-            this.renderCandidateChips();
+            // 元テキストを選択可能な領域に表示
+            const originalTextEl = document.getElementById('candidateOriginalText');
+            originalTextEl.textContent = text;
+            textArea.classList.remove('hidden');
+
+            // ノイズ除去済みのパーツを初期キーワードとして設定
+            this.candidateKeywords = [...new Set(
+                data.parts.filter((_, i) => !data.ignored_indices.includes(i))
+            )];
+
+            this.renderCandidateKeywords();
+            this.setupTextSelection();
             notice.textContent = '';
             this.displayCandidates(data.songs, data.total);
         } catch (error) {
@@ -1125,7 +1114,7 @@ class TimestampNormalization {
 
             console.error('候補の取得に失敗しました:', error);
             notice.textContent = '候補の取得に失敗しました。';
-            chipsArea.classList.add('hidden');
+            textArea.classList.add('hidden');
         }
     }
 
@@ -1157,33 +1146,34 @@ class TimestampNormalization {
     }
 
     /**
-     * チップを描画する
+     * キーワードタグを描画する
      */
-    renderCandidateChips() {
-        const chipsArea = document.getElementById('candidateChipsArea');
-        const container = document.getElementById('candidateChips');
+    renderCandidateKeywords() {
+        const keywordsArea = document.getElementById('candidateKeywordsArea');
+        const container = document.getElementById('candidateKeywords');
 
         container.innerHTML = '';
 
-        if (this.candidateParts.length === 0) {
-            chipsArea.classList.add('hidden');
+        if (this.candidateKeywords.length === 0) {
+            keywordsArea.classList.add('hidden');
             return;
         }
 
-        chipsArea.classList.remove('hidden');
+        keywordsArea.classList.remove('hidden');
 
-        this.candidateParts.forEach((part, index) => {
-            const selected = this.candidateSelectedIndices.has(index);
-            const chip = document.createElement('button');
-            chip.type = 'button';
-            chip.textContent = part;
-            chip.className = `px-2 py-1 text-xs rounded border ${
-                selected
-                    ? 'bg-amber-600 text-white border-amber-600'
-                    : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-            }`;
-            chip.addEventListener('click', () => this.toggleCandidateChip(index));
-            container.appendChild(chip);
+        this.candidateKeywords.forEach((keyword, index) => {
+            const tag = document.createElement('span');
+            tag.className = 'inline-flex items-center gap-1 px-2 py-1 text-xs rounded bg-amber-600 text-white';
+            tag.textContent = keyword;
+
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'ml-0.5 hover:text-amber-200';
+            removeBtn.textContent = '×';
+            removeBtn.addEventListener('click', () => this.removeCandidateKeyword(index));
+            tag.appendChild(removeBtn);
+
+            container.appendChild(tag);
         });
     }
 
@@ -1202,9 +1192,9 @@ class TimestampNormalization {
         results.innerHTML = '';
 
         if (!Array.isArray(songs) || songs.length === 0) {
-            notice.textContent = this.candidateSelectedIndices.size === 0
-                ? '絞り込みの語を1つ以上選んでください。'
-                : '候補が見つかりませんでした。チップを外して条件を緩めてください。';
+            notice.textContent = this.candidateKeywords.length === 0
+                ? '検索語を追加してください。'
+                : '候補が見つかりませんでした。検索語を減らして条件を緩めてください。';
             return;
         }
 
@@ -1220,41 +1210,69 @@ class TimestampNormalization {
     }
 
     /**
-     * チップの選択を切り替えて再検索する
+     * テキスト選択でキーワードを追加するイベントを設定する
      */
-    async toggleCandidateChip(index) {
-        if (this.candidateSelectedIndices.has(index)) {
-            this.candidateSelectedIndices.delete(index);
-        } else {
-            this.candidateSelectedIndices.add(index);
+    setupTextSelection() {
+        const el = document.getElementById('candidateOriginalText');
+
+        if (this._textSelectionHandler) {
+            document.removeEventListener('mouseup', this._textSelectionHandler);
         }
 
-        this.renderCandidateChips();
-        await this.searchCandidatesByChips();
+        this._textSelectionHandler = () => {
+            const selection = window.getSelection();
+            if (!selection.rangeCount) return;
+
+            const range = selection.getRangeAt(0);
+            if (!el.contains(range.startContainer)) return;
+
+            const selectedText = selection.toString().trim();
+            if (!selectedText) return;
+
+            if (!this.candidateKeywords.includes(selectedText)) {
+                this.candidateKeywords.push(selectedText);
+                this.renderCandidateKeywords();
+                this.searchCandidatesByKeywords();
+            }
+
+            selection.removeAllRanges();
+        };
+
+        document.addEventListener('mouseup', this._textSelectionHandler);
+
+        const clearBtn = document.getElementById('candidateKeywordsClear');
+        if (clearBtn && !this._keywordsClearHandler) {
+            this._keywordsClearHandler = () => {
+                this.candidateKeywords = [];
+                this.renderCandidateKeywords();
+                this.searchCandidatesByKeywords();
+            };
+            clearBtn.addEventListener('click', this._keywordsClearHandler);
+        }
     }
 
     /**
-     * 選択中のチップの語で候補を再検索する
+     * キーワードを削除して再検索する
      */
-    async searchCandidatesByChips() {
-        // チップは選択中のタイムスタンプに対するものなので、
-        // 食い違っていたら何もしない（古いチップの取り残し対策）
+    async removeCandidateKeyword(index) {
+        this.candidateKeywords.splice(index, 1);
+        this.renderCandidateKeywords();
+        await this.searchCandidatesByKeywords();
+    }
+
+    /**
+     * キーワードで候補を再検索する
+     */
+    async searchCandidatesByKeywords() {
         if (this.candidateTextKey === null
             || this.candidateTextKey !== this.selectedTimestamps[0]?.text) {
             return;
         }
 
         const results = document.getElementById('candidateResults');
-
-        // タイムスタンプ切り替えと同じ世代番号を使う。
-        // ここで進めておくことで、チップ連打中に飛んだ古いリクエストや、
-        // 検索中にタイムスタンプ自体が切り替わったケースの遅い応答を
-        // 後から無効化できる
         const seq = ++this.candidateRequestSeq;
 
-        const words = this.candidateParts.filter((_, i) => this.candidateSelectedIndices.has(i));
-
-        if (words.length === 0) {
+        if (this.candidateKeywords.length === 0) {
             results.innerHTML = '';
             this.displayCandidates([], 0);
             return;
@@ -1262,7 +1280,7 @@ class TimestampNormalization {
 
         try {
             const response = await songApiService.fetchSongs(
-                words.join(' '),
+                this.candidateKeywords.join(' '),
                 null,
                 CONSTANTS.SONG_SEARCH_MODE_FUZZY
             );
