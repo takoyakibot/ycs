@@ -36,6 +36,7 @@ class ReviewSongStatusTest extends TestCase
         $song = Song::factory()->withoutSpotify()->create([
             'title' => '孤立した曲',
             'artist' => 'アーティスト',
+            'review_status' => 'safe',
         ]);
 
         $this->artisan('songs:review-status')->assertSuccessful();
@@ -49,6 +50,7 @@ class ReviewSongStatusTest extends TestCase
         $song = Song::factory()->withoutSpotify()->create([
             'title' => 'Song Title in English',
             'artist' => 'English Artist',
+            'review_status' => 'safe',
         ]);
 
         TimestampSongMapping::create([
@@ -72,6 +74,7 @@ class ReviewSongStatusTest extends TestCase
         $song = Song::factory()->withoutSpotify()->create([
             'title' => '【MV】テスト曲名',
             'artist' => 'テストアーティスト',
+            'review_status' => 'safe',
         ]);
 
         TimestampSongMapping::create([
@@ -83,7 +86,6 @@ class ReviewSongStatusTest extends TestCase
         $this->artisan('songs:review-status')->assertSuccessful();
 
         $song->refresh();
-        // 装飾検出が先に評価されるため needs_review
         $this->assertEquals('needs_review', $song->review_status);
     }
 
@@ -92,11 +94,12 @@ class ReviewSongStatusTest extends TestCase
         $song = Song::factory()->withoutSpotify()->create([
             'title' => 'テスト曲名',
             'artist' => 'テストアーティスト',
+            'review_status' => 'safe',
         ]);
 
         $this->artisan('songs:review-status', ['--dry-run' => true])->assertSuccessful();
 
         $song->refresh();
-        $this->assertEquals('needs_review', $song->review_status);
+        $this->assertEquals('safe', $song->review_status);
     }
 }

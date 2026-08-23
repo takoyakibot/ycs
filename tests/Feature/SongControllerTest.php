@@ -424,6 +424,8 @@ class SongControllerTest extends TestCase
 
         $response->assertOk();
         $this->assertEquals(2, $response->json('total'));
+        $titles = collect($response->json('data'))->pluck('title')->sort()->values()->all();
+        $this->assertEquals(['No Status', 'Review Song'], $titles);
     }
 
     /**
