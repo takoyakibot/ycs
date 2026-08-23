@@ -1099,8 +1099,9 @@ class TimestampNormalization {
             textArea.classList.remove('hidden');
 
             // ノイズ除去済みのパーツを初期キーワードとして設定
-            this.candidateKeywords = data.parts
-                .filter((_, i) => !data.ignored_indices.includes(i));
+            this.candidateKeywords = [...new Set(
+                data.parts.filter((_, i) => !data.ignored_indices.includes(i))
+            )];
 
             this.renderCandidateKeywords();
             this.setupTextSelection();
@@ -1215,11 +1216,16 @@ class TimestampNormalization {
         const el = document.getElementById('candidateOriginalText');
 
         if (this._textSelectionHandler) {
-            el.removeEventListener('mouseup', this._textSelectionHandler);
+            document.removeEventListener('mouseup', this._textSelectionHandler);
         }
 
         this._textSelectionHandler = () => {
             const selection = window.getSelection();
+            if (!selection.rangeCount) return;
+
+            const range = selection.getRangeAt(0);
+            if (!el.contains(range.startContainer)) return;
+
             const selectedText = selection.toString().trim();
             if (!selectedText) return;
 
@@ -1232,7 +1238,7 @@ class TimestampNormalization {
             selection.removeAllRanges();
         };
 
-        el.addEventListener('mouseup', this._textSelectionHandler);
+        document.addEventListener('mouseup', this._textSelectionHandler);
 
         const clearBtn = document.getElementById('candidateKeywordsClear');
         if (clearBtn && !this._keywordsClearHandler) {
