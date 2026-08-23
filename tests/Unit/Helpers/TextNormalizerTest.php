@@ -557,7 +557,7 @@ class TextNormalizerTest extends TestCase
             '2022年秋アニメ',
             '恋愛フロップス',
             'オープニング',
-            '鈴木このみさん',
+            '鈴木このみ',
             'Love?',
             'Reason',
             'why!!',
@@ -592,6 +592,22 @@ class TextNormalizerTest extends TestCase
     {
         $result = TextNormalizer::splitForChips('アーティスト | 曲名:サブタイトル');
         $this->assertEquals(['アーティスト', '曲名', 'サブタイトル'], $result);
+    }
+
+    public function test_split_for_chips_strips_honorifics(): void
+    {
+        $this->assertEquals(['Aimer'], TextNormalizer::splitForChips('Aimerさん'));
+        $this->assertEquals(['YOASOBI'], TextNormalizer::splitForChips('YOASOBIくん'));
+        $this->assertEquals(['Ado'], TextNormalizer::splitForChips('Adoちゃん'));
+        $this->assertEquals(['米津玄師'], TextNormalizer::splitForChips('米津玄師様'));
+        $this->assertEquals(['米津玄師'], TextNormalizer::splitForChips('米津玄師さま'));
+        $this->assertEquals(['Aimer'], TextNormalizer::splitForChips('Aimer先生'));
+    }
+
+    public function test_split_for_chips_keeps_honorific_only_chip(): void
+    {
+        $this->assertEquals(['さん'], TextNormalizer::splitForChips('さん'));
+        $this->assertEquals(['くん'], TextNormalizer::splitForChips('くん'));
     }
 
     public function test_split_by_separators_unchanged_for_brackets(): void
