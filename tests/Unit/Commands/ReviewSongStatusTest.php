@@ -97,6 +97,6 @@ class ReviewSongStatusTest extends TestCase
         $this->artisan('songs:review-status', ['--dry-run' => true])->assertSuccessful();
 
         $song->refresh();
-        $this->assertNull($song->review_status);
+        $this->assertEquals('needs_review', $song->review_status);
     }
 }

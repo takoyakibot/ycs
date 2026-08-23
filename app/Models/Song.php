@@ -39,7 +39,12 @@ class Song extends Model
 
     protected static function booted(): void
     {
-        // 保存時に正規化カラムを自動設定
+        static::creating(function (Song $song) {
+            if ($song->review_status === null) {
+                $song->review_status = self::REVIEW_STATUS_NEEDS_REVIEW;
+            }
+        });
+
         static::saving(function (Song $song) {
             if ($song->isDirty('title') || $song->normalized_title === null) {
                 $song->normalized_title = TextNormalizer::normalize($song->title);

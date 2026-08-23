@@ -14,6 +14,7 @@ class Kernel extends ConsoleKernel
     {
         // $schedule->command('inspire')->hourly();
         $schedule->command('app:refresh-archives')->dailyAt('04:00');
+        $schedule->command('songs:review-status')->dailyAt('05:00');
     }
 
     /**
