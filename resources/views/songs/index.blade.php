@@ -227,9 +227,17 @@
                         <div id="candidatesList" class="tab-content hidden">
                             <div id="candidateNotice" class="text-sm text-gray-500 dark:text-gray-400 mb-3"></div>
 
-                            <div id="candidateChipsArea" class="mb-3 hidden">
-                                <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">絞り込み（押した語で検索します）</div>
-                                <div id="candidateChips" class="flex flex-wrap gap-2"></div>
+                            <div id="candidateTextArea" class="mb-3 hidden">
+                                <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">テキストを選択して検索語に追加できます</div>
+                                <div id="candidateOriginalText" class="p-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-sm select-text cursor-text break-all leading-relaxed"></div>
+                            </div>
+
+                            <div id="candidateKeywordsArea" class="mb-3 hidden">
+                                <div class="flex items-center justify-between mb-1">
+                                    <span class="text-xs text-gray-500 dark:text-gray-400">検索語</span>
+                                    <button id="candidateKeywordsClear" type="button" class="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">クリア</button>
+                                </div>
+                                <div id="candidateKeywords" class="flex flex-wrap gap-1.5"></div>
                             </div>
 
                             <div id="candidateResults" class="space-y-2 max-h-64 overflow-y-auto"></div>
