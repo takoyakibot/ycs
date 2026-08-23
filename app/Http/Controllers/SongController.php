@@ -42,6 +42,8 @@ class SongController extends Controller
      */
     private const CANDIDATE_LIMIT = 50;
 
+    private const SONGS_PER_PAGE = 50;
+
     protected SongSearchService $songSearchService;
 
     protected SongMappingService $songMappingService;
@@ -351,6 +353,7 @@ class SongController extends Controller
         $total = $query->count();
         $songs = $query->orderBy('artist')
             ->orderBy('title')
+            ->limit(self::SONGS_PER_PAGE)
             ->get();
 
         return response()->json([
