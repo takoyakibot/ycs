@@ -1,4 +1,8 @@
 <x-app-layout>
+    <x-slot name="alpine_script">
+        @vite('resources/js/songs/cleansing.js')
+    </x-slot>
+
     <div class="py-4" id="cleansing-app" x-data="cleansingApp">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
             {{-- ヘッダー --}}
@@ -193,5 +197,4 @@
         </div>
     </div>
 
-    @vite(['resources/js/songs/cleansing.js'])
 </x-app-layout>
