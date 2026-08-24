@@ -45,6 +45,10 @@ class NormalizationLog extends Model
 
     public const ACTION_MERGE_SONG = 'merge_song';
 
+    public const ACTION_RENAME_ARTIST = 'rename_artist';
+
+    public const ACTION_REVIEW_SONG_GROUP = 'review_song_group';
+
     /**
      * ターゲット種別
      */

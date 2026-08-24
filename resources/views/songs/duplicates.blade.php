@@ -9,6 +9,7 @@
                         <div class="flex gap-2 text-sm">
                             <a href="{{ route('songs.index') }}" class="text-blue-600 hover:underline">正規化画面</a>
                             <a href="{{ route('songs.decompose') }}" class="text-blue-600 hover:underline">分解画面</a>
+                            <a href="{{ route('songs.cleansing') }}" class="text-blue-600 hover:underline">クレンジング画面</a>
                         </div>
                     </div>
                 </div>

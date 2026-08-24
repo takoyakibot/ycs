@@ -28,6 +28,12 @@
                         <x-nav-link :href="route('songs.decompose')" :active="request()->routeIs('songs.decompose')">
                             {{ __('TS分解') }}
                         </x-nav-link>
+                        <x-nav-link :href="route('songs.duplicates')" :active="request()->routeIs('songs.duplicates')">
+                            {{ __('名寄せ') }}
+                        </x-nav-link>
+                        <x-nav-link :href="route('songs.cleansing')" :active="request()->routeIs('songs.cleansing')">
+                            {{ __('クレンジング') }}
+                        </x-nav-link>
                     @endif
                     <x-nav-link :href="route('markdown.show')" :active="request()->routeIs('markdown.show')" class="text-center">
                         {{ __('利用規約・') }}<br/>
@@ -114,6 +120,12 @@
                 </x-responsive-nav-link>
                 <x-responsive-nav-link :href="route('songs.decompose')" :active="request()->routeIs('songs.decompose')">
                     {{ __('TS分解') }}
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('songs.duplicates')" :active="request()->routeIs('songs.duplicates')">
+                    {{ __('名寄せ') }}
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('songs.cleansing')" :active="request()->routeIs('songs.cleansing')">
+                    {{ __('クレンジング') }}
                 </x-responsive-nav-link>
                 <x-responsive-nav-link :href="route('markdown.show')" :active="request()->routeIs('markdown.show')">
                     {{ __('利用規約・プライバシーポリシー') }}
