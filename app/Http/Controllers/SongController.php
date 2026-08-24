@@ -13,6 +13,7 @@ use App\Models\NormalizationLog;
 use App\Models\Song;
 use App\Models\TimestampSongMapping;
 use App\Models\TsItem;
+use App\Services\SongCleansingService;
 use App\Services\SongMappingService;
 use App\Services\SongMergeService;
 use App\Services\SongSearchService;
@@ -50,6 +51,8 @@ class SongController extends Controller
 
     protected SongMergeService $songMergeService;
 
+    protected SongCleansingService $songCleansingService;
+
     protected SpotifyService $spotifyService;
 
     protected YouTubeApiService $youtubeApiService;
@@ -60,6 +63,7 @@ class SongController extends Controller
         SongSearchService $songSearchService,
         SongMappingService $songMappingService,
         SongMergeService $songMergeService,
+        SongCleansingService $songCleansingService,
         SpotifyService $spotifyService,
         YouTubeApiService $youtubeApiService,
         VideoUrlService $videoUrlService
@@ -67,6 +71,7 @@ class SongController extends Controller
         $this->songSearchService = $songSearchService;
         $this->songMappingService = $songMappingService;
         $this->songMergeService = $songMergeService;
+        $this->songCleansingService = $songCleansingService;
         $this->spotifyService = $spotifyService;
         $this->youtubeApiService = $youtubeApiService;
         $this->videoUrlService = $videoUrlService;
@@ -135,6 +140,99 @@ class SongController extends Controller
             ),
             'affected_mappings' => $result['affected_mappings'],
             'affected_ts_items' => $result['affected_ts_items'],
+        ]);
+    }
+
+    /**
+     * 楽曲マスタクレンジング画面を表示
+     */
+    public function cleansing()
+    {
+        return view('songs.cleansing');
+    }
+
+    /**
+     * アーティスト名一括変換のプレビューを取得
+     */
+    public function previewArtistRename(Request $request)
+    {
+        $validated = $request->validate([
+            'from' => 'required|string|max:255',
+            'to' => 'required|string|max:255|different:from',
+        ]);
+
+        $result = $this->songCleansingService->previewArtistRename($validated['from'], $validated['to']);
+
+        return response()->json($result);
+    }
+
+    /**
+     * アーティスト名を一括変換する
+     */
+    public function renameArtist(Request $request)
+    {
+        $validated = $request->validate([
+            'from' => 'required|string|max:255',
+            'to' => 'required|string|max:255|different:from',
+        ]);
+
+        $result = $this->songCleansingService->executeArtistRename(
+            $validated['from'],
+            $validated['to'],
+            Auth::id()
+        );
+
+        return response()->json([
+            'message' => sprintf(
+                'アーティスト名を変換しました（リネーム %d件、統合 %d件）',
+                count($result['renamed']),
+                count($result['merged'])
+            ),
+            'renamed' => $result['renamed'],
+            'merged' => $result['merged'],
+        ]);
+    }
+
+    /**
+     * 同名異表記グループ（同じタイトルで複数名義のマスタ）を取得
+     */
+    public function findTitleGroups(Request $request)
+    {
+        $validated = $request->validate([
+            'search' => 'nullable|string|max:255',
+            'filter' => 'nullable|string|in:active,pending',
+        ]);
+
+        $groups = $this->songCleansingService->findTitleGroups(
+            $validated['search'] ?? '',
+            $validated['filter'] ?? 'active'
+        );
+
+        return response()->json($groups);
+    }
+
+    /**
+     * 同名異表記グループを「別の曲」または「保留」として記録する
+     */
+    public function reviewTitleGroup(Request $request)
+    {
+        $validated = $request->validate([
+            'normalized_title' => 'required|string',
+            'song_ids' => 'required|array|min:2',
+            'song_ids.*' => 'string|exists:songs,id',
+            'decision' => 'required|string|in:distinct,pending',
+        ]);
+
+        $review = $this->songCleansingService->reviewTitleGroup(
+            $validated['normalized_title'],
+            $validated['song_ids'],
+            $validated['decision'],
+            Auth::id()
+        );
+
+        return response()->json([
+            'message' => $validated['decision'] === 'pending' ? '保留にしました' : '別の曲として記録しました',
+            'id' => $review->id,
         ]);
     }
 

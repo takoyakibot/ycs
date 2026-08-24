@@ -54,6 +54,7 @@ Route::middleware(['auth', 'admin'])->group(function () {
     // 楽曲マスタ管理
     Route::get('/songs/normalize', [SongController::class, 'index'])->name('songs.index');
     Route::get('/songs/duplicates', [SongController::class, 'duplicates'])->name('songs.duplicates');
+    Route::get('/songs/cleansing', [SongController::class, 'cleansing'])->name('songs.cleansing');
 
     // タイムスタンプ分解・選別
     Route::get('/songs/decompose', [TimestampDecompositionController::class, 'index'])->name('songs.decompose');
@@ -143,6 +144,10 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::get('api/songs/duplicates', [SongController::class, 'findDuplicates'])->name('songs.findDuplicates');
     Route::get('api/songs/search-for-merge', [SongController::class, 'searchSongsForMerge'])->name('songs.searchForMerge');
     Route::post('api/songs/merge', [SongController::class, 'mergeSongs'])->name('songs.mergeSongs');
+    Route::get('api/songs/cleansing/artist-rename-preview', [SongController::class, 'previewArtistRename'])->name('songs.previewArtistRename');
+    Route::post('api/songs/cleansing/artist-rename', [SongController::class, 'renameArtist'])->name('songs.renameArtist');
+    Route::get('api/songs/cleansing/title-groups', [SongController::class, 'findTitleGroups'])->name('songs.findTitleGroups');
+    Route::post('api/songs/cleansing/title-groups/review', [SongController::class, 'reviewTitleGroup'])->name('songs.reviewTitleGroup');
     // Parameterized route - must be last to avoid capturing specific route names
     Route::put('api/songs/{id}', [SongController::class, 'updateSong'])->name('songs.updateSong');
     Route::delete('api/songs/{id}', [SongController::class, 'deleteSong'])->name('songs.deleteSong');
