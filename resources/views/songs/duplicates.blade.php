@@ -1,4 +1,8 @@
 <x-app-layout>
+    <x-slot name="alpine_script">
+        @vite('resources/js/songs/duplicates.js')
+    </x-slot>
+
     <div class="py-4" id="duplicates-app" x-data="duplicatesApp">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
             {{-- ヘッダー --}}
@@ -141,5 +145,4 @@
         </div>
     </div>
 
-    @vite(['resources/js/songs/duplicates.js'])
 </x-app-layout>
