@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Helpers\QueryHelper;
 use App\Models\NormalizationLog;
 use App\Models\Song;
 use App\Models\SongGroupReview;
@@ -127,7 +128,8 @@ class SongCleansingService
             ->orderBy('normalized_title');
 
         if ($search !== '') {
-            $titleQuery->where('title', 'LIKE', "%{$search}%");
+            $escaped = QueryHelper::escapeLikeString($search);
+            $titleQuery->where('title', 'LIKE', "%{$escaped}%");
         }
 
         $normalizedTitles = $titleQuery->limit(self::GROUP_LIMIT)->pluck('normalized_title');
