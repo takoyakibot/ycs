@@ -95,8 +95,26 @@ class SongCleansingService
     {
         $songs = Song::where('artist', $from)->orderBy('title')->get();
 
-        return $songs->map(function (Song $song) use ($to) {
+        // 同一バッチ内の重複タイトルを検出するため、リネーム済みタイトルを追跡
+        $renamedByNormalizedTitle = []; // normalized_title => song_id
+
+        return $songs->map(function (Song $song) use ($to, &$renamedByNormalizedTitle) {
             $conflict = $this->findRenameConflict($song, $to);
+
+            // 既存の変換先に競合がなくても、同一バッチ内で先にリネームされた曲と
+            // normalized_title が一致する場合は、実行時にマージが発生する
+            if (! $conflict && isset($renamedByNormalizedTitle[$song->normalized_title])) {
+                return [
+                    'song_id' => $song->id,
+                    'title' => $song->title,
+                    'action' => 'merge',
+                    'conflict_song_id' => $renamedByNormalizedTitle[$song->normalized_title],
+                ];
+            }
+
+            if (! $conflict) {
+                $renamedByNormalizedTitle[$song->normalized_title] = $song->id;
+            }
 
             return [
                 'song_id' => $song->id,
@@ -109,7 +127,7 @@ class SongCleansingService
 
     private function findRenameConflict(Song $song, string $to): ?Song
     {
-        return Song::where('title', $song->title)
+        return Song::where('normalized_title', $song->normalized_title)
             ->where('artist', $to)
             ->where('id', '!=', $song->id)
             ->first();
@@ -187,10 +205,13 @@ class SongCleansingService
     {
         $hash = SongGroupReview::hashSongIds($songIds);
 
+        // クライアントから送られた normalized_title を信用せず、実際の楽曲から取得する
+        $actualNormalizedTitle = Song::whereIn('id', $songIds)->value('normalized_title') ?? $normalizedTitle;
+
         $review = SongGroupReview::updateOrCreate(
             ['song_ids_hash' => $hash],
             [
-                'normalized_title' => $normalizedTitle,
+                'normalized_title' => $actualNormalizedTitle,
                 'song_ids' => $songIds,
                 'decision' => $decision,
                 'created_by' => $userId,

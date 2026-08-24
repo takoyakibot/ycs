@@ -15,7 +15,7 @@ return new class extends Migration
         // レビュー結果（別の曲 / 保留）を記録するテーブル
         Schema::create('song_group_reviews', function (Blueprint $table) {
             $table->string('id', 26)->primary();
-            $table->string('normalized_title');
+            $table->string('normalized_title')->charset('utf8mb4')->collation('utf8mb4_bin');
             $table->string('song_ids_hash', 40)->unique();
             $table->json('song_ids');
             $table->string('decision', 20);

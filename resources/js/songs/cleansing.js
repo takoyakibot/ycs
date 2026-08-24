@@ -173,6 +173,7 @@ document.addEventListener('DOMContentLoaded', () => {
             this.message = null;
 
             try {
+                let completed = 0;
                 for (const sourceId of sources) {
                     const res = await fetch('/api/songs/merge', {
                         method: 'POST',
@@ -187,17 +188,21 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                     if (!res.ok) {
                         const data = await res.json();
-                        throw new Error(data.message || 'マージに失敗しました');
+                        const base = data.message || 'マージに失敗しました';
+                        throw new Error(completed > 0
+                            ? `${base}（${completed}/${sources.length}件は統合済み）`
+                            : base);
                     }
+                    completed++;
                 }
                 this.message = `${sources.length}件の楽曲を統合しました`;
                 this.messageType = 'success';
-                await this.fetchTitleGroups();
             } catch (e) {
                 this.message = e.message;
                 this.messageType = 'error';
             } finally {
                 this.merging[groupKey] = false;
+                await this.fetchTitleGroups();
             }
         },
 
