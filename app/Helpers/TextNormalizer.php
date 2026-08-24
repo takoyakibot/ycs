@@ -115,6 +115,44 @@ class TextNormalizer
     }
 
     /**
+     * 楽曲マスタ登録用に装飾記号を除去する
+     *
+     * 曲名・アーティスト名の一部にはならない装飾的な絵文字・記号を除去する。
+     * normalize()とは独立しており、表示用テキストのクリーンアップに使う。
+     */
+    public static function stripDecorations(?string $text): string
+    {
+        if ($text === null || $text === '') {
+            return '';
+        }
+
+        $pattern = '/['
+            .'\x{266A}\x{266B}'             // ♪ ♫
+            .'\x{1F3B4}-\x{1F3BB}'          // 🎴-🎻 (music/game)
+            .'\x{25B6}\x{25BA}\x{25C0}'     // ▶ ► ◀
+            .'\x{23E9}\x{23EF}'             // ⏩ ⏯
+            .'\x{2726}\x{2727}'             // ✦ ✧
+            .'\x{2728}'                     // ✨
+            .'\x{2B50}'                     // ⭐
+            .'\x{1F31F}'                    // 🌟
+            .'\x{1F4AB}'                    // 💫
+            .'\x{2733}-\x{2736}'            // ✳-✶
+            .'\x{2764}'                     // ❤
+            .'\x{1F493}-\x{1F49C}'          // 💓-💜
+            .'\x{1F338}-\x{1F343}'          // 🌸-🍃 (flowers/leaves)
+            .']/u';
+
+        $result = preg_replace($pattern, '', $text);
+        if ($result === null) {
+            return trim($text);
+        }
+
+        $result = preg_replace('/\s+/', ' ', $result);
+
+        return trim($result);
+    }
+
+    /**
      * 2つのテキストが正規化後に一致するか判定
      */
     public static function equals(?string $text1, ?string $text2): bool
