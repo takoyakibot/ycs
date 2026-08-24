@@ -1,9 +1,6 @@
-document.addEventListener('DOMContentLoaded', () => {
-    const app = document.getElementById('cleansing-app');
-    if (!app) return;
+const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
 
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
-
+function registerCleansingComponent() {
     Alpine.data('cleansingApp', () => ({
         tab: 'rename',
 
@@ -238,4 +235,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         },
     }));
-});
+}
+
+if (typeof Alpine !== 'undefined') {
+    registerCleansingComponent();
+} else {
+    document.addEventListener('alpine:init', registerCleansingComponent);
+}

@@ -4,14 +4,7 @@
             {{-- ヘッダー --}}
             <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg mb-4">
                 <div class="p-4 text-gray-900 dark:text-gray-100">
-                    <div class="flex items-center justify-between">
-                        <h3 class="text-lg font-semibold">楽曲マスタクレンジング</h3>
-                        <div class="flex gap-2 text-sm">
-                            <a href="{{ route('songs.index') }}" class="text-blue-600 hover:underline">正規化画面</a>
-                            <a href="{{ route('songs.duplicates') }}" class="text-blue-600 hover:underline">名寄せ画面</a>
-                            <a href="{{ route('songs.decompose') }}" class="text-blue-600 hover:underline">分解画面</a>
-                        </div>
-                    </div>
+                    <h3 class="text-lg font-semibold">楽曲マスタクレンジング</h3>
 
                     {{-- タブ --}}
                     <div class="flex gap-1 mt-3 border-b border-gray-200 dark:border-gray-700">

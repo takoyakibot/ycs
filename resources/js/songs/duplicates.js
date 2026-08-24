@@ -1,9 +1,6 @@
-document.addEventListener('DOMContentLoaded', () => {
-    const app = document.getElementById('duplicates-app');
-    if (!app) return;
+const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
 
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
-
+function registerDuplicatesComponent() {
     Alpine.data('duplicatesApp', () => ({
         // 左ペイン: 重複グループ
         groups: [],
@@ -76,7 +73,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.selectedIds.push(songId);
             } else {
                 this.selectedIds.splice(idx, 1);
-                // 選択解除されたものがtargetだったらtargetもクリア
                 if (this.targetId === songId) {
                     this.targetId = null;
                 }
@@ -135,7 +131,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.selectedIds = [];
                 this.targetId = null;
 
-                // 両方更新
                 await Promise.all([this.fetchDuplicates(), this.doSearch()]);
             } catch (e) {
                 this.message = e.message;
@@ -145,4 +140,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         },
     }));
-});
+}
+
+if (typeof Alpine !== 'undefined') {
+    registerDuplicatesComponent();
+} else {
+    document.addEventListener('alpine:init', registerDuplicatesComponent);
+}
