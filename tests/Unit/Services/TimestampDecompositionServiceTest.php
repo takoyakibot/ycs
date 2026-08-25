@@ -941,12 +941,12 @@ class TimestampDecompositionServiceTest extends TestCase
 
         $cascadedCount = $this->service->cascadeArtistSelection('Aimer', $source->id);
 
-        // カスケードは実行されるが、曲名は確定しない
-        $this->assertEquals(1, $cascadedCount);
+        // 曲名候補が複数あるためカスケード対象外（pendingのまま）
+        $this->assertEquals(0, $cascadedCount);
 
         $result = $decomposition->fresh();
-        $this->assertEquals(TimestampDecomposition::STATUS_AUTO_MATCHED, $result->status);
-        $this->assertEquals('Aimer', $result->derived_artist);
+        $this->assertEquals(TimestampDecomposition::STATUS_PENDING, $result->status);
+        $this->assertNull($result->derived_artist);
         $this->assertNull($result->derived_title);
         $this->assertNull($result->title_part_index);
     }

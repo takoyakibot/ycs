@@ -429,6 +429,11 @@ class TimestampDecompositionService
                 // アーティストが見つかった場合、楽曲名を推定
                 $titleIndex = $this->guessTitleIndex($parts, $index);
 
+                // 曲名候補が複数あり曖昧な場合はマッチなしとする
+                if ($titleIndex === false) {
+                    return null;
+                }
+
                 return [
                     'artist_index' => $index,
                     'title_index' => $titleIndex,
@@ -444,9 +449,9 @@ class TimestampDecompositionService
      *
      * @param  array  $parts  パーツ配列
      * @param  int  $artistIndex  アーティストのインデックス
-     * @return int|null 楽曲名のインデックス
+     * @return int|null|false 候補1つ→インデックス、候補0→null、候補複数→false
      */
-    private function guessTitleIndex(array $parts, int $artistIndex): ?int
+    private function guessTitleIndex(array $parts, int $artistIndex): int|null|false
     {
         $candidateIndices = [];
 
@@ -468,9 +473,14 @@ class TimestampDecompositionService
             return $candidateIndices[0];
         }
 
-        // 候補が複数ある場合は自動確定しない
+        // 候補が複数ある場合は曖昧（false）
         // 例: "RE: I AM / Aimer" → parts=["RE","I AM","Aimer"] で
         // 候補が ["RE","I AM"] の2つになるが、先頭を選ぶと曲名が欠ける
+        if (count($candidateIndices) > 1) {
+            return false;
+        }
+
+        // 候補なし（全部ノイズ）
         return null;
     }
 
