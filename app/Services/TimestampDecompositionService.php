@@ -468,11 +468,9 @@ class TimestampDecompositionService
             return $candidateIndices[0];
         }
 
-        // 候補が複数ある場合は最初の候補を返す（通常は楽曲名が先に来ることが多い）
-        if (count($candidateIndices) > 1) {
-            return $candidateIndices[0];
-        }
-
+        // 候補が複数ある場合は自動確定しない
+        // 例: "RE: I AM / Aimer" → parts=["RE","I AM","Aimer"] で
+        // 候補が ["RE","I AM"] の2つになるが、先頭を選ぶと曲名が欠ける
         return null;
     }
 

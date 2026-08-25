@@ -906,4 +906,48 @@ class TimestampDecompositionServiceTest extends TestCase
         // 先頭と末尾パーツにはエッジ区切り文字が付く（非連続なので ' / ' で結合）
         $this->assertEquals('-AAA / CCC-', $result['decomposition']->derived_artist);
     }
+
+    /**
+     * カスケードで曲名候補が複数ある場合は自動確定しない
+     *
+     * "RE: I AM / Aimer" のように区切り文字で曲名が割れるケースで、
+     * 先頭パーツだけを曲名にしてしまう問題の防止
+     */
+    public function test_cascade_skips_multi_candidate_title(): void
+    {
+        $this->actingAs(User::factory()->create());
+
+        // "RE: I AM / Aimer" → parts=["RE", "I AM", "Aimer"]
+        $decomposition = TimestampDecomposition::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize('RE: I AM / Aimer'),
+            'original_text' => 'RE: I AM / Aimer',
+            'parts' => ['RE', 'I AM', 'Aimer'],
+            'separator_count' => 2,
+            'status' => TimestampDecomposition::STATUS_PENDING,
+            'confidence' => 0.3,
+        ]);
+
+        // カスケード元（除外用）
+        $source = TimestampDecomposition::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize('Aimer / 残響散歌'),
+            'original_text' => 'Aimer / 残響散歌',
+            'parts' => ['Aimer', '残響散歌'],
+            'separator_count' => 1,
+            'status' => TimestampDecomposition::STATUS_SELECTED,
+            'confidence' => 1.0,
+        ]);
+
+        $cascadedCount = $this->service->cascadeArtistSelection('Aimer', $source->id);
+
+        // カスケードは実行されるが、曲名は確定しない
+        $this->assertEquals(1, $cascadedCount);
+
+        $result = $decomposition->fresh();
+        $this->assertEquals(TimestampDecomposition::STATUS_AUTO_MATCHED, $result->status);
+        $this->assertEquals('Aimer', $result->derived_artist);
+        $this->assertNull($result->derived_title);
+        $this->assertNull($result->title_part_index);
+    }
 }
