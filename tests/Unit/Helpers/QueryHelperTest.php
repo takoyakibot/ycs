@@ -202,10 +202,7 @@ class QueryHelperTest extends TestCase
     }
 
     /**
-     * 先頭に連続する数値トークンをまとめて除去すること
-     *
-     * "00:12:34 曲名 / アーティスト" のようにタイムスタンプ込みで
-     * 貼り付けられても検索できるようにする
+     * 先頭のタイムスタンプや曲番号を除去すること
      */
     public function test_split_fuzzy_keywords_removes_leading_number_tokens(): void
     {
@@ -218,6 +215,27 @@ class QueryHelperTest extends TestCase
             ['ロキ', 'みきとp'],
             QueryHelper::splitFuzzyKeywords('1. ロキ / みきとP')
         );
+
+        // 曲番号 + タイムスタンプが両方付くケース
+        $this->assertEquals(
+            ['曲名'],
+            QueryHelper::splitFuzzyKeywords('1. 00:12:34 曲名')
+        );
+
+        // タイムスタンプ + 曲番号（逆順）
+        $this->assertEquals(
+            ['曲名'],
+            QueryHelper::splitFuzzyKeywords('00:12:34 1. 曲名')
+        );
+    }
+
+    /**
+     * 曲番号の桁数境界: 3桁まで除去、4桁以上は曲名として保持
+     */
+    public function test_split_fuzzy_keywords_track_number_digit_boundary(): void
+    {
+        $this->assertEquals(['曲名'], QueryHelper::splitFuzzyKeywords('100. 曲名'));
+        $this->assertEquals(['1000', '曲名'], QueryHelper::splitFuzzyKeywords('1000. 曲名'));
     }
 
     /**
@@ -226,6 +244,22 @@ class QueryHelperTest extends TestCase
     public function test_split_fuzzy_keywords_keeps_number_only_search(): void
     {
         $this->assertEquals(['123'], QueryHelper::splitFuzzyKeywords('123'));
-        $this->assertEquals(['34'], QueryHelper::splitFuzzyKeywords('00:12:34'));
+        // タイムスタンプのみの場合はフォールバックで全トークンを返す
+        $this->assertEquals(['00', '12', '34'], QueryHelper::splitFuzzyKeywords('00:12:34'));
+    }
+
+    /**
+     * 数字だけの曲名が消えないこと
+     */
+    public function test_split_fuzzy_keywords_keeps_numeric_title(): void
+    {
+        // "45510 / wowaka" → 45510 が曲名なので残る
+        $this->assertEquals(['45510', 'wowaka'], QueryHelper::splitFuzzyKeywords('45510 / wowaka'));
+
+        // "1234 5678" → 両方残る
+        $this->assertEquals(['1234', '5678'], QueryHelper::splitFuzzyKeywords('1234 5678'));
+
+        // "2:47" → フォールバックで全トークン
+        $this->assertEquals(['2', '47'], QueryHelper::splitFuzzyKeywords('2:47'));
     }
 }
