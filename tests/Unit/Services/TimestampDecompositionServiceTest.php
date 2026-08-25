@@ -777,6 +777,108 @@ class TimestampDecompositionServiceTest extends TestCase
      * "Official髭男dism" の "official" が無視キーワードとして部分一致すると、
      * アーティスト名なしで自動確定され、アーティスト名が空の楽曲マスタが作られてしまう
      */
+    public function test_link_to_song_skips_when_artist_is_empty(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $decomposition = TimestampDecomposition::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize('Night of Fire'),
+            'original_text' => 'Night of Fire',
+            'parts' => ['Night of Fire'],
+            'separator_count' => 0,
+            'status' => TimestampDecomposition::STATUS_SELECTED,
+            'confidence' => 1.0,
+            'derived_title' => 'Night of Fire',
+            'derived_artist' => null,
+        ]);
+
+        $result = $this->service->linkToSong($decomposition);
+
+        $this->assertNull($result);
+        $this->assertDatabaseCount('songs', 0);
+        $this->assertDatabaseCount('timestamp_song_mappings', 0);
+        $decomposition->refresh();
+        $this->assertNull($decomposition->song_id);
+    }
+
+    public function test_link_to_song_skips_when_artist_is_empty_string(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $decomposition = TimestampDecomposition::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize('Yesterday'),
+            'original_text' => 'Yesterday',
+            'parts' => ['Yesterday'],
+            'separator_count' => 0,
+            'status' => TimestampDecomposition::STATUS_SELECTED,
+            'confidence' => 1.0,
+            'derived_title' => 'Yesterday',
+            'derived_artist' => '',
+        ]);
+
+        $result = $this->service->linkToSong($decomposition);
+
+        $this->assertNull($result);
+        $this->assertDatabaseCount('songs', 0);
+        $this->assertDatabaseCount('timestamp_song_mappings', 0);
+    }
+
+    public function test_link_to_song_works_when_artist_is_present(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $decomposition = TimestampDecomposition::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize('Night of Fire / HINOI Team'),
+            'original_text' => 'Night of Fire / HINOI Team',
+            'parts' => ['Night of Fire', 'HINOI Team'],
+            'separator_count' => 1,
+            'status' => TimestampDecomposition::STATUS_SELECTED,
+            'confidence' => 1.0,
+            'derived_title' => 'Night of Fire',
+            'derived_artist' => 'HINOI Team',
+        ]);
+
+        $result = $this->service->linkToSong($decomposition);
+
+        $this->assertNotNull($result);
+        $this->assertEquals('Night of Fire', $result->title);
+        $this->assertEquals('HINOI Team', $result->artist);
+        $this->assertDatabaseCount('songs', 1);
+        $this->assertDatabaseCount('timestamp_song_mappings', 1);
+    }
+
+    public function test_bulk_link_auto_matched_does_not_create_song_when_artist_is_empty(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        // derived_title あり・derived_artist なしの AUTO_MATCHED レコード
+        TimestampDecomposition::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize('YOASOBI'),
+            'original_text' => 'cover / YOASOBI',
+            'parts' => ['cover', 'YOASOBI'],
+            'separator_count' => 1,
+            'status' => TimestampDecomposition::STATUS_AUTO_MATCHED,
+            'confidence' => 0.8,
+            'derived_title' => 'YOASOBI',
+            'derived_artist' => null,
+            'title_part_index' => 1,
+        ]);
+
+        $count = $this->service->bulkLinkAutoMatched();
+
+        $this->assertEquals(0, $count);
+        $this->assertDatabaseCount('songs', 0);
+        $this->assertDatabaseCount('timestamp_song_mappings', 0);
+    }
+
     public function test_scan_does_not_auto_match_artist_containing_ignore_keyword(): void
     {
         $user = User::factory()->create();
