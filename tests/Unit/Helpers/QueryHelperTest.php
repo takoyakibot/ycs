@@ -262,4 +262,39 @@ class QueryHelperTest extends TestCase
         // "2:47" → フォールバックで全トークン
         $this->assertEquals(['2', '47'], QueryHelper::splitFuzzyKeywords('2:47'));
     }
+
+    /**
+     * カバー曲やタイアップ情報のノイズワードが除去されること
+     */
+    public function test_split_fuzzy_keywords_removes_extended_noise_words(): void
+    {
+        // "cover by 〇〇" → by が除去される
+        $this->assertEquals(
+            ['夜に駆ける', 'yoasobi', '星街すいせい'],
+            QueryHelper::splitFuzzyKeywords('夜に駆ける / YOASOBI (cover by 星街すいせい)')
+        );
+
+        // "feat. 〇〇" → feat が除去される
+        $this->assertEquals(
+            ['ロキ', 'みきとp', '初音ミク'],
+            QueryHelper::splitFuzzyKeywords('ロキ / みきとP feat. 初音ミク')
+        );
+
+        // TVアニメ・OP → 除去される
+        $this->assertEquals(
+            ['残響散歌', 'aimer', '鬼滅の刃'],
+            QueryHelper::splitFuzzyKeywords('残響散歌 / Aimer (TVアニメ「鬼滅の刃」OP)')
+        );
+
+        // フル → 除去される
+        $this->assertEquals(
+            ['うっせぇわ', 'ado'],
+            QueryHelper::splitFuzzyKeywords('うっせぇわ / Ado ※フル')
+        );
+
+        // ノイズワード単体はフォールバックで保持される
+        $this->assertEquals(['op'], QueryHelper::splitFuzzyKeywords('OP'));
+        $this->assertEquals(['live'], QueryHelper::splitFuzzyKeywords('live'));
+        $this->assertEquals(['フル'], QueryHelper::splitFuzzyKeywords('フル'));
+    }
 }
