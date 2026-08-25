@@ -12,6 +12,37 @@ class QueryHelper
     private const FUZZY_TOKEN_PATTERN = '/[^\p{L}\p{Nd}]+/u';
 
     /**
+     * あいまい検索専用のストップワード（正規化前の表記）
+     *
+     * TextNormalizer::IGNORE_KEYWORDS は isIgnorablePart() や
+     * CoverSongTitleExtractorService::bracketKeywords() にも供給される共有定数。
+     * 短い語（by/ed/op等）をそこに追加すると部分一致で誤爆するため、
+     * fuzzy-search でのみ除去したい語はここに分離する。
+     */
+    private const FUZZY_STOP_WORDS = [
+        'by',
+        'feat',
+        'ft',
+        'featuring',
+        'with',
+        'op',
+        'ed',
+        'ost',
+        'inst',
+        'インスト',
+        'instrumental',
+        'フル',
+        'TVアニメ',
+        'アニメ',
+        'remix',
+        'リミックス',
+        'acoustic',
+        'アコースティック',
+        'live',
+        'ライブ',
+    ];
+
+    /**
      * LIKEクエリ用の文字列エスケープ
      *
      * SQLのLIKE句で使用される特殊文字（%, _, \）をエスケープする
@@ -112,9 +143,9 @@ class QueryHelper
     /**
      * 無視キーワードを検索キーワードと同じ単位に分解する
      *
-     * IGNORE_KEYWORDS には 'music video' のようにスペースを含む複合語がある。
-     * 検索キーワードは単語単位に分割されているため、そのまま比較すると
-     * 'music' がどのエントリとも一致せず検索語として残ってしまう。
+     * TextNormalizer::IGNORE_KEYWORDS（共有）と FUZZY_STOP_WORDS（検索専用）の
+     * 両方をトークン化してマージする。IGNORE_KEYWORDS には 'music video' のように
+     * スペースを含む複合語があるため、単語単位に分解して比較する。
      *
      * 分解の副作用として 'music' 単独もノイズ扱いになるが、
      * 全てがノイズだった場合は除去前のキーワードを使うフォールバックがあるため、
@@ -135,6 +166,13 @@ class QueryHelper
 
             foreach ($split as $token) {
                 $tokens[] = $token;
+            }
+        }
+
+        foreach (self::FUZZY_STOP_WORDS as $word) {
+            $normalized = TextNormalizer::normalize($word);
+            if ($normalized !== '') {
+                $tokens[] = $normalized;
             }
         }
 
