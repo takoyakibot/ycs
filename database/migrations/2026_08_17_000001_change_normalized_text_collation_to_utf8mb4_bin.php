@@ -51,7 +51,7 @@ return new class extends Migration
      * - ALTER TABLE MODIFY はインデックスの再構築を伴うため、
      *   件数の多い ts_items ではメンテナンスウィンドウでの実施を推奨。
      * - 今後 normalized_text 系のカラムを追加する場合も utf8mb4_bin を指定すること。
-     *   なお songs.normalized_title / normalized_artist は未対応（Issue で扱う）。
+     *   songs.normalized_title / normalized_artist は #643 で別途対応済み。
      */
     private const TARGET_COLUMNS = [
         // テーブル名 => [型, NULL可否]
