@@ -134,12 +134,14 @@ class SongController extends Controller
 
         return response()->json([
             'message' => sprintf(
-                '楽曲をマージしました（マッピング %d件、個別紐付け %d件を移行）',
+                '楽曲をマージしました（マッピング %d件、個別紐付け %d件、分解 %d件を移行）',
                 $result['affected_mappings'],
-                $result['affected_ts_items']
+                $result['affected_ts_items'],
+                $result['affected_decompositions']
             ),
             'affected_mappings' => $result['affected_mappings'],
             'affected_ts_items' => $result['affected_ts_items'],
+            'affected_decompositions' => $result['affected_decompositions'],
         ]);
     }
 

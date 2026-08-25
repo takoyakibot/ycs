@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\NormalizationLog;
 use App\Models\Song;
+use App\Models\TimestampDecomposition;
 use App\Models\TimestampSongMapping;
 use App\Models\TsItem;
 use Illuminate\Support\Facades\Auth;
@@ -152,6 +153,10 @@ class SongMergeService
             $affectedTsItems = TsItem::where('song_id', $sourceSong->id)
                 ->update(['song_id' => $targetSong->id]);
 
+            // timestamp_decompositions.song_idを付け替え
+            $affectedDecompositions = TimestampDecomposition::where('song_id', $sourceSong->id)
+                ->update(['song_id' => $targetSong->id]);
+
             // ログ記録
             NormalizationLog::log(
                 $userId,
@@ -167,6 +172,7 @@ class SongMergeService
                     'affected_mappings' => $affectedMappings,
                     'deleted_duplicate_mappings' => $deletedDuplicates,
                     'affected_ts_items' => $affectedTsItems,
+                    'affected_decompositions' => $affectedDecompositions,
                 ]
             );
 
@@ -176,6 +182,7 @@ class SongMergeService
             return [
                 'affected_mappings' => $affectedMappings,
                 'affected_ts_items' => $affectedTsItems,
+                'affected_decompositions' => $affectedDecompositions,
             ];
         });
     }
