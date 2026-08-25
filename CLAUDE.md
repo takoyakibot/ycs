@@ -127,7 +127,7 @@ php artisan test tests/Feature/SongControllerTest.php::test_specific_method  # R
   - **揃え忘れはエラーにならない。** 同一 charset で片方が `_bin` の場合、MySQL は `_bin` を優先するため JOIN は通り、意味論が黙って変わる。`Illegal mix of collations` が出るのは非バイナリ照合同士が食い違う場合のみ
   - `utf8mb4_bin` は PAD SPACE。末尾スペースの有無は DB 側では無視される（NO PAD が必要なら `utf8mb4_0900_bin`）
   - `MODIFY` で照合順序を指定するときは、`CHARACTER SET` / `COLLATE` を**型の直後・NULL 可否より前**に置くこと。順序を誤ると `ERROR 1064` になる。テストは SQLite なのでこの誤りは実行では検知できない（`tests/Unit/Migrations/ChangeNormalizedTextCollationTest.php` で生成SQLを固定している）
-  - `songs.normalized_title` / `normalized_artist` は未対応（同じ「SQL曖昧比較 → PHP 厳密比較」の構造が残っている）
+  - `songs.normalized_title` / `normalized_artist` も `utf8mb4_bin` に変更済み（#643）
 
 ## Workflow
 
