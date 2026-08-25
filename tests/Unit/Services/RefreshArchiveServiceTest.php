@@ -1519,4 +1519,184 @@ class RefreshArchiveServiceTest extends TestCase
             'id' => $report2->id,
         ]);
     }
+
+    /**
+     * comments_fetched_atがセットされた動画は、change_list経由の$resultsクエリから除外される（#654）
+     */
+    public function test_comments_fetched_at_excludes_from_results_query(): void
+    {
+        $channel = Channel::factory()->create(['channel_id' => 'UC123456789']);
+
+        Archive::create([
+            'id' => Str::ulid(),
+            'video_id' => 'fetched0001',
+            'channel_id' => $channel->channel_id,
+            'title' => '歌枠',
+            'is_public' => true,
+            'is_display' => true,
+            'published_at' => now(),
+            'comments_updated_at' => now(),
+            'comments_fetched_at' => now()->subDay(),
+        ]);
+
+        ChangeList::create([
+            'id' => Str::ulid(),
+            'video_id' => 'fetched0001',
+            'channel_id' => $channel->channel_id,
+            'comment_id' => 'ext_comment1',
+        ]);
+
+        $this->youtubeService
+            ->shouldReceive('getArchivesAndTsItems')
+            ->once()
+            ->andReturn([
+                [
+                    'id' => Str::uuid()->toString(),
+                    'video_id' => 'fetched0001',
+                    'channel_id' => $channel->channel_id,
+                    'title' => '歌枠',
+                    'thumbnail' => '',
+                    'is_public' => true,
+                    'is_display' => true,
+                    'published_at' => now(),
+                    'comments_updated_at' => now(),
+                    'description' => '',
+                    'ts_items' => [],
+                ],
+            ]);
+
+        $this->youtubeService
+            ->shouldNotReceive('getTimeStampsFromComments');
+
+        $this->service->refreshArchives($channel);
+
+        $this->assertDatabaseMissing('ts_items', [
+            'video_id' => 'fetched0001',
+            'type' => '2',
+        ]);
+    }
+
+    /**
+     * comments_fetched_atがセットされた動画は、概要欄全非表示の$hiddenDescriptionResultsクエリからも除外される（#654）
+     */
+    public function test_comments_fetched_at_excludes_from_hidden_description_query(): void
+    {
+        $channel = Channel::factory()->create(['channel_id' => 'UC123456789']);
+
+        Archive::create([
+            'id' => Str::ulid(),
+            'video_id' => 'hidden00001',
+            'channel_id' => $channel->channel_id,
+            'title' => '歌枠アーカイブ',
+            'is_public' => true,
+            'is_display' => true,
+            'published_at' => now(),
+            'comments_updated_at' => now(),
+            'comments_fetched_at' => now()->subDay(),
+        ]);
+        TsItem::create([
+            'id' => Str::ulid(),
+            'video_id' => 'hidden00001',
+            'type' => '1',
+            'ts_text' => '0:00',
+            'ts_num' => 0,
+            'text' => 'イベントA',
+            'is_display' => false,
+        ]);
+
+        $this->youtubeService
+            ->shouldReceive('getArchivesAndTsItems')
+            ->once()
+            ->andReturn([
+                [
+                    'id' => Str::uuid()->toString(),
+                    'video_id' => 'hidden00001',
+                    'channel_id' => $channel->channel_id,
+                    'title' => '歌枠アーカイブ',
+                    'thumbnail' => '',
+                    'is_public' => true,
+                    'is_display' => true,
+                    'published_at' => now(),
+                    'comments_updated_at' => now(),
+                    'description' => '',
+                    'ts_items' => [
+                        [
+                            'id' => Str::uuid()->toString(),
+                            'video_id' => 'hidden00001',
+                            'type' => '1',
+                            'ts_text' => '0:00',
+                            'ts_num' => 0,
+                            'text' => 'イベントA',
+                            'is_display' => true,
+                        ],
+                    ],
+                ],
+            ]);
+
+        $this->youtubeService
+            ->shouldNotReceive('getTimeStampsFromComments');
+
+        $this->service->refreshArchives($channel);
+
+        $this->assertDatabaseMissing('ts_items', [
+            'video_id' => 'hidden00001',
+            'type' => '2',
+        ]);
+    }
+
+    /**
+     * comments_fetched_atがDELETE→再INSERT後も保持される（#654）
+     */
+    public function test_refresh_archives_preserves_comments_fetched_at(): void
+    {
+        $channel = Channel::factory()->create(['channel_id' => 'UC123456789']);
+
+        $fetchedAt = now()->subDay();
+        Archive::create([
+            'id' => Str::ulid(),
+            'video_id' => 'preserve001',
+            'channel_id' => $channel->channel_id,
+            'title' => '歌枠',
+            'is_public' => true,
+            'is_display' => true,
+            'published_at' => now(),
+            'comments_updated_at' => now(),
+            'comments_fetched_at' => $fetchedAt,
+        ]);
+
+        $this->youtubeService
+            ->shouldReceive('getArchivesAndTsItems')
+            ->once()
+            ->andReturn([
+                [
+                    'id' => Str::uuid()->toString(),
+                    'video_id' => 'preserve001',
+                    'channel_id' => $channel->channel_id,
+                    'title' => '歌枠',
+                    'thumbnail' => '',
+                    'is_public' => true,
+                    'is_display' => true,
+                    'published_at' => now(),
+                    'comments_updated_at' => now(),
+                    'description' => '',
+                    'ts_items' => [
+                        [
+                            'id' => Str::uuid()->toString(),
+                            'video_id' => 'preserve001',
+                            'type' => '1',
+                            'ts_text' => '1:00',
+                            'ts_num' => 60,
+                            'text' => '曲A',
+                            'is_display' => true,
+                        ],
+                    ],
+                ],
+            ]);
+
+        $this->service->refreshArchives($channel);
+
+        $this->assertNotNull(
+            Archive::where('video_id', 'preserve001')->first()->comments_fetched_at
+        );
+    }
 }
