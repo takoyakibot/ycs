@@ -142,6 +142,7 @@ class RefreshArchiveService
                     AND t5.type = '1'
                     AND t5.is_display = 1
                 )
+                AND t1.comments_fetched_at IS NULL
                 AND t1.channel_id = ?
         ", [$channel->channel_id]);
 
@@ -195,9 +196,22 @@ class RefreshArchiveService
         $subtitlesUnavailableMap = Archive::where('channel_id', $channel->channel_id)
             ->whereNotNull('subtitles_unavailable_at')
             ->pluck('subtitles_unavailable_at', 'video_id');
+
+        // コメント取得済みフラグも同様に退避（#654）
+        $commentsFetchedMap = Archive::where('channel_id', $channel->channel_id)
+            ->whereNotNull('comments_fetched_at')
+            ->pluck('comments_fetched_at', 'video_id');
+        // 今回コメント取得を試行した動画にもフラグをセット
+        foreach ($comment_ts_items_map as $video_id => $ts_items) {
+            if (! isset($commentsFetchedMap[$video_id])) {
+                $commentsFetchedMap[$video_id] = $now;
+            }
+        }
+
         foreach ($rtn_archives as &$archive) {
             // chunk insertは全行のカラム構成を揃える必要があるため、該当なしはnullを明示する
             $archive['subtitles_unavailable_at'] = $subtitlesUnavailableMap[$archive['video_id']] ?? null;
+            $archive['comments_fetched_at'] = $commentsFetchedMap[$archive['video_id']] ?? null;
         }
         unset($archive);
 
