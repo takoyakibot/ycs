@@ -827,4 +827,83 @@ class TimestampDecompositionServiceTest extends TestCase
         $this->service->bulkLinkAutoMatched();
         $this->assertDatabaseCount('songs', 0);
     }
+
+    public function test_save_selection_preserves_trailing_separator(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $decomposition = TimestampDecomposition::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize('AAA -BBB-'),
+            'original_text' => 'AAA -BBB-',
+            'parts' => ['AAA', 'BBB'],
+            'separator_count' => 1,
+            'status' => TimestampDecomposition::STATUS_PENDING,
+        ]);
+
+        $result = $this->service->saveSelection($decomposition->id, [0, 1], []);
+
+        $this->assertEquals('AAA -BBB-', $result['decomposition']->derived_title);
+    }
+
+    public function test_save_selection_preserves_leading_separator(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $decomposition = TimestampDecomposition::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize('-AAA - BBB'),
+            'original_text' => '-AAA - BBB',
+            'parts' => ['AAA', 'BBB'],
+            'separator_count' => 1,
+            'status' => TimestampDecomposition::STATUS_PENDING,
+        ]);
+
+        $result = $this->service->saveSelection($decomposition->id, [0, 1], []);
+
+        $this->assertEquals('-AAA - BBB', $result['decomposition']->derived_title);
+    }
+
+    public function test_save_selection_single_part_preserves_trailing_separator(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $decomposition = TimestampDecomposition::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize('AAA - BBB-'),
+            'original_text' => 'AAA - BBB-',
+            'parts' => ['AAA', 'BBB'],
+            'separator_count' => 1,
+            'status' => TimestampDecomposition::STATUS_PENDING,
+        ]);
+
+        $result = $this->service->saveSelection($decomposition->id, [0], [1]);
+
+        $this->assertEquals('BBB-', $result['decomposition']->derived_artist);
+    }
+
+    public function test_save_selection_middle_part_no_edge_separator(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $decomposition = TimestampDecomposition::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize('-AAA - BBB - CCC-'),
+            'original_text' => '-AAA - BBB - CCC-',
+            'parts' => ['AAA', 'BBB', 'CCC'],
+            'separator_count' => 2,
+            'status' => TimestampDecomposition::STATUS_PENDING,
+        ]);
+
+        $result = $this->service->saveSelection($decomposition->id, [1], [0, 2]);
+
+        // 中間パーツにはエッジ区切り文字が付かない
+        $this->assertEquals('BBB', $result['decomposition']->derived_title);
+        // 先頭と末尾パーツにはエッジ区切り文字が付く（非連続なので ' / ' で結合）
+        $this->assertEquals('-AAA / CCC-', $result['decomposition']->derived_artist);
+    }
 }
