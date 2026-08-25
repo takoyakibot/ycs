@@ -226,6 +226,22 @@ class QueryHelperTest extends TestCase
     public function test_split_fuzzy_keywords_keeps_number_only_search(): void
     {
         $this->assertEquals(['123'], QueryHelper::splitFuzzyKeywords('123'));
-        $this->assertEquals(['34'], QueryHelper::splitFuzzyKeywords('00:12:34'));
+        // タイムスタンプのみの場合はフォールバックで全トークンを返す
+        $this->assertEquals(['00', '12', '34'], QueryHelper::splitFuzzyKeywords('00:12:34'));
+    }
+
+    /**
+     * 数字だけの曲名が消えないこと
+     */
+    public function test_split_fuzzy_keywords_keeps_numeric_title(): void
+    {
+        // "45510 / wowaka" → 45510 が曲名なので残る
+        $this->assertEquals(['45510', 'wowaka'], QueryHelper::splitFuzzyKeywords('45510 / wowaka'));
+
+        // "1234 5678" → 両方残る
+        $this->assertEquals(['1234', '5678'], QueryHelper::splitFuzzyKeywords('1234 5678'));
+
+        // "2:47" → フォールバックで全トークン
+        $this->assertEquals(['2', '47'], QueryHelper::splitFuzzyKeywords('2:47'));
     }
 }

@@ -73,17 +73,22 @@ class QueryHelper
             return [];
         }
 
-        // 文字・数字以外を区切りとして分割
-        // （"/" "-" ":" などの区切り文字、括弧、記号、絵文字、丸数字などを除去）
-        $tokens = preg_split(self::FUZZY_TOKEN_PATTERN, $normalized, -1, PREG_SPLIT_NO_EMPTY);
-        if ($tokens === false) {
-            return [];
+        // タイムスタンプ形式を先頭から除去（normalize()がコロンをスラッシュに変換するため / で判定）
+        $stripped = preg_replace('/^\d{1,2}\/\d{2}(\/\d{2})?\s*/u', '', $normalized);
+
+        // 曲番号形式（1. 01. 等）を先頭から除去
+        $stripped = preg_replace('/^\d{1,3}\.\s*/u', '', $stripped);
+
+        // 全部除去されてしまった場合はフォールバック
+        if (trim($stripped) === '') {
+            $stripped = $normalized;
         }
 
-        // 先頭の数値トークン（曲番号の "1." や "00:12:34" のようなタイムスタンプ）を除去
-        // 他にキーワードが残る場合のみ除去する（数字だけの検索を潰さないため）
-        while (count($tokens) >= 2 && preg_match('/^\p{Nd}+$/u', $tokens[0]) === 1) {
-            array_shift($tokens);
+        // 文字・数字以外を区切りとして分割
+        // （"/" "-" ":" などの区切り文字、括弧、記号、絵文字、丸数字などを除去）
+        $tokens = preg_split(self::FUZZY_TOKEN_PATTERN, $stripped, -1, PREG_SPLIT_NO_EMPTY);
+        if ($tokens === false) {
+            return [];
         }
 
         $keywords = array_values(array_unique($tokens));
