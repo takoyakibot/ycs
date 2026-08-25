@@ -406,15 +406,11 @@ class TimestampDecomposition {
         if (!indices || indices.length === 0) return '';
 
         const originalParts = this.currentItem.parts;
+        const originalText = this.currentItem.original_text;
         parts = parts || originalParts;
-
-        if (indices.length === 1) {
-            return parts[indices[0]] || '';
-        }
 
         const sortedIndices = [...indices].sort((a, b) => a - b);
 
-        // 連続するインデックスのグループを作成
         const groups = [];
         let currentGroup = [sortedIndices[0]];
 
@@ -428,18 +424,11 @@ class TimestampDecomposition {
         }
         groups.push(currentGroup);
 
-        // 各グループを、元テキストの区切り文字で連結する。
-        //
-        // 値は parts を使う。parts には補足除去済みの配列が渡ることがあり、
-        // 元テキストを範囲でスライスすると除去した補足が復活してしまう
-        // （画面は「変化なし」と表示したまま、確定すると補足付きの値が入る）。
-        // 一方で区切り文字は8種類（/／-−－:：|｜）あるため固定文字で連結すると
-        // 「曲名 - アーティスト」が「曲名 / アーティスト」に化ける。
-        // そこで区切りだけを元テキストから取り、値は parts のものを使う。
-        const separators = this.extractSeparatorsFromOriginal(
-            this.currentItem.original_text,
-            originalParts
-        );
+        // 値は parts を使い、区切りだけを元テキストから取る
+        // （parts には補足除去済みの配列が渡ることがあり、
+        // 元テキストを範囲でスライスすると除去した補足が復活するため）
+        const separators = this.extractSeparatorsFromOriginal(originalText, originalParts);
+        const { leading, trailing } = this.extractEdgeSeparators(originalText, originalParts);
 
         const result = groups.map(group => {
             let joined = parts[group[0]] || '';
@@ -448,6 +437,13 @@ class TimestampDecomposition {
                 const index = group[i];
                 const separator = separators[index - 1] ?? ' / ';
                 joined += separator + (parts[index] || '');
+            }
+
+            if (group[0] === 0 && leading) {
+                joined = leading + joined;
+            }
+            if (group[group.length - 1] === originalParts.length - 1 && trailing) {
+                joined = joined + trailing;
             }
 
             return joined.trim();
@@ -494,6 +490,46 @@ class TimestampDecomposition {
         }
 
         return separators;
+    }
+
+    /**
+     * 元テキストの先頭・末尾にある区切り文字を取得する
+     *
+     * 先頭パーツの前、末尾パーツの後にある区切り文字（とスペース）のみの
+     * テキストを返す。それ以外の文字が含まれる場合は空文字を返す。
+     */
+    extractEdgeSeparators(originalText, originalParts) {
+        const separatorPattern = /^[\s\/／\-−－:：|｜]*$/u;
+        let leading = '';
+        let trailing = '';
+
+        if (originalParts.length === 0) return { leading, trailing };
+
+        const firstPartPos = originalText.indexOf(originalParts[0]);
+        if (firstPartPos > 0) {
+            const leadingText = originalText.substring(0, firstPartPos);
+            if (separatorPattern.test(leadingText)) {
+                leading = leadingText;
+            }
+        }
+
+        let lastPartEnd = 0;
+        let currentPos = 0;
+        for (let i = 0; i < originalParts.length; i++) {
+            const pos = originalText.indexOf(originalParts[i], currentPos);
+            if (pos !== -1) {
+                lastPartEnd = pos + originalParts[i].length;
+                currentPos = lastPartEnd;
+            }
+        }
+        if (lastPartEnd < originalText.length) {
+            const trailingText = originalText.substring(lastPartEnd);
+            if (separatorPattern.test(trailingText)) {
+                trailing = trailingText;
+            }
+        }
+
+        return { leading, trailing };
     }
 
     /**

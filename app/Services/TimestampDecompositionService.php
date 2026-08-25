@@ -241,7 +241,7 @@ class TimestampDecompositionService
         }
 
         if (count($indices) === 1) {
-            return $parts[$indices[0]] ?? '';
+            return $this->extractRangeFromOriginal($originalText, $parts, $indices[0], $indices[0]);
         }
 
         sort($indices);
@@ -276,11 +276,6 @@ class TimestampDecompositionService
      */
     private function extractRangeFromOriginal(string $originalText, array $parts, int $startIndex, int $endIndex): string
     {
-        if ($startIndex === $endIndex) {
-            return $parts[$startIndex] ?? '';
-        }
-
-        // 各パーツの位置を特定
         $currentPos = 0;
         $startPos = -1;
         $endPos = -1;
@@ -301,12 +296,31 @@ class TimestampDecompositionService
             $currentPos = $partPos + mb_strlen($parts[$i]);
         }
 
-        if ($startPos !== -1 && $endPos !== -1) {
-            return trim(mb_substr($originalText, $startPos, $endPos - $startPos));
+        if ($startPos === -1 || $endPos === -1) {
+            if ($startIndex === $endIndex) {
+                return $parts[$startIndex] ?? '';
+            }
+
+            return implode(' / ', array_slice($parts, $startIndex, $endIndex - $startIndex + 1));
         }
 
-        // フォールバック: 単純に連結
-        return implode(' / ', array_slice($parts, $startIndex, $endIndex - $startIndex + 1));
+        $separatorOrWhitespace = '/^[\s\/／\-−－:：|｜]*$/u';
+
+        if ($startIndex === 0) {
+            $leading = mb_substr($originalText, 0, $startPos);
+            if (preg_match($separatorOrWhitespace, $leading)) {
+                $startPos = 0;
+            }
+        }
+
+        if ($endIndex === count($parts) - 1) {
+            $trailing = mb_substr($originalText, $endPos);
+            if (preg_match($separatorOrWhitespace, $trailing)) {
+                $endPos = mb_strlen($originalText);
+            }
+        }
+
+        return trim(mb_substr($originalText, $startPos, $endPos - $startPos));
     }
 
     /**
