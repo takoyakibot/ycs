@@ -112,6 +112,7 @@ class RefreshArchiveService
                     AND t3.comment_id IS NOT NULL
                     AND t3.comment_id <> t3.video_id
                 )
+                AND t1.comments_fetched_at IS NULL
                 AND t1.channel_id = ?
         ", [$channel->channel_id]);
 
