@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Archive;
 use App\Models\Channel;
 use App\Models\Song;
+use App\Models\TimestampDecomposition;
 use App\Models\TimestampSongMapping;
 use App\Models\TsItem;
 use App\Models\User;
@@ -125,6 +126,7 @@ class SongMergeTest extends TestCase
         $response->assertJson([
             'affected_mappings' => 0,
             'affected_ts_items' => 0,
+            'affected_decompositions' => 0,
         ]);
 
         $this->assertDatabaseMissing('songs', ['id' => $sourceSong->id]);
@@ -233,6 +235,33 @@ class SongMergeTest extends TestCase
         $this->assertTrue($targetMappings->pluck('normalized_text')->contains('target text'));
         $this->assertTrue($targetMappings->pluck('normalized_text')->contains('source text 1'));
         $this->assertTrue($targetMappings->pluck('normalized_text')->contains('source text 2'));
+    }
+
+    public function test_merge_songs_transfers_decompositions(): void
+    {
+        $targetSong = Song::factory()->create(['title' => 'Target Song', 'artist' => 'Artist']);
+        $sourceSong = Song::factory()->create(['title' => 'Source Song', 'artist' => 'Artist']);
+
+        $decomposition = TimestampDecomposition::create([
+            'normalized_text' => 'source song - artist',
+            'original_text' => 'Source Song - Artist',
+            'parts' => ['Source Song', 'Artist'],
+            'separator_count' => 1,
+            'status' => TimestampDecomposition::STATUS_AUTO_MATCHED,
+            'song_id' => $sourceSong->id,
+        ]);
+
+        $response = $this->actingAs($this->user)
+            ->postJson('/api/songs/merge', [
+                'source_song_id' => $sourceSong->id,
+                'target_song_id' => $targetSong->id,
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonFragment(['affected_decompositions' => 1]);
+
+        $decomposition->refresh();
+        $this->assertEquals($targetSong->id, $decomposition->song_id);
     }
 
     public function test_delete_song_clears_ts_item_song_id(): void

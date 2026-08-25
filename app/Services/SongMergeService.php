@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\NormalizationLog;
 use App\Models\Song;
+use App\Models\TimestampDecomposition;
 use App\Models\TimestampSongMapping;
 use App\Models\TsItem;
 use Illuminate\Support\Facades\Auth;
@@ -115,13 +116,13 @@ class SongMergeService
     /**
      * 2つの楽曲をマージする
      *
-     * source の楽曲に紐付くマッピングと個別ts_itemをすべて target に付け替え、
+     * source の楽曲に紐付くマッピング・個別ts_item・分解をすべて target に付け替え、
      * source を削除する。
      *
      * @param  string  $sourceSongId  マージ元（削除される）楽曲ID
      * @param  string  $targetSongId  マージ先（残る）楽曲ID
      * @param  int|null  $userId  操作者ID
-     * @return array{affected_mappings: int, affected_ts_items: int}
+     * @return array{affected_mappings: int, affected_ts_items: int, affected_decompositions: int}
      */
     public function merge(string $sourceSongId, string $targetSongId, ?int $userId = null): array
     {
@@ -152,6 +153,10 @@ class SongMergeService
             $affectedTsItems = TsItem::where('song_id', $sourceSong->id)
                 ->update(['song_id' => $targetSong->id]);
 
+            // timestamp_decompositions.song_idを付け替え
+            $affectedDecompositions = TimestampDecomposition::where('song_id', $sourceSong->id)
+                ->update(['song_id' => $targetSong->id]);
+
             // ログ記録
             NormalizationLog::log(
                 $userId,
@@ -167,6 +172,7 @@ class SongMergeService
                     'affected_mappings' => $affectedMappings,
                     'deleted_duplicate_mappings' => $deletedDuplicates,
                     'affected_ts_items' => $affectedTsItems,
+                    'affected_decompositions' => $affectedDecompositions,
                 ]
             );
 
@@ -176,6 +182,7 @@ class SongMergeService
             return [
                 'affected_mappings' => $affectedMappings,
                 'affected_ts_items' => $affectedTsItems,
+                'affected_decompositions' => $affectedDecompositions,
             ];
         });
     }
