@@ -61,6 +61,7 @@ class SongCleansingService
                         'target_song_id' => $conflict->id,
                         'affected_mappings' => $result['affected_mappings'],
                         'affected_ts_items' => $result['affected_ts_items'],
+                        'affected_decompositions' => $result['affected_decompositions'],
                     ];
                 } else {
                     $song->update(['artist' => $to]);
