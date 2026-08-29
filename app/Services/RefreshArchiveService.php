@@ -228,9 +228,12 @@ class RefreshArchiveService
             ->map(fn ($item) => $item->getAttributes())
             ->toArray();
 
-        // 今回APIから再取得する動画、またはAPIレスポンスに既にtype='2'が含まれる動画は退避不要
+        // 今回のAPIレスポンスに含まれる動画のみ復元対象（消えた動画を復元するとFK制約違反）
+        $freshVideoIds = collect($rtn_archives)->pluck('video_id')->all();
+
         $commentTsItemsToRestore = collect($existingCommentTsItems)
-            ->filter(fn ($item) => ! array_key_exists($item['video_id'], $comment_ts_items_map)
+            ->filter(fn ($item) => in_array($item['video_id'], $freshVideoIds)
+                && ! array_key_exists($item['video_id'], $comment_ts_items_map)
                 && ! in_array($item['video_id'], $alreadyFetchedVideoIds))
             ->values()
             ->toArray();

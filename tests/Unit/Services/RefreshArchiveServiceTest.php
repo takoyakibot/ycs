@@ -1775,4 +1775,42 @@ class RefreshArchiveServiceTest extends TestCase
             Archive::where('video_id', 'preserve001')->first()->comments_fetched_at
         );
     }
+
+    public function test_refresh_archives_does_not_restore_comment_ts_items_for_disappeared_video(): void
+    {
+        $channel = Channel::factory()->create(['channel_id' => 'UC123456789']);
+
+        Archive::create([
+            'id' => Str::ulid(),
+            'video_id' => 'gone_video',
+            'channel_id' => $channel->channel_id,
+            'title' => '消える配信',
+            'is_public' => true,
+            'is_display' => true,
+            'published_at' => now(),
+            'comments_updated_at' => now(),
+        ]);
+
+        TsItem::create([
+            'id' => Str::ulid(),
+            'video_id' => 'gone_video',
+            'type' => '2',
+            'ts_text' => '1:00',
+            'ts_num' => 60,
+            'text' => 'コメント由来',
+            'comment_id' => 'c_001',
+            'is_display' => true,
+        ]);
+
+        // APIレスポンスにgone_videoは含まれない（動画が削除・非公開化）
+        $this->youtubeService
+            ->shouldReceive('getArchivesAndTsItems')
+            ->once()
+            ->andReturn([]);
+
+        $this->service->refreshArchives($channel);
+
+        $this->assertNull(Archive::where('video_id', 'gone_video')->first());
+        $this->assertCount(0, TsItem::where('video_id', 'gone_video')->get());
+    }
 }
