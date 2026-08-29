@@ -701,7 +701,9 @@ class TimestampDecomposition {
             this.updateUndoButton();
 
             const cascadedCount = response.data.cascaded_count || 0;
-            if (cascadedCount > 0) {
+            if (!response.data.song) {
+                toast.warning('保存しました（アーティスト未指定のため楽曲マスタには未登録）');
+            } else if (cascadedCount > 0) {
                 toast.success(`保存しました（同じアーティストの ${cascadedCount} 件も自動処理）`);
             } else {
                 toast.success('保存しました');
@@ -753,7 +755,7 @@ class TimestampDecomposition {
 
         try {
             this.showLoading();
-            await axios.post('/api/songs/decompose/whole-title', {
+            const response = await axios.post('/api/songs/decompose/whole-title', {
                 id: this.currentItem.id,
                 link_to_song: true
             });
@@ -766,7 +768,11 @@ class TimestampDecomposition {
             };
             this.updateUndoButton();
 
-            toast.success('全体を楽曲名として登録しました');
+            if (!response.data.song) {
+                toast.warning('登録しました（アーティスト未指定のため楽曲マスタには未登録）');
+            } else {
+                toast.success('全体を楽曲名として登録しました');
+            }
             await this.loadStatistics();
             await this.loadNext();
         } catch (error) {

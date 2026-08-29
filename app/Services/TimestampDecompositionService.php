@@ -586,6 +586,10 @@ class TimestampDecompositionService
         $normalizedTitle = TextNormalizer::normalize($title);
         $normalizedArtist = TextNormalizer::normalize($artist);
 
+        if ($normalizedArtist === '') {
+            return null;
+        }
+
         $song = Song::where('normalized_title', $normalizedTitle)
             ->where('normalized_artist', $normalizedArtist)
             ->first();
@@ -717,6 +721,8 @@ class TimestampDecompositionService
         TimestampDecomposition::where('status', TimestampDecomposition::STATUS_AUTO_MATCHED)
             ->whereNull('song_id')
             ->whereNotNull('derived_title')
+            ->where('derived_artist', '!=', '')
+            ->whereNotNull('derived_artist')
             ->chunk(100, function ($decompositions) use (&$count) {
                 foreach ($decompositions as $decomposition) {
                     try {
