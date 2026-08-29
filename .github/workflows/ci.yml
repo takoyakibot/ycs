@@ -120,3 +120,33 @@ jobs:
       # migrate:fresh 相当（全テーブル drop → 再実行）も通ることを確認
       - name: Run migrate:fresh
         run: php artisan migrate:fresh --force
+
+      # legacy charset 環境での charset/collation 変更マイグレーションの検証（#695）
+      #
+      # 新規MySQLではテーブルが最初から utf8mb4 で作られるため、べき等性チェックを持つ
+      # charset 変更マイグレーション（convert_remaining_tables_to_utf8mb4 等）の
+      # CONVERT TO / MODIFY SQL が一度も実行されない。
+      # テーブルを legacy charset に戻してからマイグレーションを再実行し、
+      # 変換SQLの構文が正しいことを検証する。
+      - name: Verify charset migrations on legacy-charset tables
+        run: |
+          mysql -h 127.0.0.1 -u root -proot ycs_ci <<'SQL'
+          SET FOREIGN_KEY_CHECKS = 0;
+          -- convert_remaining_tables_to_utf8mb4 の対象テーブルを utf8 に戻す
+          ALTER TABLE users CONVERT TO CHARACTER SET utf8 COLLATE utf8_unicode_ci;
+          ALTER TABLE channel_excluded_words CONVERT TO CHARACTER SET utf8 COLLATE utf8_unicode_ci;
+          ALTER TABLE channel_strip_patterns CONVERT TO CHARACTER SET utf8 COLLATE utf8_unicode_ci;
+          ALTER TABLE subtitle_fingerprints CONVERT TO CHARACTER SET utf8 COLLATE utf8_unicode_ci;
+          -- timestamp_decompositions は normalized_text が utf8mb4_bin（UNIQUE付き）なので
+          -- CONVERT TO は使えない。テキストカラムのみ utf8 に戻す
+          ALTER TABLE timestamp_decompositions
+            DEFAULT CHARACTER SET utf8 COLLATE utf8_unicode_ci,
+            MODIFY original_text TEXT CHARACTER SET utf8 COLLATE utf8_unicode_ci NOT NULL,
+            MODIFY derived_title VARCHAR(255) CHARACTER SET utf8 COLLATE utf8_unicode_ci NULL,
+            MODIFY derived_artist VARCHAR(255) CHARACTER SET utf8 COLLATE utf8_unicode_ci NULL;
+          SET FOREIGN_KEY_CHECKS = 1;
+          -- マイグレーション記録を削除して再実行対象にする
+          DELETE FROM migrations
+            WHERE migration = '2026_08_20_000001_convert_remaining_tables_to_utf8mb4';
+          SQL
+          php artisan migrate --force
