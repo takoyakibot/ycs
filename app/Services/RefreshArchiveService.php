@@ -193,13 +193,19 @@ class RefreshArchiveService
         // カバー曲（歌ってみた）のts_itemsを生成
         $cover_ts_items = $this->extractCoverSongTsItems($rtn_archives, $channel->channel_id);
 
-        // 字幕なしフラグはarchivesのDELETE→再INSERTで失われるため、退避して引き継ぐ（#622）
-        $subtitlesUnavailableMap = Archive::where('channel_id', $channel->channel_id)
+        // sticky columnsはDELETE→再INSERTで失われるため、一括退避して引き継ぐ（#622, #654, #737）
+        $stickyColumns = Archive::where('channel_id', $channel->channel_id)
+            ->where(function ($query) {
+                $query->whereNotNull('subtitles_unavailable_at')
+                    ->orWhereNotNull('comments_fetched_at');
+            })
+            ->get(['video_id', 'subtitles_unavailable_at', 'comments_fetched_at']);
+
+        $subtitlesUnavailableMap = $stickyColumns
             ->whereNotNull('subtitles_unavailable_at')
             ->pluck('subtitles_unavailable_at', 'video_id');
 
-        // コメント取得済みフラグも同様に退避（#654）
-        $commentsFetchedMap = Archive::where('channel_id', $channel->channel_id)
+        $commentsFetchedMap = $stickyColumns
             ->whereNotNull('comments_fetched_at')
             ->pluck('comments_fetched_at', 'video_id');
         // 今回コメント取得を試行した動画にもフラグをセット
