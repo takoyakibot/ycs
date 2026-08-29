@@ -22,6 +22,7 @@ class TimestampDecomposition extends Model
         'derived_artist',
         'status',
         'confidence',
+        'cascade_group_id',
         'song_id',
         'created_by',
         'updated_by',
