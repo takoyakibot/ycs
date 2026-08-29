@@ -721,6 +721,8 @@ class TimestampDecompositionService
         TimestampDecomposition::where('status', TimestampDecomposition::STATUS_AUTO_MATCHED)
             ->whereNull('song_id')
             ->whereNotNull('derived_title')
+            ->where('derived_artist', '!=', '')
+            ->whereNotNull('derived_artist')
             ->chunk(100, function ($decompositions) use (&$count) {
                 foreach ($decompositions as $decomposition) {
                     try {

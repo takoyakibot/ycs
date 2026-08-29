@@ -897,6 +897,30 @@ class TimestampDecompositionServiceTest extends TestCase
         $this->assertDatabaseCount('timestamp_song_mappings', 0);
     }
 
+    public function test_bulk_link_auto_matched_does_not_create_song_when_artist_is_empty_string(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        TimestampDecomposition::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize('夜に駆ける'),
+            'original_text' => '夜に駆ける',
+            'parts' => ['夜に駆ける'],
+            'separator_count' => 0,
+            'status' => TimestampDecomposition::STATUS_AUTO_MATCHED,
+            'confidence' => 0.8,
+            'derived_title' => '夜に駆ける',
+            'derived_artist' => '',
+            'title_part_index' => 0,
+        ]);
+
+        $count = $this->service->bulkLinkAutoMatched();
+
+        $this->assertEquals(0, $count);
+        $this->assertDatabaseCount('songs', 0);
+    }
+
     /**
      * 無視キーワードを語の一部に含むアーティスト名が自動判定で捨てられないことをテスト
      *
