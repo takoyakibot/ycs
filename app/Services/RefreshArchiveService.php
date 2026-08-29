@@ -216,8 +216,27 @@ class RefreshArchiveService
         }
         unset($archive);
 
+        // コメント由来ts_itemsはDELETE→再INSERTで失われるため退避（#734）
+        // $comment_ts_items_mapに含まれない動画の既存type='2'行を保持する
+        $existingCommentTsItems = TsItem::whereIn('video_id', function ($query) use ($channel) {
+            $query->select('video_id')
+                ->from('archives')
+                ->where('channel_id', $channel->channel_id);
+        })
+            ->where('type', '2')
+            ->get()
+            ->map(fn ($item) => $item->getAttributes())
+            ->toArray();
+
+        // 今回APIから再取得する動画、またはAPIレスポンスに既にtype='2'が含まれる動画は退避不要
+        $commentTsItemsToRestore = collect($existingCommentTsItems)
+            ->filter(fn ($item) => ! array_key_exists($item['video_id'], $comment_ts_items_map)
+                && ! in_array($item['video_id'], $alreadyFetchedVideoIds))
+            ->values()
+            ->toArray();
+
         // 全てのDB操作を1つのトランザクションで実行（原子性を保証）
-        DB::transaction(function () use ($channel, $rtn_archives, $rtn_ts_items, $comment_ts_items_map, $cover_ts_items) {
+        DB::transaction(function () use ($channel, $rtn_archives, $rtn_ts_items, $comment_ts_items_map, $cover_ts_items, $commentTsItemsToRestore) {
             // 2.一度関連情報を削除（cascadeでTsItemsも消える）
             Archive::where('channel_id', $channel->channel_id)->delete();
 
@@ -251,6 +270,14 @@ class RefreshArchiveService
                     ->delete();
                 if ($ts_items) {
                     DB::table('ts_items')->insert($ts_items);
+                }
+            }
+
+            // 4.1.3.退避していたコメント由来ts_itemsを復元（#734）
+            if ($commentTsItemsToRestore) {
+                $chunked = array_chunk($commentTsItemsToRestore, 100);
+                foreach ($chunked as $chunk) {
+                    DB::table('ts_items')->insert($chunk);
                 }
             }
 
