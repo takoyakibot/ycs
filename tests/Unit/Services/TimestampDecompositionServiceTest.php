@@ -771,12 +771,6 @@ class TimestampDecompositionServiceTest extends TestCase
         $this->assertNull($saved->artist_part_index);
     }
 
-    /**
-     * 無視キーワードを語の一部に含むアーティスト名が自動判定で捨てられないことをテスト
-     *
-     * "Official髭男dism" の "official" が無視キーワードとして部分一致すると、
-     * アーティスト名なしで自動確定され、アーティスト名が空の楽曲マスタが作られてしまう
-     */
     public function test_link_to_song_skips_when_artist_is_empty(): void
     {
         $user = User::factory()->create();
@@ -818,6 +812,30 @@ class TimestampDecompositionServiceTest extends TestCase
             'confidence' => 1.0,
             'derived_title' => 'Yesterday',
             'derived_artist' => '',
+        ]);
+
+        $result = $this->service->linkToSong($decomposition);
+
+        $this->assertNull($result);
+        $this->assertDatabaseCount('songs', 0);
+        $this->assertDatabaseCount('timestamp_song_mappings', 0);
+    }
+
+    public function test_link_to_song_skips_when_artist_is_whitespace_only(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $decomposition = TimestampDecomposition::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize('Yesterday'),
+            'original_text' => 'Yesterday',
+            'parts' => ['Yesterday'],
+            'separator_count' => 0,
+            'status' => TimestampDecomposition::STATUS_SELECTED,
+            'confidence' => 1.0,
+            'derived_title' => 'Yesterday',
+            'derived_artist' => '　',
         ]);
 
         $result = $this->service->linkToSong($decomposition);
@@ -879,6 +897,12 @@ class TimestampDecompositionServiceTest extends TestCase
         $this->assertDatabaseCount('timestamp_song_mappings', 0);
     }
 
+    /**
+     * 無視キーワードを語の一部に含むアーティスト名が自動判定で捨てられないことをテスト
+     *
+     * "Official髭男dism" の "official" が無視キーワードとして部分一致すると、
+     * アーティスト名なしで自動確定され、アーティスト名が空の楽曲マスタが作られてしまう
+     */
     public function test_scan_does_not_auto_match_artist_containing_ignore_keyword(): void
     {
         $user = User::factory()->create();

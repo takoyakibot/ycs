@@ -582,13 +582,13 @@ class TimestampDecompositionService
         $title = $decomposition->derived_title;
         $artist = $decomposition->derived_artist ?? '';
 
-        if ($artist === '') {
-            return null;
-        }
-
         // 正規化済みテキストで既存楽曲を検索（文字バリエーションによる重複を防止）
         $normalizedTitle = TextNormalizer::normalize($title);
         $normalizedArtist = TextNormalizer::normalize($artist);
+
+        if ($normalizedArtist === '') {
+            return null;
+        }
 
         $song = Song::where('normalized_title', $normalizedTitle)
             ->where('normalized_artist', $normalizedArtist)
