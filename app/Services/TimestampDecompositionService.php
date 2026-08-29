@@ -209,20 +209,22 @@ class TimestampDecompositionService
             );
 
         // DBには最初のインデックスのみ保存（後方互換性のため）
+        $cascadedCount = 0;
+        $cascadeGroupId = ($enableCascade && $derivedArtist) ? (string) Str::ulid() : null;
+
         $decomposition->update([
             'title_part_index' => ! empty($titleIndices) ? $titleIndices[0] : null,
             'artist_part_index' => ! empty($artistIndices) ? $artistIndices[0] : null,
             'derived_title' => $derivedTitle ?: null,
             'derived_artist' => $derivedArtist ?: null,
             'status' => TimestampDecomposition::STATUS_SELECTED,
+            'cascade_group_id' => $cascadeGroupId,
             'updated_by' => Auth::id(),
         ]);
 
-        $cascadedCount = 0;
-
         // アーティストが設定された場合、同じアーティストを持つ他のタイムスタンプにカスケード処理
-        if ($enableCascade && $derivedArtist) {
-            $cascadedCount = $this->cascadeArtistSelection($derivedArtist, $decomposition->id);
+        if ($cascadeGroupId) {
+            $cascadedCount = $this->cascadeArtistSelection($derivedArtist, $decomposition->id, $cascadeGroupId);
         }
 
         return [
@@ -339,6 +341,7 @@ class TimestampDecompositionService
             'derived_title' => $decomposition->original_text,
             'derived_artist' => null,
             'status' => TimestampDecomposition::STATUS_SELECTED,
+            'cascade_group_id' => null,
             'updated_by' => Auth::id(),
         ]);
 
@@ -355,7 +358,7 @@ class TimestampDecompositionService
      * @param  string  $excludeId  カスケード元のID（除外）
      * @return int 処理された件数
      */
-    public function cascadeArtistSelection(string $artistName, string $excludeId): int
+    public function cascadeArtistSelection(string $artistName, string $excludeId, ?string $cascadeGroupId = null): int
     {
         $normalizedArtist = TextNormalizer::normalize($artistName);
         $count = 0;
@@ -363,7 +366,7 @@ class TimestampDecompositionService
         // pendingなタイムスタンプを検索
         TimestampDecomposition::pending()
             ->where('id', '!=', $excludeId)
-            ->chunk(100, function ($decompositions) use ($normalizedArtist, $artistName, &$count) {
+            ->chunk(100, function ($decompositions) use ($normalizedArtist, $artistName, &$count, $cascadeGroupId) {
                 foreach ($decompositions as $decomposition) {
                     $matchResult = $this->findArtistInParts($decomposition->parts, $normalizedArtist);
 
@@ -383,6 +386,7 @@ class TimestampDecompositionService
                         'derived_title' => $derivedTitle,
                         'status' => TimestampDecomposition::STATUS_AUTO_MATCHED,
                         'confidence' => 0.9,
+                        'cascade_group_id' => $cascadeGroupId,
                         'updated_by' => Auth::id(),
                     ]);
 
@@ -518,15 +522,12 @@ class TimestampDecompositionService
                 ]);
         }
 
-        // カスケード処理されたアイテムも元に戻す（同じupdated_byかつ近い時間に更新されたもの）
-        $cascadedItems = TimestampDecomposition::where('id', '!=', $id)
-            ->where('status', TimestampDecomposition::STATUS_AUTO_MATCHED)
-            ->where('updated_by', $decomposition->updated_by)
-            ->whereBetween('updated_at', [
-                $decomposition->updated_at->subSeconds(5),
-                $decomposition->updated_at->addSeconds(5),
-            ])
-            ->get();
+        // カスケード処理されたアイテムも元に戻す
+        $cascadedItems = $decomposition->cascade_group_id
+            ? TimestampDecomposition::where('id', '!=', $id)
+                ->where('cascade_group_id', $decomposition->cascade_group_id)
+                ->get()
+            : collect();
 
         foreach ($cascadedItems as $item) {
             // マッピングを解除
@@ -549,6 +550,7 @@ class TimestampDecompositionService
                 'status' => TimestampDecomposition::STATUS_PENDING,
                 'song_id' => null,
                 'confidence' => null,
+                'cascade_group_id' => null,
                 'updated_by' => Auth::id(),
             ]);
             $undoneCount++;
@@ -562,6 +564,8 @@ class TimestampDecompositionService
             'derived_artist' => null,
             'status' => TimestampDecomposition::STATUS_PENDING,
             'song_id' => null,
+            'confidence' => null,
+            'cascade_group_id' => null,
             'updated_by' => Auth::id(),
         ]);
 
