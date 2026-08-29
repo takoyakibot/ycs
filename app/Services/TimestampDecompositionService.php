@@ -209,21 +209,21 @@ class TimestampDecompositionService
             );
 
         // DBには最初のインデックスのみ保存（後方互換性のため）
+        $cascadedCount = 0;
+        $cascadeGroupId = ($enableCascade && $derivedArtist) ? (string) Str::ulid() : null;
+
         $decomposition->update([
             'title_part_index' => ! empty($titleIndices) ? $titleIndices[0] : null,
             'artist_part_index' => ! empty($artistIndices) ? $artistIndices[0] : null,
             'derived_title' => $derivedTitle ?: null,
             'derived_artist' => $derivedArtist ?: null,
             'status' => TimestampDecomposition::STATUS_SELECTED,
+            'cascade_group_id' => $cascadeGroupId,
             'updated_by' => Auth::id(),
         ]);
 
-        $cascadedCount = 0;
-
         // アーティストが設定された場合、同じアーティストを持つ他のタイムスタンプにカスケード処理
-        if ($enableCascade && $derivedArtist) {
-            $cascadeGroupId = (string) Str::ulid();
-            $decomposition->update(['cascade_group_id' => $cascadeGroupId]);
+        if ($cascadeGroupId) {
             $cascadedCount = $this->cascadeArtistSelection($derivedArtist, $decomposition->id, $cascadeGroupId);
         }
 
@@ -341,6 +341,7 @@ class TimestampDecompositionService
             'derived_title' => $decomposition->original_text,
             'derived_artist' => null,
             'status' => TimestampDecomposition::STATUS_SELECTED,
+            'cascade_group_id' => null,
             'updated_by' => Auth::id(),
         ]);
 

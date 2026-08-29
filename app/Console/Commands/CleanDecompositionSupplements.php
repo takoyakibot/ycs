@@ -405,11 +405,8 @@ class CleanDecompositionSupplements extends Command
         DB::transaction(function () use ($rows, &$updated) {
             foreach ($rows as $row) {
                 // updated_at / updated_by は意図的に更新しない。
-                // TimestampDecompositionService::undoAction() は
-                // 「同じ updated_by かつ updated_at が近いもの」をカスケード操作の
-                // まとまりとみなして一緒に戻すため、表記の掃除でこれらを書き換えると
-                // 無関係なレコードが巻き込まれて戻されてしまう。
-                // 掃除の記録は --csv で残す。
+                // 表記の掃除はユーザー操作ではなく、更新メタデータを書き換えると
+                // 操作履歴が不正確になる。掃除の記録は --csv で残す。
                 DB::table('timestamp_decompositions')
                     ->where('id', $row['id'])
                     ->update([

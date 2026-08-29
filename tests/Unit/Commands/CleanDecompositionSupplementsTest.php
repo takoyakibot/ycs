@@ -107,9 +107,8 @@ class CleanDecompositionSupplementsTest extends TestCase
     /**
      * 掃除では updated_at / updated_by を書き換えないこと
      *
-     * undoAction() が「同じ updated_by かつ updated_at が近いもの」を
-     * カスケード操作のまとまりとみなすため、掃除で書き換えると
-     * 無関係なレコードが巻き込まれて戻されてしまう
+     * 表記の掃除はユーザー操作ではなく、更新メタデータを書き換えると
+     * 操作履歴が不正確になる
      */
     public function test_apply_does_not_touch_update_metadata(): void
     {

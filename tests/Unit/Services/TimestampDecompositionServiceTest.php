@@ -1279,4 +1279,100 @@ class TimestampDecompositionServiceTest extends TestCase
         // カスケード対象にも同じcascade_group_idが設定される
         $this->assertEquals($source->cascade_group_id, $target->cascade_group_id);
     }
+
+    public function test_reconfirming_cascaded_record_clears_cascade_group_id(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $channel = Channel::factory()->create();
+        $archive = Archive::factory()->create(['channel_id' => $channel->channel_id]);
+
+        $groupId = (string) Str::ulid();
+
+        // ソース（selected）
+        $source = TimestampDecomposition::create([
+            'normalized_text' => TextNormalizer::normalize('夜に駆ける / YOASOBI'),
+            'original_text' => '夜に駆ける / YOASOBI',
+            'parts' => ['夜に駆ける', 'YOASOBI'],
+            'separator_count' => 1,
+            'title_part_index' => 0,
+            'artist_part_index' => 1,
+            'derived_title' => '夜に駆ける',
+            'derived_artist' => 'YOASOBI',
+            'status' => TimestampDecomposition::STATUS_SELECTED,
+            'cascade_group_id' => $groupId,
+            'updated_by' => $user->id,
+        ]);
+
+        TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'normalized_text' => $source->normalized_text,
+        ]);
+
+        // カスケード先（auto_matched）を直接再確定
+        $cascaded = TimestampDecomposition::create([
+            'normalized_text' => TextNormalizer::normalize('群青 / YOASOBI'),
+            'original_text' => '群青 / YOASOBI',
+            'parts' => ['群青', 'YOASOBI'],
+            'separator_count' => 1,
+            'title_part_index' => 0,
+            'artist_part_index' => 1,
+            'derived_title' => '群青',
+            'derived_artist' => 'YOASOBI',
+            'status' => TimestampDecomposition::STATUS_AUTO_MATCHED,
+            'confidence' => 0.9,
+            'cascade_group_id' => $groupId,
+            'updated_by' => $user->id,
+        ]);
+
+        TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'normalized_text' => $cascaded->normalized_text,
+        ]);
+
+        // カスケード先を直接再確定（カスケード無効）
+        $this->service->saveSelection($cascaded->id, [0], [], enableCascade: false);
+
+        $cascaded->refresh();
+        $this->assertEquals(TimestampDecomposition::STATUS_SELECTED, $cascaded->status);
+        $this->assertNull($cascaded->cascade_group_id);
+
+        // ソースをundoしても再確定済みのカスケード先は巻き込まれない
+        $result = $this->service->undoAction($source->id);
+        $this->assertEquals(1, $result['undone_count']);
+
+        $cascaded->refresh();
+        $this->assertEquals(TimestampDecomposition::STATUS_SELECTED, $cascaded->status);
+        $this->assertEquals('群青', $cascaded->derived_title);
+    }
+
+    public function test_save_as_whole_title_clears_cascade_group_id(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $groupId = (string) Str::ulid();
+
+        $decomposition = TimestampDecomposition::create([
+            'normalized_text' => TextNormalizer::normalize('群青 / YOASOBI'),
+            'original_text' => '群青 / YOASOBI',
+            'parts' => ['群青', 'YOASOBI'],
+            'separator_count' => 1,
+            'title_part_index' => 0,
+            'artist_part_index' => 1,
+            'derived_title' => '群青',
+            'derived_artist' => 'YOASOBI',
+            'status' => TimestampDecomposition::STATUS_AUTO_MATCHED,
+            'cascade_group_id' => $groupId,
+            'updated_by' => $user->id,
+        ]);
+
+        $this->service->saveAsWholeTitle($decomposition->id);
+
+        $decomposition->refresh();
+        $this->assertEquals(TimestampDecomposition::STATUS_SELECTED, $decomposition->status);
+        $this->assertEquals('群青 / YOASOBI', $decomposition->derived_title);
+        $this->assertNull($decomposition->cascade_group_id);
+    }
 }
