@@ -1647,6 +1647,82 @@ class RefreshArchiveServiceTest extends TestCase
     /**
      * comments_fetched_atがDELETE→再INSERT後も保持される（#654）
      */
+    public function test_refresh_archives_preserves_comment_ts_items_not_refetched(): void
+    {
+        $channel = Channel::factory()->create(['channel_id' => 'UC123456789']);
+
+        Archive::create([
+            'id' => Str::ulid(),
+            'video_id' => 'comment_v01',
+            'channel_id' => $channel->channel_id,
+            'title' => '歌枠',
+            'is_public' => true,
+            'is_display' => true,
+            'published_at' => now(),
+            'comments_updated_at' => now(),
+            'comments_fetched_at' => now()->subDay(),
+        ]);
+
+        TsItem::create([
+            'id' => Str::ulid(),
+            'video_id' => 'comment_v01',
+            'type' => '1',
+            'ts_text' => '1:00',
+            'ts_num' => 60,
+            'text' => '概要欄の曲',
+            'is_display' => true,
+        ]);
+
+        TsItem::create([
+            'id' => Str::ulid(),
+            'video_id' => 'comment_v01',
+            'type' => '2',
+            'ts_text' => '2:00',
+            'ts_num' => 120,
+            'text' => 'コメント由来の曲',
+            'comment_id' => 'comment_001',
+            'is_display' => true,
+        ]);
+
+        $this->youtubeService
+            ->shouldReceive('getArchivesAndTsItems')
+            ->once()
+            ->andReturn([
+                [
+                    'id' => Str::uuid()->toString(),
+                    'video_id' => 'comment_v01',
+                    'channel_id' => $channel->channel_id,
+                    'title' => '歌枠',
+                    'thumbnail' => '',
+                    'is_public' => true,
+                    'is_display' => true,
+                    'published_at' => now(),
+                    'comments_updated_at' => now(),
+                    'description' => '',
+                    'ts_items' => [
+                        [
+                            'id' => Str::uuid()->toString(),
+                            'video_id' => 'comment_v01',
+                            'type' => '1',
+                            'ts_text' => '1:00',
+                            'ts_num' => 60,
+                            'text' => '概要欄の曲',
+                            'is_display' => true,
+                        ],
+                    ],
+                ],
+            ]);
+
+        $this->service->refreshArchives($channel);
+
+        $commentItems = TsItem::where('video_id', 'comment_v01')
+            ->where('type', '2')
+            ->get();
+
+        $this->assertCount(1, $commentItems);
+        $this->assertEquals('コメント由来の曲', $commentItems->first()->text);
+    }
+
     public function test_refresh_archives_preserves_comments_fetched_at(): void
     {
         $channel = Channel::factory()->create(['channel_id' => 'UC123456789']);
