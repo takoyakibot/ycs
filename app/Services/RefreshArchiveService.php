@@ -194,6 +194,7 @@ class RefreshArchiveService
         $cover_ts_items = $this->extractCoverSongTsItems($rtn_archives, $channel->channel_id);
 
         // sticky columnsはDELETE→再INSERTで失われるため、一括退避して引き継ぐ（#622, #654, #737）
+        // 追加時はOR句・select列・pluckマップ・$rtn_archivesへの代入の4箇所を同時に更新すること
         $stickyColumns = Archive::where('channel_id', $channel->channel_id)
             ->where(function ($query) {
                 $query->whereNotNull('subtitles_unavailable_at')
