@@ -1813,4 +1813,37 @@ class RefreshArchiveServiceTest extends TestCase
         $this->assertNull(Archive::where('video_id', 'gone_video')->first());
         $this->assertCount(0, TsItem::where('video_id', 'gone_video')->get());
     }
+
+    public function test_refresh_timestamps_from_comments_resets_comments_fetched_at(): void
+    {
+        $videoId = 'video_reset';
+        $channel = Channel::factory()->create();
+        $archive = Archive::factory()->create([
+            'channel_id' => $channel->channel_id,
+            'video_id' => $videoId,
+            'comments_fetched_at' => now()->subDay(),
+        ]);
+
+        $this->youtubeService
+            ->shouldReceive('getTimeStampsFromComments')
+            ->once()
+            ->with($videoId, [])
+            ->andReturn([
+                [
+                    'id' => Str::uuid()->toString(),
+                    'video_id' => $videoId,
+                    'comment_id' => 'c_001',
+                    'type' => '2',
+                    'ts_text' => '1:00',
+                    'ts_num' => 60,
+                    'text' => 'テスト曲',
+                    'is_display' => true,
+                ],
+            ]);
+
+        $this->service->refreshTimeStampsFromComments($videoId);
+
+        $archive->refresh();
+        $this->assertNull($archive->comments_fetched_at);
+    }
 }

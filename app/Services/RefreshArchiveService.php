@@ -428,6 +428,11 @@ class RefreshArchiveService
             if ($ts_items) {
                 DB::table('ts_items')->insert($ts_items);
             }
+
+            // 手動取得後は自動チェック対象に戻す（#735）
+            Archive::where('video_id', $videoId)
+                ->whereNotNull('comments_fetched_at')
+                ->update(['comments_fetched_at' => null]);
         });
     }
 
