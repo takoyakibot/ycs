@@ -134,13 +134,17 @@ class TimestampService
      */
     private function applyFilters(Builder $query, string $search, string $index, string $publishedFrom = '', string $publishedTo = ''): void
     {
-        // 検索条件（スペース区切りでAND検索、正規化して類似文字を吸収）
         if ($search) {
             $keywords = QueryHelper::splitSearchKeywords($search);
             foreach ($keywords as $keyword) {
-                $normalizedKeyword = TextNormalizer::normalize($keyword);
+                ['term' => $term, 'exclude' => $exclude] = QueryHelper::parseSearchTerm($keyword);
+                $normalizedKeyword = TextNormalizer::normalize($term);
                 $escaped = QueryHelper::escapeLikeString($normalizedKeyword);
-                $query->where('ts_items.normalized_text', 'like', "%{$escaped}%");
+                if ($exclude) {
+                    $query->where('ts_items.normalized_text', 'not like', "%{$escaped}%");
+                } else {
+                    $query->where('ts_items.normalized_text', 'like', "%{$escaped}%");
+                }
             }
         }
 
