@@ -47,7 +47,7 @@ class Song extends Model
                 $song->normalized_artist = TextNormalizer::normalize($song->artist);
             }
 
-            if ($song->exists && ($song->isDirty('title') || $song->isDirty('artist'))) {
+            if ($song->exists && ($song->isDirty('title') || $song->isDirty('artist')) && ! $song->isDirty('review_status')) {
                 $song->review_status = null;
             }
         });
