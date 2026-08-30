@@ -39,18 +39,16 @@ class Song extends Model
 
     protected static function booted(): void
     {
-        static::creating(function (Song $song) {
-            if ($song->review_status === null) {
-                $song->review_status = self::REVIEW_STATUS_NEEDS_REVIEW;
-            }
-        });
-
         static::saving(function (Song $song) {
             if ($song->isDirty('title') || $song->normalized_title === null) {
                 $song->normalized_title = TextNormalizer::normalize($song->title);
             }
             if ($song->isDirty('artist') || $song->normalized_artist === null) {
                 $song->normalized_artist = TextNormalizer::normalize($song->artist);
+            }
+
+            if ($song->exists && ($song->isDirty('title') || $song->isDirty('artist')) && ! $song->isDirty('review_status')) {
+                $song->review_status = null;
             }
         });
     }

@@ -423,9 +423,24 @@ class SongControllerTest extends TestCase
         $response = $this->actingAs($this->user)->getJson(route('songs.fetchSongs', ['review_status' => 'needs_review']));
 
         $response->assertOk();
-        $this->assertEquals(2, $response->json('total'));
-        $titles = collect($response->json('data'))->pluck('title')->sort()->values()->all();
-        $this->assertEquals(['No Status', 'Review Song'], $titles);
+        $this->assertEquals(1, $response->json('total'));
+        $this->assertEquals('Review Song', $response->json('data.0.title'));
+    }
+
+    /**
+     * 楽曲マスタ一覧取得のテスト（review_status=nullはどちらのフィルタにも含まれない）
+     */
+    public function test_fetch_songs_null_review_status_excluded_from_both_filters(): void
+    {
+        Song::factory()->create(['title' => 'Null Song', 'artist' => 'A', 'review_status' => null]);
+
+        $needsReview = $this->actingAs($this->user)->getJson(route('songs.fetchSongs', ['review_status' => 'needs_review']));
+        $needsReview->assertOk();
+        $this->assertEquals(0, $needsReview->json('total'));
+
+        $safe = $this->actingAs($this->user)->getJson(route('songs.fetchSongs', ['review_status' => 'safe']));
+        $safe->assertOk();
+        $this->assertEquals(0, $safe->json('total'));
     }
 
     /**
