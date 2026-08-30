@@ -41,13 +41,12 @@ class TimestampDecompositionService
                     ->whereColumn('timestamp_song_mappings.normalized_text', 'ts_items.normalized_text')
                     ->where('timestamp_song_mappings.is_not_song', true);
             })
-            // 手動紐付け済みのタイムスタンプを除外（自動紐付けはTS分解で再処理可能）
             ->whereNotExists(function ($query) {
                 $query->select(DB::raw(1))
                     ->from('timestamp_song_mappings')
                     ->whereColumn('timestamp_song_mappings.normalized_text', 'ts_items.normalized_text')
                     ->whereNotNull('timestamp_song_mappings.song_id')
-                    ->where('timestamp_song_mappings.is_manual', true);
+                    ->where(TimestampSongMapping::confirmedJoinConditions());
             })
             ->whereNotExists(function ($query) {
                 $query->select(DB::raw(1))
@@ -159,13 +158,12 @@ class TimestampDecompositionService
                     ->whereColumn('timestamp_song_mappings.normalized_text', 'timestamp_decompositions.normalized_text')
                     ->where('timestamp_song_mappings.is_not_song', true);
             })
-            // 手動紐付け済みのタイムスタンプを除外（自動紐付けはTS分解で再処理可能）
             ->whereNotExists(function ($query) {
                 $query->select(DB::raw(1))
                     ->from('timestamp_song_mappings')
                     ->whereColumn('timestamp_song_mappings.normalized_text', 'timestamp_decompositions.normalized_text')
                     ->whereNotNull('timestamp_song_mappings.song_id')
-                    ->where('timestamp_song_mappings.is_manual', true);
+                    ->where(TimestampSongMapping::confirmedJoinConditions());
             })
             ->orderBy('separator_count', 'asc') // パーツが少ないものから処理（簡単なものから）
             ->orderBy('created_at', 'asc')
@@ -657,13 +655,12 @@ class TimestampDecompositionService
                     ->whereColumn('timestamp_song_mappings.normalized_text', 'timestamp_decompositions.normalized_text')
                     ->where('timestamp_song_mappings.is_not_song', true);
             })
-            // 手動紐付け済みのタイムスタンプを除外（自動紐付けはTS分解で再処理可能）
             ->whereNotExists(function ($query) {
                 $query->select(DB::raw(1))
                     ->from('timestamp_song_mappings')
                     ->whereColumn('timestamp_song_mappings.normalized_text', 'timestamp_decompositions.normalized_text')
                     ->whereNotNull('timestamp_song_mappings.song_id')
-                    ->where('timestamp_song_mappings.is_manual', true);
+                    ->where(TimestampSongMapping::confirmedJoinConditions());
             })
             ->count();
 
@@ -694,13 +691,12 @@ class TimestampDecompositionService
                     ->whereColumn('timestamp_song_mappings.normalized_text', 'ts_items.normalized_text')
                     ->where('timestamp_song_mappings.is_not_song', true);
             })
-            // 手動紐付け済みのタイムスタンプを除外（自動紐付けはTS分解で再処理可能）
             ->whereNotExists(function ($query) {
                 $query->select(DB::raw(1))
                     ->from('timestamp_song_mappings')
                     ->whereColumn('timestamp_song_mappings.normalized_text', 'ts_items.normalized_text')
                     ->whereNotNull('timestamp_song_mappings.song_id')
-                    ->where('timestamp_song_mappings.is_manual', true);
+                    ->where(TimestampSongMapping::confirmedJoinConditions());
             })
             ->whereNotExists(function ($query) {
                 $query->select(DB::raw(1))

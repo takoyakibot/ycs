@@ -28,11 +28,12 @@ class MappingStatusHelper
         }
 
         if ($mapping->song) {
-            $prefix = $mapping->is_manual ? '' : '[自動] ';
+            $confirmed = $mapping->isConfirmed();
+            $prefix = $confirmed ? '' : '[自動] ';
             $songInfo = $prefix.$mapping->song->title.' / '.$mapping->song->artist;
 
             return [
-                'status' => $mapping->is_manual ? 'linked' : 'auto_linked',
+                'status' => $confirmed ? 'linked' : 'auto_linked',
                 'label' => '紐付済',
                 'song_info' => $songInfo,
             ];

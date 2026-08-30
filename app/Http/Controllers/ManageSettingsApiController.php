@@ -461,7 +461,7 @@ class ManageSettingsApiController extends Controller
                     }
                 }
 
-                // 4. 自動紐付け（is_manual=false）をリセット
+                // 4. 未確定の自動紐付け（is_manual=false）を削除（確定済みは保持）
                 TimestampSongMapping::whereIn('normalized_text', $oldNormalizedTexts)
                     ->where('is_manual', false)
                     ->delete();
