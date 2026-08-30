@@ -257,6 +257,10 @@ class QueryHelper
     /**
      * キーワード配列を複数カラムに対するAND/OR条件として適用
      *
+     * 除外構文（-プレフィックス）はapplyAndSearchAny経由で有効。
+     * applyFuzzySearch経由ではsplitFuzzyKeywordsが「-」を区切り文字として
+     * 除去するため、呼び出し側で事前に除外語を分離する必要がある。
+     *
      * @param  Builder  $query  クエリビルダー
      * @param  string[]  $keywords  キーワード配列
      * @param  string[]  $columns  検索対象のカラム名
