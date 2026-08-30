@@ -207,4 +207,76 @@ class AutoLinkServiceTest extends TestCase
             'song_id' => $existingSong->id,
         ]);
     }
+
+    public function test_auto_link_sets_is_manual_true_when_artist_matches(): void
+    {
+        Song::factory()->create([
+            'title' => '千本桜',
+            'artist' => '初音ミク',
+        ]);
+
+        // 「千本桜 / 初音ミク」→ タイトル・アーティスト両方一致
+        $this->createTsItem('千本桜 / 初音ミク');
+
+        $this->service->autoLinkUnlinkedTimestamps(10);
+
+        $this->assertDatabaseHas('timestamp_song_mappings', [
+            'is_manual' => true,
+            'status' => 'linked',
+        ]);
+    }
+
+    public function test_auto_link_sets_is_manual_false_when_artist_does_not_match(): void
+    {
+        Song::factory()->create([
+            'title' => 'シャルル',
+            'artist' => 'バルーン',
+        ]);
+
+        // 「シャルル」のみ → タイトル一致だがアーティスト情報なし
+        $this->createTsItem('シャルル');
+
+        $this->service->autoLinkUnlinkedTimestamps(10);
+
+        $this->assertDatabaseHas('timestamp_song_mappings', [
+            'is_manual' => false,
+            'status' => 'linked',
+        ]);
+    }
+
+    public function test_auto_link_sets_is_manual_false_when_artist_mismatches(): void
+    {
+        Song::factory()->create([
+            'title' => 'Lemon',
+            'artist' => '米津玄師',
+        ]);
+
+        // 「Lemon / 別のアーティスト」→ タイトル一致だがアーティスト不一致
+        $this->createTsItem('Lemon / 別のアーティスト');
+
+        $this->service->autoLinkUnlinkedTimestamps(10);
+
+        $this->assertDatabaseHas('timestamp_song_mappings', [
+            'is_manual' => false,
+            'status' => 'linked',
+        ]);
+    }
+
+    public function test_auto_link_sets_is_manual_true_with_reversed_artist_title_when_artist_matches(): void
+    {
+        Song::factory()->create([
+            'title' => '夜に駆ける',
+            'artist' => 'YOASOBI',
+        ]);
+
+        // アーティスト/楽曲名の順序が逆でもアーティスト一致判定が効く
+        $this->createTsItem('YOASOBI / 夜に駆ける');
+
+        $this->service->autoLinkUnlinkedTimestamps(10);
+
+        $this->assertDatabaseHas('timestamp_song_mappings', [
+            'is_manual' => true,
+            'status' => 'linked',
+        ]);
+    }
 }

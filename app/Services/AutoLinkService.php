@@ -104,9 +104,9 @@ class AutoLinkService
      */
     protected function processAutoLink(string $normalizedText): string
     {
-        $existingSong = $this->findSongByNormalizedText($normalizedText);
-        if ($existingSong) {
-            $this->createAutoLinkMapping($normalizedText, $existingSong->id);
+        $result = $this->findSongByNormalizedText($normalizedText);
+        if ($result) {
+            $this->createAutoLinkMapping($normalizedText, $result['song']->id, $result['artist_matched']);
 
             return 'linked';
         }
@@ -119,8 +119,10 @@ class AutoLinkService
      *
      * extractSongInfo()で分割し、title部分とartist部分の両方で
      * songs.normalized_titleを検索する（順序が不定のため）
+     *
+     * @return array{song: Song, artist_matched: bool}|null
      */
-    protected function findSongByNormalizedText(string $normalizedText): ?Song
+    protected function findSongByNormalizedText(string $normalizedText): ?array
     {
         $songInfo = TextNormalizer::extractSongInfo($normalizedText);
 
@@ -142,31 +144,34 @@ class AutoLinkService
             }
         }
 
-        // 区切りなしの場合
+        if (empty($candidates)) {
+            return null;
+        }
+
+        // アーティスト情報がない場合（区切りなし）
         if (empty($songInfo['artist'])) {
-            return $candidates[0] ?? null;
+            return ['song' => $candidates[0], 'artist_matched' => false];
         }
 
-        // 候補が1つならそのまま返す
-        if (count($candidates) === 1) {
-            return $candidates[0];
-        }
-
-        // 候補が複数ある場合、artist側も一致するものを優先
+        // 候補の中からアーティスト一致を探す
         foreach ($candidates as $candidate) {
             $normalizedArtist = $candidate->normalized_artist;
             if ($normalizedArtist === $songInfo['artist'] || $normalizedArtist === $songInfo['title']) {
-                return $candidate;
+                return ['song' => $candidate, 'artist_matched' => true];
             }
         }
 
-        return $candidates[0] ?? null;
+        // アーティスト不一致だが候補はある
+        return ['song' => $candidates[0], 'artist_matched' => false];
     }
 
     /**
      * 自動紐付けマッピングを作成
+     *
+     * アーティスト名まで一致する場合は確定扱い（is_manual=true、即公開）、
+     * タイトルのみの一致（アーティスト情報なし・不一致）はレビュー待ち（is_manual=false）とする。
      */
-    protected function createAutoLinkMapping(string $normalizedText, string $songId): void
+    protected function createAutoLinkMapping(string $normalizedText, string $songId, bool $artistMatched): void
     {
         TimestampSongMapping::updateOrCreate(
             ['normalized_text' => $normalizedText],
@@ -174,8 +179,8 @@ class AutoLinkService
                 'song_id' => $songId,
                 'is_not_song' => false,
                 'status' => TimestampSongMapping::STATUS_LINKED,
-                'is_manual' => false,
-                'confidence' => 0.8,
+                'is_manual' => $artistMatched,
+                'confidence' => $artistMatched ? 0.9 : 0.8,
             ]
         );
     }
