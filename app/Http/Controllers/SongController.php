@@ -308,7 +308,7 @@ class SongController extends Controller
                     ->where('timestamp_song_mappings.is_not_song', true);
                 break;
             case 'auto_linked':
-                // 自動紐付け: マッピングあり かつ is_manual=false かつ is_not_song=false かつ status=linked かつ 個別マッピングなし
+                // 未確定の自動紐付け（autoLinkedUnreviewed相当）
                 $query->whereNotNull('timestamp_song_mappings.id')
                     ->where('timestamp_song_mappings.is_manual', false)
                     ->where('timestamp_song_mappings.is_not_song', false)
