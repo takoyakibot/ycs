@@ -248,6 +248,41 @@ class QueryHelperTest extends TestCase
         $this->assertEquals(['00', '12', '34'], QueryHelper::splitFuzzyKeywords('00:12:34'));
     }
 
+    public function test_split_search_keywords_preserves_minus_prefix(): void
+    {
+        $this->assertEquals(['-foo', 'bar'], QueryHelper::splitSearchKeywords('-foo bar'));
+        $this->assertEquals(['foo', '-bar'], QueryHelper::splitSearchKeywords('foo -bar'));
+        $this->assertEquals(['-a', '-b'], QueryHelper::splitSearchKeywords('-a -b'));
+    }
+
+    public function test_parse_search_term_inclusion(): void
+    {
+        $result = QueryHelper::parseSearchTerm('keyword');
+        $this->assertEquals('keyword', $result['term']);
+        $this->assertFalse($result['exclude']);
+    }
+
+    public function test_parse_search_term_exclusion(): void
+    {
+        $result = QueryHelper::parseSearchTerm('-keyword');
+        $this->assertEquals('keyword', $result['term']);
+        $this->assertTrue($result['exclude']);
+    }
+
+    public function test_parse_search_term_lone_minus_is_not_exclusion(): void
+    {
+        $result = QueryHelper::parseSearchTerm('-');
+        $this->assertEquals('-', $result['term']);
+        $this->assertFalse($result['exclude']);
+    }
+
+    public function test_parse_search_term_japanese_exclusion(): void
+    {
+        $result = QueryHelper::parseSearchTerm('-アーティスト');
+        $this->assertEquals('アーティスト', $result['term']);
+        $this->assertTrue($result['exclude']);
+    }
+
     /**
      * 数字だけの曲名が消えないこと
      */

@@ -274,13 +274,8 @@ class SongController extends Controller
             });
         }
 
-        // 検索条件（スペース区切りでAND検索）
         if ($search) {
-            $keywords = QueryHelper::splitSearchKeywords($search);
-            foreach ($keywords as $keyword) {
-                $escaped = QueryHelper::escapeLikeString($keyword);
-                $query->where('ts_items.text', 'like', "%{$escaped}%");
-            }
+            QueryHelper::applyAndSearch($query, $search, 'ts_items.text');
         }
 
         // フィルター条件
@@ -435,18 +430,36 @@ class SongController extends Controller
             $query->where('review_status', $reviewStatus);
         }
 
-        // 検索条件（キーワードごとのAND検索・各キーワードはtitleまたはartistのいずれかに含まれる）
         if ($search !== '') {
-            $keywords = $searchMode === self::SEARCH_MODE_EXACT
+            $rawKeywords = QueryHelper::splitSearchKeywords($search);
+            $exclusions = [];
+            $positiveTerms = [];
+            foreach ($rawKeywords as $kw) {
+                $parsed = QueryHelper::parseSearchTerm($kw);
+                if ($parsed['exclude']) {
+                    $exclusions[] = $parsed['term'];
+                } else {
+                    $positiveTerms[] = $parsed['term'];
+                }
+            }
+
+            $positiveSearch = implode(' ', $positiveTerms);
+            $keywords = ($searchMode === self::SEARCH_MODE_EXACT || $positiveSearch === '')
                 ? []
-                : QueryHelper::splitFuzzyKeywords($search);
+                : QueryHelper::splitFuzzyKeywords($positiveSearch);
 
             if ($searchMode === self::SEARCH_MODE_EXACT || $keywords === []) {
-                // 記号・装飾のみであいまい検索のキーワードが作れない場合は、
-                // 絞り込みが消えて全件返しになるのを避けるため入力文字列をそのまま検索する
-                QueryHelper::applyAndSearchAny($query, $search, ['title', 'artist']);
+                QueryHelper::applyAndSearchAny($query, $positiveSearch ?: $search, ['title', 'artist']);
             } else {
-                QueryHelper::applyFuzzySearch($query, $search, ['normalized_title', 'normalized_artist']);
+                QueryHelper::applyFuzzySearch($query, $positiveSearch, ['normalized_title', 'normalized_artist']);
+            }
+
+            foreach ($exclusions as $excl) {
+                $escaped = QueryHelper::escapeLikeString($excl);
+                $query->where(function ($q) use ($escaped) {
+                    $q->where('title', 'not like', "%{$escaped}%")
+                        ->where('artist', 'not like', "%{$escaped}%");
+                });
             }
         }
 

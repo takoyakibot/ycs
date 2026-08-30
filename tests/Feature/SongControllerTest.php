@@ -477,6 +477,36 @@ class SongControllerTest extends TestCase
         $this->assertEquals('Good Song', $response->json('data.0.title'));
     }
 
+    public function test_fetch_songs_minus_search_excludes_keyword(): void
+    {
+        Song::factory()->create(['title' => 'Good Song', 'artist' => 'A']);
+        Song::factory()->create(['title' => 'Bad Song', 'artist' => 'A']);
+        Song::factory()->create(['title' => 'Great Song', 'artist' => 'B']);
+
+        $response = $this->actingAs($this->user)->getJson(route('songs.fetchSongs', [
+            'search' => 'Song -Bad',
+        ]));
+
+        $response->assertOk();
+        $this->assertEquals(2, $response->json('total'));
+        $titles = collect($response->json('data'))->pluck('title')->sort()->values()->all();
+        $this->assertEquals(['Good Song', 'Great Song'], $titles);
+    }
+
+    public function test_fetch_songs_minus_search_by_artist(): void
+    {
+        Song::factory()->create(['title' => 'Song1', 'artist' => 'Alpha']);
+        Song::factory()->create(['title' => 'Song2', 'artist' => 'Beta']);
+        Song::factory()->create(['title' => 'Song3', 'artist' => 'Alpha']);
+
+        $response = $this->actingAs($this->user)->getJson(route('songs.fetchSongs', [
+            'search' => '-Beta',
+        ]));
+
+        $response->assertOk();
+        $this->assertEquals(2, $response->json('total'));
+    }
+
     /**
      * 楽曲マスタ一覧取得のテスト（あいまい検索: タイムスタンプをそのまま貼り付け）
      */

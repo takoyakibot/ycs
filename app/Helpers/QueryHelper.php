@@ -180,9 +180,24 @@ class QueryHelper
     }
 
     /**
+     * キーワードが除外指定（-プレフィックス）かどうかを判定し、検索語を返す
+     *
+     * @return array{term: string, exclude: bool}
+     */
+    public static function parseSearchTerm(string $keyword): array
+    {
+        if (str_starts_with($keyword, '-') && mb_strlen($keyword) > 1) {
+            return ['term' => mb_substr($keyword, 1), 'exclude' => true];
+        }
+
+        return ['term' => $keyword, 'exclude' => false];
+    }
+
+    /**
      * AND検索条件をクエリに適用
      *
-     * スペースで区切られた各キーワードがすべて含まれるレコードを検索
+     * スペースで区切られた各キーワードがすべて含まれるレコードを検索。
+     * -プレフィックス付きキーワードは除外条件（NOT LIKE）として適用。
      *
      * @param  Builder  $query  クエリビルダー
      * @param  string  $search  検索文字列
@@ -194,8 +209,13 @@ class QueryHelper
         $keywords = self::splitSearchKeywords($search);
 
         foreach ($keywords as $keyword) {
-            $escaped = self::escapeLikeString($keyword);
-            $query->where($column, 'like', "%{$escaped}%");
+            ['term' => $term, 'exclude' => $exclude] = self::parseSearchTerm($keyword);
+            $escaped = self::escapeLikeString($term);
+            if ($exclude) {
+                $query->where($column, 'not like', "%{$escaped}%");
+            } else {
+                $query->where($column, 'like', "%{$escaped}%");
+            }
         }
 
         return $query;
@@ -249,10 +269,17 @@ class QueryHelper
         }
 
         foreach ($keywords as $keyword) {
-            $escaped = self::escapeLikeString($keyword);
-            $query->where(function ($q) use ($escaped, $columns) {
-                foreach ($columns as $column) {
-                    $q->orWhere($column, 'like', "%{$escaped}%");
+            ['term' => $term, 'exclude' => $exclude] = self::parseSearchTerm($keyword);
+            $escaped = self::escapeLikeString($term);
+            $query->where(function ($q) use ($escaped, $columns, $exclude) {
+                if ($exclude) {
+                    foreach ($columns as $column) {
+                        $q->where($column, 'not like', "%{$escaped}%");
+                    }
+                } else {
+                    foreach ($columns as $column) {
+                        $q->orWhere($column, 'like', "%{$escaped}%");
+                    }
                 }
             });
         }
