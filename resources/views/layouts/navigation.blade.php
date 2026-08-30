@@ -41,16 +41,16 @@
                             </x-slot>
 
                             <x-slot name="content">
-                                <x-dropdown-link :href="route('songs.index')">
+                                <x-dropdown-link :href="route('songs.index')" :active="request()->routeIs('songs.index')">
                                     {{ __('タイムスタンプ正規化') }}
                                 </x-dropdown-link>
-                                <x-dropdown-link :href="route('songs.decompose')">
+                                <x-dropdown-link :href="route('songs.decompose')" :active="request()->routeIs('songs.decompose')">
                                     {{ __('TS分解') }}
                                 </x-dropdown-link>
-                                <x-dropdown-link :href="route('songs.duplicates')">
+                                <x-dropdown-link :href="route('songs.duplicates')" :active="request()->routeIs('songs.duplicates')">
                                     {{ __('名寄せ') }}
                                 </x-dropdown-link>
-                                <x-dropdown-link :href="route('songs.cleansing')">
+                                <x-dropdown-link :href="route('songs.cleansing')" :active="request()->routeIs('songs.cleansing')">
                                     {{ __('クレンジング') }}
                                 </x-dropdown-link>
                             </x-slot>
