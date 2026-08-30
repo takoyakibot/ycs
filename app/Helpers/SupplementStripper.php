@@ -11,8 +11,8 @@ namespace App\Helpers;
  *   気まぐれロマンティック（アンコール） / いきものがかり      → 気まぐれロマンティック / いきものがかり
  *   ♫気まぐれロマンティック / いきものがかり                  → 気まぐれロマンティック / いきものがかり
  *
- * 括弧やスペースを一律で潰すのではなく、config/supplement_strip.php の
- * キーワード辞書に当たった箇所だけを落とす。これにより "(Live)" や
+ * 括弧やスペースを一律で潰すのではなく、config/ignore_dictionary.php の
+ * supplement フラグ付きキーワードに当たった箇所だけを落とす。これにより "(Live)" や
  * "(feat. ○○)" のような曲名の一部としての括弧は保持される。
  *
  * TextNormalizer::normalize() の前段で使うことを想定している
@@ -312,7 +312,7 @@ class SupplementStripper
     private static function stripDecorativeSymbols(string $text, array &$hits): string
     {
         $symbols = array_filter(
-            array_map('strval', (array) config('supplement_strip.symbols', [])),
+            array_map('strval', IgnoreDictionary::symbols()),
             fn (string $symbol) => $symbol !== ''
         );
 
@@ -384,7 +384,7 @@ class SupplementStripper
 
         $keywords = [];
 
-        foreach (config('supplement_strip.keywords', []) as $keyword) {
+        foreach (IgnoreDictionary::keywordsWithFlag('supplement') as $keyword) {
             $normalized = TextNormalizer::normalize($keyword);
 
             if ($normalized === '') {

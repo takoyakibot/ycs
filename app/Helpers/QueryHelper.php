@@ -12,35 +12,14 @@ class QueryHelper
     private const FUZZY_TOKEN_PATTERN = '/[^\p{L}\p{Nd}]+/u';
 
     /**
-     * あいまい検索専用のストップワード（正規化前の表記）
+     * あいまい検索専用のストップワードのキャッシュ
      *
-     * TextNormalizer::IGNORE_KEYWORDS は isIgnorablePart() や
-     * CoverSongTitleExtractorService::bracketKeywords() にも供給される共有定数。
-     * 短い語（by/ed/op等）をそこに追加すると部分一致で誤爆するため、
-     * fuzzy-search でのみ除去したい語はここに分離する。
+     * config/ignore_dictionary.php から fuzzy_stop フラグが true の
+     * キーワードを取得する。
+     *
+     * @var string[]|null
      */
-    private const FUZZY_STOP_WORDS = [
-        'by',
-        'feat',
-        'ft',
-        'featuring',
-        'with',
-        'op',
-        'ed',
-        'ost',
-        'inst',
-        'インスト',
-        'instrumental',
-        'フル',
-        'TVアニメ',
-        'アニメ',
-        'remix',
-        'リミックス',
-        'acoustic',
-        'アコースティック',
-        'live',
-        'ライブ',
-    ];
+    private static ?array $fuzzyStopWordsCache = null;
 
     /**
      * LIKEクエリ用の文字列エスケープ
@@ -143,8 +122,8 @@ class QueryHelper
     /**
      * 無視キーワードを検索キーワードと同じ単位に分解する
      *
-     * TextNormalizer::IGNORE_KEYWORDS（共有）と FUZZY_STOP_WORDS（検索専用）の
-     * 両方をトークン化してマージする。IGNORE_KEYWORDS には 'music video' のように
+     * config/ignore_dictionary.php から ignore_part と fuzzy_stop の両フラグを持つ
+     * キーワードをトークン化してマージする。ignore_part には 'music video' のように
      * スペースを含む複合語があるため、単語単位に分解して比較する。
      *
      * 分解の副作用として 'music' 単独もノイズ扱いになるが、
@@ -169,14 +148,39 @@ class QueryHelper
             }
         }
 
-        foreach (self::FUZZY_STOP_WORDS as $word) {
-            $normalized = TextNormalizer::normalize($word);
-            if ($normalized !== '') {
-                $tokens[] = $normalized;
-            }
+        foreach (self::getFuzzyStopWords() as $word) {
+            $tokens[] = $word;
         }
 
         return array_values(array_unique($tokens));
+    }
+
+    /**
+     * config/ignore_dictionary.php から fuzzy_stop フラグが true のキーワードを取得
+     *
+     * @return string[]
+     */
+    private static function getFuzzyStopWords(): array
+    {
+        if (self::$fuzzyStopWordsCache === null) {
+            self::$fuzzyStopWordsCache = array_filter(
+                array_map(
+                    fn ($word) => TextNormalizer::normalize($word),
+                    IgnoreDictionary::keywordsWithFlag('fuzzy_stop')
+                ),
+                fn ($word) => $word !== ''
+            );
+        }
+
+        return self::$fuzzyStopWordsCache;
+    }
+
+    /**
+     * ストップワードキャッシュを破棄（テスト・設定変更時用）
+     */
+    public static function flushFuzzyStopWordCache(): void
+    {
+        self::$fuzzyStopWordsCache = null;
     }
 
     /**

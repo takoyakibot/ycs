@@ -227,47 +227,17 @@ class TextNormalizer
      * 「曲名ではない語」の辞書は複数系統あり、適用対象が異なる。語を追加するときは
      * どの経路に効かせたいかを確認し、必要な系統だけに追加すること。
      * - この配列: パーツ全体の無視判定（isIgnorablePart / TimestampDecompositionService）。
-     *   CoverSongTitleExtractorService のカッコ除去もここを参照する（部分一致で
-     *   誤爆する語は同クラスの BRACKET_KEYWORD_EXCLUSIONS で除外）
-     * - config/supplement_strip.php: 括弧内・区切り以降の「補足」の部分一致除去
-     *   （SupplementStripper）
-     * - config/strip_pattern_templates.php + channel_strip_patterns テーブル:
-     *   チャンネルごとの除去パターン。実体はDBで、管理画面から編集する
-     *   （TimestampExtractorService::applyStripPatterns）
+     * 辞書は config/ignore_dictionary.php に一元管理されている（#669）。
+     * このメソッドが参照するのは ignore_part フラグが true のキーワード。
      *
-     * isIgnorablePart() は「パーツ全体がここに挙げたキーワードと記号と数字だけで
+     * isIgnorablePart() は「パーツ全体がキーワードと記号と数字だけで
      * 構成されているか」で判定するため、短い語を入れても語の一部に一致して
      * アーティスト名を捨ててしまうことはない（例: 'ver' があっても
      * "Silver" は "sil" が残るので無視対象にならない）。
      *
      * ただし数字の残留は許容するので、キーワードに連番を添えた形は
      * 丸ごと無視対象になる（'mv' があれば "MV2" も無視される）。
-     *
-     * 単体で曲名になりうる語は入れないこと。無視対象を増やすと候補が1つに減り、
-     * detectTitleArtistPattern() が confidence 0.8 を返して自動確定するため、
-     * 生き残ったパーツがアーティスト名だった場合にアーティストが空の
-     * 楽曲マスタが作られる（例: 'soundtrack' を入れると
-     * "Soundtrack / YOASOBI" が title=YOASOBI / artist=空 で確定してしまう）。
      */
-    private const IGNORE_KEYWORDS = [
-        'cover',
-        'カバー',
-        'mv',
-        'music video',
-        'video',
-        'オリジナル',
-        'original',
-        'full',
-        'short',
-        'shorts',
-        'ver',
-        'official',
-        '公式',
-        '歌ってみた',
-        'utawaku',
-        'vtuber',
-        'vsinger',
-    ];
 
     /**
      * テキストを区切り文字で分解（正規化前のテキスト用）
@@ -405,21 +375,44 @@ class TextNormalizer
     }
 
     /**
+     * 正規化済み無視キーワードのキャッシュ
+     *
+     * @var string[]|null
+     */
+    private static ?array $ignoreKeywordsCache = null;
+
+    /**
      * 無視キーワードを正規化された形式で取得
+     *
+     * config/ignore_dictionary.php から ignore_part フラグが true の
+     * キーワードを取得し、正規化して返す。
      *
      * @return string[]
      */
     public static function getIgnoreKeywords(): array
     {
-        return array_map(fn ($keyword) => self::normalize($keyword), self::IGNORE_KEYWORDS);
+        if (self::$ignoreKeywordsCache === null) {
+            self::$ignoreKeywordsCache = array_map(
+                fn ($keyword) => self::normalize($keyword),
+                IgnoreDictionary::keywordsWithFlag('ignore_part')
+            );
+        }
+
+        return self::$ignoreKeywordsCache;
+    }
+
+    /**
+     * 無視キーワードのキャッシュを破棄（テスト・設定変更時用）
+     */
+    public static function flushIgnoreKeywordCache(): void
+    {
+        self::$ignoreKeywordsCache = null;
+        self::$ignoreKeywordsByLengthDesc = null;
+        IgnoreDictionary::flush();
     }
 
     /**
      * 正規化済み無視キーワードのキャッシュ（文字数の降順）
-     *
-     * IGNORE_KEYWORDS はクラス定数でプロセス内で変わらないため、
-     * 破棄する手段は用意していない。キーワードを設定ファイル等から
-     * 読むようにする場合はこのキャッシュを見直すこと。
      *
      * @var string[]|null
      */

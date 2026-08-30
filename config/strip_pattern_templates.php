@@ -13,8 +13,8 @@
 | 【他の辞書との棲み分け（#669）】
 | ここを変更しても既存チャンネルの適用済みパターンは変わらない（DBが実体）。
 | - パーツ全体の無視判定は TextNormalizer::IGNORE_KEYWORDS（コード定数）
-| - 括弧内・区切り以降の補足除去は config/supplement_strip.php
-| 装飾記号の集合は supplement_strip.php の symbols と重複があるが適用範囲が
+| - 括弧内・区切り以降の補足除去は config/ignore_dictionary.php の supplement フラグ
+| 装飾記号の集合は ignore_dictionary.php の symbols と重複があるが適用範囲が
 | 異なる（こちらは全体から除去、あちらは先頭・末尾のみ）。語や記号を
 | 追加するときは、どの経路に効かせたいかを確認すること。
 |
