@@ -64,6 +64,26 @@
                 {{ $slot }}
             </main>
         </div>
+
+        <!-- Footer -->
+        <footer class="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 mt-8">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+                <div class="flex flex-col sm:flex-row justify-between items-center space-y-4 sm:space-y-0">
+                    <div class="flex space-x-6 text-sm text-gray-500 dark:text-gray-400">
+                        <a href="{{ route('markdown.show') }}" class="hover:text-gray-700 dark:hover:text-gray-300">
+                            {{ __('利用規約・プライバシーポリシー') }}
+                        </a>
+                        <a href="{{ route('contact.show') }}" class="hover:text-gray-700 dark:hover:text-gray-300">
+                            {{ __('お問い合わせ') }}
+                        </a>
+                    </div>
+                    <div class="text-sm text-gray-400 dark:text-gray-500">
+                        &copy; {{ date('Y') }} {{ config('app.name') }}
+                    </div>
+                </div>
+            </div>
+        </footer>
+
         <div id="firstDisplayPopup" class="fixed bottom-0 left-0 right-0 z-50 bg-gray-800 text-white p-4 text-center">
             <p>このサイトを利用することにより、<a target="_blank" class="text-gray-400 underline" href="{{ route('markdown.show') }}">[利用規約とプライバシーポリシー]</a>に同意したものとみなします。<br/>
             利用規約とプライバシーポリシーの内容をよくご確認の上、引き続きサイトを利用してください。</p>
