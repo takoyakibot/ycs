@@ -12,7 +12,7 @@
 |
 | 【他の辞書との棲み分け（#669）】
 | ここを変更しても既存チャンネルの適用済みパターンは変わらない（DBが実体）。
-| - パーツ全体の無視判定は TextNormalizer::IGNORE_KEYWORDS（コード定数）
+| - パーツ全体の無視判定は config/ignore_dictionary.php の ignore_part フラグ
 | - 括弧内・区切り以降の補足除去は config/ignore_dictionary.php の supplement フラグ
 | 装飾記号の集合は ignore_dictionary.php の symbols と重複があるが適用範囲が
 | 異なる（こちらは全体から除去、あちらは先頭・末尾のみ）。語や記号を

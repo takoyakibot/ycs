@@ -21,7 +21,7 @@
 | - ignore_part に短い語（by, ed 等）を入れると isIgnorablePart() の部分一致で
 |   誤爆する。そういった語は fuzzy_stop のみにする
 | - bracket_keyword に短い語（ver, video 等）を入れると "(silver bullet)" 等に
-|   部分一致して無関係なカッコを丸ごと消す。BRACKET_KEYWORD_EXCLUSIONS で除外中
+|   部分一致して無関係なカッコを丸ごと消す。該当する語は bracket_keyword: false として除外
 | - supplement に曲名になりうる語（full, short 等）は入れない
 | - 単体で曲名になりうる語を ignore_part に入れると、候補が1つに減り
 |   detectTitleArtistPattern() が confidence 0.8 を返して自動確定するため

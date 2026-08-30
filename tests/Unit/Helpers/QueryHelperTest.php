@@ -172,7 +172,7 @@ class QueryHelperTest extends TestCase
     /**
      * スペースを含む複合語のノイズワードも除去されること
      *
-     * IGNORE_KEYWORDS の 'music video' は複合語だが、検索キーワードは単語単位に
+     * ignore_part の 'music video' は複合語だが、検索キーワードは単語単位に
      * 分割されるため、分解して比較しないと 'music' が検索語として残ってしまう
      */
     public function test_split_fuzzy_keywords_removes_compound_ignore_keyword(): void
