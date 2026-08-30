@@ -604,11 +604,15 @@ class TimestampService
      *
      * TimestampSongMapping::isConfirmed() と同じ条件だが、$item は
      * TsItem にマッピング列を追加した行であり TimestampSongMapping のインスタンスではないため
-     * 直接そのメソッドは使えない。条件を1箇所に集約するためのヘルパー。
+     * 直接そのメソッドは使えない。条件は TimestampSongMapping::confirmedJoinConditions() から取得し、
+     * is_manual/status の条件を直接書かないようにする。
      */
     private function isConfirmedMappingRow($item): bool
     {
-        return $item->mapping_status === TimestampSongMapping::STATUS_LINKED && (bool) $item->is_manual;
+        $conditions = TimestampSongMapping::confirmedJoinConditions();
+
+        return $item->mapping_status === $conditions['timestamp_song_mappings.status']
+            && (bool) $item->is_manual === $conditions['timestamp_song_mappings.is_manual'];
     }
 
     /**
