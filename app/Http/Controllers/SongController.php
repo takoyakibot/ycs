@@ -444,14 +444,17 @@ class SongController extends Controller
             }
 
             $positiveSearch = implode(' ', $positiveTerms);
-            $keywords = ($searchMode === self::SEARCH_MODE_EXACT || $positiveSearch === '')
-                ? []
-                : QueryHelper::splitFuzzyKeywords($positiveSearch);
 
-            if ($searchMode === self::SEARCH_MODE_EXACT || $keywords === []) {
-                QueryHelper::applyAndSearchAny($query, $positiveSearch ?: $search, ['title', 'artist']);
-            } else {
-                QueryHelper::applyFuzzySearch($query, $positiveSearch, ['normalized_title', 'normalized_artist']);
+            if ($positiveSearch !== '') {
+                $keywords = $searchMode === self::SEARCH_MODE_EXACT
+                    ? []
+                    : QueryHelper::splitFuzzyKeywords($positiveSearch);
+
+                if ($searchMode === self::SEARCH_MODE_EXACT || $keywords === []) {
+                    QueryHelper::applyAndSearchAny($query, $positiveSearch, ['title', 'artist']);
+                } else {
+                    QueryHelper::applyFuzzySearch($query, $positiveSearch, ['normalized_title', 'normalized_artist']);
+                }
             }
 
             foreach ($exclusions as $excl) {

@@ -186,7 +186,7 @@ class QueryHelper
      */
     public static function parseSearchTerm(string $keyword): array
     {
-        if (str_starts_with($keyword, '-') && mb_strlen($keyword) > 1) {
+        if (preg_match('/^[-－−]/u', $keyword) && mb_strlen($keyword) > 1) {
             return ['term' => mb_substr($keyword, 1), 'exclude' => true];
         }
 

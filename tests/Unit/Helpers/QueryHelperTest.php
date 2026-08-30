@@ -283,6 +283,26 @@ class QueryHelperTest extends TestCase
         $this->assertTrue($result['exclude']);
     }
 
+    public function test_parse_search_term_fullwidth_minus_exclusion(): void
+    {
+        // 全角マイナス（U+FF0D）
+        $result = QueryHelper::parseSearchTerm('－keyword');
+        $this->assertEquals('keyword', $result['term']);
+        $this->assertTrue($result['exclude']);
+
+        // マイナス記号（U+2212）
+        $result = QueryHelper::parseSearchTerm('−keyword');
+        $this->assertEquals('keyword', $result['term']);
+        $this->assertTrue($result['exclude']);
+    }
+
+    public function test_parse_search_term_lone_fullwidth_minus_is_not_exclusion(): void
+    {
+        $result = QueryHelper::parseSearchTerm('－');
+        $this->assertEquals('－', $result['term']);
+        $this->assertFalse($result['exclude']);
+    }
+
     /**
      * 数字だけの曲名が消えないこと
      */
