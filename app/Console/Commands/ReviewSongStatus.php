@@ -11,14 +11,16 @@ class ReviewSongStatus extends Command
 {
     protected $signature = 'songs:review-status
         {--chunk=200 : チャンクサイズ}
+        {--all : 判定済みレコードも含めて全件再判定する}
         {--dry-run : 実際の更新を行わず、判定結果のみ表示}';
 
-    protected $description = '全Songレコードの信頼度を判定し、review_status (safe/needs_review) を設定（装飾検出にstrip_pattern_templatesを使用）';
+    protected $description = '未判定（review_status=NULL）のSongレコードを判定し、review_status (safe/needs_review) を設定。--all で全件再判定';
 
     public function handle(): int
     {
         $chunkSize = (int) $this->option('chunk');
         $dryRun = $this->option('dry-run');
+        $all = $this->option('all');
 
         $decorationPatterns = collect(config('strip_pattern_templates', []))
             ->map(fn ($t) => ['pattern' => $t['pattern'], 'is_regex' => $t['is_regex']])
@@ -26,7 +28,12 @@ class ReviewSongStatus extends Command
 
         $stats = [Song::REVIEW_STATUS_SAFE => 0, Song::REVIEW_STATUS_NEEDS_REVIEW => 0, 'total' => 0];
 
-        Song::with('mappings')->chunk($chunkSize, function ($songs) use ($decorationPatterns, $dryRun, &$stats) {
+        $query = Song::with('mappings');
+        if (! $all) {
+            $query->whereNull('review_status');
+        }
+
+        $query->chunkById($chunkSize, function ($songs) use ($decorationPatterns, $dryRun, &$stats) {
             $safeIds = [];
             $needsReviewIds = [];
 
@@ -58,9 +65,10 @@ class ReviewSongStatus extends Command
             }
         });
 
+        $mode = $all ? '全件再判定' : '未判定のみ';
         $safe = $stats[Song::REVIEW_STATUS_SAFE];
         $needsReview = $stats[Song::REVIEW_STATUS_NEEDS_REVIEW];
-        $this->info("判定完了: 合計 {$stats['total']}件 (safe: {$safe}, needs_review: {$needsReview})");
+        $this->info("判定完了（{$mode}）: 合計 {$stats['total']}件 (safe: {$safe}, needs_review: {$needsReview})");
 
         if ($dryRun) {
             $this->warn('--dry-run: 実際の更新は行われていません');
@@ -71,12 +79,10 @@ class ReviewSongStatus extends Command
 
     private function evaluateSong(Song $song, array $decorationPatterns): string
     {
-        // 1. 装飾検出: title/artist にテンプレートパターンがヒットするか
         if ($this->hasDecoration($song, $decorationPatterns)) {
             return Song::REVIEW_STATUS_NEEDS_REVIEW;
         }
 
-        // 2. 一致チェック: マッピングが存在し、normalized_text にtitle/artistが含まれるか
         $mappedTexts = $song->mappings->pluck('normalized_text')->toArray();
 
         if (empty($mappedTexts)) {
