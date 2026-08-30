@@ -38,9 +38,8 @@ class CoverSongTitleExtractorServiceTest extends TestCase
     }
 
     /**
-     * カッコ除去対象は TextNormalizer::getIgnoreKeywords() を情報源とするが、
-     * カッコ内の部分一致で誤爆する語（ver / video 等）は除外している（#669）。
-     * これらの語を含むだけのカッコは除去されないこと。
+     * config/ignore_dictionary.php で bracket_keyword: false の語（ver / video 等）は
+     * カッコ除去に使われない。これらの語を含むだけのカッコは除去されないこと。
      */
     public function test_bracket_keyword_exclusions_keep_unrelated_brackets(): void
     {

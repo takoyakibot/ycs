@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Helpers\IgnoreDictionary;
 use App\Helpers\SupplementStripper;
 use App\Helpers\TextNormalizer;
 use App\Models\TimestampDecomposition;
@@ -32,8 +33,9 @@ class CleanDecompositionSupplements extends Command
 
         $this->line('モード: '.($apply ? '<comment>APPLY（更新します）</comment>' : '<info>ドライラン（更新しません）</info>'));
         $this->line('適用ルール: <info>'.implode(', ', $rules).'</info>');
-        $this->line('キーワード辞書: <info>'.count(config('supplement_strip.keywords', [])).'件</info>'
-            .' / 装飾記号: <info>'.count(config('supplement_strip.symbols', [])).'件</info>');
+        $supplementKeywords = IgnoreDictionary::keywordsWithFlag('supplement');
+        $this->line('キーワード辞書: <info>'.count($supplementKeywords).'件</info>'
+            .' / 装飾記号: <info>'.count(IgnoreDictionary::symbols()).'件</info>');
         $this->newLine();
 
         $changes = $this->collectChanges($rules);
@@ -291,7 +293,7 @@ class CleanDecompositionSupplements extends Command
         $this->table(['ルール', 'キーワード', 'ヒット数'], $table);
 
         $unused = array_values(array_diff(
-            config('supplement_strip.keywords', []),
+            IgnoreDictionary::keywordsWithFlag('supplement'),
             array_map(fn ($label) => explode(':', $label, 2)[1] ?? '', array_keys($hits))
         ));
 

@@ -318,7 +318,10 @@ class CleanDecompositionSupplementsTest extends TestCase
     {
         $decomposition = $this->createDecomposition('曲名 / アーティスト (謎ワード)');
 
-        config()->set('supplement_strip.keywords', ['謎ワード']);
+        config()->set('ignore_dictionary.keywords', [
+            '謎ワード' => ['ignore_part' => false, 'bracket_keyword' => false, 'supplement' => true, 'fuzzy_stop' => false],
+        ]);
+        \App\Helpers\IgnoreDictionary::flush();
         SupplementStripper::flushKeywordCache();
 
         $this->artisan('ts-decompositions:clean-supplements --apply')->assertSuccessful();

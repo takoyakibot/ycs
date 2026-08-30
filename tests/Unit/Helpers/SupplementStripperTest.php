@@ -331,7 +331,10 @@ class SupplementStripperTest extends TestCase
      */
     public function test_keywords_come_from_config(): void
     {
-        config()->set('supplement_strip.keywords', ['独自ワード']);
+        config()->set('ignore_dictionary.keywords', [
+            '独自ワード' => ['ignore_part' => false, 'bracket_keyword' => false, 'supplement' => true, 'fuzzy_stop' => false],
+        ]);
+        \App\Helpers\IgnoreDictionary::flush();
         SupplementStripper::flushKeywordCache();
 
         $this->assertEquals('曲名 / アーティスト', trim(SupplementStripper::strip('曲名 / アーティスト (独自ワード)')));
