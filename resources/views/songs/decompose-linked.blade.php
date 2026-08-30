@@ -118,7 +118,7 @@
                                                 @endif
                                             </td>
                                             <td class="py-2 whitespace-nowrap text-gray-500 dark:text-gray-400">
-                                                {{ $decomposition->updated_at?->format('Y-m-d H:i') }}
+                                                <x-datetime :value="$decomposition->updated_at" />
                                             </td>
                                         </tr>
                                     @endforeach

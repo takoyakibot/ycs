@@ -45,9 +45,9 @@
                         <div class="min-w-0">
                             <p class="text-sm font-medium text-gray-900 dark:text-gray-100 break-all">{{ $token->name }}</p>
                             <p class="text-xs text-gray-500 dark:text-gray-400">
-                                発行日: {{ $token->created_at->format('Y-m-d H:i') }}
+                                発行日: <x-datetime :value="$token->created_at" />
                                 @if ($token->last_used_at)
-                                    / 最終使用: {{ $token->last_used_at->format('Y-m-d H:i') }}
+                                    / 最終使用: <x-datetime :value="$token->last_used_at" />
                                 @else
                                     / 最終使用: -
                                 @endif
