@@ -130,7 +130,7 @@ class ChannelController extends Controller
                         $normalizedText = TextNormalizer::normalize($tsItem['text']);
                         $mapping = $mappings->get($normalizedText);
 
-                        if ($mapping && $mapping->song) {
+                        if ($mapping && $mapping->song && $mapping->isConfirmed()) {
                             $tsItem['song'] = [
                                 'title' => $mapping->song->title,
                                 'artist' => $mapping->song->artist,

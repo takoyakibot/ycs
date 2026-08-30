@@ -71,6 +71,58 @@ class TimestampSongMapping extends Model
         return $this->status === self::STATUS_LINKED;
     }
 
+    /**
+     * 確定済みマッピング: 手動紐付け or レビュー承認済みの自動紐付け
+     *
+     * is_manual と status の複合条件。直接条件を書かず、このスコープを使うこと。
+     */
+    public function scopeConfirmed($query)
+    {
+        return $query->where('status', self::STATUS_LINKED)
+            ->where('is_manual', true);
+    }
+
+    /**
+     * 未レビューの自動紐付け: 自動紐付けされたがまだ確定されていない
+     *
+     * is_manual と status の複合条件。直接条件を書かず、このスコープを使うこと。
+     */
+    public function scopeAutoLinkedUnreviewed($query)
+    {
+        return $query->where('status', self::STATUS_LINKED)
+            ->where('is_manual', false);
+    }
+
+    /**
+     * このマッピングが確定済みかどうか
+     */
+    public function isConfirmed(): bool
+    {
+        return $this->status === self::STATUS_LINKED && $this->is_manual === true;
+    }
+
+    /**
+     * このマッピングが未レビューの自動紐付けかどうか
+     */
+    public function isAutoLinkedUnreviewed(): bool
+    {
+        return $this->status === self::STATUS_LINKED && $this->is_manual === false;
+    }
+
+    /**
+     * JOINクエリで「確定済み」を判定するための条件配列
+     *
+     * TimestampService 等の LEFT JOIN クエリではスコープが使えないため、
+     * このメソッドで条件を一元管理する。
+     */
+    public static function confirmedJoinConditions(): array
+    {
+        return [
+            'timestamp_song_mappings.status' => self::STATUS_LINKED,
+            'timestamp_song_mappings.is_manual' => true,
+        ];
+    }
+
     public function song()
     {
         return $this->belongsTo(Song::class, 'song_id', 'id');

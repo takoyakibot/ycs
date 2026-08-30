@@ -259,12 +259,14 @@ class ChannelArchiveTest extends TestCase
             'is_display' => 1,
         ]);
 
-        // マッピングを作成
+        // マッピングを作成（確定済み: is_manual=trueでなければ song 情報は非表示になる）
         TimestampSongMapping::factory()->withSong($songB)->create([
             'normalized_text' => \App\Helpers\TextNormalizer::normalize($tsB->text),
+            'is_manual' => true,
         ]);
         TimestampSongMapping::factory()->withSong($songA)->create([
             'normalized_text' => \App\Helpers\TextNormalizer::normalize($tsA->text),
+            'is_manual' => true,
         ]);
 
         $response = $this->getJson("/api/channels/{$channel->handle}/timestamps?sort=song_asc");
@@ -425,8 +427,10 @@ class ChannelArchiveTest extends TestCase
             'is_display' => 1,
         ]);
 
+        // 確定済み（is_manual=true）でなければ song 情報は非表示になる
         TimestampSongMapping::factory()->withSong($song)->create([
             'normalized_text' => \App\Helpers\TextNormalizer::normalize($ts->text),
+            'is_manual' => true,
         ]);
 
         $response = $this->getJson("/api/channels/{$channel->handle}/timestamps");

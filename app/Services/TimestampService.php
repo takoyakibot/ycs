@@ -7,6 +7,7 @@ use App\Helpers\QueryHelper;
 use App\Helpers\TextNormalizer;
 use App\Helpers\ValidationHelper;
 use App\Models\Channel;
+use App\Models\TimestampSongMapping;
 use App\Models\TsItem;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
@@ -47,6 +48,7 @@ class TimestampService
                 'timestamp_song_mappings.song_id',
                 'timestamp_song_mappings.is_not_song',
                 'timestamp_song_mappings.is_manual',
+                'timestamp_song_mappings.status as mapping_status',
                 'songs.title as song_title',
                 'songs.artist as song_artist',
                 'songs.spotify_track_id'
@@ -98,7 +100,7 @@ class TimestampService
                     'published_at' => $item->archive->published_at,
                 ],
                 'mapping' => $item->mapping_id ? [
-                    'song' => $item->song_id ? [
+                    'song' => ($item->song_id && $this->isConfirmedMappingRow($item)) ? [
                         'title' => $item->song_title,
                         'artist' => $item->song_artist,
                         'spotify_track_id' => ValidationHelper::validateSpotifyTrackId($item->spotify_track_id),
@@ -328,6 +330,7 @@ class TimestampService
                 'timestamp_song_mappings.song_id',
                 'timestamp_song_mappings.is_not_song',
                 'timestamp_song_mappings.is_manual',
+                'timestamp_song_mappings.status as mapping_status',
                 'songs.title as song_title',
                 'songs.artist as song_artist',
                 'songs.spotify_track_id',
@@ -405,7 +408,7 @@ class TimestampService
                 'published_at' => $item->archive->published_at,
             ],
             'mapping' => $item->mapping_id ? [
-                'song' => $item->song_id ? [
+                'song' => ($item->song_id && $this->isConfirmedMappingRow($item)) ? [
                     'title' => $item->song_title,
                     'artist' => $item->song_artist,
                     'spotify_track_id' => ValidationHelper::validateSpotifyTrackId($item->spotify_track_id),
@@ -472,6 +475,7 @@ class TimestampService
                 'timestamp_song_mappings.song_id',
                 'timestamp_song_mappings.is_not_song',
                 'timestamp_song_mappings.is_manual',
+                'timestamp_song_mappings.status as mapping_status',
                 'songs.title as song_title',
                 'songs.artist as song_artist',
                 'songs.spotify_track_id',
@@ -525,7 +529,7 @@ class TimestampService
                 'published_at' => $item->archive->published_at,
             ] : null,
             'mapping' => $item->mapping_id ? [
-                'song' => $item->song_id ? [
+                'song' => ($item->song_id && $this->isConfirmedMappingRow($item)) ? [
                     'title' => $item->song_title,
                     'artist' => $item->song_artist,
                     'spotify_track_id' => ValidationHelper::validateSpotifyTrackId($item->spotify_track_id),
@@ -593,6 +597,22 @@ class TimestampService
         $countSameKey = $countSameKeyQuery->count();
 
         return $countBefore + $countSameKey + 1;
+    }
+
+    /**
+     * LEFT JOIN結果（mapping_status / is_manual列を持つ行）が確定済みマッピングかどうかを判定
+     *
+     * TimestampSongMapping::isConfirmed() と同じ条件だが、$item は
+     * TsItem にマッピング列を追加した行であり TimestampSongMapping のインスタンスではないため
+     * 直接そのメソッドは使えない。条件は TimestampSongMapping::confirmedJoinConditions() から取得し、
+     * is_manual/status の条件を直接書かないようにする。
+     */
+    private function isConfirmedMappingRow($item): bool
+    {
+        $conditions = TimestampSongMapping::confirmedJoinConditions();
+
+        return $item->mapping_status === $conditions['timestamp_song_mappings.status']
+            && (bool) $item->is_manual === $conditions['timestamp_song_mappings.is_manual'];
     }
 
     /**
