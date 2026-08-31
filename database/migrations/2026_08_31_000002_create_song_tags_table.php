@@ -9,8 +9,8 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('song_tags', function (Blueprint $table) {
-            $table->char('id', 26)->primary();
-            $table->char('song_id', 26);
+            $table->string('id', 26)->primary();
+            $table->string('song_id', 26);
             $table->string('value', 255);
             $table->timestamps();
 
