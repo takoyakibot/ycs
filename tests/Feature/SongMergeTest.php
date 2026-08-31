@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Archive;
 use App\Models\Channel;
 use App\Models\Song;
+use App\Models\SongTag;
 use App\Models\TimestampDecomposition;
 use App\Models\TimestampSongMapping;
 use App\Models\TsItem;
@@ -262,6 +263,43 @@ class SongMergeTest extends TestCase
 
         $decomposition->refresh();
         $this->assertEquals($targetSong->id, $decomposition->song_id);
+    }
+
+    public function test_merge_songs_migrates_tags(): void
+    {
+        $targetSong = Song::factory()->create(['title' => 'Target', 'artist' => 'Artist']);
+        $sourceSong = Song::factory()->create(['title' => 'Source', 'artist' => 'Artist']);
+
+        SongTag::factory()->create(['song_id' => $targetSong->id, 'value' => 'BBB']);
+        SongTag::factory()->create(['song_id' => $sourceSong->id, 'value' => 'AAA']);
+        SongTag::factory()->create(['song_id' => $sourceSong->id, 'value' => 'BBB']);
+
+        $response = $this->actingAs($this->user)
+            ->postJson('/api/songs/merge', [
+                'source_song_id' => $sourceSong->id,
+                'target_song_id' => $targetSong->id,
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonFragment(['migrated_tags' => 1]);
+
+        $targetTags = SongTag::where('song_id', $targetSong->id)->pluck('value')->sort()->values()->toArray();
+        $this->assertEquals(['AAA', 'BBB'], $targetTags);
+    }
+
+    public function test_merge_songs_with_no_tags(): void
+    {
+        $targetSong = Song::factory()->create(['title' => 'Target']);
+        $sourceSong = Song::factory()->create(['title' => 'Source']);
+
+        $response = $this->actingAs($this->user)
+            ->postJson('/api/songs/merge', [
+                'source_song_id' => $sourceSong->id,
+                'target_song_id' => $targetSong->id,
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonFragment(['migrated_tags' => 0]);
     }
 
     public function test_delete_song_clears_ts_item_song_id(): void

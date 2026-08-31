@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\NormalizationLog;
 use App\Models\Song;
+use App\Models\SongTag;
 use App\Models\TimestampDecomposition;
 use App\Models\TimestampSongMapping;
 use App\Models\TsItem;
@@ -122,7 +123,7 @@ class SongMergeService
      * @param  string  $sourceSongId  マージ元（削除される）楽曲ID
      * @param  string  $targetSongId  マージ先（残る）楽曲ID
      * @param  int|null  $userId  操作者ID
-     * @return array{affected_mappings: int, affected_ts_items: int, affected_decompositions: int}
+     * @return array{affected_mappings: int, affected_ts_items: int, affected_decompositions: int, migrated_tags: int}
      */
     public function merge(string $sourceSongId, string $targetSongId, ?int $userId = null): array
     {
@@ -157,6 +158,23 @@ class SongMergeService
             $affectedDecompositions = TimestampDecomposition::where('song_id', $sourceSong->id)
                 ->update(['song_id' => $targetSong->id]);
 
+            // タグを移行（ターゲットに既存の値と重複するものはスキップ）
+            $targetTagValues = SongTag::where('song_id', $targetSong->id)
+                ->pluck('value')
+                ->toArray();
+
+            $sourceTags = SongTag::where('song_id', $sourceSong->id)->get();
+            $migratedTags = 0;
+            foreach ($sourceTags as $tag) {
+                if (! in_array($tag->value, $targetTagValues, true)) {
+                    SongTag::create([
+                        'song_id' => $targetSong->id,
+                        'value' => $tag->value,
+                    ]);
+                    $migratedTags++;
+                }
+            }
+
             // ログ記録
             NormalizationLog::log(
                 $userId,
@@ -173,6 +191,7 @@ class SongMergeService
                     'deleted_duplicate_mappings' => $deletedDuplicates,
                     'affected_ts_items' => $affectedTsItems,
                     'affected_decompositions' => $affectedDecompositions,
+                    'migrated_tags' => $migratedTags,
                 ]
             );
 
@@ -183,6 +202,7 @@ class SongMergeService
                 'affected_mappings' => $affectedMappings,
                 'affected_ts_items' => $affectedTsItems,
                 'affected_decompositions' => $affectedDecompositions,
+                'migrated_tags' => $migratedTags,
             ];
         });
     }
