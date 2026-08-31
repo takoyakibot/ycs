@@ -24,6 +24,9 @@ export class AutoReshuffleManager {
         this.lastPlaybackTime = 0;
         this.stallCount = 0;
 
+        // PAUSED終端判定の遅延タイマー
+        this.pauseEndTimerId = null;
+
         // アーカイブ末尾の多重処理防止フラグ
         // 動画終端の検知はENDEDイベント・監視・PAUSEDの3経路があるため、
         // 1回の再生につき1度だけ末尾処理を実行する
@@ -306,6 +309,7 @@ export class AutoReshuffleManager {
     suspend() {
         this.stopMonitor();
         this.clearBufferingTimeout();
+        this.clearPauseEndTimer();
         // 終了時刻は保持する。再度再生したときに曲送り表示を継続するため
         this.archiveEndHandled = true;
     }
@@ -384,21 +388,37 @@ export class AutoReshuffleManager {
         if (event.data === YT.PlayerState.ENDED) {
             this.handleArchiveEnd();
         } else if (event.data === YT.PlayerState.PAUSED) {
-            // 終端で一時停止扱いになるプレイヤーもあるため、末尾かどうかを確認する
+            // 終端で一時停止扱いになるプレイヤーもあるため、末尾かどうかを確認する。
+            // ただしユーザー操作による一時停止と区別できないため、2秒の猶予を設け、
+            // その間に再生が再開されなければ終端扱いにする
             if (this.isNearVideoEnd(videoPlayerManager.getCurrentTime())) {
-                this.handleArchiveEnd();
+                this.clearPauseEndTimer();
+                this.pauseEndTimerId = setTimeout(() => {
+                    this.pauseEndTimerId = null;
+                    this.handleArchiveEnd();
+                }, 2000);
             } else {
                 this.stopMonitor();
             }
+        } else if (event.data === YT.PlayerState.PLAYING) {
+            this.clearPauseEndTimer();
         }
     }
 
     /**
      * すべてのタイマー・インターバルをクリーンアップ
      */
+    clearPauseEndTimer() {
+        if (this.pauseEndTimerId) {
+            clearTimeout(this.pauseEndTimerId);
+            this.pauseEndTimerId = null;
+        }
+    }
+
     cleanup() {
         this.stopMonitor();
         this.clearBufferingTimeout();
+        this.clearPauseEndTimer();
     }
 }
 
