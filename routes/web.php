@@ -148,6 +148,10 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::post('api/songs/cleansing/artist-rename', [SongController::class, 'renameArtist'])->name('songs.renameArtist');
     Route::get('api/songs/cleansing/title-groups', [SongController::class, 'findTitleGroups'])->name('songs.findTitleGroups');
     Route::post('api/songs/cleansing/title-groups/review', [SongController::class, 'reviewTitleGroup'])->name('songs.reviewTitleGroup');
+    // タグ管理API
+    Route::get('api/songs/{id}/tags', [SongController::class, 'songTags'])->name('songs.songTags');
+    Route::post('api/songs/{id}/tags', [SongController::class, 'addSongTag'])->name('songs.addSongTag');
+    Route::delete('api/songs/{id}/tags/{tagId}', [SongController::class, 'deleteSongTag'])->name('songs.deleteSongTag');
     // Parameterized route - must be last to avoid capturing specific route names
     Route::put('api/songs/{id}', [SongController::class, 'updateSong'])->name('songs.updateSong');
     Route::delete('api/songs/{id}', [SongController::class, 'deleteSong'])->name('songs.deleteSong');

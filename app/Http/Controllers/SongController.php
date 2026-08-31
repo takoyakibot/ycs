@@ -11,6 +11,7 @@ use App\Http\Requests\NormalizedTextRequest;
 use App\Http\Requests\StoreSongRequest;
 use App\Models\NormalizationLog;
 use App\Models\Song;
+use App\Models\SongTag;
 use App\Models\TimestampSongMapping;
 use App\Models\TsItem;
 use App\Services\SongCleansingService;
@@ -1037,5 +1038,54 @@ class SongController extends Controller
                 'is_manual' => $mapping->is_manual,
             ] : null,
         ]);
+    }
+
+    /**
+     * 楽曲マスタに紐づくタグ一覧を取得
+     */
+    public function songTags(string $id): JsonResponse
+    {
+        $song = Song::findOrFail($id);
+
+        return response()->json([
+            'tags' => $song->tags()->orderBy('created_at')->get(),
+        ]);
+    }
+
+    /**
+     * 楽曲マスタにタグを追加
+     */
+    public function addSongTag(Request $request, string $id): JsonResponse
+    {
+        $song = Song::findOrFail($id);
+
+        $validated = $request->validate([
+            'value' => 'required|string|max:255',
+        ]);
+
+        $tag = $song->tags()->create([
+            'value' => trim($validated['value']),
+        ]);
+
+        return response()->json([
+            'tag' => $tag,
+            'message' => 'タグを追加しました。',
+        ], 201);
+    }
+
+    /**
+     * 楽曲マスタのタグを削除
+     */
+    public function deleteSongTag(string $id, string $tagId): JsonResponse
+    {
+        $tag = SongTag::where('song_id', $id)->where('id', $tagId)->first();
+
+        if (! $tag) {
+            return response()->json(['message' => 'タグが見つかりません。'], 404);
+        }
+
+        $tag->delete();
+
+        return response()->json(['message' => 'タグを削除しました。']);
     }
 }
