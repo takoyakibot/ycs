@@ -140,6 +140,7 @@ function registerArchiveListComponent() {
                 // 配信リンクパネルの状態管理
                 selectedSong: null,
                 selectedTimestamp: null,
+                displayStale: false,
                 showDistributionPanel: false,
                 panelDismissed: false,
 
@@ -1098,6 +1099,12 @@ function registerArchiveListComponent() {
                  * 同じアーカイブ内の次の曲を再生、なければランダム再生
                  */
                 async playNextOrRandom() {
+                    if (this.displayStale) {
+                        this.displayStale = false;
+                        this.playRandomTimestamp();
+                        return;
+                    }
+
                     // 現在再生中のタイムスタンプ情報がなければランダム再生
                     if (!this.selectedTimestamp?.video_id || this.selectedTimestamp?.ts_num === undefined) {
                         this.playRandomTimestamp();
@@ -1220,6 +1227,7 @@ function registerArchiveListComponent() {
                                 };
                             }
                             this.selectedTimestamp = nextTimestamp;
+                            this.displayStale = false;
 
                             // PiPタイトル更新（表示更新のみで再生位置は変わらないため履歴は追加しない）
                             updateDocumentTitle(this.selectedSong);
@@ -1235,7 +1243,7 @@ function registerArchiveListComponent() {
                         }
                     } catch (error) {
                         console.error('[DisplayUpdate] API error:', error);
-                        // 取得に失敗しても末尾検知は継続する
+                        this.displayStale = true;
                         autoReshuffleManager.setEndTime(null);
                         autoReshuffleManager.startMonitor();
                     }
@@ -1272,6 +1280,7 @@ function registerArchiveListComponent() {
                             };
                         }
                         this.selectedTimestamp = timestamp;
+                        this.displayStale = false;
 
                         // 配信パネルを表示
                         if (!this.panelDismissed) {
