@@ -5,6 +5,7 @@ namespace Tests\Unit\Services;
 use App\Models\Archive;
 use App\Models\Channel;
 use App\Models\Song;
+use App\Models\SongTag;
 use App\Models\TimestampSongMapping;
 use App\Models\TsItem;
 use App\Services\AutoLinkService;
@@ -71,6 +72,7 @@ class AutoLinkServiceTest extends TestCase
             'title' => '千本桜',
             'artist' => '初音ミク',
         ]);
+        SongTag::factory()->create(['song_id' => $existingSong->id, 'value' => '初音ミク']);
 
         $this->createTsItem('千本桜 / 初音ミク');
 
@@ -158,6 +160,7 @@ class AutoLinkServiceTest extends TestCase
             'title' => "Don't say \"lazy\"",
             'artist' => '桜高軽音部',
         ]);
+        SongTag::factory()->create(['song_id' => $existingSong->id, 'value' => '桜高軽音部']);
 
         // UnicodeクォートのバリエーションもTextNormalizerで正規化されるためマッチする
         $this->createTsItem("Don\xE2\x80\x99t say \xE2\x80\x9Clazy\xE2\x80\x9D / 桜高軽音部");
@@ -196,6 +199,7 @@ class AutoLinkServiceTest extends TestCase
             'title' => '夜に駆ける',
             'artist' => 'YOASOBI',
         ]);
+        SongTag::factory()->create(['song_id' => $existingSong->id, 'value' => 'YOASOBI']);
 
         // アーティスト/楽曲名の順序が逆でもマッチする
         $this->createTsItem('YOASOBI / 夜に駆ける');
@@ -210,10 +214,11 @@ class AutoLinkServiceTest extends TestCase
 
     public function test_auto_link_sets_is_manual_true_when_artist_matches(): void
     {
-        Song::factory()->create([
+        $song = Song::factory()->create([
             'title' => '千本桜',
             'artist' => '初音ミク',
         ]);
+        SongTag::factory()->create(['song_id' => $song->id, 'value' => '初音ミク']);
 
         // 「千本桜 / 初音ミク」→ タイトル・アーティスト両方一致
         $this->createTsItem('千本桜 / 初音ミク');
@@ -246,10 +251,11 @@ class AutoLinkServiceTest extends TestCase
 
     public function test_auto_link_sets_is_manual_false_when_artist_mismatches(): void
     {
-        Song::factory()->create([
+        $song = Song::factory()->create([
             'title' => 'Lemon',
             'artist' => '米津玄師',
         ]);
+        SongTag::factory()->create(['song_id' => $song->id, 'value' => '米津玄師']);
 
         // 「Lemon / 別のアーティスト」→ タイトル一致だがアーティスト不一致
         $this->createTsItem('Lemon / 別のアーティスト');
@@ -264,10 +270,11 @@ class AutoLinkServiceTest extends TestCase
 
     public function test_auto_link_sets_is_manual_true_with_reversed_artist_title_when_artist_matches(): void
     {
-        Song::factory()->create([
+        $song = Song::factory()->create([
             'title' => '夜に駆ける',
             'artist' => 'YOASOBI',
         ]);
+        SongTag::factory()->create(['song_id' => $song->id, 'value' => 'YOASOBI']);
 
         // アーティスト/楽曲名の順序が逆でもアーティスト一致判定が効く
         $this->createTsItem('YOASOBI / 夜に駆ける');
@@ -276,6 +283,67 @@ class AutoLinkServiceTest extends TestCase
 
         $this->assertDatabaseHas('timestamp_song_mappings', [
             'is_manual' => true,
+            'status' => 'linked',
+        ]);
+    }
+
+    public function test_auto_link_matches_tag_from_multi_artist(): void
+    {
+        $song = Song::factory()->create([
+            'title' => 'コラボ曲',
+            'artist' => 'AAA,BBB',
+        ]);
+        SongTag::factory()->create(['song_id' => $song->id, 'value' => 'AAA']);
+        SongTag::factory()->create(['song_id' => $song->id, 'value' => 'BBB']);
+
+        // テキストに「AAA」だけ含まれていてもタグマッチ成功
+        $this->createTsItem('コラボ曲 / AAA');
+
+        $this->service->autoLinkUnlinkedTimestamps(10);
+
+        $this->assertDatabaseHas('timestamp_song_mappings', [
+            'song_id' => $song->id,
+            'is_manual' => true,
+            'status' => 'linked',
+        ]);
+    }
+
+    public function test_auto_link_no_tag_match_sets_is_manual_false(): void
+    {
+        $song = Song::factory()->create([
+            'title' => 'テスト曲',
+            'artist' => 'オリジナルアーティスト',
+        ]);
+        SongTag::factory()->create(['song_id' => $song->id, 'value' => 'オリジナルアーティスト']);
+
+        // タイトルは一致するがタグに「無関係」は含まれない
+        $this->createTsItem('テスト曲 / 無関係');
+
+        $this->service->autoLinkUnlinkedTimestamps(10);
+
+        $this->assertDatabaseHas('timestamp_song_mappings', [
+            'song_id' => $song->id,
+            'is_manual' => false,
+            'status' => 'linked',
+        ]);
+    }
+
+    public function test_auto_link_title_only_no_tags_needed(): void
+    {
+        $song = Song::factory()->create([
+            'title' => 'シャルル',
+            'artist' => 'バルーン',
+        ]);
+        SongTag::factory()->create(['song_id' => $song->id, 'value' => 'バルーン']);
+
+        // 区切りなし → タイトルのみ一致、タグ照合なし
+        $this->createTsItem('シャルル');
+
+        $this->service->autoLinkUnlinkedTimestamps(10);
+
+        $this->assertDatabaseHas('timestamp_song_mappings', [
+            'song_id' => $song->id,
+            'is_manual' => false,
             'status' => 'linked',
         ]);
     }
