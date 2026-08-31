@@ -129,6 +129,16 @@ php artisan test tests/Feature/SongControllerTest.php::test_specific_method  # R
   - `MODIFY` で照合順序を指定するときは、`CHARACTER SET` / `COLLATE` を**型の直後・NULL 可否より前**に置くこと。順序を誤ると `ERROR 1064` になる。テストは SQLite なのでこの誤りは実行では検知できない（`tests/Unit/Migrations/ChangeNormalizedTextCollationTest.php` で生成SQLを固定している）
   - `songs.normalized_title` / `normalized_artist` も `utf8mb4_bin` に変更済み（#643）
 
+## Production Server
+
+```bash
+ssh -i ~/.ssh/alpacasandbag_app2_rsa -p 22 alpacasandbag@v2007.coreserver.jp
+```
+
+- ホスティング: CORESERVER v2007
+- アプリパス: `~/domains/ycs.alpacasandbag.jp/public_html/`
+- artisan実行例: `cd ~/domains/ycs.alpacasandbag.jp/public_html && php artisan tinker --execute="..."`
+
 ## Workflow
 
 修正対応は以下のフローで実施:
