@@ -118,7 +118,8 @@ class AutoLinkService
      * normalized_textから楽曲名を抽出し、既存songsテーブルと照合する
      *
      * extractSongInfo()で分割し、title部分とartist部分の両方で
-     * songs.normalized_titleを検索する（順序が不定のため）
+     * songs.normalized_titleを検索する（順序が不定のため）。
+     * アーティスト一致判定はsong_tagsとのパーツ完全一致で行う。
      *
      * @return array{song: Song, artist_matched: bool}|null
      */
@@ -130,17 +131,19 @@ class AutoLinkService
 
         // parts[1]（title部分）でnormalized_titleを検索
         if (! empty($songInfo['title'])) {
-            $song = Song::where('normalized_title', $songInfo['title'])->first();
-            if ($song) {
+            $songs = Song::where('normalized_title', $songInfo['title'])->with('tags')->get();
+            foreach ($songs as $song) {
                 $candidates[] = $song;
             }
         }
 
         // parts[0]（artist部分）でもnormalized_titleを検索（順序が逆の場合に対応）
         if (! empty($songInfo['artist'])) {
-            $song = Song::where('normalized_title', $songInfo['artist'])->first();
-            if ($song && ! in_array($song->id, array_map(fn ($s) => $s->id, $candidates))) {
-                $candidates[] = $song;
+            $songs = Song::where('normalized_title', $songInfo['artist'])->with('tags')->get();
+            foreach ($songs as $song) {
+                if (! in_array($song->id, array_map(fn ($s) => $s->id, $candidates))) {
+                    $candidates[] = $song;
+                }
             }
         }
 
@@ -153,10 +156,20 @@ class AutoLinkService
             return ['song' => $candidates[0], 'artist_matched' => false];
         }
 
-        // 候補の中からアーティスト一致を探す
+        // タグマッチング: テキストの非タイトル部分と候補のタグをパーツ完全一致で照合
         foreach ($candidates as $candidate) {
-            $normalizedArtist = $candidate->normalized_artist;
-            if ($normalizedArtist === $songInfo['artist'] || $normalizedArtist === $songInfo['title']) {
+            $tagValues = $candidate->tags->pluck('value')
+                ->map(fn ($v) => TextNormalizer::normalize($v))
+                ->toArray();
+
+            // 候補のタイトルがどちらのパーツに一致したかで、照合対象を決める
+            $matchPart = ($candidate->normalized_title === $songInfo['title'])
+                ? $songInfo['artist']
+                : $songInfo['title'];
+
+            $normalizedMatchPart = TextNormalizer::normalize($matchPart);
+
+            if (in_array($normalizedMatchPart, $tagValues, true)) {
                 return ['song' => $candidate, 'artist_matched' => true];
             }
         }
