@@ -435,6 +435,190 @@ class TimestampDecompositionServiceTest extends TestCase
     }
 
     /**
+     * スペースの有無だけが異なる normalized_text は near-duplicate としてスキップされることをテスト
+     */
+    public function test_scan_skips_near_duplicate_with_different_spacing(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $channel = Channel::create([
+            'channel_id' => 'UC_test_channel_spacing',
+            'handle' => '@test_spacing',
+            'title' => 'Test Channel Spacing',
+            'user_id' => $user->id,
+        ]);
+
+        $archive = Archive::create([
+            'id' => (string) Str::ulid(),
+            'video_id' => 'test_video_spacing',
+            'channel_id' => 'UC_test_channel_spacing',
+            'title' => 'Test Video Spacing',
+            'is_display' => true,
+            'published_at' => now(),
+            'comments_updated_at' => now(),
+        ]);
+
+        // スペースありの表記
+        TsItem::create([
+            'id' => (string) Str::ulid(),
+            'video_id' => 'test_video_spacing',
+            'comment_id' => 'test_video_spacing',
+            'type' => '1',
+            'ts_text' => '0:00',
+            'ts_num' => 0,
+            'text' => 'アーティスト / 曲名',
+            'normalized_text' => TextNormalizer::normalize('アーティスト / 曲名'),
+            'is_display' => true,
+        ]);
+
+        // スペースなしの表記（normalized_textは別値になる）
+        TsItem::create([
+            'id' => (string) Str::ulid(),
+            'video_id' => 'test_video_spacing',
+            'comment_id' => 'test_video_spacing',
+            'type' => '1',
+            'ts_text' => '1:00',
+            'ts_num' => 60,
+            'text' => 'アーティスト/曲名',
+            'normalized_text' => TextNormalizer::normalize('アーティスト/曲名'),
+            'is_display' => true,
+        ]);
+
+        // normalized_textが実際に異なることを前提として確認
+        $this->assertNotEquals(
+            TextNormalizer::normalize('アーティスト / 曲名'),
+            TextNormalizer::normalize('アーティスト/曲名')
+        );
+
+        $count = $this->service->scanAndDecompose();
+
+        // near-duplicateとして1件のみ作成される
+        $this->assertEquals(1, $count);
+        $this->assertEquals(1, TimestampDecomposition::count());
+    }
+
+    /**
+     * 同じnormalized_textを持つ異なるtextのタイムスタンプは1件にグルーピングされることをテスト
+     */
+    public function test_scan_groups_by_normalized_text_only(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $channel = Channel::create([
+            'channel_id' => 'UC_test_channel_group',
+            'handle' => '@test_group',
+            'title' => 'Test Channel Group',
+            'user_id' => $user->id,
+        ]);
+
+        $archive = Archive::create([
+            'id' => (string) Str::ulid(),
+            'video_id' => 'test_video_group',
+            'channel_id' => 'UC_test_channel_group',
+            'title' => 'Test Video Group',
+            'is_display' => true,
+            'published_at' => now(),
+            'comments_updated_at' => now(),
+        ]);
+
+        // 大文字表記
+        TsItem::create([
+            'id' => (string) Str::ulid(),
+            'video_id' => 'test_video_group',
+            'comment_id' => 'test_video_group',
+            'type' => '1',
+            'ts_text' => '0:00',
+            'ts_num' => 0,
+            'text' => 'Artist / Song',
+            'normalized_text' => TextNormalizer::normalize('Artist / Song'),
+            'is_display' => true,
+        ]);
+
+        // 全て大文字の表記（normalizeで小文字化されるため同じnormalized_textになる）
+        TsItem::create([
+            'id' => (string) Str::ulid(),
+            'video_id' => 'test_video_group',
+            'comment_id' => 'test_video_group',
+            'type' => '1',
+            'ts_text' => '1:00',
+            'ts_num' => 60,
+            'text' => 'ARTIST / SONG',
+            'normalized_text' => TextNormalizer::normalize('ARTIST / SONG'),
+            'is_display' => true,
+        ]);
+
+        // normalized_textが同じであることを前提として確認
+        $this->assertEquals(
+            TextNormalizer::normalize('Artist / Song'),
+            TextNormalizer::normalize('ARTIST / SONG')
+        );
+
+        $count = $this->service->scanAndDecompose();
+
+        // groupByによって1件のみ作成される
+        $this->assertEquals(1, $count);
+        $this->assertEquals(1, TimestampDecomposition::count());
+    }
+
+    /**
+     * 内容が異なるタイムスタンプはnear-duplicate判定でスキップされず、それぞれ作成されることをテスト
+     */
+    public function test_scan_does_not_skip_unrelated_items(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $channel = Channel::create([
+            'channel_id' => 'UC_test_channel_unrelated',
+            'handle' => '@test_unrelated',
+            'title' => 'Test Channel Unrelated',
+            'user_id' => $user->id,
+        ]);
+
+        $archive = Archive::create([
+            'id' => (string) Str::ulid(),
+            'video_id' => 'test_video_unrelated',
+            'channel_id' => 'UC_test_channel_unrelated',
+            'title' => 'Test Video Unrelated',
+            'is_display' => true,
+            'published_at' => now(),
+            'comments_updated_at' => now(),
+        ]);
+
+        TsItem::create([
+            'id' => (string) Str::ulid(),
+            'video_id' => 'test_video_unrelated',
+            'comment_id' => 'test_video_unrelated',
+            'type' => '1',
+            'ts_text' => '0:00',
+            'ts_num' => 0,
+            'text' => 'アーティストA / 曲名A',
+            'normalized_text' => TextNormalizer::normalize('アーティストA / 曲名A'),
+            'is_display' => true,
+        ]);
+
+        TsItem::create([
+            'id' => (string) Str::ulid(),
+            'video_id' => 'test_video_unrelated',
+            'comment_id' => 'test_video_unrelated',
+            'type' => '1',
+            'ts_text' => '1:00',
+            'ts_num' => 60,
+            'text' => 'アーティストB / 曲名B',
+            'normalized_text' => TextNormalizer::normalize('アーティストB / 曲名B'),
+            'is_display' => true,
+        ]);
+
+        $count = $this->service->scanAndDecompose();
+
+        // 内容が異なるため両方とも作成される
+        $this->assertEquals(2, $count);
+        $this->assertEquals(2, TimestampDecomposition::count());
+    }
+
+    /**
      * 既にスキャン済みの「楽曲でない」タイムスタンプがgetNextPendingから除外されることをテスト
      */
     public function test_get_next_pending_excludes_not_song_timestamps(): void
@@ -1374,5 +1558,62 @@ class TimestampDecompositionServiceTest extends TestCase
         $this->assertEquals(TimestampDecomposition::STATUS_SELECTED, $decomposition->status);
         $this->assertEquals('群青 / YOASOBI', $decomposition->derived_title);
         $this->assertNull($decomposition->cascade_group_id);
+    }
+
+    public function test_unscanned_count_excludes_near_duplicate_of_existing_decomposition(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $channel = Channel::create([
+            'channel_id' => 'UC_test_channel',
+            'handle' => '@test',
+            'title' => 'Test Channel',
+            'user_id' => $user->id,
+        ]);
+
+        Archive::create([
+            'id' => (string) Str::ulid(),
+            'video_id' => 'test_video_1',
+            'channel_id' => 'UC_test_channel',
+            'title' => 'Test Video',
+            'is_display' => true,
+            'published_at' => now(),
+            'comments_updated_at' => now(),
+        ]);
+
+        // スペースありの normalized_text で ts_item を作成
+        TsItem::create([
+            'id' => (string) Str::ulid(),
+            'video_id' => 'test_video_1',
+            'comment_id' => 'test_video_1',
+            'type' => '1',
+            'ts_text' => '0:00',
+            'ts_num' => 0,
+            'text' => 'アーティスト / 曲名',
+            'normalized_text' => TextNormalizer::normalize('アーティスト / 曲名'),
+            'is_display' => true,
+        ]);
+
+        // スペースなしの normalized_text で ts_item を作成（near-duplicate）
+        TsItem::create([
+            'id' => (string) Str::ulid(),
+            'video_id' => 'test_video_1',
+            'comment_id' => 'test_video_1',
+            'type' => '1',
+            'ts_text' => '1:00',
+            'ts_num' => 60,
+            'text' => 'アーティスト/曲名',
+            'normalized_text' => TextNormalizer::normalize('アーティスト/曲名'),
+            'is_display' => true,
+        ]);
+
+        // スキャン実行 → 1件のみ作成される
+        $count = $this->service->scanAndDecompose();
+        $this->assertEquals(1, $count);
+
+        // 統計の unscanned が 0 であること（near-duplicate も「スキャン済み」として扱われる）
+        $stats = $this->service->getStatistics();
+        $this->assertEquals(0, $stats['unscanned']);
     }
 }
