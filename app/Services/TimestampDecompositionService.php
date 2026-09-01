@@ -10,6 +10,7 @@ use App\Models\TsItem;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class TimestampDecompositionService
@@ -88,7 +89,7 @@ class TimestampDecompositionService
                     $existingCompactKeys[$compactKey] = true;
                 } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
                     // 正規化テキストが重複している場合はスキップ（異なる元テキストが同じ正規化結果になる場合）
-                    \Illuminate\Support\Facades\Log::debug('TimestampDecomposition: skipped duplicate normalized_text', [
+                    Log::debug('TimestampDecomposition: skipped duplicate normalized_text', [
                         'normalized_text' => $item->normalized_text,
                         'text' => $item->text,
                     ]);
@@ -423,7 +424,7 @@ class TimestampDecompositionService
                         try {
                             $this->linkToSong($decomposition->fresh());
                         } catch (\Exception $e) {
-                            \Illuminate\Support\Facades\Log::warning('Cascade link failed: '.$decomposition->id, [
+                            Log::warning('Cascade link failed: '.$decomposition->id, [
                                 'error' => $e->getMessage(),
                             ]);
                         }
@@ -760,7 +761,7 @@ class TimestampDecompositionService
                             $count++;
                         }
                     } catch (\Exception $e) {
-                        \Illuminate\Support\Facades\Log::error('Failed to link decomposition: '.$decomposition->id, [
+                        Log::error('Failed to link decomposition: '.$decomposition->id, [
                             'error' => $e->getMessage(),
                             'decomposition_id' => $decomposition->id,
                             'derived_title' => $decomposition->derived_title,
