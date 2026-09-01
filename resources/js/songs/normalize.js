@@ -1205,7 +1205,7 @@ class TimestampNormalization {
         songs.forEach(song => {
             results.appendChild(this.createSongElement(song, songs, total, () => {
                 this.displayCandidates(songs, total);
-            }, { showEditDelete: false }));
+            }, { showActions: false }));
         });
     }
 
@@ -1301,7 +1301,7 @@ class TimestampNormalization {
         }
     }
 
-    createSongElement(song, songs, total, onSelectionChange = null, { showEditDelete = true } = {}) {
+    createSongElement(song, songs, total, onSelectionChange = null, { showActions = true } = {}) {
         const div = document.createElement('div');
         div.dataset.songId = song.id;
         const isSelected = this.selectedSong?.id === song.id;
@@ -1347,31 +1347,31 @@ class TimestampNormalization {
         const copyBtn = this.createSongCopyButton(song);
         buttonContainer.appendChild(copyBtn);
 
-        // 絞り込みボタン
-        const filterBtn = this.createSongFilterButton(song);
-        buttonContainer.appendChild(filterBtn);
+        if (showActions) {
+            // 絞り込みボタン
+            const filterBtn = this.createSongFilterButton(song);
+            buttonContainer.appendChild(filterBtn);
 
-        // 編集ボタン
-        const editBtn = document.createElement('button');
-        editBtn.className = 'px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700';
-        editBtn.textContent = '編集';
-        editBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.openEditModal(song);
-        });
+            // 編集ボタン
+            const editBtn = document.createElement('button');
+            editBtn.className = 'px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700';
+            editBtn.textContent = '編集';
+            editBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.openEditModal(song);
+            });
 
-        // 削除ボタン
-        const deleteBtn = document.createElement('button');
-        deleteBtn.className = 'px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700';
-        deleteBtn.textContent = '削除';
-        deleteBtn.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            if (confirm(`楽曲マスタを削除しますか?\n${song.title} / ${song.artist}`)) {
-                await this.deleteSong(song.id);
-            }
-        });
+            // 削除ボタン
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700';
+            deleteBtn.textContent = '削除';
+            deleteBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (confirm(`楽曲マスタを削除しますか?\n${song.title} / ${song.artist}`)) {
+                    await this.deleteSong(song.id);
+                }
+            });
 
-        if (showEditDelete) {
             buttonContainer.appendChild(editBtn);
             buttonContainer.appendChild(deleteBtn);
         }
