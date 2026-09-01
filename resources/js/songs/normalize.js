@@ -1205,7 +1205,7 @@ class TimestampNormalization {
         songs.forEach(song => {
             results.appendChild(this.createSongElement(song, songs, total, () => {
                 this.displayCandidates(songs, total);
-            }));
+            }, { showEditDelete: false }));
         });
     }
 
@@ -1301,7 +1301,7 @@ class TimestampNormalization {
         }
     }
 
-    createSongElement(song, songs, total, onSelectionChange = null) {
+    createSongElement(song, songs, total, onSelectionChange = null, { showEditDelete = true } = {}) {
         const div = document.createElement('div');
         div.dataset.songId = song.id;
         const isSelected = this.selectedSong?.id === song.id;
@@ -1371,8 +1371,10 @@ class TimestampNormalization {
             }
         });
 
-        buttonContainer.appendChild(editBtn);
-        buttonContainer.appendChild(deleteBtn);
+        if (showEditDelete) {
+            buttonContainer.appendChild(editBtn);
+            buttonContainer.appendChild(deleteBtn);
+        }
 
         div.appendChild(contentDiv);
         div.appendChild(buttonContainer);
