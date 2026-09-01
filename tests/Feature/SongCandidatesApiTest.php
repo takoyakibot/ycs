@@ -155,4 +155,24 @@ class SongCandidatesApiTest extends TestCase
 
         $this->getJson('/api/songs/candidates')->assertStatus(422);
     }
+
+    /**
+     * 候補が50件を超える場合、songsは50件に制限されtotalは実数が返ること
+     */
+    public function test_limits_candidates_to_50(): void
+    {
+        $this->actingAs(User::factory()->create());
+
+        for ($i = 1; $i <= 55; $i++) {
+            Song::factory()->create(['title' => "テスト曲{$i}", 'artist' => 'テストアーティスト']);
+        }
+
+        $response = $this->getJson('/api/songs/candidates?'.http_build_query([
+            'text' => 'テスト曲',
+        ]));
+
+        $response->assertOk();
+        $this->assertEquals(55, $response->json('total'));
+        $this->assertCount(50, $response->json('songs'));
+    }
 }
