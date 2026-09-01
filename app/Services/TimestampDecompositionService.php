@@ -28,8 +28,15 @@ class TimestampDecompositionService
     {
         $count = 0;
 
+        // 既存の分解結果からコンパクトキー（スラッシュ周りの空白を除去したキー）のSetを構築
+        // near-duplicate（スペースの有無だけが異なる normalized_text）の重複作成を防止するため
+        $existingCompactKeys = [];
+        foreach (TimestampDecomposition::pluck('normalized_text') as $normalizedText) {
+            $existingCompactKeys[self::compactSeparators($normalizedText)] = true;
+        }
+
         // 区切り文字を含み、まだ分解されていないタイムスタンプを取得
-        $query = TsItem::select('text', 'normalized_text')
+        $query = TsItem::select(DB::raw('MIN(text) as text'), 'normalized_text')
             ->whereNotNull('text')
             ->where('text', '!=', '')
             ->where('is_display', true)
@@ -53,33 +60,56 @@ class TimestampDecompositionService
                     ->from('timestamp_decompositions')
                     ->whereColumn('timestamp_decompositions.normalized_text', 'ts_items.normalized_text');
             })
-            ->groupBy('text', 'normalized_text')
+            ->groupBy('normalized_text')
             ->orderByRaw('MIN(ts_items.id)'); // GROUP BYとの互換性のためMIN()を使用
 
-        // チャンク処理で大量データに対応
-        $query->chunk(500, function ($items) use (&$count) {
-            foreach ($items as $item) {
-                // 区切り文字を含むかチェック
-                if (! TextNormalizer::hasSeparators($item->text)) {
+        // 軽量クエリ（text + normalized_textのみ）のため全件取得
+        // chunk()はGROUP BYと組み合わせるとオフセットドリフトが発生しうるため使用しない
+        $items = $query->get();
+        foreach ($items as $item) {
+            // 区切り文字を含むかチェック
+            if (! TextNormalizer::hasSeparators($item->text)) {
+                continue;
+            }
+
+            // スペースの有無だけが異なる near-duplicate をスキップ
+            $compactKey = self::compactSeparators($item->normalized_text);
+            if (isset($existingCompactKeys[$compactKey])) {
+                continue;
+            }
+
+            $decomposition = $this->decompose($item->text);
+
+            // パーツが2つ以上ある場合のみ保存
+            if ($decomposition['separator_count'] > 0) {
+                try {
+                    $this->createDecomposition($item->text, $item->normalized_text, $decomposition);
+                    $count++;
+                    $existingCompactKeys[$compactKey] = true;
+                } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+                    // 正規化テキストが重複している場合はスキップ（異なる元テキストが同じ正規化結果になる場合）
+                    \Illuminate\Support\Facades\Log::debug('TimestampDecomposition: skipped duplicate normalized_text', [
+                        'normalized_text' => $item->normalized_text,
+                        'text' => $item->text,
+                    ]);
+
                     continue;
                 }
-
-                $decomposition = $this->decompose($item->text);
-
-                // パーツが2つ以上ある場合のみ保存
-                if ($decomposition['separator_count'] > 0) {
-                    try {
-                        $this->createDecomposition($item->text, $item->normalized_text, $decomposition);
-                        $count++;
-                    } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
-                        // 正規化テキストが重複している場合はスキップ（異なる元テキストが同じ正規化結果になる場合）
-                        continue;
-                    }
-                }
             }
-        });
+        }
 
         return $count;
+    }
+
+    /**
+     * 区切り文字（スラッシュ）周辺の空白を除去したコンパクトキーを生成
+     *
+     * スペースの有無だけが異なる normalized_text（例: "A / B" と "A/B"）を
+     * 同一のものとみなし、near-duplicate な分解結果の作成を防ぐために使用する
+     */
+    private static function compactSeparators(string $text): string
+    {
+        return preg_replace('/\s*\/\s*/', '/', $text);
     }
 
     /**
