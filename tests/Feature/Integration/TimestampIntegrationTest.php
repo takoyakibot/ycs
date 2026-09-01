@@ -13,6 +13,7 @@ use App\Services\ChannelQueryService;
 use App\Services\CoverSongTitleExtractorService;
 use App\Services\RefreshArchiveService;
 use App\Services\SubtitleFingerprintService;
+use App\Services\TimestampExtractorService;
 use App\Services\VideoAnalyzerService;
 use App\Services\YouTubeService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -188,6 +189,14 @@ class TimestampIntegrationTest extends TestCase
             ['HELLO WORLD', 'hello world'],
             // 全角スペース → 半角スペース1つに統一
             ['曲名　/　アーティスト', '曲名 / アーティスト'],
+            // 単純な絵文字は保持されつつ、周囲の英字は小文字化される
+            ['Hello😀World', 'hello😀world'],
+            // ZWJ(U+200D)結合の絵文字シーケンス(家族)はそのまま保持される
+            // (U+200B/U+200C/U+FEFFのみ除去対象で、U+200Dは絵文字シーケンス用に保持される仕様)
+            [
+                "曲名👨\u{200D}👩\u{200D}👧\u{200D}👦",
+                "曲名👨\u{200D}👩\u{200D}👧\u{200D}👦",
+            ],
         ];
 
         foreach ($cases as $index => [$original, $expected]) {
@@ -252,7 +261,8 @@ class TimestampIntegrationTest extends TestCase
     }
 
     /**
-     * タイムスタンプ表記ゆれ(1:23 / 01:23 / 1:23:45)のts_text・ts_numの保存を検証する
+     * タイムスタンプ表記ゆれ(1:23 / 01:23 / 1:23:45)の解析(timestampToSeconds)と
+     * ts_text・ts_numの保存を検証する
      */
     public function test_timestamp_format_variations(): void
     {
@@ -262,6 +272,8 @@ class TimestampIntegrationTest extends TestCase
             'video_id' => 'formattest1',
         ]);
 
+        $extractor = app(TimestampExtractorService::class);
+
         $cases = [
             // [ts_text, ts_num, text]
             ['1:23', 83, 'Short Format Song'],
@@ -270,6 +282,14 @@ class TimestampIntegrationTest extends TestCase
         ];
 
         foreach ($cases as [$tsText, $tsNum, $text]) {
+            // 実際のパース処理(TimestampExtractorService::timestampToSeconds)が
+            // 期待する秒数を返すことを確認
+            $this->assertSame(
+                $tsNum,
+                $extractor->timestampToSeconds($tsText),
+                "timestampToSeconds mismatch for input: {$tsText}"
+            );
+
             $tsItem = TsItem::create([
                 'id' => (string) Str::ulid(),
                 'video_id' => $archive->video_id,
