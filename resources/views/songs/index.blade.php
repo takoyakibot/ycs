@@ -128,7 +128,7 @@
 
                         <!-- タブ -->
                         <div class="mb-4">
-                            <nav class="flex space-x-4 border-b border-gray-200 dark:border-gray-700">
+                            <nav class="flex space-x-4 overflow-x-auto whitespace-nowrap border-b border-gray-200 dark:border-gray-700">
                                 <button id="spotifyTab" class="tab-button px-3 py-2 text-sm font-medium border-b-2 {{ $spotifyEnabled ? 'border-green-500 text-green-600' : 'border-transparent text-gray-400 cursor-not-allowed' }} -mb-px" {{ $spotifyEnabled ? '' : 'disabled' }}>
                                     Spotify検索{{ $spotifyEnabled ? '' : '（無効）' }}
                                 </button>
