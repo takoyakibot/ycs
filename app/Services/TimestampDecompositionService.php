@@ -93,6 +93,7 @@ class TimestampDecompositionService
                         'normalized_text' => $item->normalized_text,
                         'text' => $item->text,
                     ]);
+                    $existingCompactKeys[$compactKey] = true;
 
                     continue;
                 }
@@ -710,6 +711,12 @@ class TimestampDecompositionService
      */
     private function countUnscannedTimestamps(): int
     {
+        // 既存のコンパクトキーを構築（near-duplicate も「スキャン済み」として扱うため）
+        $existingCompactKeys = [];
+        foreach (TimestampDecomposition::pluck('normalized_text') as $nt) {
+            $existingCompactKeys[self::compactSeparators($nt)] = true;
+        }
+
         return TsItem::select('normalized_text')
             ->whereNotNull('text')
             ->where('text', '!=', '')
@@ -734,9 +741,24 @@ class TimestampDecompositionService
                     ->from('timestamp_decompositions')
                     ->whereColumn('timestamp_decompositions.normalized_text', 'ts_items.normalized_text');
             })
-            ->whereRaw("text REGEXP '[/／−－:：|｜-]'") // ハイフンは末尾に、長音記号（ー）は含まない（誤検出防止）
+            ->where(function ($q) {
+                if (DB::getDriverName() === 'sqlite') {
+                    $q->where('text', 'LIKE', '%/%')
+                        ->orWhere('text', 'LIKE', '%／%')
+                        ->orWhere('text', 'LIKE', '%-%')
+                        ->orWhere('text', 'LIKE', '%−%')
+                        ->orWhere('text', 'LIKE', '%－%')
+                        ->orWhere('text', 'LIKE', '%:%')
+                        ->orWhere('text', 'LIKE', '%：%')
+                        ->orWhere('text', 'LIKE', '%|%')
+                        ->orWhere('text', 'LIKE', '%｜%');
+                } else {
+                    $q->whereRaw("text REGEXP '[/／−－:：|｜-]'");
+                }
+            })
             ->groupBy('normalized_text')
             ->get()
+            ->filter(fn ($item) => ! isset($existingCompactKeys[self::compactSeparators($item->normalized_text)]))
             ->count();
     }
 

@@ -1559,4 +1559,61 @@ class TimestampDecompositionServiceTest extends TestCase
         $this->assertEquals('群青 / YOASOBI', $decomposition->derived_title);
         $this->assertNull($decomposition->cascade_group_id);
     }
+
+    public function test_unscanned_count_excludes_near_duplicate_of_existing_decomposition(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $channel = Channel::create([
+            'channel_id' => 'UC_test_channel',
+            'handle' => '@test',
+            'title' => 'Test Channel',
+            'user_id' => $user->id,
+        ]);
+
+        Archive::create([
+            'id' => (string) Str::ulid(),
+            'video_id' => 'test_video_1',
+            'channel_id' => 'UC_test_channel',
+            'title' => 'Test Video',
+            'is_display' => true,
+            'published_at' => now(),
+            'comments_updated_at' => now(),
+        ]);
+
+        // スペースありの normalized_text で ts_item を作成
+        TsItem::create([
+            'id' => (string) Str::ulid(),
+            'video_id' => 'test_video_1',
+            'comment_id' => 'test_video_1',
+            'type' => '1',
+            'ts_text' => '0:00',
+            'ts_num' => 0,
+            'text' => 'アーティスト / 曲名',
+            'normalized_text' => TextNormalizer::normalize('アーティスト / 曲名'),
+            'is_display' => true,
+        ]);
+
+        // スペースなしの normalized_text で ts_item を作成（near-duplicate）
+        TsItem::create([
+            'id' => (string) Str::ulid(),
+            'video_id' => 'test_video_1',
+            'comment_id' => 'test_video_1',
+            'type' => '1',
+            'ts_text' => '1:00',
+            'ts_num' => 60,
+            'text' => 'アーティスト/曲名',
+            'normalized_text' => TextNormalizer::normalize('アーティスト/曲名'),
+            'is_display' => true,
+        ]);
+
+        // スキャン実行 → 1件のみ作成される
+        $count = $this->service->scanAndDecompose();
+        $this->assertEquals(1, $count);
+
+        // 統計の unscanned が 0 であること（near-duplicate も「スキャン済み」として扱われる）
+        $stats = $this->service->getStatistics();
+        $this->assertEquals(0, $stats['unscanned']);
+    }
 }
