@@ -23,38 +23,18 @@
                             {{ __('チャンネル管理') }}
                         </x-nav-link>
 
-                        <!-- マスタ管理ドロップダウン -->
-                        <x-dropdown align="left" width="48">
-                            <x-slot name="trigger">
-                                @php
-                                    $masterActive = request()->routeIs('songs.index')
-                                        || request()->routeIs('songs.decompose')
-                                        || request()->routeIs('songs.duplicates')
-                                        || request()->routeIs('songs.cleansing');
-                                @endphp
-                                <button class="inline-flex items-center px-1 pt-1 border-b-2 {{ $masterActive ? 'border-indigo-400 dark:border-indigo-600 text-gray-900 dark:text-gray-100' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-700' }} text-sm font-medium leading-5 focus:outline-none transition duration-150 ease-in-out h-full">
-                                    <span>{{ __('マスタ管理') }}</span>
-                                    <svg class="ms-1 fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
-                                    </svg>
-                                </button>
-                            </x-slot>
-
-                            <x-slot name="content">
-                                <x-dropdown-link :href="route('songs.index')" :active="request()->routeIs('songs.index')">
-                                    {{ __('タイムスタンプ正規化') }}
-                                </x-dropdown-link>
-                                <x-dropdown-link :href="route('songs.decompose')" :active="request()->routeIs('songs.decompose')">
-                                    {{ __('TS分解') }}
-                                </x-dropdown-link>
-                                <x-dropdown-link :href="route('songs.duplicates')" :active="request()->routeIs('songs.duplicates')">
-                                    {{ __('名寄せ') }}
-                                </x-dropdown-link>
-                                <x-dropdown-link :href="route('songs.cleansing')" :active="request()->routeIs('songs.cleansing')">
-                                    {{ __('クレンジング') }}
-                                </x-dropdown-link>
-                            </x-slot>
-                        </x-dropdown>
+                        <x-nav-link :href="route('songs.index')" :active="request()->routeIs('songs.index')">
+                            {{ __('正規化') }}
+                        </x-nav-link>
+                        <x-nav-link :href="route('songs.decompose')" :active="request()->routeIs('songs.decompose')">
+                            {{ __('TS分解') }}
+                        </x-nav-link>
+                        <x-nav-link :href="route('songs.duplicates')" :active="request()->routeIs('songs.duplicates')">
+                            {{ __('名寄せ') }}
+                        </x-nav-link>
+                        <x-nav-link :href="route('songs.cleansing')" :active="request()->routeIs('songs.cleansing')">
+                            {{ __('クレンジング') }}
+                        </x-nav-link>
                     @endif
                 </div>
             </div>
@@ -130,12 +110,8 @@
                     {{ __('チャンネル管理') }}
                 </x-responsive-nav-link>
 
-                <!-- マスタ管理グループ -->
-                <div class="ps-4 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider pt-3 pb-1">
-                    {{ __('マスタ管理') }}
-                </div>
                 <x-responsive-nav-link :href="route('songs.index')" :active="request()->routeIs('songs.index')">
-                    {{ __('タイムスタンプ正規化') }}
+                    {{ __('正規化') }}
                 </x-responsive-nav-link>
                 <x-responsive-nav-link :href="route('songs.decompose')" :active="request()->routeIs('songs.decompose')">
                     {{ __('TS分解') }}
