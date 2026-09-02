@@ -77,19 +77,21 @@ class TimestampNormalization {
         document.getElementById('deselectAllBtn').addEventListener('click', () => this.deselectAll());
 
         // Spotify検索
-        document.getElementById('searchSpotifyBtn').addEventListener('click', () => this.searchSpotify());
-        document.getElementById('spotifySearch').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                this.searchSpotify();
-            }
-        });
+        if (this.spotifyEnabled) {
+            document.getElementById('searchSpotifyBtn').addEventListener('click', () => this.searchSpotify());
+            document.getElementById('spotifySearch').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this.searchSpotify();
+                }
+            });
 
-        // Spotify検索クリアボタン
-        document.getElementById('clearSpotifySearchBtn').addEventListener('click', () => {
-            document.getElementById('spotifySearch').value = '';
-            document.getElementById('spotifyTracks').innerHTML = '';
-        });
+            // Spotify検索クリアボタン
+            document.getElementById('clearSpotifySearchBtn').addEventListener('click', () => {
+                document.getElementById('spotifySearch').value = '';
+                document.getElementById('spotifyTracks').innerHTML = '';
+            });
+        }
 
         // タイムスタンプ検索クリアボタン
         document.getElementById('clearTimestampSearchBtn').addEventListener('click', () => {
@@ -694,6 +696,7 @@ class TimestampNormalization {
 
     updateSpotifySelectedDisplay() {
         const spotifySelectedDiv = document.getElementById('spotifySelected');
+        if (!spotifySelectedDiv) return;
         if (this.selectedSpotifyTrack) {
             spotifySelectedDiv.classList.remove('hidden');
             const spotifyInfoDiv = document.getElementById('spotifySelectedInfo');
