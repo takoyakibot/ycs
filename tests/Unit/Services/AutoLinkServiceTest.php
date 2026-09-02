@@ -347,4 +347,87 @@ class AutoLinkServiceTest extends TestCase
             'status' => 'linked',
         ]);
     }
+
+    public function test_auto_link_matches_artist_with_honorific_via_containment(): void
+    {
+        $song = Song::factory()->create([
+            'title' => 'ロキ',
+            'artist' => '鈴木このみ',
+        ]);
+        SongTag::factory()->create(['song_id' => $song->id, 'value' => '鈴木このみ']);
+
+        $this->createTsItem('鈴木このみさん / ロキ');
+
+        $this->service->autoLinkUnlinkedTimestamps(10);
+
+        $this->assertDatabaseHas('timestamp_song_mappings', [
+            'song_id' => $song->id,
+            'is_manual' => true,
+            'status' => 'linked',
+        ]);
+    }
+
+    public function test_auto_link_prefers_exact_tag_match_over_containment(): void
+    {
+        $songA = Song::factory()->create([
+            'title' => 'Yesterday',
+            'artist' => 'Beatles',
+        ]);
+        SongTag::factory()->create(['song_id' => $songA->id, 'value' => 'Beatles']);
+
+        $songB = Song::factory()->create([
+            'title' => 'Yesterday',
+            'artist' => 'Beat',
+        ]);
+        SongTag::factory()->create(['song_id' => $songB->id, 'value' => 'Beat']);
+
+        // "Beatles"はタグ完全一致、"Beat"は部分一致 → 完全一致のsongAが優先される
+        $this->createTsItem('Beatles / Yesterday');
+
+        $this->service->autoLinkUnlinkedTimestamps(10);
+
+        $this->assertDatabaseHas('timestamp_song_mappings', [
+            'song_id' => $songA->id,
+            'is_manual' => true,
+        ]);
+    }
+
+    public function test_auto_link_artist_containment_fallback_when_no_title_match(): void
+    {
+        $song = Song::factory()->create([
+            'title' => 'ロキ',
+            'artist' => '鈴木このみ',
+        ]);
+
+        // 区切りなし＆タイトルが完全一致しないケース → アーティスト名含有でフォールバック
+        $this->createTsItem('鈴木このみさん ロキ');
+
+        $this->service->autoLinkUnlinkedTimestamps(10);
+
+        // 「鈴木このみさん ロキ」はextractSongInfoで区切れず全体がtitleになる。
+        // normalized_titleに完全一致しないので、findSongByArtistContainmentで
+        // 「鈴木このみ」が含まれる→「ロキ」もタイトル一致→紐付け成功
+        $this->assertDatabaseHas('timestamp_song_mappings', [
+            'song_id' => $song->id,
+            'status' => 'linked',
+        ]);
+    }
+
+    public function test_auto_link_artist_containment_matches_normalized_artist_field(): void
+    {
+        $song = Song::factory()->create([
+            'title' => 'テスト曲',
+            'artist' => '山田太郎',
+        ]);
+        // タグなしだがartistフィールドで部分一致する
+        $this->createTsItem('山田太郎さん / テスト曲');
+
+        $this->service->autoLinkUnlinkedTimestamps(10);
+
+        $this->assertDatabaseHas('timestamp_song_mappings', [
+            'song_id' => $song->id,
+            'is_manual' => true,
+            'status' => 'linked',
+        ]);
+    }
 }
