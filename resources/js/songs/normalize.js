@@ -20,7 +20,8 @@ class TimestampNormalization {
         this.selectedSpotifyTrack = null; // Spotify選択楽曲情報
         this.currentPage = 1;
         this.currentSearchQuery = ''; // 検索条件を保持
-        this.searchTimeout = null;
+        this.timestampSearchTimeout = null;
+        this.songsSearchTimeout = null;
         this.currentFilter = sessionStorage.getItem('timestampFilter') || 'active'; // active, all, unlinked, linked, not_song, auto_linked, pending
         this.currentSongFilter = null; // 楽曲による絞り込み（楽曲オブジェクト）
         this.operationHistory = []; // 操作履歴
@@ -58,10 +59,12 @@ class TimestampNormalization {
     bindEvents() {
         // タイムスタンプ検索
         document.getElementById('timestampSearch').addEventListener('input', (e) => {
-            clearTimeout(this.searchTimeout);
+            clearTimeout(this.timestampSearchTimeout);
             this.currentSearchQuery = e.target.value;
-            this.searchTimeout = setTimeout(() => {
+            this.selectedTimestamps = [];
+            this.timestampSearchTimeout = setTimeout(() => {
                 this.loadTimestamps(1, this.currentSearchQuery);
+                this.updateSelectionDisplay();
             }, 500);
         });
 
@@ -97,7 +100,9 @@ class TimestampNormalization {
         document.getElementById('clearTimestampSearchBtn').addEventListener('click', () => {
             document.getElementById('timestampSearch').value = '';
             this.currentSearchQuery = '';
+            this.selectedTimestamps = [];
             this.loadTimestamps(1, '');
+            this.updateSelectionDisplay();
         });
 
         // 手動登録フォーム
@@ -113,8 +118,8 @@ class TimestampNormalization {
 
         // 楽曲マスタ検索
         document.getElementById('songsSearch').addEventListener('input', (e) => {
-            clearTimeout(this.searchTimeout);
-            this.searchTimeout = setTimeout(() => {
+            clearTimeout(this.songsSearchTimeout);
+            this.songsSearchTimeout = setTimeout(() => {
                 this.loadSongs(e.target.value);
             }, 500);
         });
@@ -449,7 +454,6 @@ class TimestampNormalization {
             this.selectedTimestamps.push(timestamp);
         }
 
-        this.clearSelectedSong();
         this.refreshTimestampSelectionStyles();
         this.updateSelectionDisplay();
 
@@ -469,7 +473,6 @@ class TimestampNormalization {
             }
         });
 
-        this.clearSelectedSong();
         this.refreshTimestampSelectionStyles();
         this.updateSelectionDisplay();
     }
