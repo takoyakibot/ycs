@@ -98,13 +98,19 @@ class AutoLinkService
      * 単一テキストの自動紐付け処理
      *
      * normalized_textからtitle/artistを抽出し、songs.normalized_titleと完全一致照合。
-     * 一致すれば自動紐付け、不一致なら未紐付けのまま。
+     * 完全一致で見つからない場合、楽曲マスタのアーティスト名がテキストに含まれるかで
+     * フォールバック検索を行う。
      *
      * @return string 'linked'|'not_found'
      */
     protected function processAutoLink(string $normalizedText): string
     {
         $result = $this->findSongByNormalizedText($normalizedText);
+
+        if (! $result) {
+            $result = $this->findSongByArtistContainment($normalizedText);
+        }
+
         if ($result) {
             $this->createAutoLinkMapping($normalizedText, $result['song']->id, $result['artist_matched']);
 
@@ -156,26 +162,84 @@ class AutoLinkService
             return ['song' => $candidates[0], 'artist_matched' => false];
         }
 
-        // タグマッチング: テキストの非タイトル部分と候補のタグをパーツ完全一致で照合
+        // タグマッチング Pass 1: 完全一致
         foreach ($candidates as $candidate) {
-            $tagValues = $candidate->tags->pluck('value')
-                ->map(fn ($v) => TextNormalizer::normalize($v))
-                ->toArray();
-
-            // 候補のタイトルがどちらのパーツに一致したかで、照合対象を決める
-            $matchPart = ($candidate->normalized_title === $songInfo['title'])
-                ? $songInfo['artist']
-                : $songInfo['title'];
-
-            $normalizedMatchPart = TextNormalizer::normalize($matchPart);
+            [$tagValues, $normalizedMatchPart] = $this->getArtistMatchParts($candidate, $songInfo);
 
             if (in_array($normalizedMatchPart, $tagValues, true)) {
                 return ['song' => $candidate, 'artist_matched' => true];
             }
         }
 
+        // タグマッチング Pass 2: アーティスト側からの部分一致（敬称付き対応）
+        foreach ($candidates as $candidate) {
+            [$tagValues, $normalizedMatchPart] = $this->getArtistMatchParts($candidate, $songInfo);
+
+            foreach ($tagValues as $tagValue) {
+                if ($tagValue !== '' && str_contains($normalizedMatchPart, $tagValue)) {
+                    return ['song' => $candidate, 'artist_matched' => true];
+                }
+            }
+
+            if ($candidate->normalized_artist !== null && $candidate->normalized_artist !== '') {
+                if (str_contains($normalizedMatchPart, $candidate->normalized_artist)) {
+                    return ['song' => $candidate, 'artist_matched' => true];
+                }
+            }
+        }
+
         // アーティスト不一致だが候補はある
         return ['song' => $candidates[0], 'artist_matched' => false];
+    }
+
+    /**
+     * 候補の楽曲とテキストのアーティスト情報からマッチング用データを返す
+     *
+     * @return array{0: string[], 1: string} [正規化済みタグ値の配列, 正規化済みマッチ対象テキスト]
+     */
+    private function getArtistMatchParts(Song $candidate, array $songInfo): array
+    {
+        $tagValues = $candidate->tags->pluck('value')
+            ->map(fn ($v) => TextNormalizer::normalize($v))
+            ->toArray();
+
+        $matchPart = ($candidate->normalized_title === $songInfo['title'])
+            ? $songInfo['artist']
+            : $songInfo['title'];
+
+        return [$tagValues, TextNormalizer::normalize($matchPart)];
+    }
+
+    /**
+     * テキストにアーティスト名が含まれる楽曲を検索するフォールバック
+     *
+     * タイトル完全一致で候補が見つからなかった場合に、楽曲マスタのアーティスト名が
+     * テキスト中に含まれるかで検索する。敬称付きアーティスト名に対応するための手段。
+     *
+     * @return array{song: Song, artist_matched: bool}|null
+     */
+    protected function findSongByArtistContainment(string $normalizedText): ?array
+    {
+        $songs = Song::whereNotNull('normalized_artist')
+            ->where('normalized_artist', '!=', '')
+            ->whereRaw('INSTR(?, normalized_artist) > 0', [$normalizedText])
+            ->with('tags')
+            ->orderByRaw('LENGTH(normalized_artist) DESC')
+            ->limit(10)
+            ->get();
+
+        if ($songs->isEmpty()) {
+            return null;
+        }
+
+        foreach ($songs as $song) {
+            if ($song->normalized_title !== null && $song->normalized_title !== ''
+                && str_contains($normalizedText, $song->normalized_title)) {
+                return ['song' => $song, 'artist_matched' => true];
+            }
+        }
+
+        return ['song' => $songs->first(), 'artist_matched' => false];
     }
 
     /**

@@ -511,7 +511,7 @@ class SongController extends Controller
 
         $search = implode(' ', $searchParts);
 
-        $songs = [];
+        $songs = collect();
         $total = 0;
 
         // 検索語が作れない場合は検索しない。
@@ -530,10 +530,39 @@ class SongController extends Controller
             $songs = $query->orderBy('title')->limit(self::CANDIDATE_LIMIT)->get();
         }
 
+        // リバース検索: 楽曲マスタのアーティスト名がチップに含まれるか（敬称付き対応）
+        if ($songs->count() < self::CANDIDATE_LIMIT && $searchParts !== []) {
+            $existingIds = $songs->pluck('id')->toArray();
+            $reverseQuery = Song::query()
+                ->whereNotNull('normalized_artist')
+                ->where('normalized_artist', '!=', '');
+
+            if ($existingIds !== []) {
+                $reverseQuery->whereNotIn('id', $existingIds);
+            }
+
+            $reverseQuery->where(function ($q) use ($searchParts) {
+                foreach ($searchParts as $part) {
+                    $normalized = TextNormalizer::normalize($part);
+                    if ($normalized !== '') {
+                        $q->orWhereRaw('INSTR(?, normalized_artist) > 0', [$normalized]);
+                    }
+                }
+            });
+
+            $remaining = self::CANDIDATE_LIMIT - $songs->count();
+            $reverseSongs = $reverseQuery->orderBy('title')->limit($remaining)->get();
+
+            if ($reverseSongs->isNotEmpty()) {
+                $songs = $songs->concat($reverseSongs);
+                $total += $reverseSongs->count();
+            }
+        }
+
         return response()->json([
             'parts' => $parts,
             'ignored_indices' => $ignoredIndices,
-            'songs' => $songs,
+            'songs' => $songs->values(),
             'total' => $total,
         ]);
     }

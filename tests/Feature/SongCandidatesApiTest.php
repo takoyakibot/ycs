@@ -175,4 +175,41 @@ class SongCandidatesApiTest extends TestCase
         $this->assertEquals(55, $response->json('total'));
         $this->assertCount(50, $response->json('songs'));
     }
+
+    /**
+     * 敬称付きアーティスト名でもリバース検索で候補が返ること
+     */
+    public function test_reverse_artist_containment_finds_honorific_match(): void
+    {
+        $this->actingAs(User::factory()->create());
+
+        $target = Song::factory()->create(['title' => 'ロキ', 'artist' => '鈴木このみ']);
+
+        $response = $this->getJson('/api/songs/candidates?'.http_build_query([
+            'text' => '鈴木このみさん / ロキ',
+        ]));
+
+        $response->assertOk();
+        $this->assertGreaterThanOrEqual(1, $response->json('total'));
+        $ids = collect($response->json('songs'))->pluck('id')->toArray();
+        $this->assertContains($target->id, $ids);
+    }
+
+    /**
+     * リバース検索の結果は通常検索結果と重複しないこと
+     */
+    public function test_reverse_search_does_not_duplicate_fuzzy_results(): void
+    {
+        $this->actingAs(User::factory()->create());
+
+        $song = Song::factory()->create(['title' => 'テスト曲', 'artist' => 'テストアーティスト']);
+
+        $response = $this->getJson('/api/songs/candidates?'.http_build_query([
+            'text' => 'テストアーティスト / テスト曲',
+        ]));
+
+        $response->assertOk();
+        $ids = collect($response->json('songs'))->pluck('id')->toArray();
+        $this->assertEquals(array_unique($ids), $ids);
+    }
 }
