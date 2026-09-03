@@ -149,11 +149,19 @@ class SongController extends Controller
     }
 
     /**
-     * 楽曲マスタクレンジング画面を表示
+     * アーティスト名一括変換画面を表示
      */
-    public function cleansing()
+    public function artistRename()
     {
-        return view('songs.cleansing');
+        return view('songs.artist-rename');
+    }
+
+    /**
+     * 同名異表記グループ画面を表示
+     */
+    public function titleGroups()
+    {
+        return view('songs.title-groups');
     }
 
     /**

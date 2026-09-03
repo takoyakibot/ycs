@@ -53,8 +53,20 @@ fi
 echo "✅ Code style is good!"
 echo ""
 
-# 4. フロントエンドビルドをチェック
-echo "4️⃣ Building frontend assets..."
+# 4. package-lock.json の同期チェック
+echo "4️⃣ Checking package-lock.json sync..."
+npm install --package-lock-only --ignore-scripts --silent 2>/dev/null
+if ! git diff --quiet package-lock.json 2>/dev/null; then
+    echo "❌ package-lock.json is out of sync with package.json!"
+    echo "   Run 'npm install' and commit the updated lock file."
+    git checkout -- package-lock.json 2>/dev/null
+    exit 1
+fi
+echo "✅ package-lock.json is in sync!"
+echo ""
+
+# 5. フロントエンドビルドをチェック
+echo "5️⃣ Building frontend assets..."
 npm run build
 if [ $? -ne 0 ]; then
     echo "❌ Frontend build failed! Please fix before committing."
