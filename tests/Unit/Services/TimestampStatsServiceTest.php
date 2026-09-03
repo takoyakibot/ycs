@@ -23,10 +23,13 @@ class TimestampStatsServiceTest extends TestCase
         $this->service = app(TimestampStatsService::class);
     }
 
-    private function createTsItem(string $text, array $overrides = []): TsItem
+    private function createTsItem(string $text, array $overrides = [], array $archiveOverrides = []): TsItem
     {
         $channel = Channel::factory()->create();
-        $archive = Archive::factory()->create(['channel_id' => $channel->channel_id]);
+        $archive = Archive::factory()->create(array_merge(
+            ['channel_id' => $channel->channel_id],
+            $archiveOverrides
+        ));
 
         return TsItem::factory()->create(array_merge([
             'video_id' => $archive->video_id,
@@ -88,8 +91,8 @@ class TimestampStatsServiceTest extends TestCase
 
     public function test_recent_count_within_seven_days(): void
     {
-        $this->createTsItem('最近の曲', ['created_at' => now()->subDays(3)]);
-        $this->createTsItem('古い曲', ['created_at' => now()->subDays(10)]);
+        $this->createTsItem('最近の曲', [], ['published_at' => now()->subDays(3)->toDateString()]);
+        $this->createTsItem('古い曲', [], ['published_at' => now()->subDays(10)->toDateString()]);
 
         $summary = $this->service->getSummary();
 
