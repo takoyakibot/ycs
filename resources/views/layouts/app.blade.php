@@ -30,8 +30,8 @@
         <!-- Scripts -->
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
-    <body class="font-sans antialiased">
-        <div class="min-h-screen bg-gray-100 dark:bg-gray-900">
+    <body class="font-sans antialiased flex flex-col h-screen overflow-hidden">
+        <div class="flex-1 flex flex-col min-h-0 bg-gray-100 dark:bg-gray-900">
             @include('layouts.navigation')
 
             {{-- フラッシュメッセージ --}}
@@ -60,14 +60,13 @@
             @endif
 
             <!-- Page Content -->
-            <main>
+            <main class="flex-1 overflow-auto min-h-0">
                 {{ $slot }}
             </main>
-        </div>
 
-        <!-- Footer -->
-        <footer class="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 mt-8">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <!-- Footer -->
+            <footer class="flex-shrink-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
                 <div class="flex items-center justify-between gap-4">
                     <div class="flex flex-shrink-0 gap-x-6 text-sm text-gray-500 dark:text-gray-400">
                         <a href="{{ route('markdown.show') }}" class="hover:text-gray-700 dark:hover:text-gray-300">
@@ -92,7 +91,8 @@
                     @endisset
                 </div>
             </div>
-        </footer>
+            </footer>
+        </div>
 
         <div id="firstDisplayPopup" class="fixed bottom-0 left-0 right-0 z-50 bg-gray-800 text-white p-4 text-center">
             <p>このサイトを利用することにより、<a target="_blank" class="text-gray-400 underline" href="{{ route('markdown.show') }}">[利用規約とプライバシーポリシー]</a>に同意したものとみなします。<br/>
