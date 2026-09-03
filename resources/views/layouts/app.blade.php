@@ -68,34 +68,28 @@
         <!-- Footer -->
         <footer class="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 mt-8">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-                {{-- 仕分け状況サマリー --}}
-                @isset($timestampStats)
-                <div class="text-xs text-gray-400 dark:text-gray-500 mb-4 pb-4 border-b border-gray-100 dark:border-gray-700">
-                    <div class="flex flex-wrap gap-x-4 gap-y-1">
-                        <span>仕分け状況:</span>
-                        <span>未紐付け <span class="font-medium text-gray-600 dark:text-gray-300">{{ number_format($timestampStats['unlinked']) }}</span>件</span>
-                        <span>紐付け済み <span class="font-medium text-gray-600 dark:text-gray-300">{{ number_format($timestampStats['linked']) }}</span>件</span>
-                        <span>楽曲でない <span class="font-medium text-gray-600 dark:text-gray-300">{{ number_format($timestampStats['not_song']) }}</span>件</span>
-                        <span>紐付け率 <span class="font-medium text-gray-600 dark:text-gray-300">{{ $timestampStats['linked_rate'] }}%</span></span>
-                        @if($timestampStats['recent_count'] > 0)
-                            <span>直近7日の新着 <span class="font-medium text-orange-500">{{ number_format($timestampStats['recent_count']) }}</span>件</span>
-                        @endif
-                    </div>
-                </div>
-                @endisset
-
-                <div class="flex flex-col sm:flex-row justify-between items-center space-y-4 sm:space-y-0">
-                    <div class="flex flex-wrap gap-x-6 gap-y-2 text-sm text-gray-500 dark:text-gray-400">
+                <div class="flex items-center justify-between gap-4">
+                    <div class="flex flex-shrink-0 gap-x-6 text-sm text-gray-500 dark:text-gray-400">
                         <a href="{{ route('markdown.show') }}" class="hover:text-gray-700 dark:hover:text-gray-300">
                             {{ __('利用規約・プライバシーポリシー') }}
                         </a>
                         <a href="{{ route('contact.show') }}" class="hover:text-gray-700 dark:hover:text-gray-300">
                             {{ __('お問い合わせ') }}
                         </a>
+                        <span class="text-gray-400 dark:text-gray-500">&copy; {{ date('Y') }} {{ config('app.name') }}</span>
                     </div>
-                    <div class="text-sm text-gray-400 dark:text-gray-500">
-                        &copy; {{ date('Y') }} {{ config('app.name') }}
+                    @isset($timestampStats)
+                    <div class="min-w-0 truncate text-xs text-gray-400 dark:text-gray-500 cursor-default"
+                         title="未紐付け {{ number_format($timestampStats['unlinked']) }}件 / 紐付け済み {{ number_format($timestampStats['linked']) }}件 / 楽曲でない {{ number_format($timestampStats['not_song']) }}件 / 紐付け率 {{ $timestampStats['linked_rate'] }}%{{ $timestampStats['recent_count'] > 0 ? ' / 直近7日の新着 ' . number_format($timestampStats['recent_count']) . '件' : '' }}">
+                        未紐付け <span class="font-medium">{{ number_format($timestampStats['unlinked']) }}</span>件
+                        / 紐付け済み <span class="font-medium">{{ number_format($timestampStats['linked']) }}</span>件
+                        / 楽曲でない <span class="font-medium">{{ number_format($timestampStats['not_song']) }}</span>件
+                        / 紐付け率 <span class="font-medium">{{ $timestampStats['linked_rate'] }}%</span>
+                        @if($timestampStats['recent_count'] > 0)
+                            / 直近7日の新着 <span class="font-medium text-orange-500">{{ number_format($timestampStats['recent_count']) }}</span>件
+                        @endif
                     </div>
+                    @endisset
                 </div>
             </div>
         </footer>
