@@ -54,6 +54,7 @@ Route::middleware(['auth', 'admin'])->group(function () {
     // 楽曲マスタ管理
     Route::get('/songs/normalize', [SongController::class, 'index'])->name('songs.index');
     Route::get('/songs/duplicates', [SongController::class, 'duplicates'])->name('songs.duplicates');
+    Route::redirect('/songs/cleansing', '/songs/artist-rename', 301);
     Route::get('/songs/artist-rename', [SongController::class, 'artistRename'])->name('songs.artistRename');
     Route::get('/songs/title-groups', [SongController::class, 'titleGroups'])->name('songs.titleGroups');
 
