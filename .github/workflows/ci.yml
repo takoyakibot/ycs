@@ -2,7 +2,7 @@
 #
 # - php-tests: SQLite in-memory（phpunit.xml の設定どおり）なので DB サービス不要。
 #   ページ描画テストが @vite を通るため、フロントエンドのビルドも同 job で行う
-#   （JS のユニットテスト基盤は未整備（#665）のため build までが検証範囲）
+# - js-tests: vitest + jsdom によるフロントエンドJSのユニットテスト（#665）
 # - mysql-migrate: RefreshArchiveService やマイグレーションが MySQL / SQLite で
 #   分岐しており、SQLite だけでは MySQL 固有の失敗を拾えない（#653 / #641 が実例）
 #   ため、空の MySQL に migrate を通す job を別に置く
@@ -58,6 +58,24 @@ jobs:
 
       - name: Check code style (Pint)
         run: ./vendor/bin/pint --test
+
+  js-tests:
+    name: JS tests (Vitest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run JS tests
+        run: npm test
 
   mysql-migrate:
     name: MySQL migrate
