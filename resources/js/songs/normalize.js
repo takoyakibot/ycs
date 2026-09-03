@@ -51,7 +51,7 @@ class TimestampNormalization {
         this.updateFilterButtons();
         this.updateSongSearchModeButtons();
         this.loadTimestamps();
-        this.showTab(this.spotifyEnabled ? 'spotifyTab' : 'manualTab');
+        this.showTab('songsTab');
         this.updateSelectionDisplay();
         this.initHistoryPanel();
     }
