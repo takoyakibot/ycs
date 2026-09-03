@@ -116,4 +116,30 @@ describe('Pagination.render', () => {
         Pagination.render(container, { current_page: 1, last_page: 5, total: 50 }, callback);
         expect(container.textContent).toContain('(全50件)');
     });
+
+    it('ジャンプボタンの有効/無効の境界値', () => {
+        Pagination.render(container, { current_page: 6, last_page: 20 }, callback);
+        const buttons = [...container.querySelectorAll('button')];
+        const getBtn = (label) => buttons.find(b => b.textContent === label);
+
+        expect(getBtn('-5').disabled).toBe(false);
+        expect(getBtn('-10').disabled).toBe(true);
+        expect(getBtn('+5').disabled).toBe(false);
+        expect(getBtn('+10').disabled).toBe(false);
+    });
+
+    it('showFirstLast: falseで最初/最後ボタンを非表示', () => {
+        Pagination.render(container, { current_page: 5, last_page: 20 }, callback, { showFirstLast: false });
+        const labels = [...container.querySelectorAll('button')].map(b => b.textContent);
+        expect(labels).not.toContain('最初');
+        expect(labels).not.toContain('最後');
+    });
+
+    it('不正なページ番号の場合は描画しない', () => {
+        const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        Pagination.render(container, { current_page: 'abc', last_page: 'xyz' }, callback);
+        expect(container.querySelectorAll('button').length).toBe(0);
+        expect(spy).toHaveBeenCalled();
+        spy.mockRestore();
+    });
 });

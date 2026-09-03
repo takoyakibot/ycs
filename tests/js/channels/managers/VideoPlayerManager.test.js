@@ -174,6 +174,9 @@ describe('VideoPlayerManager', () => {
             expect(mgr.isPlaying).toBe(false);
             expect(mgr.currentVideoId).toBeNull();
             expect(mgr.playerMinimized).toBe(false);
+            expect(mgr.onShowChange).toHaveBeenCalledWith(false);
+            expect(mgr.onMinimizedChange).toHaveBeenCalledWith(false);
+            expect(mgr.onPlayingChange).toHaveBeenCalledWith(false);
         });
 
         it('resetPosition関数が渡されていれば呼ぶ', () => {
@@ -222,6 +225,14 @@ describe('VideoPlayerManager', () => {
             expect(mgr.player.setVolume).toHaveBeenCalledWith(75);
         });
 
+        it('境界値0と100は有効', () => {
+            const mgr = new VideoPlayerManager();
+            mgr.setVolume(0);
+            expect(mgr.volume).toBe(0);
+            mgr.setVolume(100);
+            expect(mgr.volume).toBe(100);
+        });
+
         it('範囲外の値は無視する', () => {
             const mgr = new VideoPlayerManager();
             mgr.setVolume(-1);
@@ -262,6 +273,13 @@ describe('VideoPlayerManager', () => {
             mgr.setPipSize('small');
             expect(mgr.pipSize).toBe('small');
             expect(sessionStorage.getItem('pipSize')).toBe('small');
+        });
+
+        it('プレイヤーがあればsetSizeを呼ぶ', () => {
+            const mgr = new VideoPlayerManager();
+            mgr.player = { setSize: vi.fn() };
+            mgr.setPipSize('large');
+            expect(mgr.player.setSize).toHaveBeenCalledWith(480, 270);
         });
 
         it('無効なサイズは無視する', () => {

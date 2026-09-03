@@ -118,6 +118,28 @@ describe('SimilarSongsDialog', () => {
             expect(result).toEqual({ action: 'use_existing', songId: 'song2' });
         });
 
+        it('HTMLを含む入力がエスケープされてDOMに挿入される', () => {
+            const malicious = [
+                {
+                    song: { id: 's1', title: '<img src=x onerror=alert(1)>', artist: '"><script>alert(2)</script>' },
+                    similarity: 80,
+                    title_similarity: 70,
+                    artist_similarity: 90,
+                },
+            ];
+            const maliciousInput = { title: '<b>bold</b>', artist: '&amp;' };
+
+            SimilarSongsDialog.show(malicious, maliciousInput);
+            const dialog = document.getElementById('similarSongsDialog');
+
+            expect(dialog.querySelector('img')).toBeNull();
+            expect(dialog.querySelector('script')).toBeNull();
+            expect(dialog.innerHTML).not.toContain('<img');
+            expect(dialog.innerHTML).not.toContain('<script');
+            expect(dialog.textContent).toContain('<img src=x onerror=alert(1)>');
+            expect(dialog.textContent).toContain('<b>bold</b>');
+        });
+
         it('選択をやり直すと新しい選択が反映される', async () => {
             const promise = SimilarSongsDialog.show(similarSongs, inputData);
 
