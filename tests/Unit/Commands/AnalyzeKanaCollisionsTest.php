@@ -109,16 +109,13 @@ class AnalyzeKanaCollisionsTest extends TestCase
     }
 
     /**
-     * 変換で新たにマッピングを引けるようになる ts_items を数えること
-     *
-     * これが選択肢2の利得。半角カナで書かれたタイムスタンプが、
-     * 全角で登録済みのマッピングに繋がるようになる。
+     * 半角カナのts_itemsは正規化時に全角化されるため、
+     * 分析コマンドでは「値が変わる」件数が0になること
      */
     public function test_counts_newly_linkable_ts_items(): void
     {
         $this->mapping(TextNormalizer::normalize('イエスタデイ'));
 
-        // 半角カナのタイムスタンプ（変換前はマッピングを引けない）
         $archive = Archive::factory()->create();
         TsItem::factory()->create([
             'video_id' => $archive->video_id,
@@ -127,7 +124,7 @@ class AnalyzeKanaCollisionsTest extends TestCase
         ]);
 
         $this->artisan('normalized-text:analyze-kana-collisions')
-            ->expectsOutputToContain('変換で新たにマッピングを引けるようになる ts_items: 1件')
+            ->expectsOutputToContain('変換で新たにマッピングを引けるようになる ts_items: 0件')
             ->assertSuccessful();
     }
 

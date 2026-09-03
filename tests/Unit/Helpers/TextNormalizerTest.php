@@ -33,6 +33,12 @@ class TextNormalizerTest extends TestCase
         $this->assertEquals('abc123', TextNormalizer::normalize('ＡＢＣ１２３'));
     }
 
+    public function test_halfwidth_kana_to_fullwidth(): void
+    {
+        $this->assertEquals('イエスタデイ', TextNormalizer::normalize('ｲｴｽﾀﾃﾞｲ'));
+        $this->assertEquals('ガンバレ', TextNormalizer::normalize('ｶﾞﾝﾊﾞﾚ'));
+    }
+
     /**
      * 区切り文字の統一テスト
      */
