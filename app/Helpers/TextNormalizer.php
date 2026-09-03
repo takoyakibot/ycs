@@ -48,8 +48,8 @@ class TextNormalizer
             return '';
         }
 
-        // 全角文字を半角に変換
-        $text = mb_convert_kana($text, 'as', 'UTF-8');
+        // 全角英数→半角、半角カナ→全角カナ（濁点結合含む）
+        $text = mb_convert_kana($text, 'asKV', 'UTF-8');
 
         // 区切り文字を統一（スラッシュに統一）
         // 注意: 長音記号（ー）は前後にスペースがある場合のみ区切り文字として扱う
