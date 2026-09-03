@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Models\TimestampSongMapping;
 use App\Models\TsItem;
 
 class TimestampStatsService
@@ -12,26 +11,22 @@ class TimestampStatsService
      */
     public function getSummary(): array
     {
-        $totalUniqueTexts = TsItem::where('is_display', 1)
-            ->where('type', '!=', '3')
-            ->whereNotNull('normalized_text')
-            ->distinct('normalized_text')
-            ->count('normalized_text');
-
-        $linked = TimestampSongMapping::whereNotNull('song_id')
-            ->where('is_not_song', false)
-            ->count();
-
-        $notSong = TimestampSongMapping::where('is_not_song', true)
-            ->count();
-
-        $unlinked = (int) TsItem::selectRaw('COUNT(DISTINCT ts_items.normalized_text) as cnt')
-            ->leftJoin('timestamp_song_mappings', 'ts_items.normalized_text', '=', 'timestamp_song_mappings.normalized_text')
+        $base = TsItem::query()
             ->where('ts_items.is_display', 1)
             ->where('ts_items.type', '!=', '3')
-            ->whereNotNull('ts_items.normalized_text')
-            ->whereNull('timestamp_song_mappings.id')
-            ->first()->cnt;
+            ->whereNotNull('ts_items.normalized_text');
+
+        $counts = (clone $base)
+            ->leftJoin('timestamp_song_mappings', 'ts_items.normalized_text', '=', 'timestamp_song_mappings.normalized_text')
+            ->selectRaw('COUNT(DISTINCT ts_items.normalized_text) as total')
+            ->selectRaw('COUNT(DISTINCT CASE WHEN timestamp_song_mappings.song_id IS NOT NULL AND timestamp_song_mappings.is_not_song = 0 THEN ts_items.normalized_text END) as linked')
+            ->selectRaw('COUNT(DISTINCT CASE WHEN timestamp_song_mappings.is_not_song = 1 THEN ts_items.normalized_text END) as not_song')
+            ->first();
+
+        $total = (int) $counts->total;
+        $linked = (int) $counts->linked;
+        $notSong = (int) $counts->not_song;
+        $unlinked = $total - $linked - $notSong;
 
         $recentCount = TsItem::where('is_display', 1)
             ->where('type', '!=', '3')
@@ -40,8 +35,8 @@ class TimestampStatsService
             ->where('created_at', '>=', now()->subDays(7))
             ->count();
 
-        $linkedRate = $totalUniqueTexts > 0
-            ? round(($linked + $notSong) / $totalUniqueTexts * 100, 1)
+        $linkedRate = $total > 0
+            ? round(($linked + $notSong) / $total * 100, 1)
             : 0;
 
         return [
