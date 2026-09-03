@@ -430,4 +430,37 @@ class AutoLinkServiceTest extends TestCase
             'status' => 'linked',
         ]);
     }
+
+    public function test_auto_link_pass2_skips_short_tag_containment(): void
+    {
+        $song = Song::factory()->create([
+            'title' => 'Yesterday',
+            'artist' => 'AI',
+        ]);
+        SongTag::factory()->create(['song_id' => $song->id, 'value' => 'AI']);
+
+        // "Aimer" contains "ai" after normalization, but tag is too short for containment
+        $this->createTsItem('Aimer / Yesterday');
+
+        $this->service->autoLinkUnlinkedTimestamps(10);
+
+        $this->assertDatabaseHas('timestamp_song_mappings', [
+            'song_id' => $song->id,
+            'is_manual' => false,
+        ]);
+    }
+
+    public function test_auto_link_containment_skips_short_artist(): void
+    {
+        Song::factory()->create([
+            'title' => 'ロキ',
+            'artist' => 'AI',
+        ]);
+
+        $this->createTsItem('Kaiser ロキ');
+
+        $this->service->autoLinkUnlinkedTimestamps(10);
+
+        $this->assertDatabaseCount('timestamp_song_mappings', 0);
+    }
 }

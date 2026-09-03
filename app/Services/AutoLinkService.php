@@ -6,10 +6,13 @@ use App\Helpers\TextNormalizer;
 use App\Models\Song;
 use App\Models\TimestampSongMapping;
 use App\Models\TsItem;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class AutoLinkService
 {
+    const MIN_ARTIST_LENGTH_FOR_CONTAINMENT = 3;
+
     /**
      * 未紐付けのタイムスタンプを既存楽曲マスタと照合し、自動紐付けする
      *
@@ -176,12 +179,14 @@ class AutoLinkService
             [$tagValues, $normalizedMatchPart] = $this->getArtistMatchParts($candidate, $songInfo);
 
             foreach ($tagValues as $tagValue) {
-                if ($tagValue !== '' && str_contains($normalizedMatchPart, $tagValue)) {
+                if ($tagValue !== '' && mb_strlen($tagValue) >= self::MIN_ARTIST_LENGTH_FOR_CONTAINMENT
+                    && str_contains($normalizedMatchPart, $tagValue)) {
                     return ['song' => $candidate, 'artist_matched' => true];
                 }
             }
 
-            if ($candidate->normalized_artist !== null && $candidate->normalized_artist !== '') {
+            if ($candidate->normalized_artist !== null && $candidate->normalized_artist !== ''
+                && mb_strlen($candidate->normalized_artist) >= self::MIN_ARTIST_LENGTH_FOR_CONTAINMENT) {
                 if (str_contains($normalizedMatchPart, $candidate->normalized_artist)) {
                     return ['song' => $candidate, 'artist_matched' => true];
                 }
@@ -220,8 +225,10 @@ class AutoLinkService
      */
     protected function findSongByArtistContainment(string $normalizedText): ?array
     {
+        $lengthFunc = DB::getDriverName() === 'sqlite' ? 'LENGTH' : 'CHAR_LENGTH';
         $songs = Song::whereNotNull('normalized_artist')
             ->where('normalized_artist', '!=', '')
+            ->whereRaw("$lengthFunc(normalized_artist) >= ?", [self::MIN_ARTIST_LENGTH_FOR_CONTAINMENT])
             ->whereRaw('INSTR(?, normalized_artist) > 0', [$normalizedText])
             ->with('tags')
             ->orderByRaw('LENGTH(normalized_artist) DESC')

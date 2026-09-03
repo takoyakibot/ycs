@@ -212,4 +212,26 @@ class SongCandidatesApiTest extends TestCase
         $ids = collect($response->json('songs'))->pluck('id')->toArray();
         $this->assertEquals(array_unique($ids), $ids);
     }
+
+    /**
+     * アーティスト名が短い楽曲はリバース検索から除外されること
+     */
+    public function test_reverse_search_skips_short_artist_name(): void
+    {
+        $this->actingAs(User::factory()->create());
+
+        Song::factory()->create(['title' => 'テスト曲', 'artist' => 'AI']);
+
+        $response = $this->getJson('/api/songs/candidates?'.http_build_query([
+            'text' => 'Kaiser / テスト',
+        ]));
+
+        $response->assertOk();
+        $ids = collect($response->json('songs'))->pluck('id')->toArray();
+        $this->assertNotContains(
+            Song::where('artist', 'AI')->first()->id,
+            $ids,
+            'Short artist name should not match via reverse INSTR search'
+        );
+    }
 }

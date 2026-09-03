@@ -14,6 +14,7 @@ use App\Models\Song;
 use App\Models\SongTag;
 use App\Models\TimestampSongMapping;
 use App\Models\TsItem;
+use App\Services\AutoLinkService;
 use App\Services\SongCleansingService;
 use App\Services\SongMappingService;
 use App\Services\SongMergeService;
@@ -541,9 +542,11 @@ class SongController extends Controller
         // リバース検索: 楽曲マスタのアーティスト名がチップに含まれるか（敬称付き対応）
         if ($songs->count() < self::CANDIDATE_LIMIT && $searchParts !== []) {
             $existingIds = $songs->pluck('id')->toArray();
+            $lengthFunc = DB::getDriverName() === 'sqlite' ? 'LENGTH' : 'CHAR_LENGTH';
             $reverseQuery = Song::query()
                 ->whereNotNull('normalized_artist')
-                ->where('normalized_artist', '!=', '');
+                ->where('normalized_artist', '!=', '')
+                ->whereRaw("$lengthFunc(normalized_artist) >= ?", [AutoLinkService::MIN_ARTIST_LENGTH_FOR_CONTAINMENT]);
 
             if ($existingIds !== []) {
                 $reverseQuery->whereNotIn('id', $existingIds);
