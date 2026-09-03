@@ -28,12 +28,11 @@ class TimestampStatsService
         $notSong = (int) $counts->not_song;
         $unlinked = $total - $linked - $notSong;
 
-        $recentCount = TsItem::where('is_display', 1)
-            ->where('type', '!=', '3')
-            ->whereNotNull('text')
-            ->where('text', '!=', '')
-            ->where('created_at', '>=', now()->subDays(7))
-            ->count();
+        $recentCount = (clone $base)
+            ->join('archives', 'ts_items.video_id', '=', 'archives.video_id')
+            ->where('archives.published_at', '>=', now()->subDays(7)->toDateString())
+            ->distinct()
+            ->count('ts_items.normalized_text');
 
         $linkedRate = $total > 0
             ? round(($linked + $notSong) / $total * 100, 1)
