@@ -12,6 +12,7 @@
         "alpinejs": "^3.4.2",
         "autoprefixer": "^10.4.20",
         "axios": "^1.7.8",
+        "esbuild": "^0.28.2",
         "jsdom": "^29.1.1",
         "laravel-vite-plugin": "^1.0.0",
         "postcss": "^8.4.49",
