@@ -137,6 +137,9 @@ export class SongOperationDialog {
             overlay.addEventListener('mousedown', (e) => {
                 if (e.target === overlay) close();
             });
+            overlay.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') close();
+            });
 
             // ========================================
             // Tag panel
@@ -398,7 +401,10 @@ export class SongOperationDialog {
                         toast.success(`${sources.length}件の楽曲を統合しました`);
                         close();
                     } catch (e) {
-                        if (mergedCount > 0) actionPerformed = 'merged';
+                        if (mergedCount > 0) {
+                            actionPerformed = 'merged';
+                            await doSearch();
+                        }
                         msgArea.show(e.message, 'error');
                     } finally {
                         merging = false;
@@ -682,12 +688,7 @@ export class SongOperationDialog {
             switchTab(lastTab);
             document.body.appendChild(overlay);
 
-            if (lastTab === 'tags') focusTagInput();
             if (lastTab === 'merge') mergeDoSearch();
-            if (lastTab === 'artist') {
-                artistsLoaded = true;
-                loadArtists();
-            }
         });
     }
 }
