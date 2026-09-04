@@ -15,10 +15,8 @@ class SongNotationService
     {
         $song = Song::findOrFail($songId);
 
-        // 通常マッピング（is_manual=true のレビュー済みのみ）
         $normalizedTexts = TimestampSongMapping::where('song_id', $songId)
-            ->where('status', TimestampSongMapping::STATUS_LINKED)
-            ->where('is_manual', true)
+            ->confirmed()
             ->where('is_not_song', false)
             ->pluck('normalized_text');
 

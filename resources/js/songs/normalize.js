@@ -2352,31 +2352,27 @@ class TimestampNormalization {
     loadNotationCandidates(songId) {
         const listEl = document.getElementById('notationCandidatesList');
         const toggleBtn = document.getElementById('notationToggleBtn');
-        const toggleIcon = document.getElementById('notationToggleIcon');
 
         // リセット
         listEl.innerHTML = '';
         listEl.classList.add('hidden');
-        toggleIcon.classList.remove('rotate-90');
-
-        // ローディング表示を準備
-        const loadingEl = document.createElement('div');
-        loadingEl.className = 'p-3 text-sm text-gray-500 dark:text-gray-400';
-        loadingEl.textContent = '読み込み中...';
-
-        // トグル動作
-        const toggleHandler = () => {
-            const isHidden = listEl.classList.toggle('hidden');
-            toggleIcon.classList.toggle('rotate-90', !isHidden);
-        };
+        const oldIcon = document.getElementById('notationToggleIcon');
+        if (oldIcon) oldIcon.classList.remove('rotate-90');
 
         // 既存ハンドラを剥がして再設定
         const newBtn = toggleBtn.cloneNode(true);
         toggleBtn.parentNode.replaceChild(newBtn, toggleBtn);
-        newBtn.addEventListener('click', toggleHandler);
+        const toggleIcon = newBtn.querySelector('svg');
+
+        // トグル動作
+        newBtn.addEventListener('click', () => {
+            const isHidden = listEl.classList.toggle('hidden');
+            if (toggleIcon) toggleIcon.classList.toggle('rotate-90', !isHidden);
+        });
 
         songApiService.fetchNotations(songId)
             .then(data => {
+                if (!this.editingSong || this.editingSong.id !== songId) return;
                 listEl.innerHTML = '';
                 if (!data.notations || data.notations.length === 0) {
                     const emptyEl = document.createElement('div');
@@ -2453,8 +2449,8 @@ class TimestampNormalization {
         const match = text.match(separatorPattern);
         if (match) {
             const idx = match.index;
-            const title = text.substring(0, idx).trim();
-            const artist = text.substring(idx + match[0].length).trim();
+            const artist = text.substring(0, idx).trim();
+            const title = text.substring(idx + match[0].length).trim();
             document.getElementById('editSongTitle').value = title;
             document.getElementById('editSongArtist').value = artist;
         } else {
