@@ -360,6 +360,13 @@ export class SongOperationDialog {
 
                         row.appendChild(cb);
                         row.appendChild(info);
+                        if (s.distinct_review) {
+                            const badge = document.createElement('span');
+                            badge.className = 'ml-2 px-1.5 py-0.5 text-xs bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200 rounded flex-shrink-0';
+                            badge.textContent = '別の曲と判定済み';
+                            badge.title = '同名異表記グループで「別の曲」と判定されています';
+                            row.appendChild(badge);
+                        }
                         row.appendChild(targetBtn);
                         resultsList.appendChild(row);
                     });

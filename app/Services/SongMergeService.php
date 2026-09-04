@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Helpers\QueryHelper;
 use App\Models\NormalizationLog;
 use App\Models\Song;
+use App\Models\SongGroupReview;
 use App\Models\SongTag;
 use App\Models\TimestampDecomposition;
 use App\Models\TimestampSongMapping;
@@ -139,6 +140,19 @@ class SongMergeService
             ->groupBy('song_id')
             ->pluck('count', 'song_id');
 
+        // 「別の曲」判定情報を取得
+        $normalizedTitles = $songs->pluck('normalized_title')->unique()->filter(fn ($v) => $v !== null && $v !== '')->toArray();
+        $distinctSongIds = collect();
+        if ($normalizedTitles) {
+            $distinctReviews = SongGroupReview::where('decision', SongGroupReview::DECISION_DISTINCT)
+                ->whereIn('normalized_title', $normalizedTitles)
+                ->get(['song_ids']);
+            foreach ($distinctReviews as $review) {
+                $distinctSongIds = $distinctSongIds->merge($review->song_ids);
+            }
+            $distinctSongIds = $distinctSongIds->unique();
+        }
+
         return $songs->map(fn ($song) => [
             'id' => $song->id,
             'title' => $song->title,
@@ -146,6 +160,7 @@ class SongMergeService
             'spotify_track_id' => $song->spotify_track_id,
             'mappings_count' => $song->mappings_count,
             'ts_items_count' => $tsItemCounts->get($song->id, 0),
+            'distinct_review' => $distinctSongIds->contains($song->id),
         ])->toArray();
     }
 
