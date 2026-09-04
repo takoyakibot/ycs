@@ -389,20 +389,18 @@ class TimestampService
             return null;
         }
 
-        $nextItem = TsItem::query()
+        $query = TsItem::query()
             ->leftJoin('timestamp_song_mappings', 'ts_items.normalized_text', '=', 'timestamp_song_mappings.normalized_text')
             ->where('ts_items.video_id', $videoId)
             ->where('ts_items.ts_num', '>', $currentTsNum)
             ->where('ts_items.is_display', 1)
             ->whereNotNull('ts_items.text')
             ->where('ts_items.text', '!=', '')
-            ->whereNotNull('ts_items.normalized_text')
-            ->where(function ($q) {
-                $q->whereNotNull('ts_items.song_id')
-                    ->orWhereNull('timestamp_song_mappings.id')
-                    ->orWhere('timestamp_song_mappings.is_not_song', false);
-            })
-            ->orderBy('ts_items.ts_num', 'asc')
+            ->whereNotNull('ts_items.normalized_text');
+
+        $this->applyIsNotSongFilter($query);
+
+        $nextItem = $query->orderBy('ts_items.ts_num', 'asc')
             ->first(['ts_items.ts_num']);
 
         return $nextItem?->ts_num;
@@ -420,7 +418,7 @@ class TimestampService
     {
         // 同じ動画内で、現在のタイムスタンプより後のものを取得
         // チャンネルに属する動画のみを対象とする
-        $item = TsItem::with(['archive'])
+        $query = TsItem::with(['archive'])
             ->leftJoin('timestamp_song_mappings', 'ts_items.normalized_text', '=', 'timestamp_song_mappings.normalized_text')
             ->leftJoin('songs', 'timestamp_song_mappings.song_id', '=', 'songs.id')
             ->select(
@@ -445,13 +443,11 @@ class TimestampService
             ->whereNotNull('ts_items.text')
             ->where('ts_items.text', '!=', '')
             ->whereNotNull('ts_items.normalized_text')
-            ->where('ts_items.is_display', 1)
-            ->where(function ($q) {
-                $q->whereNotNull('ts_items.song_id')
-                    ->orWhereNull('timestamp_song_mappings.id')
-                    ->orWhere('timestamp_song_mappings.is_not_song', false);
-            })
-            ->orderBy('ts_items.ts_num', 'asc')
+            ->where('ts_items.is_display', 1);
+
+        $this->applyIsNotSongFilter($query);
+
+        $item = $query->orderBy('ts_items.ts_num', 'asc')
             ->first();
 
         if (! $item) {
@@ -585,11 +581,14 @@ class TimestampService
                 'spotify_track_id' => ValidationHelper::validateSpotifyTrackId($individualSong->spotify_track_id),
             ];
             if ($includeDuration) {
-                $info['duration_ms'] = $individualSong->spotify_data
-                    ? (is_string($individualSong->spotify_data)
+                $songDurationMs = null;
+                if ($individualSong->spotify_data) {
+                    $spotifyData = is_string($individualSong->spotify_data)
                         ? json_decode($individualSong->spotify_data, true)
-                        : $individualSong->spotify_data)['duration_ms'] ?? null
-                    : null;
+                        : $individualSong->spotify_data;
+                    $songDurationMs = $spotifyData['duration_ms'] ?? null;
+                }
+                $info['duration_ms'] = $songDurationMs;
             }
 
             return $info;
@@ -629,8 +628,8 @@ class TimestampService
 
         return [
             'song' => $songInfo,
-            'is_not_song' => $item->mapping_id ? (bool) $item->is_not_song : false,
-            'is_manual' => $item->mapping_id ? (bool) $item->is_manual : false,
+            'is_not_song' => $individualSong ? false : ($item->mapping_id ? (bool) $item->is_not_song : false),
+            'is_manual' => $individualSong ? false : ($item->mapping_id ? (bool) $item->is_manual : false),
         ];
     }
 
