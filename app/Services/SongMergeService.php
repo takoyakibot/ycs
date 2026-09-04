@@ -86,17 +86,45 @@ class SongMergeService
      */
     public function searchSongs(string $search): array
     {
-        if ($search === '') {
+        if (trim($search) === '') {
             return [];
         }
 
+        $rawKeywords = QueryHelper::splitSearchKeywords($search);
+        $exclusions = [];
+        $positiveTerms = [];
+        foreach ($rawKeywords as $kw) {
+            $parsed = QueryHelper::parseSearchTerm($kw);
+            if ($parsed['exclude']) {
+                $exclusions[] = $parsed['term'];
+            } else {
+                $positiveTerms[] = $parsed['term'];
+            }
+        }
+
+        $positiveSearch = implode(' ', $positiveTerms);
+
         $query = Song::query();
 
-        $keywords = QueryHelper::splitFuzzyKeywords($search);
-        if ($keywords !== []) {
-            QueryHelper::applyFuzzySearch($query, $search, ['normalized_title', 'normalized_artist']);
-        } else {
-            QueryHelper::applyAndSearchAny($query, $search, ['title', 'artist']);
+        if ($positiveSearch !== '') {
+            $keywords = QueryHelper::splitFuzzyKeywords($positiveSearch);
+            if ($keywords !== []) {
+                QueryHelper::applyFuzzySearch($query, $positiveSearch, ['normalized_title', 'normalized_artist']);
+            } else {
+                QueryHelper::applyAndSearchAny($query, $positiveSearch, ['title', 'artist']);
+            }
+        }
+
+        foreach ($exclusions as $excl) {
+            $escaped = QueryHelper::escapeLikeString($excl);
+            $query->where(function ($q) use ($escaped) {
+                $q->where('title', 'not like', "%{$escaped}%")
+                    ->where('artist', 'not like', "%{$escaped}%");
+            });
+        }
+
+        if ($positiveSearch === '' && $exclusions === []) {
+            return [];
         }
 
         $songs = $query
