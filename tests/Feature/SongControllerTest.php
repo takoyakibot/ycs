@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Archive;
 use App\Models\Channel;
 use App\Models\Song;
+use App\Models\SongGroupReview;
 use App\Models\SongTag;
 use App\Models\TimestampSongMapping;
 use App\Models\TsItem;
@@ -2222,5 +2223,68 @@ class SongControllerTest extends TestCase
 
         $response->assertStatus(200);
         $this->assertEquals([], $response->json());
+    }
+
+    public function test_search_songs_for_merge_includes_distinct_review_flag(): void
+    {
+        $song1 = Song::factory()->create(['title' => 'Drops', 'artist' => '坂本真綾']);
+        $song2 = Song::factory()->create(['title' => 'Drops', 'artist' => 'GReeeeN']);
+
+        SongGroupReview::create([
+            'normalized_title' => $song1->normalized_title,
+            'song_ids_hash' => SongGroupReview::hashSongIds([$song1->id, $song2->id]),
+            'song_ids' => [$song1->id, $song2->id],
+            'decision' => SongGroupReview::DECISION_DISTINCT,
+            'created_by' => $this->user->id,
+        ]);
+
+        $response = $this->actingAs($this->user)
+            ->getJson(route('songs.searchForMerge', ['search' => 'Drops']));
+
+        $response->assertStatus(200);
+        $results = collect($response->json());
+        $this->assertCount(2, $results);
+
+        $song1Result = $results->firstWhere('id', $song1->id);
+        $song2Result = $results->firstWhere('id', $song2->id);
+        $this->assertTrue($song1Result['distinct_review']);
+        $this->assertTrue($song2Result['distinct_review']);
+    }
+
+    public function test_search_songs_for_merge_distinct_review_false_when_no_review(): void
+    {
+        Song::factory()->create(['title' => 'Drops', 'artist' => '坂本真綾']);
+
+        $response = $this->actingAs($this->user)
+            ->getJson(route('songs.searchForMerge', ['search' => 'Drops']));
+
+        $response->assertStatus(200);
+        $results = $response->json();
+        $this->assertCount(1, $results);
+        $this->assertFalse($results[0]['distinct_review']);
+    }
+
+    public function test_search_songs_for_merge_distinct_review_shown_even_when_partner_not_in_results(): void
+    {
+        $song1 = Song::factory()->create(['title' => 'Drops', 'artist' => '坂本真綾']);
+        $song2 = Song::factory()->create(['title' => 'Drops', 'artist' => 'GReeeeN']);
+
+        SongGroupReview::create([
+            'normalized_title' => $song1->normalized_title,
+            'song_ids_hash' => SongGroupReview::hashSongIds([$song1->id, $song2->id]),
+            'song_ids' => [$song1->id, $song2->id],
+            'decision' => SongGroupReview::DECISION_DISTINCT,
+            'created_by' => $this->user->id,
+        ]);
+
+        // パートナー(song2)を含まない検索結果でもバッジが表示される
+        $response = $this->actingAs($this->user)
+            ->getJson(route('songs.searchForMerge', ['search' => '坂本真綾']));
+
+        $response->assertStatus(200);
+        $results = collect($response->json());
+        $song1Result = $results->firstWhere('id', $song1->id);
+        $this->assertNotNull($song1Result);
+        $this->assertTrue($song1Result['distinct_review']);
     }
 }
