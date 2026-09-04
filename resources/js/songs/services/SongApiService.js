@@ -103,6 +103,21 @@ export class SongApiService {
         });
         return response.data;
     }
+
+    async fetchTags(songId) {
+        const response = await axios.get(`/api/songs/${songId}/tags`);
+        return response.data;
+    }
+
+    async addTag(songId, value) {
+        const response = await axios.post(`/api/songs/${songId}/tags`, { value });
+        return response.data;
+    }
+
+    async deleteTag(songId, tagId) {
+        const response = await axios.delete(`/api/songs/${songId}/tags/${tagId}`);
+        return response.data;
+    }
 }
 
 // シングルトンインスタンスをエクスポート
