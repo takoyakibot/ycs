@@ -71,6 +71,15 @@ function registerArtistRenameComponent() {
         },
 
         handleToKeydown(event) {
+            if (event.key === 'Enter') {
+                if (this.showToSuggestions && this.toHighlightIndex >= 0) {
+                    event.preventDefault();
+                    this.selectToSuggestion(this.toSuggestions[this.toHighlightIndex]);
+                } else {
+                    this.previewRename();
+                }
+                return;
+            }
             if (!this.showToSuggestions) return;
             if (event.key === 'ArrowDown') {
                 event.preventDefault();
@@ -78,9 +87,6 @@ function registerArtistRenameComponent() {
             } else if (event.key === 'ArrowUp') {
                 event.preventDefault();
                 this.toHighlightIndex = Math.max(this.toHighlightIndex - 1, -1);
-            } else if (event.key === 'Enter' && this.toHighlightIndex >= 0) {
-                event.preventDefault();
-                this.selectToSuggestion(this.toSuggestions[this.toHighlightIndex]);
             }
         },
 
