@@ -223,6 +223,16 @@ class RefreshArchiveService
         }
         unset($archive);
 
+        // 個別マッピング（ts_items.song_id）はDELETE→再INSERTで失われるため退避（#724）
+        $savedSongIds = DB::table('ts_items')
+            ->whereIn('video_id', function ($query) use ($channel) {
+                $query->select('video_id')
+                    ->from('archives')
+                    ->where('channel_id', $channel->channel_id);
+            })
+            ->whereNotNull('song_id')
+            ->get(['video_id', 'comment_id', 'ts_text', 'ts_num', 'type', 'song_id']);
+
         // コメント由来ts_itemsはDELETE→再INSERTで失われるため退避（#734）
         // $comment_ts_items_mapに含まれない動画の既存type='2'行を保持する
         $existingCommentTsItems = TsItem::whereIn('video_id', function ($query) use ($channel) {
@@ -246,7 +256,7 @@ class RefreshArchiveService
             ->toArray();
 
         // 全てのDB操作を1つのトランザクションで実行（原子性を保証）
-        DB::transaction(function () use ($channel, $rtn_archives, $rtn_ts_items, $comment_ts_items_map, $cover_ts_items, $commentTsItemsToRestore) {
+        DB::transaction(function () use ($channel, $rtn_archives, $rtn_ts_items, $comment_ts_items_map, $cover_ts_items, $commentTsItemsToRestore, $savedSongIds, $freshVideoIds) {
             // 2.一度関連情報を削除（cascadeでTsItemsも消える）
             Archive::where('channel_id', $channel->channel_id)->delete();
 
@@ -289,6 +299,20 @@ class RefreshArchiveService
                 foreach ($chunked as $chunk) {
                     DB::table('ts_items')->insert($chunk);
                 }
+            }
+
+            // 4.1.4.退避していた個別マッピング（song_id）を復元（#724）
+            foreach ($savedSongIds as $saved) {
+                if (! in_array($saved->video_id, $freshVideoIds)) {
+                    continue;
+                }
+                DB::table('ts_items')
+                    ->where('video_id', $saved->video_id)
+                    ->where('comment_id', $saved->comment_id)
+                    ->where('ts_text', $saved->ts_text)
+                    ->where('ts_num', $saved->ts_num)
+                    ->where('type', $saved->type)
+                    ->update(['song_id' => $saved->song_id]);
             }
 
             // 4.2.1.アーカイブ更新でts_item_idが変わったので、change_listのts_item_idを更新
