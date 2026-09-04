@@ -213,8 +213,8 @@ class SongCleansingTest extends TestCase
         $response->assertStatus(200);
         $data = $response->json();
         $this->assertCount(2, $data);
-        $this->assertEquals($data[0]['songs'][0]['title'], 'ソングB');
-        $this->assertEquals($data[1]['songs'][0]['title'], 'ソングA');
+        $this->assertEquals('ソングB', $data[0]['songs'][0]['title']);
+        $this->assertEquals('ソングA', $data[1]['songs'][0]['title']);
     }
 
     public function test_find_title_groups_reviewed_groups_do_not_shrink_result(): void
