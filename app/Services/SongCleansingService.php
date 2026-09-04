@@ -12,9 +12,14 @@ use Illuminate\Support\Facades\DB;
 class SongCleansingService
 {
     /**
-     * 同名異表記グループの取得件数上限
+     * 同名異表記グループの表示件数上限
      */
     private const GROUP_LIMIT = 50;
+
+    /**
+     * フィルタ前の取得件数上限（limit後にSongGroupReviewで除外するため余裕を持たせる）
+     */
+    private const PRE_FILTER_LIMIT = 500;
 
     public function __construct(private SongMergeService $songMergeService) {}
 
@@ -144,14 +149,14 @@ class SongCleansingService
         $titleQuery = Song::selectRaw('normalized_title, COUNT(DISTINCT normalized_artist) as artist_count')
             ->groupBy('normalized_title')
             ->having('artist_count', '>', 1)
-            ->orderBy('normalized_title');
+            ->orderByDesc('artist_count');
 
         if ($search !== '') {
             $escaped = QueryHelper::escapeLikeString($search);
             $titleQuery->where('title', 'LIKE', "%{$escaped}%");
         }
 
-        $normalizedTitles = $titleQuery->limit(self::GROUP_LIMIT)->pluck('normalized_title');
+        $normalizedTitles = $titleQuery->limit(self::PRE_FILTER_LIMIT)->pluck('normalized_title');
 
         if ($normalizedTitles->isEmpty()) {
             return [];
@@ -169,6 +174,8 @@ class SongCleansingService
             ->groupBy('song_id')
             ->pluck('count', 'song_id');
 
+        $titleOrder = $normalizedTitles->flip();
+
         $groups = $songs->groupBy('normalized_title')->map(function ($songsInGroup, $normalizedTitle) use ($tsItemCounts) {
             $sortedIds = $songsInGroup->pluck('id')->sort()->values()->all();
 
@@ -184,7 +191,7 @@ class SongCleansingService
                     'ts_items_count' => $tsItemCounts->get($song->id, 0),
                 ])->values(),
             ];
-        })->values();
+        })->sortBy(fn ($group) => $titleOrder->get($group['normalized_title'], PHP_INT_MAX))->values();
 
         $hashes = $groups->pluck('song_ids_hash')->toArray();
         $reviewedDecisions = SongGroupReview::whereIn('song_ids_hash', $hashes)
@@ -196,7 +203,7 @@ class SongCleansingService
             return $filter === 'pending'
                 ? $decision === SongGroupReview::DECISION_PENDING
                 : $decision === null;
-        })->values()->toArray();
+        })->take(self::GROUP_LIMIT)->values()->toArray();
     }
 
     /**

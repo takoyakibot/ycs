@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Song;
+use App\Models\SongGroupReview;
 use App\Models\TimestampSongMapping;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -195,5 +196,51 @@ class SongCleansingTest extends TestCase
 
         $response->assertStatus(422)
             ->assertJsonValidationErrors(['song_ids']);
+    }
+
+    public function test_find_title_groups_ordered_by_artist_count_desc(): void
+    {
+        Song::factory()->create(['title' => 'ソングA', 'artist' => 'X']);
+        Song::factory()->create(['title' => 'ソングA', 'artist' => 'Y']);
+
+        Song::factory()->create(['title' => 'ソングB', 'artist' => 'P']);
+        Song::factory()->create(['title' => 'ソングB', 'artist' => 'Q']);
+        Song::factory()->create(['title' => 'ソングB', 'artist' => 'R']);
+
+        $response = $this->actingAs($this->user)
+            ->getJson('/api/songs/cleansing/title-groups');
+
+        $response->assertStatus(200);
+        $data = $response->json();
+        $this->assertCount(2, $data);
+        $this->assertEquals($data[0]['songs'][0]['title'], 'ソングB');
+        $this->assertEquals($data[1]['songs'][0]['title'], 'ソングA');
+    }
+
+    public function test_find_title_groups_reviewed_groups_do_not_shrink_result(): void
+    {
+        for ($i = 1; $i <= 3; $i++) {
+            Song::factory()->create(['title' => "グループ{$i}", 'artist' => 'A']);
+            Song::factory()->create(['title' => "グループ{$i}", 'artist' => 'B']);
+        }
+
+        $songA = Song::where('title', 'グループ1')->where('artist', 'A')->first();
+        $songB = Song::where('title', 'グループ1')->where('artist', 'B')->first();
+        $sortedIds = collect([$songA->id, $songB->id])->sort()->values()->all();
+
+        SongGroupReview::create([
+            'normalized_title' => $songA->normalized_title,
+            'song_ids_hash' => SongGroupReview::hashSongIds($sortedIds),
+            'song_ids' => $sortedIds,
+            'decision' => SongGroupReview::DECISION_DISTINCT,
+            'created_by' => $this->user->id,
+        ]);
+
+        $response = $this->actingAs($this->user)
+            ->getJson('/api/songs/cleansing/title-groups?filter=active');
+
+        $response->assertStatus(200);
+        $data = $response->json();
+        $this->assertCount(2, $data);
     }
 }
