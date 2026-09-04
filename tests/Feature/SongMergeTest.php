@@ -198,6 +198,49 @@ class SongMergeTest extends TestCase
             ->assertJsonCount(0);
     }
 
+    public function test_search_songs_for_merge_fuzzy_search(): void
+    {
+        Song::factory()->create(['title' => '夜に駆ける', 'artist' => 'YOASOBI']);
+        Song::factory()->create(['title' => '夜に駆ける(cover)', 'artist' => 'Someone']);
+        Song::factory()->create(['title' => 'Unrelated', 'artist' => 'Other']);
+
+        $response = $this->actingAs($this->user)
+            ->getJson('/api/songs/search-for-merge?search=' . urlencode('夜に駆ける'));
+
+        $response->assertStatus(200);
+        $data = $response->json();
+        $this->assertCount(2, $data);
+    }
+
+    public function test_search_songs_for_merge_fuzzy_multiword(): void
+    {
+        Song::factory()->create(['title' => '夜に駆ける', 'artist' => 'YOASOBI']);
+        Song::factory()->create(['title' => '群青', 'artist' => 'YOASOBI']);
+        Song::factory()->create(['title' => 'Other', 'artist' => 'Other']);
+
+        $response = $this->actingAs($this->user)
+            ->getJson('/api/songs/search-for-merge?search=' . urlencode('YOASOBI 群青'));
+
+        $response->assertStatus(200);
+        $data = $response->json();
+        $this->assertCount(1, $data);
+        $this->assertEquals('群青', $data[0]['title']);
+    }
+
+    public function test_search_songs_for_merge_matches_artist(): void
+    {
+        Song::factory()->create(['title' => 'Song A', 'artist' => 'YOASOBI']);
+        Song::factory()->create(['title' => 'Song B', 'artist' => 'Ado']);
+
+        $response = $this->actingAs($this->user)
+            ->getJson('/api/songs/search-for-merge?search=YOASOBI');
+
+        $response->assertStatus(200);
+        $data = $response->json();
+        $this->assertCount(1, $data);
+        $this->assertEquals('Song A', $data[0]['title']);
+    }
+
     public function test_merge_songs_handles_multiple_mappings(): void
     {
         $targetSong = Song::factory()->create(['title' => 'Target Song', 'artist' => 'Artist']);

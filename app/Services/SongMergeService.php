@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Helpers\QueryHelper;
 use App\Models\NormalizationLog;
 use App\Models\Song;
 use App\Models\SongTag;
@@ -78,21 +79,55 @@ class SongMergeService
     }
 
     /**
-     * 楽曲を部分一致で検索する（名寄せ候補用）
+     * 楽曲をあいまい検索する（名寄せ候補用）
      *
-     * @param  string  $search  検索文字列（タイトル・アーティストで部分一致）
+     * @param  string  $search  検索文字列（スペース区切りでAND検索）
      * @return array 楽曲の配列（マッピング数・ts_item数付き）
      */
     public function searchSongs(string $search): array
     {
-        if ($search === '') {
+        if (trim($search) === '') {
             return [];
         }
 
-        $songs = Song::where(function ($q) use ($search) {
-            $q->where('title', 'LIKE', "%{$search}%")
-                ->orWhere('artist', 'LIKE', "%{$search}%");
-        })
+        $rawKeywords = QueryHelper::splitSearchKeywords($search);
+        $exclusions = [];
+        $positiveTerms = [];
+        foreach ($rawKeywords as $kw) {
+            $parsed = QueryHelper::parseSearchTerm($kw);
+            if ($parsed['exclude']) {
+                $exclusions[] = $parsed['term'];
+            } else {
+                $positiveTerms[] = $parsed['term'];
+            }
+        }
+
+        $positiveSearch = implode(' ', $positiveTerms);
+
+        $query = Song::query();
+
+        if ($positiveSearch !== '') {
+            $keywords = QueryHelper::splitFuzzyKeywords($positiveSearch);
+            if ($keywords !== []) {
+                QueryHelper::applyFuzzySearch($query, $positiveSearch, ['normalized_title', 'normalized_artist']);
+            } else {
+                QueryHelper::applyAndSearchAny($query, $positiveSearch, ['title', 'artist']);
+            }
+        }
+
+        foreach ($exclusions as $excl) {
+            $escaped = QueryHelper::escapeLikeString($excl);
+            $query->where(function ($q) use ($escaped) {
+                $q->where('title', 'not like', "%{$escaped}%")
+                    ->where('artist', 'not like', "%{$escaped}%");
+            });
+        }
+
+        if ($positiveSearch === '' && $exclusions === []) {
+            return [];
+        }
+
+        $songs = $query
             ->withCount('mappings')
             ->orderBy('title')
             ->limit(100)

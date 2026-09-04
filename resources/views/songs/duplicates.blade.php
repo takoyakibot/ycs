@@ -58,11 +58,20 @@
 
                         {{-- 検索欄 --}}
                         <div class="flex gap-2 mb-3">
-                            <input type="text"
-                                   x-model="search"
-                                   @keydown.enter="doSearch()"
-                                   placeholder="タイトル・アーティストで検索..."
-                                   class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                            <div class="relative flex-1">
+                                <input type="text"
+                                       x-model="search"
+                                       @keydown.enter="doSearch()"
+                                       placeholder="タイトル・アーティストで検索..."
+                                       class="w-full px-3 py-2 pr-8 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                                <button x-show="search"
+                                        x-cloak
+                                        @click="clearSearch()"
+                                        class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                                        aria-label="クリア">
+                                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+                                </button>
+                            </div>
                             <button @click="doSearch()"
                                     :disabled="searchLoading"
                                     class="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50">
