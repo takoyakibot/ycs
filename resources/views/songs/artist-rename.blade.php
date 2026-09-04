@@ -27,16 +27,50 @@
                     </p>
 
                     <div class="flex flex-wrap gap-2 mb-3">
-                        <input type="text"
-                               x-model="renameFrom"
-                               placeholder="変換前のアーティスト名（完全一致）"
-                               class="flex-1 min-w-[200px] px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                        <div class="relative flex-1 min-w-[200px]">
+                            <input type="text"
+                                   x-model="renameFrom"
+                                   @input="updateFromSuggestions()"
+                                   @focus="updateFromSuggestions()"
+                                   @click.outside="showFromSuggestions = false"
+                                   @keydown="handleFromKeydown($event)"
+                                   placeholder="変換前のアーティスト名（完全一致）"
+                                   autocomplete="off"
+                                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                            <div x-show="showFromSuggestions"
+                                 x-cloak
+                                 class="absolute z-50 w-full mt-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                                <template x-for="(artist, index) in fromSuggestions" :key="artist">
+                                    <div @click="selectFromSuggestion(artist)"
+                                         :class="index === fromHighlightIndex ? 'bg-blue-100 dark:bg-blue-900' : 'hover:bg-gray-100 dark:hover:bg-gray-600'"
+                                         class="px-3 py-2 cursor-pointer text-sm text-gray-900 dark:text-gray-100"
+                                         x-text="artist"></div>
+                                </template>
+                            </div>
+                        </div>
                         <span class="self-center text-gray-400">→</span>
-                        <input type="text"
-                               x-model="renameTo"
-                               @keydown.enter="previewRename()"
-                               placeholder="変換後のアーティスト名"
-                               class="flex-1 min-w-[200px] px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                        <div class="relative flex-1 min-w-[200px]">
+                            <input type="text"
+                                   x-model="renameTo"
+                                   @input="updateToSuggestions()"
+                                   @focus="updateToSuggestions()"
+                                   @click.outside="showToSuggestions = false"
+                                   @keydown="handleToKeydown($event)"
+                                   @keydown.enter="if(toHighlightIndex < 0) previewRename()"
+                                   placeholder="変換後のアーティスト名"
+                                   autocomplete="off"
+                                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                            <div x-show="showToSuggestions"
+                                 x-cloak
+                                 class="absolute z-50 w-full mt-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                                <template x-for="(artist, index) in toSuggestions" :key="artist">
+                                    <div @click="selectToSuggestion(artist)"
+                                         :class="index === toHighlightIndex ? 'bg-blue-100 dark:bg-blue-900' : 'hover:bg-gray-100 dark:hover:bg-gray-600'"
+                                         class="px-3 py-2 cursor-pointer text-sm text-gray-900 dark:text-gray-100"
+                                         x-text="artist"></div>
+                                </template>
+                            </div>
+                        </div>
                         <button @click="previewRename()"
                                 :disabled="renamePreviewing || !renameFrom.trim() || !renameTo.trim()"
                                 class="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50">

@@ -157,6 +157,13 @@ class SongController extends Controller
         return view('songs.artist-rename');
     }
 
+    public function distinctArtists(): JsonResponse
+    {
+        $artists = Song::distinct()->orderBy('artist')->pluck('artist');
+
+        return response()->json($artists);
+    }
+
     /**
      * 同名異表記グループ画面を表示
      */
