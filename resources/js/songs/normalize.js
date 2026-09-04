@@ -15,7 +15,7 @@ axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
 /**
  * タイムスタンプ正規化機能
  */
-class TimestampNormalization {
+export class TimestampNormalization {
     constructor() {
         this.selectedTimestamps = []; // 複数選択対応
         this.selectedSong = null;
