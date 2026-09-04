@@ -240,4 +240,124 @@ class RefreshArchiveServiceSongIdTest extends TestCase
         $this->assertNotNull($tsItem);
         $this->assertNull($tsItem->song_id);
     }
+
+    /**
+     * 同じsong_idを持つ複数のts_itemsが一括復元されることを確認（#813）
+     */
+    public function test_multiple_items_with_same_song_id_restored_in_batch(): void
+    {
+        $channel = Channel::factory()->create(['channel_id' => 'UC123456789']);
+
+        $songA = Song::factory()->create(['title' => 'Song A']);
+        $songB = Song::factory()->create(['title' => 'Song B']);
+
+        Archive::create([
+            'id' => Str::ulid(),
+            'video_id' => 'video123abc',
+            'channel_id' => $channel->channel_id,
+            'title' => '歌枠アーカイブ',
+            'is_public' => true,
+            'is_display' => true,
+            'published_at' => now(),
+            'comments_updated_at' => now(),
+        ]);
+
+        // songA に2つ、songB に1つマッピング
+        TsItem::create([
+            'id' => Str::ulid(),
+            'video_id' => 'video123abc',
+            'comment_id' => 'video123abc',
+            'type' => '1',
+            'ts_text' => '1:00',
+            'ts_num' => 60,
+            'text' => 'Song A (1st)',
+            'is_display' => true,
+            'song_id' => $songA->id,
+        ]);
+        TsItem::create([
+            'id' => Str::ulid(),
+            'video_id' => 'video123abc',
+            'comment_id' => 'video123abc',
+            'type' => '1',
+            'ts_text' => '5:00',
+            'ts_num' => 300,
+            'text' => 'Song A (2nd)',
+            'is_display' => true,
+            'song_id' => $songA->id,
+        ]);
+        TsItem::create([
+            'id' => Str::ulid(),
+            'video_id' => 'video123abc',
+            'comment_id' => 'video123abc',
+            'type' => '1',
+            'ts_text' => '10:00',
+            'ts_num' => 600,
+            'text' => 'Song B',
+            'is_display' => true,
+            'song_id' => $songB->id,
+        ]);
+
+        $tsItems = [
+            [
+                'id' => Str::uuid()->toString(),
+                'video_id' => 'video123abc',
+                'comment_id' => 'video123abc',
+                'type' => '1',
+                'ts_text' => '1:00',
+                'ts_num' => 60,
+                'text' => 'Song A (1st)',
+                'is_display' => true,
+            ],
+            [
+                'id' => Str::uuid()->toString(),
+                'video_id' => 'video123abc',
+                'comment_id' => 'video123abc',
+                'type' => '1',
+                'ts_text' => '5:00',
+                'ts_num' => 300,
+                'text' => 'Song A (2nd)',
+                'is_display' => true,
+            ],
+            [
+                'id' => Str::uuid()->toString(),
+                'video_id' => 'video123abc',
+                'comment_id' => 'video123abc',
+                'type' => '1',
+                'ts_text' => '10:00',
+                'ts_num' => 600,
+                'text' => 'Song B',
+                'is_display' => true,
+            ],
+        ];
+
+        $this->youtubeService
+            ->shouldReceive('getArchivesAndTsItems')
+            ->once()
+            ->andReturn([
+                [
+                    'id' => Str::uuid()->toString(),
+                    'video_id' => 'video123abc',
+                    'channel_id' => $channel->channel_id,
+                    'title' => '歌枠アーカイブ',
+                    'thumbnail' => '',
+                    'is_public' => true,
+                    'is_display' => true,
+                    'published_at' => now(),
+                    'comments_updated_at' => now(),
+                    'description' => '',
+                    'ts_items' => $tsItems,
+                ],
+            ]);
+
+        $this->service->refreshArchives($channel);
+
+        // songAの2つのts_itemsが両方とも復元されていること
+        $item1 = TsItem::where('video_id', 'video123abc')->where('ts_text', '1:00')->first();
+        $item2 = TsItem::where('video_id', 'video123abc')->where('ts_text', '5:00')->first();
+        $item3 = TsItem::where('video_id', 'video123abc')->where('ts_text', '10:00')->first();
+
+        $this->assertEquals($songA->id, $item1->song_id);
+        $this->assertEquals($songA->id, $item2->song_id);
+        $this->assertEquals($songB->id, $item3->song_id);
+    }
 }

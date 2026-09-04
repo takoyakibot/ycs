@@ -301,18 +301,24 @@ class RefreshArchiveService
                 }
             }
 
-            // 4.1.4.退避していた個別マッピング（song_id）を復元（#724）
-            foreach ($savedSongIds as $saved) {
-                if (! in_array($saved->video_id, $freshVideoIds)) {
-                    continue;
+            // 4.1.4.退避していた個別マッピング（song_id）を復元（#724, #813）
+            $restorable = $savedSongIds->filter(fn ($s) => in_array($s->video_id, $freshVideoIds));
+            foreach ($restorable->groupBy('song_id') as $songId => $items) {
+                foreach (array_chunk($items->all(), 100) as $chunk) {
+                    DB::table('ts_items')
+                        ->where(function ($q) use ($chunk) {
+                            foreach ($chunk as $item) {
+                                $q->orWhere(function ($q2) use ($item) {
+                                    $q2->where('video_id', $item->video_id)
+                                        ->where('comment_id', $item->comment_id)
+                                        ->where('ts_text', $item->ts_text)
+                                        ->where('ts_num', $item->ts_num)
+                                        ->where('type', $item->type);
+                                });
+                            }
+                        })
+                        ->update(['song_id' => $songId]);
                 }
-                DB::table('ts_items')
-                    ->where('video_id', $saved->video_id)
-                    ->where('comment_id', $saved->comment_id)
-                    ->where('ts_text', $saved->ts_text)
-                    ->where('ts_num', $saved->ts_num)
-                    ->where('type', $saved->type)
-                    ->update(['song_id' => $saved->song_id]);
             }
 
             // 4.2.1.アーカイブ更新でts_item_idが変わったので、change_listのts_item_idを更新
