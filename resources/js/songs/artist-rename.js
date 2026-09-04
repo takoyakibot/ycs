@@ -11,6 +11,85 @@ function registerArtistRenameComponent() {
         message: null,
         messageType: 'success',
 
+        allArtists: [],
+        fromSuggestions: [],
+        toSuggestions: [],
+        showFromSuggestions: false,
+        showToSuggestions: false,
+        fromHighlightIndex: -1,
+        toHighlightIndex: -1,
+
+        async init() {
+            try {
+                const res = await fetch('/api/songs/artists');
+                if (res.ok) {
+                    this.allArtists = await res.json();
+                }
+            } catch (_) {}
+        },
+
+        filterSuggestions(query) {
+            if (!query.trim()) return [];
+            const q = query.toLowerCase();
+            return this.allArtists.filter(a => a.toLowerCase().includes(q)).slice(0, 20);
+        },
+
+        updateFromSuggestions() {
+            this.fromSuggestions = this.filterSuggestions(this.renameFrom);
+            this.showFromSuggestions = this.fromSuggestions.length > 0;
+            this.fromHighlightIndex = -1;
+        },
+
+        updateToSuggestions() {
+            this.toSuggestions = this.filterSuggestions(this.renameTo);
+            this.showToSuggestions = this.toSuggestions.length > 0;
+            this.toHighlightIndex = -1;
+        },
+
+        selectFromSuggestion(artist) {
+            this.renameFrom = artist;
+            this.showFromSuggestions = false;
+        },
+
+        selectToSuggestion(artist) {
+            this.renameTo = artist;
+            this.showToSuggestions = false;
+        },
+
+        handleFromKeydown(event) {
+            if (!this.showFromSuggestions) return;
+            if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                this.fromHighlightIndex = Math.min(this.fromHighlightIndex + 1, this.fromSuggestions.length - 1);
+            } else if (event.key === 'ArrowUp') {
+                event.preventDefault();
+                this.fromHighlightIndex = Math.max(this.fromHighlightIndex - 1, -1);
+            } else if (event.key === 'Enter' && this.fromHighlightIndex >= 0) {
+                event.preventDefault();
+                this.selectFromSuggestion(this.fromSuggestions[this.fromHighlightIndex]);
+            }
+        },
+
+        handleToKeydown(event) {
+            if (event.key === 'Enter') {
+                if (this.showToSuggestions && this.toHighlightIndex >= 0) {
+                    event.preventDefault();
+                    this.selectToSuggestion(this.toSuggestions[this.toHighlightIndex]);
+                } else {
+                    this.previewRename();
+                }
+                return;
+            }
+            if (!this.showToSuggestions) return;
+            if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                this.toHighlightIndex = Math.min(this.toHighlightIndex + 1, this.toSuggestions.length - 1);
+            } else if (event.key === 'ArrowUp') {
+                event.preventDefault();
+                this.toHighlightIndex = Math.max(this.toHighlightIndex - 1, -1);
+            }
+        },
+
         async previewRename() {
             if (!this.renameFrom.trim() || !this.renameTo.trim()) return;
             this.renamePreviewing = true;
@@ -68,6 +147,7 @@ function registerArtistRenameComponent() {
                 this.renamePlan = null;
                 this.renameFrom = '';
                 this.renameTo = '';
+                this.init();
             } catch (e) {
                 this.message = e.message;
                 this.messageType = 'error';

@@ -2022,4 +2022,26 @@ class SongControllerTest extends TestCase
         $data = $response->json('data');
         $this->assertEquals(TimestampSongMapping::STATUS_PENDING, $data[0]['status']);
     }
+
+    public function test_distinct_artists_returns_unique_sorted_list(): void
+    {
+        Song::factory()->create(['artist' => 'YOASOBI']);
+        Song::factory()->create(['artist' => '坂本真綾']);
+        Song::factory()->create(['artist' => 'YOASOBI']);
+        Song::factory()->create(['artist' => 'Ado']);
+
+        $response = $this->actingAs($this->user)->getJson('/api/songs/artists');
+
+        $response->assertStatus(200);
+        $artists = $response->json();
+        $this->assertEquals(['Ado', 'YOASOBI', '坂本真綾'], $artists);
+    }
+
+    public function test_distinct_artists_returns_empty_when_no_songs(): void
+    {
+        $response = $this->actingAs($this->user)->getJson('/api/songs/artists');
+
+        $response->assertStatus(200);
+        $this->assertEquals([], $response->json());
+    }
 }

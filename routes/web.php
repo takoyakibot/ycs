@@ -146,6 +146,7 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::get('api/songs/duplicates', [SongController::class, 'findDuplicates'])->name('songs.findDuplicates');
     Route::get('api/songs/search-for-merge', [SongController::class, 'searchSongsForMerge'])->name('songs.searchForMerge');
     Route::post('api/songs/merge', [SongController::class, 'mergeSongs'])->name('songs.mergeSongs');
+    Route::get('api/songs/artists', [SongController::class, 'distinctArtists'])->name('songs.distinctArtists');
     Route::get('api/songs/cleansing/artist-rename-preview', [SongController::class, 'previewArtistRename'])->name('songs.previewArtistRename');
     Route::post('api/songs/cleansing/artist-rename', [SongController::class, 'renameArtist'])->name('songs.renameArtist');
     Route::get('api/songs/cleansing/title-groups', [SongController::class, 'findTitleGroups'])->name('songs.findTitleGroups');
