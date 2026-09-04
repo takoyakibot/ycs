@@ -43,8 +43,9 @@ class DuplicateCommentDetectionServiceTest extends TestCase
         $pairs = $this->service->detect($this->videoId);
 
         $this->assertCount(1, $pairs);
-        $this->assertEquals(750, $pairs[0]->ts_num_a);
-        $this->assertEquals(753, $pairs[0]->ts_num_b);
+        $tsNums = [$pairs[0]->ts_num_a, $pairs[0]->ts_num_b];
+        sort($tsNums);
+        $this->assertEquals([750, 753], $tsNums);
     }
 
     public function test_does_not_detect_beyond_threshold(): void

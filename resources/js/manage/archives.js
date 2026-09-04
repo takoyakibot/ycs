@@ -193,9 +193,10 @@ document.addEventListener('DOMContentLoaded', function () {
         if (target.classList.contains('duplicate-comment-badge')) {
             const videoId = target.getAttribute('data-video-id');
             if (videoId) {
-                toggleDuplicatePanel(videoId, target);
+                toggleDuplicatePanel(videoId, target).finally(() => cleanup(target));
+            } else {
+                cleanup(target);
             }
-            cleanup(target);
             return;
         }
 
@@ -603,7 +604,7 @@ async function toggleDuplicatePanel(videoId, badgeButton) {
             return;
         }
 
-        let panelHtml = `<div class="duplicate-panel mt-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+        let panelHtml = `<div class="duplicate-panel w-full mt-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
             <div class="flex justify-between items-center mb-2">
                 <span class="text-sm font-semibold text-red-800 dark:text-red-300">重複コメントタイムスタンプ（${data.total_pairs}ペア）</span>
                 <button class="duplicate-panel-close text-red-500 hover:text-red-700 text-sm">閉じる</button>
@@ -629,8 +630,7 @@ async function toggleDuplicatePanel(videoId, badgeButton) {
 
         panelHtml += '</div></div>';
 
-        const thumbnailSection = card.querySelector('.flex.flex-col.flex-shrink-0');
-        thumbnailSection.insertAdjacentHTML('beforeend', DOMPurify.sanitize(panelHtml));
+        card.insertAdjacentHTML('beforeend', DOMPurify.sanitize(panelHtml));
 
         card.querySelector('.duplicate-panel-close').addEventListener('click', () => {
             card.querySelector('.duplicate-panel').remove();
