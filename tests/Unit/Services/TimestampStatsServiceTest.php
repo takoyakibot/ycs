@@ -47,6 +47,7 @@ class TimestampStatsServiceTest extends TestCase
         $this->assertEquals(0, $summary['not_song']);
         $this->assertEquals(0, $summary['linked_rate']);
         $this->assertEquals(0, $summary['recent_count']);
+        $this->assertEquals(0, $summary['songs_count']);
     }
 
     public function test_counts_unlinked_linked_and_not_song(): void
@@ -66,6 +67,7 @@ class TimestampStatsServiceTest extends TestCase
         $this->assertEquals(1, $summary['unlinked']);
         $this->assertEquals(1, $summary['linked']);
         $this->assertEquals(1, $summary['not_song']);
+        $this->assertEquals(1, $summary['songs_count']);
     }
 
     public function test_linked_rate_calculation(): void

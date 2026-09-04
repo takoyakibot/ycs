@@ -2,12 +2,13 @@
 
 namespace App\Services;
 
+use App\Models\Song;
 use App\Models\TsItem;
 
 class TimestampStatsService
 {
     /**
-     * @return array{unlinked: int, linked: int, not_song: int, linked_rate: float, recent_count: int}
+     * @return array{unlinked: int, linked: int, not_song: int, linked_rate: float, recent_count: int, songs_count: int}
      */
     public function getSummary(): array
     {
@@ -44,6 +45,7 @@ class TimestampStatsService
             'not_song' => $notSong,
             'linked_rate' => $linkedRate,
             'recent_count' => $recentCount,
+            'songs_count' => Song::count(),
         ];
     }
 }
