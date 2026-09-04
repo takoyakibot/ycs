@@ -156,6 +156,7 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::get('api/songs/{id}/tags', [SongController::class, 'songTags'])->name('songs.songTags');
     Route::post('api/songs/{id}/tags', [SongController::class, 'addSongTag'])->name('songs.addSongTag');
     Route::delete('api/songs/{id}/tags/{tagId}', [SongController::class, 'deleteSongTag'])->name('songs.deleteSongTag');
+    Route::get('api/songs/{id}/notations', [SongController::class, 'notations'])->name('songs.notations');
     // Parameterized route - must be last to avoid capturing specific route names
     Route::put('api/songs/{id}', [SongController::class, 'updateSong'])->name('songs.updateSong');
     Route::delete('api/songs/{id}', [SongController::class, 'deleteSong'])->name('songs.deleteSong');

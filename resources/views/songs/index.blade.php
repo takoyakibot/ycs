@@ -274,7 +274,7 @@
 
     <!-- 楽曲編集モーダル -->
     <div id="editSongModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
-        <div class="bg-white dark:bg-gray-800 p-6 rounded-lg w-full max-w-md mx-4">
+        <div class="bg-white dark:bg-gray-800 p-6 rounded-lg w-full max-w-lg mx-4">
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">楽曲マスタ編集</h3>
                 <button id="closeEditModalBtn" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
@@ -313,6 +313,16 @@
                         <span id="editSongDurationFormatted" class="text-sm text-gray-500 dark:text-gray-400 min-w-[80px]"></span>
                     </div>
                     <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">※ 秒またはミリ秒で入力可能（片方を入力すると自動変換）</p>
+                </div>
+                <div id="notationCandidatesSection">
+                    <button type="button" id="notationToggleBtn" class="flex items-center gap-1 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">
+                        <svg id="notationToggleIcon" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                        </svg>
+                        表記候補（タイムスタンプ原文から）
+                    </button>
+                    <div id="notationCandidatesList" class="hidden mt-2 max-h-60 overflow-y-auto border border-gray-200 dark:border-gray-600 rounded-md">
+                    </div>
                 </div>
                 <div class="flex gap-2 pt-2">
                     <button type="submit" class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
