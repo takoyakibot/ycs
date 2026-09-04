@@ -249,17 +249,45 @@ export class SongOperationDialog {
                 const searchRow = document.createElement('div');
                 searchRow.className = 'flex gap-2 mb-3';
 
+                const searchWrapper = document.createElement('div');
+                searchWrapper.className = 'relative flex-1';
+
                 const searchInput = document.createElement('input');
                 searchInput.type = 'text';
                 searchInput.value = song.title;
                 searchInput.placeholder = '楽曲名で検索';
-                searchInput.className = 'flex-1 px-3 py-2 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500';
+                searchInput.className = 'w-full px-3 py-2 pr-8 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500';
+
+                const clearBtn = document.createElement('button');
+                clearBtn.className = 'absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hidden';
+                clearBtn.setAttribute('aria-label', 'クリア');
+                clearBtn.innerHTML = '<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>';
+
+                function updateClearBtn() {
+                    clearBtn.classList.toggle('hidden', !searchInput.value);
+                }
+                searchInput.addEventListener('input', updateClearBtn);
+                updateClearBtn();
+
+                clearBtn.addEventListener('click', () => {
+                    searchInput.value = '';
+                    searchResults = [];
+                    selectedIds = [];
+                    targetId = null;
+                    resultsList.innerHTML = '';
+                    updateMergeBtn();
+                    updateClearBtn();
+                    msgArea.clear();
+                });
+
+                searchWrapper.appendChild(searchInput);
+                searchWrapper.appendChild(clearBtn);
 
                 const searchBtn = document.createElement('button');
                 searchBtn.className = 'px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 flex-shrink-0';
                 searchBtn.textContent = '検索';
 
-                searchRow.appendChild(searchInput);
+                searchRow.appendChild(searchWrapper);
                 searchRow.appendChild(searchBtn);
                 panel.appendChild(searchRow);
 
@@ -348,7 +376,7 @@ export class SongOperationDialog {
                         const res = await fetch(`/api/songs/search-for-merge?${params}`);
                         if (!res.ok) throw new Error('検索に失敗しました');
                         searchResults = await res.json();
-                        selectedIds = [];
+                        selectedIds = searchResults.map(s => s.id);
                         targetId = null;
                         renderResults();
                         updateMergeBtn();

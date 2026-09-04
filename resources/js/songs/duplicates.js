@@ -47,6 +47,14 @@ function registerDuplicatesComponent() {
 
         // --- 右ペイン: 検索・選択・マージ ---
 
+        clearSearch() {
+            this.search = '';
+            this.searchResults = [];
+            this.selectedIds = [];
+            this.targetId = null;
+            this.message = null;
+        },
+
         async doSearch() {
             if (!this.search.trim()) return;
             this.searchLoading = true;
@@ -59,6 +67,7 @@ function registerDuplicatesComponent() {
                 const res = await fetch(`/api/songs/search-for-merge?${params}`);
                 if (!res.ok) throw new Error('検索に失敗しました');
                 this.searchResults = await res.json();
+                this.selectedIds = this.searchResults.map(s => s.id);
             } catch (e) {
                 this.message = e.message;
                 this.messageType = 'error';
