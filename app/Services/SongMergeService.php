@@ -19,64 +19,79 @@ class SongMergeService
      * 重複楽曲のグループを検出する
      *
      * normalized_title が同じ楽曲をグループ化して返す。
-     * 各グループには楽曲情報とマッピング数を含む。
+     * SongGroupReview の判定結果でフィルタリングする。
      *
      * @param  string  $search  検索フィルタ（タイトルで絞り込み）
+     * @param  string  $filter  'active'（未処理）または 'pending'（保留中）
      * @return array 重複グループの配列
      */
-    public function findDuplicates(string $search = ''): array
+    public function findDuplicates(string $search = '', string $filter = 'active'): array
     {
-        // normalized_titleでグループ化し、2件以上のグループを取得
-        $query = Song::selectRaw('normalized_title, normalized_artist, COUNT(*) as count')
-            ->groupBy('normalized_title', 'normalized_artist')
+        $titleQuery = Song::selectRaw('normalized_title, COUNT(*) as count')
+            ->whereNotNull('normalized_title')
+            ->groupBy('normalized_title')
             ->having('count', '>', 1)
             ->orderBy('count', 'desc');
 
         if ($search !== '') {
-            $query->where('title', 'LIKE', "%{$search}%");
+            $escaped = QueryHelper::escapeLikeString($search);
+            $titleQuery->where('title', 'LIKE', "%{$escaped}%");
         }
 
-        $groups = $query->limit(50)->get();
+        $normalizedTitles = $titleQuery->limit(500)->pluck('normalized_title');
 
-        // 全グループの楽曲を一括取得（N+1クエリ対策）
-        $groupKeys = $groups->map(fn ($g) => [$g->normalized_title, $g->normalized_artist]);
+        if ($normalizedTitles->isEmpty()) {
+            return [];
+        }
 
-        $allSongs = Song::where(function ($q) use ($groupKeys) {
-            foreach ($groupKeys as $key) {
-                $q->orWhere(function ($q2) use ($key) {
-                    $q2->where('normalized_title', $key[0])
-                        ->where('normalized_artist', $key[1]);
-                });
-            }
-        })
+        $songs = Song::whereIn('normalized_title', $normalizedTitles)
             ->withCount('mappings')
+            ->orderBy('artist')
+            ->orderBy('title')
             ->get();
 
-        // ts_items.song_idのカウントを一括取得
-        $songIds = $allSongs->pluck('id')->toArray();
+        $songIds = $songs->pluck('id')->toArray();
         $tsItemCounts = TsItem::selectRaw('song_id, COUNT(*) as count')
             ->whereIn('song_id', $songIds)
             ->groupBy('song_id')
             ->pluck('count', 'song_id');
 
-        return $groups->map(function ($group) use ($allSongs, $tsItemCounts) {
-            $songs = $allSongs->filter(fn ($s) => $s->normalized_title === $group->normalized_title
-                    && $s->normalized_artist === $group->normalized_artist)
-                ->map(fn ($song) => [
+        $groups = $songs->groupBy('normalized_title')->map(function ($songsInGroup, $normalizedTitle) use ($tsItemCounts) {
+            $sortedIds = $songsInGroup->pluck('id')->sort()->values()->all();
+
+            return [
+                'normalized_title' => $normalizedTitle,
+                'song_ids_hash' => SongGroupReview::hashSongIds($sortedIds),
+                'songs' => $songsInGroup->map(fn (Song $song) => [
                     'id' => $song->id,
                     'title' => $song->title,
                     'artist' => $song->artist,
+                    'normalized_artist' => $song->normalized_artist,
                     'spotify_track_id' => $song->spotify_track_id,
                     'mappings_count' => $song->mappings_count,
                     'ts_items_count' => $tsItemCounts->get($song->id, 0),
-                ])->values();
-
-            return [
-                'normalized_title' => $group->normalized_title,
-                'normalized_artist' => $group->normalized_artist,
-                'songs' => $songs,
+                ])->values(),
             ];
-        })->toArray();
+        })->values();
+
+        $hashes = $groups->pluck('song_ids_hash')->toArray();
+        $reviewedDecisions = SongGroupReview::whereIn('song_ids_hash', $hashes)
+            ->pluck('decision', 'song_ids_hash');
+
+        $filtered = $groups->filter(function ($group) use ($reviewedDecisions, $filter) {
+            $decision = $reviewedDecisions->get($group['song_ids_hash']);
+
+            return $filter === 'pending'
+                ? $decision === SongGroupReview::DECISION_PENDING
+                : $decision === null;
+        });
+
+        $order = $normalizedTitles->flip();
+
+        return $filtered->sortBy(fn ($g) => $order->get($g['normalized_title']))
+            ->values()
+            ->take(50)
+            ->toArray();
     }
 
     /**

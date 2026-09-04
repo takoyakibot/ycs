@@ -23,29 +23,105 @@
                 {{-- 左ペイン: 重複グループ --}}
                 <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
                     <div class="p-4 text-gray-900 dark:text-gray-100">
-                        <h4 class="font-semibold mb-3">重複検出グループ</h4>
-                        <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">クリックで検索欄にタイトルを入力し、名寄せ候補を検索します</p>
+                        <h4 class="font-semibold mb-2">重複検出グループ</h4>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                            同じ曲名（正規化後）で複数のマスタが存在するグループです。
+                            同じ曲であればマージ、別の曲であれば「別の曲」、判断がつかない場合は「保留」を選んでください。
+                        </p>
+
+                        <div class="flex flex-wrap items-center gap-2 mb-3">
+                            <input type="text"
+                                   x-model="groupSearch"
+                                   @keydown.enter="fetchDuplicates()"
+                                   placeholder="タイトルで絞り込み..."
+                                   class="flex-1 min-w-[150px] px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                            <button @click="fetchDuplicates()"
+                                    class="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700">
+                                検索
+                            </button>
+                            <div class="flex gap-1 ml-auto">
+                                <button @click="setGroupFilter('active')"
+                                        class="px-3 py-1 text-sm rounded"
+                                        :class="groupFilter === 'active' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600'">
+                                    未処理
+                                </button>
+                                <button @click="setGroupFilter('pending')"
+                                        class="px-3 py-1 text-sm rounded"
+                                        :class="groupFilter === 'pending' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600'">
+                                    保留中
+                                </button>
+                            </div>
+                        </div>
 
                         <template x-if="groupsLoading">
                             <div class="text-center py-4 text-gray-500 dark:text-gray-400 text-sm">読み込み中...</div>
                         </template>
 
                         <template x-if="!groupsLoading && groups.length === 0">
-                            <div class="text-center py-4 text-gray-500 dark:text-gray-400 text-sm">重複楽曲はありません</div>
+                            <div class="text-center py-4 text-gray-500 dark:text-gray-400 text-sm">対象のグループはありません</div>
                         </template>
 
-                        <div class="space-y-2 max-h-[70vh] overflow-y-auto">
-                            <template x-for="(group, gi) in groups" :key="gi">
-                                <button @click="selectGroup(group)"
-                                        class="w-full text-left p-3 border border-gray-200 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
-                                    <div class="font-medium text-sm truncate" x-text="group.songs[0]?.title || group.normalized_title"></div>
-                                    <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                                        <span x-text="group.songs.length"></span>件の楽曲
-                                        <template x-if="group.normalized_artist">
-                                            <span> / <span x-text="group.normalized_artist"></span></span>
+                        <div class="space-y-3 max-h-[70vh] overflow-y-auto">
+                            <template x-for="group in groups" :key="group.song_ids_hash">
+                                <div class="border border-gray-200 dark:border-gray-700 rounded-md p-3"
+                                     :class="activeGroupHash === group.song_ids_hash ? 'ring-2 ring-blue-400' : ''">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <button @click="selectGroup(group)" class="font-medium text-sm text-left hover:text-blue-600 dark:hover:text-blue-400 truncate flex-1" x-text="group.normalized_title"></button>
+                                        <div class="flex gap-1 flex-shrink-0 ml-2">
+                                            <button @click="mergeGroup(group)"
+                                                    :disabled="!canMergeGroup(group.song_ids_hash) || groupMerging[group.song_ids_hash]"
+                                                    class="px-2 py-1 text-xs rounded-md bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                                                <span x-show="!groupMerging[group.song_ids_hash]">マージ</span>
+                                                <span x-show="groupMerging[group.song_ids_hash]">処理中...</span>
+                                            </button>
+                                            <button @click="reviewGroup(group, 'pending')"
+                                                    class="px-2 py-1 text-xs rounded-md bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">
+                                                保留
+                                            </button>
+                                            <button @click="reviewGroup(group, 'distinct')"
+                                                    class="px-2 py-1 text-xs rounded-md bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">
+                                                別の曲
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div class="space-y-1">
+                                        <template x-for="song in group.songs" :key="song.id">
+                                            <div class="flex items-center gap-2 p-2 border rounded-md transition-colors text-sm"
+                                                 :class="{
+                                                     'border-blue-500 bg-blue-50 dark:bg-blue-900/20': isGroupSelected(group.song_ids_hash, song.id),
+                                                     'border-orange-500 bg-orange-50 dark:bg-orange-900/20 ring-2 ring-orange-300': groupTargetId[group.song_ids_hash] === song.id,
+                                                     'border-gray-200 dark:border-gray-700': !isGroupSelected(group.song_ids_hash, song.id)
+                                                 }">
+                                                <input type="checkbox"
+                                                       :checked="isGroupSelected(group.song_ids_hash, song.id)"
+                                                       @change="toggleGroupSelect(group.song_ids_hash, song.id)"
+                                                       class="w-4 h-4 flex-shrink-0 text-blue-600 rounded focus:ring-blue-500">
+
+                                                <div class="flex-1 min-w-0">
+                                                    <div class="font-medium truncate" x-text="song.title"></div>
+                                                    <div class="text-xs text-gray-500 dark:text-gray-400 truncate" x-text="song.artist || '(アーティスト未設定)'"></div>
+                                                    <div class="flex gap-2 mt-0.5 text-xs text-gray-400 dark:text-gray-500">
+                                                        <span>MP: <span x-text="song.mappings_count"></span></span>
+                                                        <span>TS: <span x-text="song.ts_items_count"></span></span>
+                                                        <template x-if="song.spotify_track_id">
+                                                            <span class="text-green-600">Spotify</span>
+                                                        </template>
+                                                    </div>
+                                                </div>
+
+                                                <button x-show="isGroupSelected(group.song_ids_hash, song.id)"
+                                                        @click="setGroupTarget(group.song_ids_hash, song.id)"
+                                                        class="flex-shrink-0 px-2 py-1 text-xs rounded-md transition-colors"
+                                                        :class="groupTargetId[group.song_ids_hash] === song.id
+                                                            ? 'bg-orange-600 text-white'
+                                                            : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 hover:bg-orange-100 dark:hover:bg-orange-900/30'"
+                                                        x-text="groupTargetId[group.song_ids_hash] === song.id ? 'マージ先' : '残す'">
+                                                </button>
+                                            </div>
                                         </template>
                                     </div>
-                                </button>
+                                </div>
                             </template>
                         </div>
                     </div>
@@ -132,6 +208,9 @@
                                             <span>TS: <span x-text="song.ts_items_count"></span></span>
                                             <template x-if="song.spotify_track_id">
                                                 <span class="text-green-600">Spotify</span>
+                                            </template>
+                                            <template x-if="song.distinct_review">
+                                                <span class="text-amber-600">別の曲判定あり</span>
                                             </template>
                                         </div>
                                     </div>
