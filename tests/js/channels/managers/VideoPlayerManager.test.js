@@ -260,6 +260,20 @@ describe('VideoPlayerManager', () => {
             expect(mgr.volume).toBe(42);
         });
 
+        it('restoreVolumeでミュート(0)を正しく復元する', () => {
+            sessionStorage.setItem('videoVolume', '0');
+            const mgr = new VideoPlayerManager();
+            mgr.restoreVolume();
+            expect(mgr.volume).toBe(0);
+        });
+
+        it('restoreVolumeで不正な値はデフォルト値になる', () => {
+            sessionStorage.setItem('videoVolume', 'invalid');
+            const mgr = new VideoPlayerManager();
+            mgr.restoreVolume();
+            expect(mgr.volume).toBe(100);
+        });
+
         it('sessionStorageに値がなければデフォルト値のまま', () => {
             const mgr = new VideoPlayerManager();
             mgr.restoreVolume();
