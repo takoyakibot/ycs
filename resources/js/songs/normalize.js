@@ -5,6 +5,7 @@ import { timestampApiService } from './services/TimestampApiService.js';
 import { songApiService } from './services/SongApiService.js';
 import { SimilarSongsDialog } from './components/SimilarSongsDialog.js';
 import { SongOperationDialog } from './components/SongOperationDialog.js';
+import { ArtistTagSyncDialog } from './components/ArtistTagSyncDialog.js';
 import { Pagination } from '../shared/components/Pagination.js';
 
 // axiosの設定: クロスオリジンリクエストでクッキーを送信
@@ -2325,8 +2326,9 @@ class TimestampNormalization {
      * 編集モーダルを開く
      * @param {Object} song - 編集対象の楽曲
      */
-    openEditModal(song) {
+    async openEditModal(song) {
         this.editingSong = song;
+        this.editingSongTags = null;
         document.getElementById('editSongId').value = song.id;
         document.getElementById('editSongTitle').value = song.title;
         document.getElementById('editSongArtist').value = song.artist;
@@ -2336,6 +2338,13 @@ class TimestampNormalization {
         this.updateDurationDisplay(song.duration_ms);
         document.getElementById('editSongModal').classList.remove('hidden');
         this.loadNotationCandidates(song.id);
+
+        try {
+            const response = await songApiService.fetchTags(song.id);
+            this.editingSongTags = response.tags;
+        } catch (e) {
+            this.editingSongTags = [];
+        }
     }
 
     /**
@@ -2343,6 +2352,7 @@ class TimestampNormalization {
      */
     closeEditModal() {
         this.editingSong = null;
+        this.editingSongTags = null;
         document.getElementById('editSongModal').classList.add('hidden');
         document.getElementById('editSongForm').reset();
         document.getElementById('editSongDurationFormatted').textContent = '';
@@ -2485,6 +2495,22 @@ class TimestampNormalization {
             updateData.duration_ms = parseInt(durationMs, 10);
         } else {
             updateData.duration_ms = null;
+        }
+
+        // アーティスト名変更時のタグ同期確認
+        const oldArtist = this.editingSong.artist;
+        const newArtist = artist;
+        const artistChanged = oldArtist !== newArtist;
+
+        if (artistChanged && this.editingSongTags) {
+            const matchingTags = this.editingSongTags.filter(t => t.value === oldArtist);
+            if (matchingTags.length > 0) {
+                const result = await ArtistTagSyncDialog.show(oldArtist, newArtist, matchingTags);
+                if (result.action === 'sync') {
+                    updateData.sync_tags = true;
+                    updateData.old_artist = oldArtist;
+                }
+            }
         }
 
         try {

@@ -948,15 +948,51 @@ class SongController extends Controller
             'artist' => 'sometimes|required|string|max:255',
             'video_url' => 'nullable|url|max:255',
             'duration_ms' => 'nullable|integer|min:0|max:86400000', // 最大24時間
+            'sync_tags' => 'sometimes|boolean',
+            'old_artist' => 'required_if:sync_tags,true|nullable|string|max:255',
         ]);
 
         $song = Song::findOrFail($id);
-        $song->update($validated);
+
+        $songData = collect($validated)->except(['sync_tags', 'old_artist'])->all();
+        $syncTags = ! empty($validated['sync_tags']) && ! empty($validated['old_artist']) && isset($validated['artist']);
+
+        $updatedTags = DB::transaction(function () use ($song, $songData, $syncTags, $validated) {
+            $song->update($songData);
+
+            if ($syncTags) {
+                return $this->syncArtistTags($song, $validated['old_artist'], $validated['artist']);
+            }
+
+            return [];
+        });
 
         return response()->json([
             'message' => '楽曲マスタを更新しました。',
             'song' => $song,
+            'updated_tags' => $updatedTags,
         ]);
+    }
+
+    /**
+     * アーティスト名変更時にタグを同期
+     */
+    private function syncArtistTags(Song $song, string $oldArtist, string $newArtist): array
+    {
+        $matchingTags = $song->tags()->where('value', $oldArtist)->get();
+        $updatedTags = [];
+
+        foreach ($matchingTags as $tag) {
+            $oldValue = $tag->value;
+            $tag->update(['value' => $newArtist]);
+            $updatedTags[] = [
+                'id' => $tag->id,
+                'old_value' => $oldValue,
+                'new_value' => $newArtist,
+            ];
+        }
+
+        return $updatedTags;
     }
 
     /**
