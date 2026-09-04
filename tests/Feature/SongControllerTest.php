@@ -1732,6 +1732,185 @@ class SongControllerTest extends TestCase
         ]);
     }
 
+    /**
+     * 楽曲マスタの更新テスト（タグ同期あり・一致するタグが更新される）
+     */
+    public function test_update_song_with_tag_sync(): void
+    {
+        $song = Song::factory()->create([
+            'title' => 'Song',
+            'artist' => 'YOASOBI',
+        ]);
+        $tag = SongTag::factory()->create(['song_id' => $song->id, 'value' => 'YOASOBI']);
+
+        $response = $this->actingAs($this->user)->putJson(route('songs.updateSong', $song->id), [
+            'title' => 'Song',
+            'artist' => 'Ayase',
+            'sync_tags' => true,
+            'old_artist' => 'YOASOBI',
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonCount(1, 'updated_tags');
+        $response->assertJsonPath('updated_tags.0.id', $tag->id);
+        $response->assertJsonPath('updated_tags.0.old_value', 'YOASOBI');
+        $response->assertJsonPath('updated_tags.0.new_value', 'Ayase');
+
+        $this->assertDatabaseHas('song_tags', [
+            'id' => $tag->id,
+            'value' => 'Ayase',
+        ]);
+    }
+
+    /**
+     * 楽曲マスタの更新テスト（タグ同期あり・一致しないタグは変更されない）
+     */
+    public function test_update_song_with_tag_sync_non_matching_tags_unchanged(): void
+    {
+        $song = Song::factory()->create([
+            'title' => 'Song',
+            'artist' => 'YOASOBI',
+        ]);
+        $matchingTag = SongTag::factory()->create(['song_id' => $song->id, 'value' => 'YOASOBI']);
+        $otherTag = SongTag::factory()->create(['song_id' => $song->id, 'value' => 'J-POP']);
+
+        $response = $this->actingAs($this->user)->putJson(route('songs.updateSong', $song->id), [
+            'title' => 'Song',
+            'artist' => 'Ayase',
+            'sync_tags' => true,
+            'old_artist' => 'YOASOBI',
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonCount(1, 'updated_tags');
+
+        $this->assertDatabaseHas('song_tags', [
+            'id' => $matchingTag->id,
+            'value' => 'Ayase',
+        ]);
+        $this->assertDatabaseHas('song_tags', [
+            'id' => $otherTag->id,
+            'value' => 'J-POP',
+        ]);
+    }
+
+    /**
+     * 楽曲マスタの更新テスト（タグ同期なし・後方互換性）
+     */
+    public function test_update_song_without_tag_sync(): void
+    {
+        $song = Song::factory()->create([
+            'title' => 'Song',
+            'artist' => 'YOASOBI',
+        ]);
+        $tag = SongTag::factory()->create(['song_id' => $song->id, 'value' => 'YOASOBI']);
+
+        $response = $this->actingAs($this->user)->putJson(route('songs.updateSong', $song->id), [
+            'title' => 'Song',
+            'artist' => 'Ayase',
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('updated_tags', []);
+
+        $this->assertDatabaseHas('song_tags', [
+            'id' => $tag->id,
+            'value' => 'YOASOBI',
+        ]);
+    }
+
+    /**
+     * 楽曲マスタの更新テスト（タグ同期時にold_artist未指定で422）
+     */
+    public function test_update_song_tag_sync_requires_old_artist(): void
+    {
+        $song = Song::factory()->create([
+            'title' => 'Song',
+            'artist' => 'YOASOBI',
+        ]);
+
+        $response = $this->actingAs($this->user)->putJson(route('songs.updateSong', $song->id), [
+            'title' => 'Song',
+            'artist' => 'Ayase',
+            'sync_tags' => true,
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors('old_artist');
+    }
+
+    /**
+     * 楽曲マスタの更新テスト（タグ同期が他の楽曲のタグに影響しない）
+     */
+    public function test_update_song_tag_sync_does_not_affect_other_songs(): void
+    {
+        $song1 = Song::factory()->create(['artist' => 'YOASOBI']);
+        $song2 = Song::factory()->create(['artist' => 'YOASOBI']);
+        SongTag::factory()->create(['song_id' => $song1->id, 'value' => 'YOASOBI']);
+        $otherSongTag = SongTag::factory()->create(['song_id' => $song2->id, 'value' => 'YOASOBI']);
+
+        $response = $this->actingAs($this->user)->putJson(route('songs.updateSong', $song1->id), [
+            'artist' => 'Ayase',
+            'sync_tags' => true,
+            'old_artist' => 'YOASOBI',
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonCount(1, 'updated_tags');
+
+        $this->assertDatabaseHas('song_tags', [
+            'id' => $otherSongTag->id,
+            'value' => 'YOASOBI',
+        ]);
+    }
+
+    /**
+     * 楽曲マスタの更新テスト（複数の一致するタグがすべて更新される）
+     */
+    public function test_update_song_tag_sync_multiple_matching_tags(): void
+    {
+        $song = Song::factory()->create(['artist' => 'YOASOBI']);
+        $tag1 = SongTag::factory()->create(['song_id' => $song->id, 'value' => 'YOASOBI']);
+        $tag2 = SongTag::factory()->create(['song_id' => $song->id, 'value' => 'YOASOBI']);
+        $tag3 = SongTag::factory()->create(['song_id' => $song->id, 'value' => 'J-POP']);
+
+        $response = $this->actingAs($this->user)->putJson(route('songs.updateSong', $song->id), [
+            'artist' => 'Ayase',
+            'sync_tags' => true,
+            'old_artist' => 'YOASOBI',
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonCount(2, 'updated_tags');
+
+        $this->assertDatabaseHas('song_tags', ['id' => $tag1->id, 'value' => 'Ayase']);
+        $this->assertDatabaseHas('song_tags', ['id' => $tag2->id, 'value' => 'Ayase']);
+        $this->assertDatabaseHas('song_tags', ['id' => $tag3->id, 'value' => 'J-POP']);
+    }
+
+    /**
+     * 楽曲マスタの更新テスト（sync_tags=true でartistなしの場合タグ同期がスキップされる）
+     */
+    public function test_update_song_tag_sync_without_artist_skips_sync(): void
+    {
+        $song = Song::factory()->create(['artist' => 'YOASOBI']);
+        $tag = SongTag::factory()->create(['song_id' => $song->id, 'value' => 'YOASOBI']);
+
+        $response = $this->actingAs($this->user)->putJson(route('songs.updateSong', $song->id), [
+            'title' => 'New Title',
+            'sync_tags' => true,
+            'old_artist' => 'YOASOBI',
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('updated_tags', []);
+
+        $this->assertDatabaseHas('song_tags', [
+            'id' => $tag->id,
+            'value' => 'YOASOBI',
+        ]);
+    }
+
     // ==========================================
     // markAsPending のテスト
     // ==========================================
