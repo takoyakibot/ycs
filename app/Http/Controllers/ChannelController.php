@@ -6,6 +6,7 @@ use App\Helpers\CharacterCategorizer;
 use App\Helpers\TextNormalizer;
 use App\Helpers\ValidationHelper;
 use App\Models\Channel;
+use App\Models\Song;
 use App\Models\TimestampSongMapping;
 use App\Models\TsItem;
 use App\Services\GetArchiveService;
@@ -76,20 +77,24 @@ class ChannelController extends Controller
         // 楽曲マッピング情報を付与
         $archivesArray = $archives->toArray();
 
-        // 全タイムスタンプの正規化テキストを収集
+        // 全タイムスタンプの正規化テキストと個別マッピングのsong_idを収集
         $allNormalizedTexts = [];
+        $allIndividualSongIds = [];
         foreach ($archivesArray['data'] as $archive) {
             if (isset($archive['ts_items_display'])) {
                 foreach ($archive['ts_items_display'] as $tsItem) {
                     if (! empty($tsItem['text'])) {
                         $allNormalizedTexts[] = TextNormalizer::normalize($tsItem['text']);
                     }
+                    if (! empty($tsItem['song_id'])) {
+                        $allIndividualSongIds[] = $tsItem['song_id'];
+                    }
                 }
             }
         }
 
         // 早期リターン: タイムスタンプがない場合
-        if (empty($allNormalizedTexts)) {
+        if (empty($allNormalizedTexts) && empty($allIndividualSongIds)) {
             return response()->json($archivesArray);
         }
 
@@ -110,11 +115,19 @@ class ChannelController extends Controller
             $mappings = collect();
         }
 
+        // 個別マッピング（ts_items.song_id）の楽曲情報を一括取得（#724）
+        $individualSongs = ! empty($allIndividualSongIds)
+            ? Song::whereIn('id', array_unique($allIndividualSongIds))->get()->keyBy('id')
+            : collect();
+
         // 「楽曲ではない」タイムスタンプを除外してから楽曲情報を追加
         foreach ($archivesArray['data'] as &$archive) {
             if (isset($archive['ts_items_display'])) {
-                // 「楽曲ではない」とマークされたタイムスタンプを除外
+                // 「楽曲ではない」とマークされたタイムスタンプを除外（個別マッピングがある場合は常に表示 #724）
                 $archive['ts_items_display'] = array_values(array_filter($archive['ts_items_display'], function ($tsItem) use ($mappings) {
+                    if (! empty($tsItem['song_id'])) {
+                        return true;
+                    }
                     if (empty($tsItem['text'])) {
                         return true;
                     }
@@ -124,9 +137,20 @@ class ChannelController extends Controller
                     return ! ($mapping && $mapping->is_not_song);
                 }));
 
-                // 残ったタイムスタンプに楽曲情報を追加
+                // 残ったタイムスタンプに楽曲情報を追加（個別マッピング優先 #724）
                 foreach ($archive['ts_items_display'] as &$tsItem) {
-                    if (! empty($tsItem['text'])) {
+                    if (! empty($tsItem['song_id'])) {
+                        $song = $individualSongs[$tsItem['song_id']] ?? null;
+                        if ($song) {
+                            $tsItem['song'] = [
+                                'title' => $song->title,
+                                'artist' => $song->artist,
+                                'spotify_track_id' => ValidationHelper::validateSpotifyTrackId($song->spotify_track_id),
+                            ];
+                        } else {
+                            $tsItem['song'] = null;
+                        }
+                    } elseif (! empty($tsItem['text'])) {
                         $normalizedText = TextNormalizer::normalize($tsItem['text']);
                         $mapping = $mappings->get($normalizedText);
 

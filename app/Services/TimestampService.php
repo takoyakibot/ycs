@@ -7,6 +7,7 @@ use App\Helpers\QueryHelper;
 use App\Helpers\TextNormalizer;
 use App\Helpers\ValidationHelper;
 use App\Models\Channel;
+use App\Models\Song;
 use App\Models\TimestampSongMapping;
 use App\Models\TsItem;
 use Illuminate\Database\Eloquent\Builder;
@@ -15,6 +16,8 @@ use Illuminate\Support\Facades\Log;
 
 class TimestampService
 {
+    private const SONG_TITLE_COALESCE = 'COALESCE(individual_songs.title, songs.title, ts_items.text)';
+
     /**
      * チャンネルのタイムスタンプを取得（マッピング情報付き）
      *
@@ -42,6 +45,7 @@ class TimestampService
         $query = TsItem::with(['archive'])
             ->leftJoin('timestamp_song_mappings', 'ts_items.normalized_text', '=', 'timestamp_song_mappings.normalized_text')
             ->leftJoin('songs', 'timestamp_song_mappings.song_id', '=', 'songs.id')
+            ->leftJoin('songs as individual_songs', 'ts_items.song_id', '=', 'individual_songs.id')
             ->select(
                 'ts_items.*',
                 'timestamp_song_mappings.id as mapping_id',
@@ -51,7 +55,8 @@ class TimestampService
                 'timestamp_song_mappings.status as mapping_status',
                 'songs.title as song_title',
                 'songs.artist as song_artist',
-                'songs.spotify_track_id'
+                'songs.spotify_track_id',
+                'ts_items.song_id as individual_song_id'
             )
             ->whereHas('archive', function ($q) use ($channel) {
                 $q->where('channel_id', $channel->channel_id)
@@ -62,20 +67,13 @@ class TimestampService
             ->whereNotNull('ts_items.normalized_text')
             ->where('ts_items.is_display', 1);
 
-        // 「楽曲ではない」を除外
-        // - マッピングが存在しない（未分類）: 表示
-        // - マッピングが存在してis_not_song=false（楽曲）: 表示
-        // - マッピングが存在してis_not_song=true（楽曲でない）: 除外
-        $query->where(function ($q) {
-            $q->whereNull('timestamp_song_mappings.id')
-                ->orWhere('timestamp_song_mappings.is_not_song', false);
-        });
+        $this->applyIsNotSongFilter($query);
 
         // 検索・頭文字インデックス・公開日で絞り込み
         $this->applyFilters($query, $search, $index, $publishedFrom, $publishedTo);
 
-        // 楽曲名順でソート（楽曲名がなければタイムスタンプテキストを使用）
-        $query->orderByRaw('COALESCE(songs.title, ts_items.text) ASC');
+        // 楽曲名順でソート（個別マッピング曲名 > テキストマッピング曲名 > TSテキスト）
+        $query->orderByRaw(self::SONG_TITLE_COALESCE.' ASC');
 
         // 利用可能な頭文字カテゴリを取得（フィルタリング前のベースクエリで）
         $availableIndexes = $this->fetchAvailableIndexes($channel, $search, $publishedFrom, $publishedTo);
@@ -87,8 +85,19 @@ class TimestampService
         $tsItemIds = $paginated->getCollection()->pluck('id')->toArray();
         $reportedTsItemIds = $this->fetchReportedIds($tsItemIds);
 
+        // 個別マッピング（ts_items.song_id）の楽曲情報を一括取得（#724）
+        $individualSongIds = $paginated->getCollection()
+            ->pluck('individual_song_id')->filter()->unique()->values()->toArray();
+        $individualSongs = ! empty($individualSongIds)
+            ? Song::whereIn('id', $individualSongIds)->get()->keyBy('id')
+            : collect();
+
         // 各タイムスタンプを整形
-        $items = $paginated->getCollection()->map(function ($item) use ($reportedTsItemIds) {
+        $items = $paginated->getCollection()->map(function ($item) use ($reportedTsItemIds, $individualSongs) {
+            $individualSong = $item->individual_song_id
+                ? ($individualSongs[$item->individual_song_id] ?? null) : null;
+            $songInfo = $this->buildSongInfo($individualSong, $item);
+
             return [
                 'id' => $item->id,
                 'ts_text' => $item->ts_text,
@@ -99,15 +108,8 @@ class TimestampService
                     'title' => $item->archive->title,
                     'published_at' => $item->archive->published_at,
                 ],
-                'mapping' => $item->mapping_id ? [
-                    'song' => ($item->song_id && $this->isConfirmedMappingRow($item)) ? [
-                        'title' => $item->song_title,
-                        'artist' => $item->song_artist,
-                        'spotify_track_id' => ValidationHelper::validateSpotifyTrackId($item->spotify_track_id),
-                    ] : null,
-                    'is_not_song' => (bool) $item->is_not_song,
-                    'is_manual' => (bool) $item->is_manual,
-                ] : null,
+                'mapping' => $this->buildMappingResponse($individualSong, $item, $songInfo),
+                'is_individual_mapping' => $individualSong !== null,
                 'has_pending_report' => in_array($item->id, $reportedTsItemIds),
             ];
         });
@@ -189,25 +191,15 @@ class TimestampService
     {
         $chars = CharacterCategorizer::getCharsForCategory($index);
 
+        $coalesce = self::SONG_TITLE_COALESCE;
+
         if (CharacterCategorizer::isOtherCategory($index)) {
             // 「その他」カテゴリ: 既知のカテゴリに属さない文字（主に漢字）
             $driver = DB::getDriverName();
 
             if ($driver === 'mysql') {
-                // MySQL: REGEXPで効率的にフィルタリング
-                // 既知カテゴリ（アルファベット、数字、ひらがな、カタカナ）以外を抽出
                 $pattern = '^[A-Za-z0-9あ-んア-ンー]';
-                $query->where(function ($q) use ($pattern) {
-                    $q->where(function ($subQ) use ($pattern) {
-                        // 楽曲名がある場合
-                        $subQ->whereNotNull('songs.title')
-                            ->whereRaw('songs.title NOT REGEXP ?', [$pattern]);
-                    })->orWhere(function ($subQ) use ($pattern) {
-                        // 楽曲名がない場合、タイムスタンプテキストで判定
-                        $subQ->whereNull('songs.title')
-                            ->whereRaw('ts_items.text NOT REGEXP ?', [$pattern]);
-                    });
-                });
+                $query->whereRaw("{$coalesce} NOT REGEXP ?", [$pattern]);
             } else {
                 // SQLite: NOT LIKEアプローチ（互換性優先）
                 $allKnownChars = [];
@@ -217,46 +209,18 @@ class TimestampService
                     }
                 }
 
-                $query->where(function ($q) use ($allKnownChars) {
-                    $q->where(function ($subQ) use ($allKnownChars) {
-                        // 楽曲名がある場合
-                        $subQ->whereNotNull('songs.title');
-                        foreach ($allKnownChars as $char) {
-                            $escapedChar = QueryHelper::escapeLikeString($char);
-                            $subQ->where('songs.title', 'not like', $escapedChar.'%');
-                        }
-                    })->orWhere(function ($subQ) use ($allKnownChars) {
-                        // 楽曲名がない場合、タイムスタンプテキストで判定
-                        $subQ->whereNull('songs.title');
-                        foreach ($allKnownChars as $char) {
-                            $escapedChar = QueryHelper::escapeLikeString($char);
-                            $subQ->where('ts_items.text', 'not like', $escapedChar.'%');
-                        }
-                    });
-                });
+                foreach ($allKnownChars as $char) {
+                    $escapedChar = QueryHelper::escapeLikeString($char);
+                    $query->whereRaw("{$coalesce} NOT LIKE ?", [$escapedChar.'%']);
+                }
             }
         } elseif (! empty($chars)) {
             // 通常のカテゴリ: 指定された文字で始まるものをフィルタ
-            $query->where(function ($q) use ($chars) {
-                $q->where(function ($subQ) use ($chars) {
-                    // 楽曲名がある場合
-                    $subQ->whereNotNull('songs.title');
-                    $subQ->where(function ($innerQ) use ($chars) {
-                        foreach ($chars as $char) {
-                            $escapedChar = QueryHelper::escapeLikeString($char);
-                            $innerQ->orWhere('songs.title', 'like', $escapedChar.'%');
-                        }
-                    });
-                })->orWhere(function ($subQ) use ($chars) {
-                    // 楽曲名がない場合、タイムスタンプテキストで判定
-                    $subQ->whereNull('songs.title');
-                    $subQ->where(function ($innerQ) use ($chars) {
-                        foreach ($chars as $char) {
-                            $escapedChar = QueryHelper::escapeLikeString($char);
-                            $innerQ->orWhere('ts_items.text', 'like', $escapedChar.'%');
-                        }
-                    });
-                });
+            $query->where(function ($q) use ($chars, $coalesce) {
+                foreach ($chars as $char) {
+                    $escapedChar = QueryHelper::escapeLikeString($char);
+                    $q->orWhereRaw("{$coalesce} LIKE ?", [$escapedChar.'%']);
+                }
             });
         }
     }
@@ -270,6 +234,7 @@ class TimestampService
         $query = TsItem::query()
             ->leftJoin('timestamp_song_mappings', 'ts_items.normalized_text', '=', 'timestamp_song_mappings.normalized_text')
             ->leftJoin('songs', 'timestamp_song_mappings.song_id', '=', 'songs.id')
+            ->leftJoin('songs as individual_songs', 'ts_items.song_id', '=', 'individual_songs.id')
             ->whereHas('archive', function ($q) use ($channel) {
                 $q->where('channel_id', $channel->channel_id)
                     ->where('is_display', 1);
@@ -277,18 +242,16 @@ class TimestampService
             ->whereNotNull('ts_items.text')
             ->where('ts_items.text', '!=', '')
             ->whereNotNull('ts_items.normalized_text')
-            ->where('ts_items.is_display', 1)
-            ->where(function ($q) {
-                $q->whereNull('timestamp_song_mappings.id')
-                    ->orWhere('timestamp_song_mappings.is_not_song', false);
-            });
+            ->where('ts_items.is_display', 1);
+
+        $this->applyIsNotSongFilter($query);
 
         // 検索・公開日で絞り込み（頭文字インデックスはカテゴリ抽出対象のため適用しない）
         $this->applyFilters($query, $search, '', $publishedFrom, $publishedTo);
 
-        // 頭文字を取得（楽曲名優先、なければタイムスタンプテキスト）
+        // 頭文字を取得（個別マッピング曲名 > テキストマッピング曲名 > TSテキスト）
         $firstChars = $query
-            ->selectRaw('DISTINCT SUBSTRING(COALESCE(songs.title, ts_items.text), 1, 1) as first_char')
+            ->selectRaw('DISTINCT SUBSTRING('.self::SONG_TITLE_COALESCE.', 1, 1) as first_char')
             ->pluck('first_char')
             ->filter()
             ->toArray();
@@ -328,6 +291,7 @@ class TimestampService
         $query = TsItem::with(['archive'])
             ->leftJoin('timestamp_song_mappings', 'ts_items.normalized_text', '=', 'timestamp_song_mappings.normalized_text')
             ->leftJoin('songs', 'timestamp_song_mappings.song_id', '=', 'songs.id')
+            ->leftJoin('songs as individual_songs', 'ts_items.song_id', '=', 'individual_songs.id')
             ->select(
                 'ts_items.*',
                 'timestamp_song_mappings.id as mapping_id',
@@ -338,7 +302,8 @@ class TimestampService
                 'songs.title as song_title',
                 'songs.artist as song_artist',
                 'songs.spotify_track_id',
-                'songs.spotify_data'
+                'songs.spotify_data',
+                'ts_items.song_id as individual_song_id'
             )
             ->whereHas('archive', function ($q) use ($channel) {
                 $q->where('channel_id', $channel->channel_id)
@@ -349,11 +314,7 @@ class TimestampService
             ->whereNotNull('ts_items.normalized_text')
             ->where('ts_items.is_display', 1);
 
-        // 「楽曲ではない」を除外
-        $query->where(function ($q) {
-            $q->whereNull('timestamp_song_mappings.id')
-                ->orWhere('timestamp_song_mappings.is_not_song', false);
-        });
+        $this->applyIsNotSongFilter($query);
 
         // 一覧と同じ検索・頭文字インデックス・公開日の条件で絞り込む
         $this->applyFilters($query, $search, $index, $publishedFrom, $publishedTo);
@@ -383,23 +344,20 @@ class TimestampService
             return null;
         }
 
+        // 個別マッピング（ts_items.song_id）の楽曲情報を取得（#724）
+        $individualSong = $item->individual_song_id
+            ? Song::find($item->individual_song_id) : null;
+
         // 選ばれたアイテムのソート順での位置を計算（ページ番号算出用）
         // 一覧側も同じ絞り込みが効いているため、同条件でカウントしないとページがずれる
-        $sortKey = $item->song_title ?? $item->text;
+        $sortKey = $individualSong ? $individualSong->title : ($item->song_title ?? $item->text);
         $position = $this->calculateItemPosition($channel, $sortKey, $item->id, $search, $index, $publishedFrom, $publishedTo);
         $page = (int) ceil($position / $perPage);
 
         // 同じ動画内の次のタイムスタンプを取得（自動再抽選用）
         $nextTsNum = $this->getNextTimestampInVideo($item->video_id, $item->ts_num);
 
-        // spotify_dataから楽曲の長さを取得（ミリ秒）
-        $songDurationMs = null;
-        if ($item->spotify_data) {
-            $spotifyData = is_string($item->spotify_data)
-                ? json_decode($item->spotify_data, true)
-                : $item->spotify_data;
-            $songDurationMs = $spotifyData['duration_ms'] ?? null;
-        }
+        $songInfo = $this->buildSongInfo($individualSong, $item, true);
 
         return [
             'id' => $item->id,
@@ -411,16 +369,8 @@ class TimestampService
                 'title' => $item->archive->title,
                 'published_at' => $item->archive->published_at,
             ],
-            'mapping' => $item->mapping_id ? [
-                'song' => ($item->song_id && $this->isConfirmedMappingRow($item)) ? [
-                    'title' => $item->song_title,
-                    'artist' => $item->song_artist,
-                    'spotify_track_id' => ValidationHelper::validateSpotifyTrackId($item->spotify_track_id),
-                    'duration_ms' => $songDurationMs,
-                ] : null,
-                'is_not_song' => (bool) $item->is_not_song,
-                'is_manual' => (bool) $item->is_manual,
-            ] : null,
+            'mapping' => $this->buildMappingResponse($individualSong, $item, $songInfo),
+            'is_individual_mapping' => $individualSong !== null,
             'page' => max(1, $page),
             'next_ts_num' => $nextTsNum,
         ];
@@ -447,9 +397,9 @@ class TimestampService
             ->whereNotNull('ts_items.text')
             ->where('ts_items.text', '!=', '')
             ->whereNotNull('ts_items.normalized_text')
-            // 「楽曲ではない」を除外
             ->where(function ($q) {
-                $q->whereNull('timestamp_song_mappings.id')
+                $q->whereNotNull('ts_items.song_id')
+                    ->orWhereNull('timestamp_song_mappings.id')
                     ->orWhere('timestamp_song_mappings.is_not_song', false);
             })
             ->orderBy('ts_items.ts_num', 'asc')
@@ -483,7 +433,8 @@ class TimestampService
                 'songs.title as song_title',
                 'songs.artist as song_artist',
                 'songs.spotify_track_id',
-                'songs.spotify_data'
+                'songs.spotify_data',
+                'ts_items.song_id as individual_song_id'
             )
             ->whereHas('archive', function ($q) use ($channel) {
                 $q->where('channel_id', $channel->channel_id)
@@ -495,9 +446,9 @@ class TimestampService
             ->where('ts_items.text', '!=', '')
             ->whereNotNull('ts_items.normalized_text')
             ->where('ts_items.is_display', 1)
-            // 「楽曲ではない」を除外
             ->where(function ($q) {
-                $q->whereNull('timestamp_song_mappings.id')
+                $q->whereNotNull('ts_items.song_id')
+                    ->orWhereNull('timestamp_song_mappings.id')
                     ->orWhere('timestamp_song_mappings.is_not_song', false);
             })
             ->orderBy('ts_items.ts_num', 'asc')
@@ -507,20 +458,17 @@ class TimestampService
             return null;
         }
 
+        // 個別マッピング（ts_items.song_id）の楽曲情報を取得（#724）
+        $individualSong = $item->individual_song_id
+            ? Song::find($item->individual_song_id) : null;
+
         // 同じ動画内の次のタイムスタンプを取得
         $nextTsNum = $this->getNextTimestampInVideo($videoId, $item->ts_num);
 
-        // spotify_dataから楽曲の長さを取得（ミリ秒）
-        $songDurationMs = null;
-        if ($item->spotify_data) {
-            $spotifyData = is_string($item->spotify_data)
-                ? json_decode($item->spotify_data, true)
-                : $item->spotify_data;
-            $songDurationMs = $spotifyData['duration_ms'] ?? null;
-        }
-
         // アーカイブ内の最後の楽曲かどうかを判定
         $isLastInArchive = $nextTsNum === null;
+
+        $songInfo = $this->buildSongInfo($individualSong, $item, true);
 
         return [
             'id' => $item->id,
@@ -532,16 +480,8 @@ class TimestampService
                 'title' => $item->archive->title,
                 'published_at' => $item->archive->published_at,
             ] : null,
-            'mapping' => $item->mapping_id ? [
-                'song' => ($item->song_id && $this->isConfirmedMappingRow($item)) ? [
-                    'title' => $item->song_title,
-                    'artist' => $item->song_artist,
-                    'spotify_track_id' => ValidationHelper::validateSpotifyTrackId($item->spotify_track_id),
-                    'duration_ms' => $songDurationMs,
-                ] : null,
-                'is_not_song' => (bool) $item->is_not_song,
-                'is_manual' => (bool) $item->is_manual,
-            ] : null,
+            'mapping' => $this->buildMappingResponse($individualSong, $item, $songInfo),
+            'is_individual_mapping' => $individualSong !== null,
             'next_ts_num' => $nextTsNum,
             'is_last_in_archive' => $isLastInArchive,
         ];
@@ -559,10 +499,13 @@ class TimestampService
         string $publishedFrom = '',
         string $publishedTo = ''
     ): int {
+        $coalesce = self::SONG_TITLE_COALESCE;
+
         // ソートキーより前にあるアイテム数をカウント
         $countBeforeQuery = TsItem::query()
             ->leftJoin('timestamp_song_mappings', 'ts_items.normalized_text', '=', 'timestamp_song_mappings.normalized_text')
             ->leftJoin('songs', 'timestamp_song_mappings.song_id', '=', 'songs.id')
+            ->leftJoin('songs as individual_songs', 'ts_items.song_id', '=', 'individual_songs.id')
             ->whereHas('archive', function ($q) use ($channel) {
                 $q->where('channel_id', $channel->channel_id)
                     ->where('is_display', 1);
@@ -570,12 +513,9 @@ class TimestampService
             ->whereNotNull('ts_items.text')
             ->where('ts_items.text', '!=', '')
             ->whereNotNull('ts_items.normalized_text')
-            ->where('ts_items.is_display', 1)
-            ->where(function ($q) {
-                $q->whereNull('timestamp_song_mappings.id')
-                    ->orWhere('timestamp_song_mappings.is_not_song', false);
-            })
-            ->whereRaw('COALESCE(songs.title, ts_items.text) < ?', [$sortKey]);
+            ->where('ts_items.is_display', 1);
+        $this->applyIsNotSongFilter($countBeforeQuery);
+        $countBeforeQuery->whereRaw("{$coalesce} < ?", [$sortKey]);
         $this->applyFilters($countBeforeQuery, $search, $index, $publishedFrom, $publishedTo);
         $countBefore = $countBeforeQuery->count();
 
@@ -583,6 +523,7 @@ class TimestampService
         $countSameKeyQuery = TsItem::query()
             ->leftJoin('timestamp_song_mappings', 'ts_items.normalized_text', '=', 'timestamp_song_mappings.normalized_text')
             ->leftJoin('songs', 'timestamp_song_mappings.song_id', '=', 'songs.id')
+            ->leftJoin('songs as individual_songs', 'ts_items.song_id', '=', 'individual_songs.id')
             ->whereHas('archive', function ($q) use ($channel) {
                 $q->where('channel_id', $channel->channel_id)
                     ->where('is_display', 1);
@@ -590,12 +531,9 @@ class TimestampService
             ->whereNotNull('ts_items.text')
             ->where('ts_items.text', '!=', '')
             ->whereNotNull('ts_items.normalized_text')
-            ->where('ts_items.is_display', 1)
-            ->where(function ($q) {
-                $q->whereNull('timestamp_song_mappings.id')
-                    ->orWhere('timestamp_song_mappings.is_not_song', false);
-            })
-            ->whereRaw('COALESCE(songs.title, ts_items.text) = ?', [$sortKey])
+            ->where('ts_items.is_display', 1);
+        $this->applyIsNotSongFilter($countSameKeyQuery);
+        $countSameKeyQuery->whereRaw("{$coalesce} = ?", [$sortKey])
             ->where('ts_items.id', '<', $itemId);
         $this->applyFilters($countSameKeyQuery, $search, $index, $publishedFrom, $publishedTo);
         $countSameKey = $countSameKeyQuery->count();
@@ -617,6 +555,83 @@ class TimestampService
 
         return $item->mapping_status === $conditions['timestamp_song_mappings.status']
             && (bool) $item->is_manual === $conditions['timestamp_song_mappings.is_manual'];
+    }
+
+    /**
+     * 「楽曲ではない」フィルタを適用（個別マッピングがある場合は常に表示）
+     */
+    private function applyIsNotSongFilter(Builder $query): void
+    {
+        $query->where(function ($q) {
+            $q->whereNotNull('ts_items.song_id')
+                ->orWhereNull('timestamp_song_mappings.id')
+                ->orWhere('timestamp_song_mappings.is_not_song', false);
+        });
+    }
+
+    /**
+     * 個別マッピングまたはテキストマッピングから楽曲情報を組み立てる
+     *
+     * @param  Song|null  $individualSong  個別マッピングの楽曲
+     * @param  object  $item  JOIN結果の行
+     * @param  bool  $includeDuration  duration_msを含めるか
+     */
+    private function buildSongInfo(?Song $individualSong, $item, bool $includeDuration = false): ?array
+    {
+        if ($individualSong) {
+            $info = [
+                'title' => $individualSong->title,
+                'artist' => $individualSong->artist,
+                'spotify_track_id' => ValidationHelper::validateSpotifyTrackId($individualSong->spotify_track_id),
+            ];
+            if ($includeDuration) {
+                $info['duration_ms'] = $individualSong->spotify_data
+                    ? (is_string($individualSong->spotify_data)
+                        ? json_decode($individualSong->spotify_data, true)
+                        : $individualSong->spotify_data)['duration_ms'] ?? null
+                    : null;
+            }
+
+            return $info;
+        }
+
+        if ($item->mapping_id && $item->song_id && $this->isConfirmedMappingRow($item)) {
+            $info = [
+                'title' => $item->song_title,
+                'artist' => $item->song_artist,
+                'spotify_track_id' => ValidationHelper::validateSpotifyTrackId($item->spotify_track_id),
+            ];
+            if ($includeDuration) {
+                $songDurationMs = null;
+                if ($item->spotify_data) {
+                    $spotifyData = is_string($item->spotify_data)
+                        ? json_decode($item->spotify_data, true)
+                        : $item->spotify_data;
+                    $songDurationMs = $spotifyData['duration_ms'] ?? null;
+                }
+                $info['duration_ms'] = $songDurationMs;
+            }
+
+            return $info;
+        }
+
+        return null;
+    }
+
+    /**
+     * 個別マッピングまたはテキストマッピングからmapping応答オブジェクトを組み立てる
+     */
+    private function buildMappingResponse(?Song $individualSong, $item, ?array $songInfo): ?array
+    {
+        if (! $item->mapping_id && ! $individualSong) {
+            return null;
+        }
+
+        return [
+            'song' => $songInfo,
+            'is_not_song' => $item->mapping_id ? (bool) $item->is_not_song : false,
+            'is_manual' => $item->mapping_id ? (bool) $item->is_manual : false,
+        ];
     }
 
     /**

@@ -86,6 +86,7 @@ class AutoLinkService
                 }
             })
             ->whereNull('timestamp_song_mappings.id')
+            ->whereNull('ts_items.song_id')
             ->groupBy('ts_items.normalized_text')
             ->orderByRaw('MIN(ts_items.text) asc')
             ->limit($limit)
