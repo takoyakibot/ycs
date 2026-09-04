@@ -4,7 +4,7 @@ import { CONSTANTS } from './utils/constants.js';
 import { timestampApiService } from './services/TimestampApiService.js';
 import { songApiService } from './services/SongApiService.js';
 import { SimilarSongsDialog } from './components/SimilarSongsDialog.js';
-import { TagEditorDialog } from './components/TagEditorDialog.js';
+import { SongOperationDialog } from './components/SongOperationDialog.js';
 import { Pagination } from '../shared/components/Pagination.js';
 
 // axiosの設定: クロスオリジンリクエストでクッキーを送信
@@ -1375,21 +1375,27 @@ class TimestampNormalization {
             const filterBtn = this.createSongFilterButton(song);
             buttonContainer.appendChild(filterBtn);
 
-            // タグボタン
-            const tagBtn = document.createElement('button');
-            tagBtn.className = 'px-2 py-1 text-xs bg-teal-600 text-white rounded hover:bg-teal-700';
-            tagBtn.textContent = 'タグ';
-            tagBtn.addEventListener('click', async (e) => {
+            // 操作ボタン
+            const opBtn = document.createElement('button');
+            opBtn.className = 'px-2 py-1 text-xs bg-teal-600 text-white rounded hover:bg-teal-700';
+            opBtn.textContent = '操作';
+            opBtn.addEventListener('click', async (e) => {
                 e.stopPropagation();
-                const result = await TagEditorDialog.show(song);
-                song.tags = result.tags;
-                if (onSelectionChange) {
-                    onSelectionChange();
+                const result = await SongOperationDialog.show(song);
+                if (result.action === 'merged' || result.action === 'artist_renamed') {
+                    this.selectedSong = null;
+                    this.loadSongs(document.getElementById('songsSearch')?.value ?? '');
+                    this.loadTimestamps();
                 } else {
-                    this.displaySongs(songs, total);
+                    song.tags = result.tags;
+                    if (onSelectionChange) {
+                        onSelectionChange();
+                    } else {
+                        this.displaySongs(songs, total);
+                    }
                 }
             });
-            buttonContainer.appendChild(tagBtn);
+            buttonContainer.appendChild(opBtn);
 
             // 編集ボタン
             const editBtn = document.createElement('button');
