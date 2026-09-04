@@ -205,7 +205,7 @@ class SongMergeTest extends TestCase
         Song::factory()->create(['title' => 'Unrelated', 'artist' => 'Other']);
 
         $response = $this->actingAs($this->user)
-            ->getJson('/api/songs/search-for-merge?search=' . urlencode('夜に駆ける'));
+            ->getJson('/api/songs/search-for-merge?search='.urlencode('夜に駆ける'));
 
         $response->assertStatus(200);
         $data = $response->json();
@@ -219,7 +219,7 @@ class SongMergeTest extends TestCase
         Song::factory()->create(['title' => 'Other', 'artist' => 'Other']);
 
         $response = $this->actingAs($this->user)
-            ->getJson('/api/songs/search-for-merge?search=' . urlencode('YOASOBI 群青'));
+            ->getJson('/api/songs/search-for-merge?search='.urlencode('YOASOBI 群青'));
 
         $response->assertStatus(200);
         $data = $response->json();

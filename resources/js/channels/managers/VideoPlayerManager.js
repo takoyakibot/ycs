@@ -332,7 +332,8 @@ export class VideoPlayerManager {
     restoreVolume() {
         const saved = sessionStorage.getItem('videoVolume');
         if (saved !== null) {
-            this.volume = parseInt(saved, 10) || 100;
+            const parsed = parseInt(saved, 10);
+            this.volume = Number.isNaN(parsed) ? 100 : parsed;
         }
     }
 
