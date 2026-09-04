@@ -63,6 +63,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                             公開日: ${formatDate(archive.published_at)}
                                         </p>
                                         ${getSubtitleStatusBadges(archive.subtitle_status)}
+                                        ${getDuplicateCommentBadge(archive.duplicate_pair_count, archive.video_id)}
                                     </div>
                                     <div class="flex flex-col">
                                         <div class="flex gap-2">
@@ -187,6 +188,16 @@ document.addEventListener('DOMContentLoaded', function () {
             isProcessing = false;
             toggleButtonDisabled(target, isProcessing);
         };
+
+        // 重複コメントバッジクリック時
+        if (target.classList.contains('duplicate-comment-badge')) {
+            const videoId = target.getAttribute('data-video-id');
+            if (videoId) {
+                toggleDuplicatePanel(videoId, target);
+            }
+            cleanup(target);
+            return;
+        }
 
         // 表示非表示切り替えボタン押下時
         if (target.classList.contains('toggle-display-btn')) {
@@ -556,6 +567,78 @@ function getSubtitleStatusBadges(status) {
     html += '</div>';
 
     return html;
+}
+
+/**
+ * 重複コメントタイムスタンプのバッジを生成
+ */
+function getDuplicateCommentBadge(count, videoId) {
+    if (!count || count <= 0) {
+        return '';
+    }
+    return `<div class="flex flex-wrap gap-1 mt-1">
+        <button class="duplicate-comment-badge inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800 cursor-pointer hover:bg-red-200" data-video-id="${escapeHTML(videoId)}">
+            重複 ${count}件
+        </button>
+    </div>`;
+}
+
+/**
+ * 重複コメント詳細パネルを展開/閉じる
+ */
+async function toggleDuplicatePanel(videoId, badgeButton) {
+    const card = badgeButton.closest('.archive');
+    const existingPanel = card.querySelector('.duplicate-panel');
+    if (existingPanel) {
+        existingPanel.remove();
+        return;
+    }
+
+    try {
+        const response = await axios.get(`/api/manage/archives/${encodeURIComponent(videoId)}/duplicate-comments`);
+        const data = response.data;
+
+        if (!data.duplicate_pairs || data.duplicate_pairs.length === 0) {
+            toast.info('重複するタイムスタンプはありません');
+            return;
+        }
+
+        let panelHtml = `<div class="duplicate-panel mt-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+            <div class="flex justify-between items-center mb-2">
+                <span class="text-sm font-semibold text-red-800 dark:text-red-300">重複コメントタイムスタンプ（${data.total_pairs}ペア）</span>
+                <button class="duplicate-panel-close text-red-500 hover:text-red-700 text-sm">閉じる</button>
+            </div>
+            <div class="space-y-2">`;
+
+        data.duplicate_pairs.forEach(pair => {
+            panelHtml += `
+                <div class="flex flex-col gap-1 p-2 bg-white dark:bg-gray-800 rounded text-sm">
+                    <div class="flex items-center gap-2">
+                        <span class="tabular-nums text-blue-600 font-mono">${escapeHTML(pair.item_a.ts_text || '')}</span>
+                        <span>${escapeHTML(pair.item_a.text || '')}</span>
+                        <span class="text-xs text-gray-400">(${escapeHTML((pair.item_a.comment_id || '').substring(0, 8))}…)</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="tabular-nums text-blue-600 font-mono">${escapeHTML(pair.item_b.ts_text || '')}</span>
+                        <span>${escapeHTML(pair.item_b.text || '')}</span>
+                        <span class="text-xs text-gray-400">(${escapeHTML((pair.item_b.comment_id || '').substring(0, 8))}…)</span>
+                    </div>
+                    <div class="text-xs text-red-600 dark:text-red-400 text-right">差: ${pair.diff_seconds}秒</div>
+                </div>`;
+        });
+
+        panelHtml += '</div></div>';
+
+        const thumbnailSection = card.querySelector('.flex.flex-col.flex-shrink-0');
+        thumbnailSection.insertAdjacentHTML('beforeend', DOMPurify.sanitize(panelHtml));
+
+        card.querySelector('.duplicate-panel-close').addEventListener('click', () => {
+            card.querySelector('.duplicate-panel').remove();
+        });
+    } catch (error) {
+        console.error('重複コメント取得エラー:', error);
+        toast.error('重複コメントの取得に失敗しました');
+    }
 }
 
 function getTsItems(tsItems) {
