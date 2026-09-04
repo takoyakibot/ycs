@@ -84,6 +84,27 @@ class SongTagApiTest extends TestCase
         $response->assertStatus(404);
     }
 
+    public function test_add_tag_marks_review_status_safe(): void
+    {
+        $song = Song::factory()->create(['review_status' => null]);
+
+        $this->actingAs($this->admin)
+            ->postJson("/api/songs/{$song->id}/tags", ['value' => 'テスト']);
+
+        $this->assertEquals('safe', $song->fresh()->review_status);
+    }
+
+    public function test_delete_tag_marks_review_status_safe(): void
+    {
+        $song = Song::factory()->create(['review_status' => null]);
+        $tag = SongTag::factory()->create(['song_id' => $song->id, 'value' => '削除']);
+
+        $this->actingAs($this->admin)
+            ->deleteJson("/api/songs/{$song->id}/tags/{$tag->id}");
+
+        $this->assertEquals('safe', $song->fresh()->review_status);
+    }
+
     public function test_unauthenticated_user_cannot_access(): void
     {
         $song = Song::factory()->create();

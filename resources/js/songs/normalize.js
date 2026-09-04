@@ -4,6 +4,7 @@ import { CONSTANTS } from './utils/constants.js';
 import { timestampApiService } from './services/TimestampApiService.js';
 import { songApiService } from './services/SongApiService.js';
 import { SimilarSongsDialog } from './components/SimilarSongsDialog.js';
+import { TagEditorDialog } from './components/TagEditorDialog.js';
 import { Pagination } from '../shared/components/Pagination.js';
 
 // axiosの設定: クロスオリジンリクエストでクッキーを送信
@@ -1321,7 +1322,10 @@ class TimestampNormalization {
         contentDiv.className = 'flex-1 min-w-0';
 
         const songInfo = document.createElement('div');
-        songInfo.className = 'text-sm truncate';
+        songInfo.className = 'text-sm flex items-center min-w-0';
+
+        const textWrapper = document.createElement('span');
+        textWrapper.className = 'truncate min-w-0';
 
         const titleSpan = document.createElement('span');
         titleSpan.className = 'font-medium';
@@ -1331,9 +1335,22 @@ class TimestampNormalization {
         separatorSpan.className = 'text-gray-500 dark:text-gray-400';
         separatorSpan.textContent = ' / ' + song.artist;
 
-        songInfo.appendChild(titleSpan);
-        songInfo.appendChild(separatorSpan);
+        textWrapper.appendChild(titleSpan);
+        textWrapper.appendChild(separatorSpan);
+        songInfo.appendChild(textWrapper);
         songInfo.title = `${song.title} / ${song.artist}`;
+
+        if (song.tags && song.tags.length > 0) {
+            const tagContainer = document.createElement('span');
+            tagContainer.className = 'inline-flex gap-1 ml-2 overflow-hidden flex-shrink-0';
+            song.tags.forEach(tag => {
+                const badge = document.createElement('span');
+                badge.className = 'inline-block px-1.5 py-0.5 text-[10px] rounded bg-blue-600 text-white whitespace-nowrap';
+                badge.textContent = tag.value;
+                tagContainer.appendChild(badge);
+            });
+            songInfo.appendChild(tagContainer);
+        }
 
         contentDiv.appendChild(songInfo);
 
@@ -1357,6 +1374,22 @@ class TimestampNormalization {
             // 絞り込みボタン
             const filterBtn = this.createSongFilterButton(song);
             buttonContainer.appendChild(filterBtn);
+
+            // タグボタン
+            const tagBtn = document.createElement('button');
+            tagBtn.className = 'px-2 py-1 text-xs bg-teal-600 text-white rounded hover:bg-teal-700';
+            tagBtn.textContent = 'タグ';
+            tagBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const result = await TagEditorDialog.show(song);
+                song.tags = result.tags;
+                if (onSelectionChange) {
+                    onSelectionChange();
+                } else {
+                    this.displaySongs(songs, total);
+                }
+            });
+            buttonContainer.appendChild(tagBtn);
 
             // 編集ボタン
             const editBtn = document.createElement('button');

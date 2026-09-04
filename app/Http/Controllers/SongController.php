@@ -482,6 +482,7 @@ class SongController extends Controller
         $songs = $query->orderBy('artist')
             ->orderBy('title')
             ->limit(self::SONGS_PER_PAGE)
+            ->with(['tags' => fn ($q) => $q->orderBy('created_at')])
             ->get();
 
         return response()->json([
@@ -1109,6 +1110,8 @@ class SongController extends Controller
             'value' => trim($validated['value']),
         ]);
 
+        $song->update(['review_status' => 'safe']);
+
         return response()->json([
             'tag' => $tag,
             'message' => 'タグを追加しました。',
@@ -1127,6 +1130,8 @@ class SongController extends Controller
         }
 
         $tag->delete();
+
+        $tag->song->update(['review_status' => 'safe']);
 
         return response()->json(['message' => 'タグを削除しました。']);
     }

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Archive;
 use App\Models\Channel;
 use App\Models\Song;
+use App\Models\SongTag;
 use App\Models\TimestampSongMapping;
 use App\Models\TsItem;
 use App\Models\User;
@@ -661,6 +662,20 @@ class SongControllerTest extends TestCase
 
         $response->assertOk();
         $this->assertEquals(0, $response->json('total'));
+    }
+
+    public function test_fetch_songs_includes_tags(): void
+    {
+        $song = Song::factory()->create();
+        SongTag::factory()->create(['song_id' => $song->id, 'value' => 'タグX']);
+        SongTag::factory()->create(['song_id' => $song->id, 'value' => 'タグY']);
+
+        $response = $this->actingAs($this->user)->getJson(route('songs.fetchSongs'));
+
+        $response->assertOk();
+        $data = $response->json('data.0');
+        $this->assertArrayHasKey('tags', $data);
+        $this->assertCount(2, $data['tags']);
     }
 
     /**
