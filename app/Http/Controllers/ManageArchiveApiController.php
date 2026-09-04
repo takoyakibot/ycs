@@ -15,6 +15,7 @@ use App\Models\SubtitleFingerprint;
 use App\Models\TimestampSongMapping;
 use App\Models\TsItem;
 use App\Models\VideoSubtitle;
+use App\Services\DuplicateCommentDetectionService;
 use App\Services\GetArchiveService;
 use App\Services\RefreshArchiveService;
 use Illuminate\Http\Request;
@@ -30,12 +31,16 @@ class ManageArchiveApiController extends Controller
 
     protected $getArchiveService;
 
+    protected $duplicateDetectionService;
+
     public function __construct(
         RefreshArchiveService $refreshArchiveService,
-        GetArchiveService $getArchiveService
+        GetArchiveService $getArchiveService,
+        DuplicateCommentDetectionService $duplicateDetectionService
     ) {
         $this->refreshArchiveService = $refreshArchiveService;
         $this->getArchiveService = $getArchiveService;
+        $this->duplicateDetectionService = $duplicateDetectionService;
     }
 
     public function fetchArchives(string $id, Request $request)
@@ -60,6 +65,9 @@ class ManageArchiveApiController extends Controller
 
         // 字幕・フィンガープリントの状況を付加
         $this->appendSubtitleStatus($archives);
+
+        // 重複コメントタイムスタンプの件数を付加
+        $this->appendDuplicateCommentStatus($archives);
 
         return response()->json($archives);
     }
@@ -136,6 +144,64 @@ class ManageArchiveApiController extends Controller
                 $tsItem->mapping_status = MappingStatusHelper::get($mapping);
             }
         }
+    }
+
+    /**
+     * アーカイブ一覧に重複コメントタイムスタンプの件数を付加
+     */
+    private function appendDuplicateCommentStatus($archives): void
+    {
+        $videoIds = collect($archives->items())->pluck('video_id')->filter()->unique()->values()->toArray();
+
+        if (empty($videoIds)) {
+            return;
+        }
+
+        $counts = $this->duplicateDetectionService->countByVideoIds($videoIds);
+
+        foreach ($archives->items() as $archive) {
+            $archive->duplicate_pair_count = $counts[$archive->video_id] ?? 0;
+        }
+    }
+
+    /**
+     * 動画単位の重複コメントタイムスタンプ詳細を取得
+     */
+    public function detectDuplicateComments(string $videoId)
+    {
+        $archive = Archive::where('video_id', $videoId)->first();
+        if (! $archive) {
+            abort(404, 'アーカイブが見つかりません');
+        }
+
+        $channel = Channel::where('channel_id', $archive->channel_id)->first();
+        if (! $channel || ! $this->canAccessChannel($channel)) {
+            abort(403, 'このチャンネルへのアクセス権限がありません');
+        }
+
+        $pairs = $this->duplicateDetectionService->detect($videoId);
+
+        return response()->json([
+            'video_id' => $videoId,
+            'duplicate_pairs' => collect($pairs)->map(fn ($pair) => [
+                'item_a' => [
+                    'id' => $pair->id_a,
+                    'ts_text' => $pair->ts_text_a,
+                    'ts_num' => $pair->ts_num_a,
+                    'text' => $pair->text_a,
+                    'comment_id' => $pair->comment_id_a,
+                ],
+                'item_b' => [
+                    'id' => $pair->id_b,
+                    'ts_text' => $pair->ts_text_b,
+                    'ts_num' => $pair->ts_num_b,
+                    'text' => $pair->text_b,
+                    'comment_id' => $pair->comment_id_b,
+                ],
+                'diff_seconds' => abs($pair->ts_num_a - $pair->ts_num_b),
+            ])->values(),
+            'total_pairs' => count($pairs),
+        ]);
     }
 
     public function addArchives(Request $request)

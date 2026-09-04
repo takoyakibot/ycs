@@ -80,6 +80,7 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::patch('api/manage/archives/fetch-comments', [ManageArchiveApiController::class, 'fetchComments'])->name('manage.fetchComments')
         ->middleware('throttle:10,1'); // 1分間に10回まで（YouTube API呼び出し）
     Route::patch('api/manage/archives/edit-timestamps', [ManageArchiveApiController::class, 'editTimestamps'])->name('manage.editTimestamps');
+    Route::get('api/manage/archives/{videoId}/duplicate-comments', [ManageArchiveApiController::class, 'detectDuplicateComments'])->name('manage.detectDuplicateComments');
 
     // チャンネル設定API（除外ワード管理・カバー曲）
     Route::get('api/manage/channels/{id}/excluded-words', [ManageSettingsApiController::class, 'fetchExcludedWords'])->name('manage.fetchExcludedWords');
