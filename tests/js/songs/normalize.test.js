@@ -341,7 +341,7 @@ describe('TimestampNormalization', () => {
                 is_manual: true,
             });
             expect(el.textContent).toContain('...');
-            expect(el.textContent.length).toBeLessThanOrEqual(34); // 30 + "..."
+            expect(el.textContent).toHaveLength(33); // MAX_STATUS_LENGTH(30) + "..."
         });
     });
 
