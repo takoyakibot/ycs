@@ -12,9 +12,15 @@ use Illuminate\Support\Facades\DB;
 class SongCleansingService
 {
     /**
-     * 同名異表記グループの取得件数上限
+     * 同名異表記グループの表示件数上限
      */
     private const GROUP_LIMIT = 50;
+
+    /**
+     * フィルタ前の取得件数上限。レビュー済みグループがこれを超えて上位に集中すると
+     * 表示件数が痩せる問題が再発しうる（根本解決にはSQL側でJOIN除外が必要）
+     */
+    private const PRE_FILTER_LIMIT = 500;
 
     public function __construct(private SongMergeService $songMergeService) {}
 
@@ -144,6 +150,7 @@ class SongCleansingService
         $titleQuery = Song::selectRaw('normalized_title, COUNT(DISTINCT normalized_artist) as artist_count')
             ->groupBy('normalized_title')
             ->having('artist_count', '>', 1)
+            ->orderByDesc('artist_count')
             ->orderBy('normalized_title');
 
         if ($search !== '') {
@@ -151,7 +158,7 @@ class SongCleansingService
             $titleQuery->where('title', 'LIKE', "%{$escaped}%");
         }
 
-        $normalizedTitles = $titleQuery->limit(self::GROUP_LIMIT)->pluck('normalized_title');
+        $normalizedTitles = $titleQuery->limit(self::PRE_FILTER_LIMIT)->pluck('normalized_title');
 
         if ($normalizedTitles->isEmpty()) {
             return [];
@@ -169,22 +176,32 @@ class SongCleansingService
             ->groupBy('song_id')
             ->pluck('count', 'song_id');
 
-        $groups = $songs->groupBy('normalized_title')->map(function ($songsInGroup, $normalizedTitle) use ($tsItemCounts) {
-            $sortedIds = $songsInGroup->pluck('id')->sort()->values()->all();
+        $grouped = $songs->groupBy('normalized_title');
 
-            return [
-                'normalized_title' => $normalizedTitle,
-                'song_ids_hash' => SongGroupReview::hashSongIds($sortedIds),
-                'songs' => $songsInGroup->map(fn (Song $song) => [
-                    'id' => $song->id,
-                    'title' => $song->title,
-                    'artist' => $song->artist,
-                    'spotify_track_id' => $song->spotify_track_id,
-                    'mappings_count' => $song->mappings_count,
-                    'ts_items_count' => $tsItemCounts->get($song->id, 0),
-                ])->values(),
-            ];
-        })->values();
+        $groups = $normalizedTitles
+            ->map(function ($normalizedTitle) use ($grouped, $tsItemCounts) {
+                $songsInGroup = $grouped->get($normalizedTitle);
+                if (! $songsInGroup) {
+                    return null;
+                }
+
+                $sortedIds = $songsInGroup->pluck('id')->sort()->values()->all();
+
+                return [
+                    'normalized_title' => $normalizedTitle,
+                    'song_ids_hash' => SongGroupReview::hashSongIds($sortedIds),
+                    'songs' => $songsInGroup->map(fn (Song $song) => [
+                        'id' => $song->id,
+                        'title' => $song->title,
+                        'artist' => $song->artist,
+                        'spotify_track_id' => $song->spotify_track_id,
+                        'mappings_count' => $song->mappings_count,
+                        'ts_items_count' => $tsItemCounts->get($song->id, 0),
+                    ])->values(),
+                ];
+            })
+            ->filter()
+            ->values();
 
         $hashes = $groups->pluck('song_ids_hash')->toArray();
         $reviewedDecisions = SongGroupReview::whereIn('song_ids_hash', $hashes)
@@ -196,7 +213,7 @@ class SongCleansingService
             return $filter === 'pending'
                 ? $decision === SongGroupReview::DECISION_PENDING
                 : $decision === null;
-        })->values()->toArray();
+        })->take(self::GROUP_LIMIT)->values()->toArray();
     }
 
     /**
