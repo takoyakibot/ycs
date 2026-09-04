@@ -2335,6 +2335,7 @@ class TimestampNormalization {
         document.getElementById('editSongDurationSeconds').value = song.duration_ms ? Math.round(song.duration_ms / 1000) : '';
         this.updateDurationDisplay(song.duration_ms);
         document.getElementById('editSongModal').classList.remove('hidden');
+        this.loadNotationCandidates(song.id);
     }
 
     /**
@@ -2345,6 +2346,121 @@ class TimestampNormalization {
         document.getElementById('editSongModal').classList.add('hidden');
         document.getElementById('editSongForm').reset();
         document.getElementById('editSongDurationFormatted').textContent = '';
+        this.clearNotationCandidates();
+    }
+
+    loadNotationCandidates(songId) {
+        const listEl = document.getElementById('notationCandidatesList');
+        const toggleBtn = document.getElementById('notationToggleBtn');
+        const toggleIcon = document.getElementById('notationToggleIcon');
+
+        // リセット
+        listEl.innerHTML = '';
+        listEl.classList.add('hidden');
+        toggleIcon.classList.remove('rotate-90');
+
+        // ローディング表示を準備
+        const loadingEl = document.createElement('div');
+        loadingEl.className = 'p-3 text-sm text-gray-500 dark:text-gray-400';
+        loadingEl.textContent = '読み込み中...';
+
+        // トグル動作
+        const toggleHandler = () => {
+            const isHidden = listEl.classList.toggle('hidden');
+            toggleIcon.classList.toggle('rotate-90', !isHidden);
+        };
+
+        // 既存ハンドラを剥がして再設定
+        const newBtn = toggleBtn.cloneNode(true);
+        toggleBtn.parentNode.replaceChild(newBtn, toggleBtn);
+        newBtn.addEventListener('click', toggleHandler);
+
+        songApiService.fetchNotations(songId)
+            .then(data => {
+                listEl.innerHTML = '';
+                if (!data.notations || data.notations.length === 0) {
+                    const emptyEl = document.createElement('div');
+                    emptyEl.className = 'p-3 text-sm text-gray-500 dark:text-gray-400';
+                    emptyEl.textContent = '候補なし';
+                    listEl.appendChild(emptyEl);
+                } else {
+                    data.notations.forEach(notation => {
+                        const row = document.createElement('div');
+                        row.className = 'flex items-center justify-between px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700 last:border-b-0';
+
+                        const textWrapper = document.createElement('div');
+                        textWrapper.className = 'flex items-center gap-2 min-w-0 flex-1';
+
+                        const freqEl = document.createElement('span');
+                        freqEl.className = 'text-xs text-gray-400 tabular-nums flex-shrink-0 w-8 text-right';
+                        freqEl.textContent = `${notation.frequency}回`;
+
+                        const textEl = document.createElement('span');
+                        textEl.className = 'text-sm text-gray-800 dark:text-gray-200 truncate';
+                        textEl.textContent = notation.text;
+                        textEl.title = notation.text;
+
+                        textWrapper.appendChild(freqEl);
+                        textWrapper.appendChild(textEl);
+
+                        const applyBtn = document.createElement('button');
+                        applyBtn.type = 'button';
+                        applyBtn.className = 'text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 flex-shrink-0 ml-2';
+                        applyBtn.textContent = '適用';
+                        applyBtn.addEventListener('click', () => {
+                            this.applyNotation(notation.text);
+                        });
+
+                        row.appendChild(textWrapper);
+                        row.appendChild(applyBtn);
+                        listEl.appendChild(row);
+                    });
+
+                    // 除外件数の表示
+                    if (data.excluded_count > 0) {
+                        const infoEl = document.createElement('div');
+                        infoEl.className = 'px-3 py-2 text-xs text-gray-400 dark:text-gray-500';
+                        infoEl.textContent = `${data.total_timestamps}件中 ${data.excluded_count}件はタイトルのみのため候補から除外`;
+                        listEl.appendChild(infoEl);
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('表記候補の取得に失敗:', error);
+                listEl.innerHTML = '';
+                const errorEl = document.createElement('div');
+                errorEl.className = 'p-3 text-sm text-red-500';
+                errorEl.textContent = '表記候補の取得に失敗しました';
+                listEl.appendChild(errorEl);
+            });
+    }
+
+    clearNotationCandidates() {
+        const listEl = document.getElementById('notationCandidatesList');
+        if (listEl) {
+            listEl.innerHTML = '';
+            listEl.classList.add('hidden');
+        }
+        const toggleIcon = document.getElementById('notationToggleIcon');
+        if (toggleIcon) {
+            toggleIcon.classList.remove('rotate-90');
+        }
+    }
+
+    applyNotation(text) {
+        // SEPARATOR_PATTERN と同じ: /[\/／\-−－:：|｜]/u
+        const separatorPattern = /[\/／\-−－:：|｜]/u;
+        const match = text.match(separatorPattern);
+        if (match) {
+            const idx = match.index;
+            const title = text.substring(0, idx).trim();
+            const artist = text.substring(idx + match[0].length).trim();
+            document.getElementById('editSongTitle').value = title;
+            document.getElementById('editSongArtist').value = artist;
+        } else {
+            // 区切り文字なしの場合はタイトルとして全体をセット
+            document.getElementById('editSongTitle').value = text.trim();
+        }
     }
 
     /**

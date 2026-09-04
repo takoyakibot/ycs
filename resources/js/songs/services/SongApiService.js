@@ -118,6 +118,11 @@ export class SongApiService {
         const response = await axios.delete(`/api/songs/${songId}/tags/${tagId}`);
         return response.data;
     }
+
+    async fetchNotations(songId) {
+        const response = await axios.get(`/api/songs/${songId}/notations`);
+        return response.data;
+    }
 }
 
 // シングルトンインスタンスをエクスポート

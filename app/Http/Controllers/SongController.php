@@ -18,6 +18,7 @@ use App\Services\AutoLinkService;
 use App\Services\SongCleansingService;
 use App\Services\SongMappingService;
 use App\Services\SongMergeService;
+use App\Services\SongNotationService;
 use App\Services\SongSearchService;
 use App\Services\SpotifyService;
 use App\Services\VideoUrlService;
@@ -61,6 +62,8 @@ class SongController extends Controller
 
     protected VideoUrlService $videoUrlService;
 
+    protected SongNotationService $songNotationService;
+
     public function __construct(
         SongSearchService $songSearchService,
         SongMappingService $songMappingService,
@@ -68,7 +71,8 @@ class SongController extends Controller
         SongCleansingService $songCleansingService,
         SpotifyService $spotifyService,
         YouTubeApiService $youtubeApiService,
-        VideoUrlService $videoUrlService
+        VideoUrlService $videoUrlService,
+        SongNotationService $songNotationService
     ) {
         $this->songSearchService = $songSearchService;
         $this->songMappingService = $songMappingService;
@@ -77,6 +81,7 @@ class SongController extends Controller
         $this->spotifyService = $spotifyService;
         $this->youtubeApiService = $youtubeApiService;
         $this->videoUrlService = $videoUrlService;
+        $this->songNotationService = $songNotationService;
     }
 
     /**
@@ -1141,5 +1146,12 @@ class SongController extends Controller
         $tag->song->update(['review_status' => 'safe']);
 
         return response()->json(['message' => 'タグを削除しました。']);
+    }
+
+    public function notations(string $id): JsonResponse
+    {
+        $result = $this->songNotationService->getNotationCandidates($id);
+
+        return response()->json($result);
     }
 }
