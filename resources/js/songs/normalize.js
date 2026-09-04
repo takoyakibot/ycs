@@ -2422,6 +2422,7 @@ class TimestampNormalization {
                 }
             })
             .catch(error => {
+                if (!this.editingSong || this.editingSong.id !== songId) return;
                 console.error('表記候補の取得に失敗:', error);
                 listEl.innerHTML = '';
                 const errorEl = document.createElement('div');
