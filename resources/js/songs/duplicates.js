@@ -41,6 +41,9 @@ function registerDuplicatesComponent() {
                 this.groupSelectedIds = {};
                 this.groupTargetId = {};
                 this.activeGroupHash = null;
+                for (const group of this.groups) {
+                    this.groupSelectedIds[group.song_ids_hash] = group.songs.map(s => s.id);
+                }
             } catch (e) {
                 this.message = e.message;
                 this.messageType = 'error';

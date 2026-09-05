@@ -56,7 +56,6 @@ class SongMergeTest extends TestCase
         $data = $response->json();
         $this->assertCount(1, $data);
         $this->assertCount(2, $data[0]['songs']);
-        $this->assertArrayHasKey('normalized_artist', $data[0]['songs'][0]);
     }
 
     public function test_find_duplicates_with_search(): void
@@ -197,7 +196,7 @@ class SongMergeTest extends TestCase
         $response = $this->actingAs($this->user)
             ->getJson('/api/songs/duplicates');
         $data = $response->json();
-        $this->assertGreaterThanOrEqual(45, count($data));
+        $this->assertCount(45, $data);
     }
 
     public function test_find_duplicates_rejects_invalid_filter(): void

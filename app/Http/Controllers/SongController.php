@@ -112,7 +112,7 @@ class SongController extends Controller
             'filter' => 'nullable|string|in:active,pending',
         ]);
 
-        $groups = $this->songMergeService->findDuplicates(
+        $groups = $this->songCleansingService->findDuplicates(
             $validated['search'] ?? '',
             $validated['filter'] ?? 'active'
         );
