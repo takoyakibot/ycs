@@ -72,7 +72,7 @@
                                                 :disabled="!canMergeGroup(group.song_ids_hash) || groupMerging[group.song_ids_hash]"
                                                 class="px-3 py-1 text-xs rounded-md bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed">
                                             <span x-show="!groupMerging[group.song_ids_hash]">マージ</span>
-                                            <span x-show="groupMerging[group.song_ids_hash]">処理中...</span>
+                                            <span x-show="groupMerging[group.song_ids_hash]">マージ中...</span>
                                         </button>
                                         <button @click="reviewGroup(group, 'pending')"
                                                 title="判断を保留し、「保留中」フィルターで後から見直せます"

@@ -160,12 +160,7 @@ class SongCleansingService
 
         $normalizedTitles = $titleQuery->limit(self::PRE_FILTER_LIMIT)->pluck('normalized_title');
 
-        return $this->buildGroupsFromTitles($normalizedTitles, $filter, fn (Song $song, $tsItemCounts) => [
-            'id' => $song->id,
-            'title' => $song->title,
-            'artist' => $song->artist,
-            'ts_items_count' => $tsItemCounts->get($song->id, 0),
-        ]);
+        return $this->buildGroupsFromTitles($normalizedTitles, $filter);
     }
 
     /**
@@ -190,15 +185,10 @@ class SongCleansingService
 
         $normalizedTitles = $titleQuery->limit(self::PRE_FILTER_LIMIT)->pluck('normalized_title');
 
-        return $this->buildGroupsFromTitles($normalizedTitles, $filter, fn (Song $song, $tsItemCounts) => [
-            'id' => $song->id,
-            'title' => $song->title,
-            'artist' => $song->artist,
-            'ts_items_count' => $tsItemCounts->get($song->id, 0),
-        ]);
+        return $this->buildGroupsFromTitles($normalizedTitles, $filter);
     }
 
-    private function buildGroupsFromTitles(\Illuminate\Support\Collection $normalizedTitles, string $filter, callable $songMapper): array
+    private function buildGroupsFromTitles(\Illuminate\Support\Collection $normalizedTitles, string $filter): array
     {
         if ($normalizedTitles->isEmpty()) {
             return [];
@@ -214,7 +204,7 @@ class SongCleansingService
         $grouped = $songs->groupBy('normalized_title');
 
         $groups = $normalizedTitles
-            ->map(function ($normalizedTitle) use ($grouped, $tsItemCounts, $songMapper) {
+            ->map(function ($normalizedTitle) use ($grouped, $tsItemCounts) {
                 $songsInGroup = $grouped->get($normalizedTitle);
                 if (! $songsInGroup) {
                     return null;
@@ -225,7 +215,12 @@ class SongCleansingService
                 return [
                     'normalized_title' => $normalizedTitle,
                     'song_ids_hash' => SongGroupReview::hashSongIds($sortedIds),
-                    'songs' => $songsInGroup->map(fn (Song $song) => $songMapper($song, $tsItemCounts))->values(),
+                    'songs' => $songsInGroup->map(fn (Song $song) => [
+                        'id' => $song->id,
+                        'title' => $song->title,
+                        'artist' => $song->artist,
+                        'ts_items_count' => $tsItemCounts->get($song->id, 0),
+                    ])->values(),
                 ];
             })
             ->filter()
