@@ -335,8 +335,8 @@ export class SongOperationDialog {
                         const info = document.createElement('div');
                         info.className = 'flex-1 min-w-0 truncate';
                         info.innerHTML = `<span class="font-medium">${escapeHtml(s.title)}</span> <span class="text-gray-500 dark:text-gray-400">/ ${escapeHtml(s.artist)}</span>`;
-                        if (s.mappings_count !== undefined) {
-                            info.innerHTML += ` <span class="text-xs text-gray-400">(MP:${escapeHtml(String(s.mappings_count))} TS:${escapeHtml(String(s.ts_items_count))})</span>`;
+                        if (s.ts_items_count !== undefined) {
+                            info.innerHTML += ` <span class="text-xs text-gray-400">(TS:${escapeHtml(String(s.ts_items_count))})</span>`;
                         }
 
                         const isTarget = targetId === s.id;

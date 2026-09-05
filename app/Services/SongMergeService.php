@@ -65,7 +65,6 @@ class SongMergeService
         }
 
         $songs = $query
-            ->withCount('mappings')
             ->orderBy('title')
             ->limit(100)
             ->get();
@@ -93,8 +92,6 @@ class SongMergeService
             'id' => $song->id,
             'title' => $song->title,
             'artist' => $song->artist,
-            'spotify_track_id' => $song->spotify_track_id,
-            'mappings_count' => $song->mappings_count,
             'ts_items_count' => $tsItemCounts->get($song->id, 0),
             'distinct_review' => $distinctSongIds->contains($song->id),
         ])->toArray();

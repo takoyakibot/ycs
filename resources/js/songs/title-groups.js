@@ -81,7 +81,7 @@ function registerTitleGroupsComponent() {
             const target = group.songs.find(s => s.id === this.targetId[groupKey]);
             const sources = this.selectedIds[groupKey].filter(id => id !== this.targetId[groupKey]);
 
-            if (!confirm(`「${target.artist || '(アーティスト未設定)'}」に統合します。${sources.length}件の楽曲が削除されます。よろしいですか？`)) {
+            if (!confirm(`「${target.title} / ${target.artist || '(アーティスト未設定)'}」に統合します。${sources.length}件の楽曲が削除されます。よろしいですか？`)) {
                 return;
             }
 
