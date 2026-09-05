@@ -148,6 +148,8 @@ class SongCleansingService
     public function findTitleGroups(string $search = '', string $filter = 'active'): array
     {
         $titleQuery = Song::selectRaw('normalized_title, COUNT(DISTINCT normalized_artist) as artist_count')
+            ->whereNotNull('normalized_title')
+            ->where('normalized_title', '!=', '')
             ->groupBy('normalized_title')
             ->having('artist_count', '>', 1)
             ->orderByDesc('artist_count')
@@ -173,6 +175,7 @@ class SongCleansingService
     {
         $titleQuery = Song::selectRaw('normalized_title, COUNT(*) as count')
             ->whereNotNull('normalized_title')
+            ->where('normalized_title', '!=', '')
             ->groupBy('normalized_title')
             ->having('count', '>', 1)
             ->orderBy('count', 'desc')
