@@ -71,10 +71,12 @@
                                             <span x-show="merging[groupKey(group)]">マージ中...</span>
                                         </button>
                                         <button @click="reviewGroup(group, 'pending')"
+                                                title="判断を保留し、「保留中」フィルターで後から見直せます"
                                                 class="px-3 py-1 text-xs rounded-md bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">
                                             保留
                                         </button>
                                         <button @click="reviewGroup(group, 'distinct')"
+                                                title="別の曲として記録し、今後このグループを候補に表示しません"
                                                 class="px-3 py-1 text-xs rounded-md bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">
                                             別の曲
                                         </button>
@@ -97,12 +99,18 @@
                                             <div class="flex-1 min-w-0">
                                                 <div class="text-sm font-medium truncate" x-text="song.title"></div>
                                                 <div class="text-xs text-gray-500 dark:text-gray-400 truncate" x-text="song.artist || '(アーティスト未設定)'"></div>
-                                                <div class="flex gap-2 mt-0.5 text-xs text-gray-400 dark:text-gray-500">
-                                                    <span>MP: <span x-text="song.mappings_count"></span></span>
-                                                    <span>TS: <span x-text="song.ts_items_count"></span></span>
-                                                    <template x-if="song.spotify_track_id">
-                                                        <span class="text-green-600">Spotify</span>
-                                                    </template>
+                                                <div class="flex items-center gap-2 mt-0.5 text-xs text-gray-400 dark:text-gray-500">
+                                                    <span><span x-text="song.ts_items_count"></span>回歌唱</span>
+                                                    <a :href="'https://www.youtube.com/results?search_query=' + encodeURIComponent(song.title + ' ' + (song.artist || ''))"
+                                                       target="_blank"
+                                                       rel="noopener noreferrer"
+                                                       class="text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300"
+                                                       @click.stop
+                                                       title="YouTubeで検索">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 inline" viewBox="0 0 24 24" fill="currentColor">
+                                                            <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                                                        </svg>
+                                                    </a>
                                                 </div>
                                             </div>
 
