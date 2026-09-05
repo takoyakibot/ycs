@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Archive;
 use App\Models\Channel;
 use App\Models\Song;
+use App\Models\SongGroupReview;
 use App\Models\SongTag;
 use App\Models\TimestampDecomposition;
 use App\Models\TimestampSongMapping;
@@ -30,12 +31,23 @@ class SongMergeTest extends TestCase
 
     public function test_find_duplicates_returns_groups(): void
     {
-        // 同じnormalized_titleを持つ2曲を作成
         Song::factory()->create(['title' => 'Test Song', 'artist' => 'Artist A']);
         Song::factory()->create(['title' => 'test song', 'artist' => 'artist a']);
-
-        // 別の曲（重複なし）
         Song::factory()->create(['title' => 'Unique Song', 'artist' => 'Artist B']);
+
+        $response = $this->actingAs($this->user)
+            ->getJson('/api/songs/duplicates');
+
+        $response->assertStatus(200);
+        $data = $response->json();
+        $this->assertCount(1, $data);
+        $this->assertCount(2, $data[0]['songs']);
+    }
+
+    public function test_find_duplicates_groups_by_title_only(): void
+    {
+        Song::factory()->create(['title' => 'Lemon', 'artist' => '米津玄師']);
+        Song::factory()->create(['title' => 'LEMON', 'artist' => 'Kenshi Yonezu']);
 
         $response = $this->actingAs($this->user)
             ->getJson('/api/songs/duplicates');
@@ -61,12 +73,145 @@ class SongMergeTest extends TestCase
         $this->assertCount(1, $data);
     }
 
+    public function test_find_duplicates_excludes_distinct_groups(): void
+    {
+        $song1 = Song::factory()->create(['title' => 'Drops', 'artist' => '']);
+        $song2 = Song::factory()->create(['title' => 'Drops', 'artist' => '坂本真綾']);
+
+        $sortedIds = [$song1->id, $song2->id];
+        sort($sortedIds);
+        SongGroupReview::create([
+            'normalized_title' => 'drops',
+            'song_ids_hash' => SongGroupReview::hashSongIds($sortedIds),
+            'song_ids' => $sortedIds,
+            'decision' => SongGroupReview::DECISION_DISTINCT,
+            'created_by' => $this->user->id,
+        ]);
+
+        $response = $this->actingAs($this->user)
+            ->getJson('/api/songs/duplicates');
+
+        $response->assertStatus(200);
+        $data = $response->json();
+        $this->assertCount(0, $data);
+    }
+
+    public function test_find_duplicates_filter_pending(): void
+    {
+        $song1 = Song::factory()->create(['title' => 'Song A', 'artist' => 'Artist 1']);
+        $song2 = Song::factory()->create(['title' => 'song a', 'artist' => 'Artist 2']);
+        Song::factory()->create(['title' => 'Song B', 'artist' => 'Artist 3']);
+        Song::factory()->create(['title' => 'song b', 'artist' => 'Artist 4']);
+
+        $sortedIds = [$song1->id, $song2->id];
+        sort($sortedIds);
+        SongGroupReview::create([
+            'normalized_title' => 'song a',
+            'song_ids_hash' => SongGroupReview::hashSongIds($sortedIds),
+            'song_ids' => $sortedIds,
+            'decision' => SongGroupReview::DECISION_PENDING,
+            'created_by' => $this->user->id,
+        ]);
+
+        $response = $this->actingAs($this->user)
+            ->getJson('/api/songs/duplicates?filter=active');
+
+        $response->assertStatus(200);
+        $data = $response->json();
+        $this->assertCount(1, $data);
+        $this->assertEquals('song b', $data[0]['normalized_title']);
+
+        $response = $this->actingAs($this->user)
+            ->getJson('/api/songs/duplicates?filter=pending');
+
+        $response->assertStatus(200);
+        $data = $response->json();
+        $this->assertCount(1, $data);
+        $this->assertEquals('song a', $data[0]['normalized_title']);
+    }
+
+    public function test_find_duplicates_includes_song_ids_hash(): void
+    {
+        Song::factory()->create(['title' => 'Test Song', 'artist' => 'A']);
+        Song::factory()->create(['title' => 'test song', 'artist' => 'B']);
+
+        $response = $this->actingAs($this->user)
+            ->getJson('/api/songs/duplicates');
+
+        $response->assertStatus(200);
+        $data = $response->json();
+        $this->assertArrayHasKey('song_ids_hash', $data[0]);
+        $this->assertNotEmpty($data[0]['song_ids_hash']);
+    }
+
+    public function test_find_duplicates_preserves_count_desc_order(): void
+    {
+        Song::factory()->create(['title' => 'AAA', 'artist' => 'Alpha']);
+        Song::factory()->create(['title' => 'aaa', 'artist' => 'Aleph']);
+
+        Song::factory()->create(['title' => 'ZZZ', 'artist' => 'Zebra']);
+        Song::factory()->create(['title' => 'zzz', 'artist' => 'Zulu']);
+        Song::factory()->create(['title' => 'ZZZ', 'artist' => 'Zone']);
+
+        $response = $this->actingAs($this->user)
+            ->getJson('/api/songs/duplicates');
+
+        $response->assertStatus(200);
+        $data = $response->json();
+        $this->assertCount(2, $data);
+        $this->assertEquals('zzz', $data[0]['normalized_title']);
+        $this->assertEquals('aaa', $data[1]['normalized_title']);
+    }
+
+    public function test_find_duplicates_shows_lower_ranked_groups_after_review(): void
+    {
+        // 55グループ作成（各2曲）
+        for ($i = 1; $i <= 55; $i++) {
+            $title = sprintf('Song %03d', $i);
+            Song::factory()->create(['title' => $title, 'artist' => 'Artist A']);
+            Song::factory()->create(['title' => strtolower($title), 'artist' => 'Artist B']);
+        }
+
+        // 初回: 50件返る
+        $response = $this->actingAs($this->user)
+            ->getJson('/api/songs/duplicates');
+        $data = $response->json();
+        $this->assertCount(50, $data);
+
+        // 10件をdistinctにする
+        for ($i = 0; $i < 10; $i++) {
+            $group = $data[$i];
+            $songIds = array_column($group['songs'], 'id');
+            sort($songIds);
+            SongGroupReview::create([
+                'normalized_title' => $group['normalized_title'],
+                'song_ids_hash' => SongGroupReview::hashSongIds($songIds),
+                'song_ids' => $songIds,
+                'decision' => SongGroupReview::DECISION_DISTINCT,
+                'created_by' => $this->user->id,
+            ]);
+        }
+
+        // 2回目: 依然50件返る（51-55番目が繰り上がる）
+        $response = $this->actingAs($this->user)
+            ->getJson('/api/songs/duplicates');
+        $data = $response->json();
+        $this->assertCount(45, $data);
+    }
+
+    public function test_find_duplicates_rejects_invalid_filter(): void
+    {
+        $response = $this->actingAs($this->user)
+            ->getJson('/api/songs/duplicates?filter=invalid');
+
+        $response->assertStatus(422);
+    }
+
     public function test_merge_songs_happy_path(): void
     {
         $targetSong = Song::factory()->create(['title' => 'Test Song', 'artist' => 'Artist']);
         $sourceSong = Song::factory()->create(['title' => 'test song', 'artist' => 'artist']);
 
-        // sourceSongにマッピングを紐付け
         TimestampSongMapping::factory()
             ->withSong($sourceSong)
             ->withText('test text 1')
@@ -76,7 +221,6 @@ class SongMergeTest extends TestCase
             ->withText('test text 2')
             ->create();
 
-        // sourceSongに個別ts_itemを紐付け
         $channel = Channel::factory()->create();
         $archive = Archive::factory()->create(['channel_id' => $channel->channel_id]);
         TsItem::factory()->create([
@@ -96,16 +240,9 @@ class SongMergeTest extends TestCase
             'affected_ts_items' => 1,
         ]);
 
-        // sourceSongが削除されていること
         $this->assertDatabaseMissing('songs', ['id' => $sourceSong->id]);
-
-        // マッピングがtargetSongに移行されていること
         $this->assertEquals(2, TimestampSongMapping::where('song_id', $targetSong->id)->count());
-
-        // ts_itemがtargetSongに移行されていること
         $this->assertEquals(1, TsItem::where('song_id', $targetSong->id)->count());
-
-        // ログが記録されていること
         $this->assertDatabaseHas('normalization_logs', [
             'action' => 'merge_song',
             'target_id' => $targetSong->id,
@@ -246,13 +383,11 @@ class SongMergeTest extends TestCase
         $targetSong = Song::factory()->create(['title' => 'Target Song', 'artist' => 'Artist']);
         $sourceSong = Song::factory()->create(['title' => 'Source Song', 'artist' => 'Artist']);
 
-        // targetにマッピングを作成
         TimestampSongMapping::factory()
             ->withSong($targetSong)
             ->withText('target text')
             ->create();
 
-        // sourceにマッピングを複数作成
         TimestampSongMapping::factory()
             ->withSong($sourceSong)
             ->withText('source text 1')
@@ -270,10 +405,8 @@ class SongMergeTest extends TestCase
 
         $response->assertStatus(200);
 
-        // sourceSongが削除されていること
         $this->assertDatabaseMissing('songs', ['id' => $sourceSong->id]);
 
-        // sourceのマッピングがtargetに付け替えられていること
         $targetMappings = TimestampSongMapping::where('song_id', $targetSong->id)->get();
         $this->assertEquals(3, $targetMappings->count());
         $this->assertTrue($targetMappings->pluck('normalized_text')->contains('target text'));
@@ -361,10 +494,8 @@ class SongMergeTest extends TestCase
 
         $response->assertStatus(200);
 
-        // songが削除されていること
         $this->assertDatabaseMissing('songs', ['id' => $song->id]);
 
-        // ts_item.song_idがnullにクリアされていること
         $tsItem->refresh();
         $this->assertNull($tsItem->song_id);
     }

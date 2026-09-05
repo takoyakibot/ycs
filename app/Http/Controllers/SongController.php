@@ -107,8 +107,15 @@ class SongController extends Controller
      */
     public function findDuplicates(Request $request)
     {
-        $search = (string) $request->query('search', '');
-        $groups = $this->songMergeService->findDuplicates($search);
+        $validated = $request->validate([
+            'search' => 'nullable|string|max:255',
+            'filter' => 'nullable|string|in:active,pending',
+        ]);
+
+        $groups = $this->songCleansingService->findDuplicates(
+            $validated['search'] ?? '',
+            $validated['filter'] ?? 'active'
+        );
 
         return response()->json($groups);
     }

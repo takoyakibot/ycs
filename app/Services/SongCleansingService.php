@@ -160,6 +160,36 @@ class SongCleansingService
 
         $normalizedTitles = $titleQuery->limit(self::PRE_FILTER_LIMIT)->pluck('normalized_title');
 
+        return $this->buildGroupsFromTitles($normalizedTitles, $filter);
+    }
+
+    /**
+     * 重複楽曲のグループを検出する
+     *
+     * normalized_title が同じ楽曲をグループ化して返す。
+     * SongGroupReview の判定結果でフィルタリングする。
+     */
+    public function findDuplicates(string $search = '', string $filter = 'active'): array
+    {
+        $titleQuery = Song::selectRaw('normalized_title, COUNT(*) as count')
+            ->whereNotNull('normalized_title')
+            ->groupBy('normalized_title')
+            ->having('count', '>', 1)
+            ->orderBy('count', 'desc')
+            ->orderBy('normalized_title');
+
+        if ($search !== '') {
+            $escaped = QueryHelper::escapeLikeString($search);
+            $titleQuery->where('title', 'LIKE', "%{$escaped}%");
+        }
+
+        $normalizedTitles = $titleQuery->limit(self::PRE_FILTER_LIMIT)->pluck('normalized_title');
+
+        return $this->buildGroupsFromTitles($normalizedTitles, $filter);
+    }
+
+    private function buildGroupsFromTitles(\Illuminate\Support\Collection $normalizedTitles, string $filter): array
+    {
         if ($normalizedTitles->isEmpty()) {
             return [];
         }
@@ -169,11 +199,7 @@ class SongCleansingService
             ->orderBy('title')
             ->get();
 
-        $songIds = $songs->pluck('id')->toArray();
-        $tsItemCounts = TsItem::selectRaw('song_id, COUNT(*) as count')
-            ->whereIn('song_id', $songIds)
-            ->groupBy('song_id')
-            ->pluck('count', 'song_id');
+        $tsItemCounts = $this->fetchTsItemCounts($songs->pluck('id')->toArray());
 
         $grouped = $songs->groupBy('normalized_title');
 
@@ -200,6 +226,19 @@ class SongCleansingService
             ->filter()
             ->values();
 
+        return $this->filterByReview($groups, $filter);
+    }
+
+    private function fetchTsItemCounts(array $songIds): \Illuminate\Support\Collection
+    {
+        return TsItem::selectRaw('song_id, COUNT(*) as count')
+            ->whereIn('song_id', $songIds)
+            ->groupBy('song_id')
+            ->pluck('count', 'song_id');
+    }
+
+    private function filterByReview(\Illuminate\Support\Collection $groups, string $filter): array
+    {
         $hashes = $groups->pluck('song_ids_hash')->toArray();
         $reviewedDecisions = SongGroupReview::whereIn('song_ids_hash', $hashes)
             ->pluck('decision', 'song_ids_hash');
