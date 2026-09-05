@@ -27,6 +27,10 @@ function registerTitleGroupsComponent() {
                 this.groups = await res.json();
                 this.selectedIds = {};
                 this.targetId = {};
+                for (const group of this.groups) {
+                    const key = this.groupKey(group);
+                    this.selectedIds[key] = group.songs.map(s => s.id);
+                }
             } catch (e) {
                 this.message = e.message;
                 this.messageType = 'error';

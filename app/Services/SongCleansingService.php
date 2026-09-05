@@ -165,7 +165,6 @@ class SongCleansingService
         }
 
         $songs = Song::whereIn('normalized_title', $normalizedTitles)
-            ->withCount('mappings')
             ->orderBy('artist')
             ->orderBy('title')
             ->get();
@@ -194,8 +193,6 @@ class SongCleansingService
                         'id' => $song->id,
                         'title' => $song->title,
                         'artist' => $song->artist,
-                        'spotify_track_id' => $song->spotify_track_id,
-                        'mappings_count' => $song->mappings_count,
                         'ts_items_count' => $tsItemCounts->get($song->id, 0),
                     ])->values(),
                 ];
