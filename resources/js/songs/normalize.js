@@ -178,6 +178,15 @@ export class TimestampNormalization {
         document.getElementById('editSongDurationMs').addEventListener('input', (e) => this.onDurationMsInput(e));
         document.getElementById('editSongDurationSeconds').addEventListener('input', (e) => this.onDurationSecondsInput(e));
 
+        // タグ編集
+        document.getElementById('addTagBtn').addEventListener('click', () => this.addEditTag());
+        document.getElementById('editSongTagInput').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this.addEditTag();
+            }
+        });
+
         // モーダル外クリックで閉じる。
         // モーダル内でテキスト選択などのドラッグを始めて外でマウスを離すと、
         // clickイベントのtargetが背景要素になり誤って閉じてしまうため、
@@ -2329,6 +2338,7 @@ export class TimestampNormalization {
     async openEditModal(song) {
         this.editingSong = song;
         this.editingSongTags = null;
+        this.editingTagsModified = false;
         document.getElementById('editSongId').value = song.id;
         document.getElementById('editSongTitle').value = song.title;
         document.getElementById('editSongArtist').value = song.artist;
@@ -2345,18 +2355,109 @@ export class TimestampNormalization {
         } catch (e) {
             this.editingSongTags = [];
         }
+        this.renderEditTags();
     }
 
     /**
      * 編集モーダルを閉じる
      */
     closeEditModal() {
+        const tagsModified = this.editingTagsModified;
         this.editingSong = null;
         this.editingSongTags = null;
+        this.editingTagsModified = false;
         document.getElementById('editSongModal').classList.add('hidden');
         document.getElementById('editSongForm').reset();
         document.getElementById('editSongDurationFormatted').textContent = '';
+        document.getElementById('editSongTagsContainer').innerHTML = '';
+        document.getElementById('editSongTagInput').value = '';
         this.clearNotationCandidates();
+
+        // タグが変更された場合のみ一覧を再読込（保存時はupdateSongがloadSongsを呼ぶためフラグをリセット済み）
+        if (tagsModified) {
+            this.loadSongs(document.getElementById('songsSearch').value);
+        }
+    }
+
+    /**
+     * 編集モーダル内のタグ一覧を描画する
+     */
+    renderEditTags() {
+        const container = document.getElementById('editSongTagsContainer');
+        container.innerHTML = '';
+
+        if (!this.editingSongTags || this.editingSongTags.length === 0) {
+            return;
+        }
+
+        this.editingSongTags.forEach(tag => {
+            const badge = document.createElement('span');
+            badge.className = 'inline-flex items-center gap-1 px-2 py-1 text-xs rounded bg-blue-600 text-white';
+            badge.textContent = tag.value;
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.type = 'button';
+            deleteBtn.className = 'ml-0.5 hover:text-red-200 focus:outline-none';
+            deleteBtn.innerHTML = '&times;';
+            deleteBtn.addEventListener('click', () => this.deleteEditTag(tag.id));
+
+            badge.appendChild(deleteBtn);
+            container.appendChild(badge);
+        });
+    }
+
+    /**
+     * 編集モーダルからタグを追加する
+     */
+    async addEditTag() {
+        const input = document.getElementById('editSongTagInput');
+        const value = input.value.trim();
+        if (!value || !this.editingSong) return;
+
+        try {
+            const response = await songApiService.addTag(this.editingSong.id, value);
+            this.editingSongTags.push(response.tag);
+            this.editingTagsModified = true;
+
+            // editingSong.tags も更新して一覧表示に反映
+            if (this.editingSong.tags) {
+                this.editingSong.tags.push(response.tag);
+            } else {
+                this.editingSong.tags = [response.tag];
+            }
+
+            input.value = '';
+            this.renderEditTags();
+            toast.success('タグを追加しました。');
+        } catch (error) {
+            console.error('タグの追加に失敗しました:', error);
+            toast.error('タグの追加に失敗しました。');
+        }
+    }
+
+    /**
+     * 編集モーダルからタグを削除する
+     * @param {string} tagId - 削除対象のタグID
+     */
+    async deleteEditTag(tagId) {
+        if (!this.editingSong) return;
+
+        try {
+            await songApiService.deleteTag(this.editingSong.id, tagId);
+            this.editingSongTags = this.editingSongTags.filter(t => t.id !== tagId);
+            this.editingTagsModified = true;
+
+            // editingSong.tags も更新して一覧表示に反映
+            if (this.editingSong.tags) {
+                this.editingSong.tags = this.editingSong.tags.filter(t => t.id !== tagId);
+            }
+
+            this.renderEditTags();
+            toast.success('タグを削除しました。');
+        } catch (error) {
+            console.error('タグの削除に失敗しました:', error);
+            toast.error('タグの削除に失敗しました。');
+        }
     }
 
     loadNotationCandidates(songId) {
@@ -2517,6 +2618,8 @@ export class TimestampNormalization {
             this.showLoading();
             const response = await songApiService.updateSong(songId, updateData);
             toast.success('楽曲マスタを更新しました。');
+            // updateSong自身がloadSongsを呼ぶため、closeEditModalでの二重fetchを防ぐ
+            this.editingTagsModified = false;
             this.closeEditModal();
             await this.loadSongs(document.getElementById('songsSearch').value);
 

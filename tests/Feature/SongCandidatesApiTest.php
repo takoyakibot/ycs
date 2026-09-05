@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Song;
+use App\Models\SongTag;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -233,5 +234,27 @@ class SongCandidatesApiTest extends TestCase
             $ids,
             'Short artist name should not match via reverse INSTR search'
         );
+    }
+
+    /**
+     * candidatesレスポンスの各楽曲にタグ情報が含まれること
+     */
+    public function test_candidates_include_tags(): void
+    {
+        $this->actingAs(User::factory()->create());
+
+        $song = Song::factory()->create(['title' => '候補タグ曲', 'artist' => 'アーティスト']);
+        SongTag::factory()->create(['song_id' => $song->id, 'value' => 'テストタグ']);
+
+        $response = $this->getJson('/api/songs/candidates?'.http_build_query([
+            'text' => '候補タグ曲',
+        ]));
+
+        $response->assertOk();
+        $songData = collect($response->json('songs'))->firstWhere('id', $song->id);
+        $this->assertNotNull($songData);
+        $this->assertArrayHasKey('tags', $songData);
+        $this->assertCount(1, $songData['tags']);
+        $this->assertEquals('テストタグ', $songData['tags'][0]['value']);
     }
 }

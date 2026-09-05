@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Helpers\TextNormalizer;
 use App\Models\Song;
 use App\Services\TimestampExtractorService;
 use Illuminate\Console\Command;
@@ -28,7 +29,7 @@ class ReviewSongStatus extends Command
 
         $stats = [Song::REVIEW_STATUS_SAFE => 0, Song::REVIEW_STATUS_NEEDS_REVIEW => 0, 'total' => 0];
 
-        $query = Song::with('mappings');
+        $query = Song::with(['mappings', 'tags']);
         if (! $all) {
             $query->whereNull('review_status');
         }
@@ -98,6 +99,19 @@ class ReviewSongStatus extends Command
             }
             if ($normalizedArtist !== '' && str_contains($text, $normalizedArtist)) {
                 return Song::REVIEW_STATUS_SAFE;
+            }
+        }
+
+        // タグベースの判定: タグの正規化値がマッピングテキストに含まれていればsafe
+        foreach ($song->tags as $tag) {
+            $normalizedTagValue = TextNormalizer::normalize($tag->value);
+            if ($normalizedTagValue === '') {
+                continue;
+            }
+            foreach ($mappedTexts as $text) {
+                if (str_contains($text, $normalizedTagValue)) {
+                    return Song::REVIEW_STATUS_SAFE;
+                }
             }
         }
 
