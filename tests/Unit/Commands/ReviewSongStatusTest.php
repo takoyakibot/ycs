@@ -3,6 +3,7 @@
 namespace Tests\Unit\Commands;
 
 use App\Models\Song;
+use App\Models\SongTag;
 use App\Models\TimestampSongMapping;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -196,5 +197,47 @@ class ReviewSongStatusTest extends TestCase
 
         $song->refresh();
         $this->assertEquals('safe', $song->review_status);
+    }
+
+    public function test_safe_when_tag_matches_mapped_text(): void
+    {
+        $song = Song::factory()->withoutSpotify()->create([
+            'title' => '全く違うタイトル',
+            'artist' => '全く違うアーティスト',
+        ]);
+
+        TimestampSongMapping::create([
+            'id' => Str::ulid(),
+            'normalized_text' => 'テストタグの値を含むテキスト',
+            'song_id' => $song->id,
+        ]);
+
+        SongTag::factory()->create(['song_id' => $song->id, 'value' => 'テストタグの値']);
+
+        $this->artisan('songs:review-status')->assertSuccessful();
+
+        $song->refresh();
+        $this->assertEquals('safe', $song->review_status);
+    }
+
+    public function test_needs_review_when_no_title_artist_tag_match(): void
+    {
+        $song = Song::factory()->withoutSpotify()->create([
+            'title' => 'タイトルA',
+            'artist' => 'アーティストA',
+        ]);
+
+        TimestampSongMapping::create([
+            'id' => Str::ulid(),
+            'normalized_text' => '全く関係ないテキスト',
+            'song_id' => $song->id,
+        ]);
+
+        SongTag::factory()->create(['song_id' => $song->id, 'value' => 'マッチしないタグ']);
+
+        $this->artisan('songs:review-status')->assertSuccessful();
+
+        $song->refresh();
+        $this->assertEquals('needs_review', $song->review_status);
     }
 }

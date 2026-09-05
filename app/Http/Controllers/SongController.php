@@ -547,6 +547,8 @@ class SongController extends Controller
         // 記号だけのパーツは isIgnorablePart() では無視対象にならないが、
         // あいまい検索のキーワードにもならないため、そのまま検索すると
         // WHERE 句が1つも付かず全件が返ってしまう
+        $tagsEagerLoad = ['tags' => fn ($q) => $q->orderBy('created_at')];
+
         if ($searchParts !== [] && QueryHelper::splitFuzzyKeywords($search) !== []) {
             $query = Song::query();
             QueryHelper::applyFuzzySearch(
@@ -556,7 +558,7 @@ class SongController extends Controller
             );
 
             $total = $query->count();
-            $songs = $query->orderBy('title')->limit(self::CANDIDATE_LIMIT)->get();
+            $songs = $query->with($tagsEagerLoad)->orderBy('title')->limit(self::CANDIDATE_LIMIT)->get();
         }
 
         // リバース検索: 楽曲マスタのアーティスト名がチップに含まれるか（敬称付き対応）
@@ -582,7 +584,7 @@ class SongController extends Controller
             });
 
             $remaining = self::CANDIDATE_LIMIT - $songs->count();
-            $reverseSongs = $reverseQuery->orderBy('title')->limit($remaining)->get();
+            $reverseSongs = $reverseQuery->with($tagsEagerLoad)->orderBy('title')->limit($remaining)->get();
 
             if ($reverseSongs->isNotEmpty()) {
                 $songs = $songs->concat($reverseSongs);

@@ -314,6 +314,14 @@
                     </div>
                     <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">※ 秒またはミリ秒で入力可能（片方を入力すると自動変換）</p>
                 </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">タグ</label>
+                    <div id="editSongTagsContainer" class="flex flex-wrap gap-1 mb-2"></div>
+                    <div class="flex gap-2">
+                        <input type="text" id="editSongTagInput" placeholder="新しいタグを入力..." class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                        <button type="button" id="addTagBtn" class="px-3 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700">追加</button>
+                    </div>
+                </div>
                 <div id="notationCandidatesSection">
                     <button type="button" id="notationToggleBtn" class="flex items-center gap-1 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">
                         <svg id="notationToggleIcon" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
