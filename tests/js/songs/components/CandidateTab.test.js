@@ -131,6 +131,7 @@ describe('CandidateTab', () => {
             expect(tab.candidateTextKey).toBe('夜に駆ける');
             expect(tab.candidateKeywords).toEqual(['夜', '駆ける']);
             expect(document.getElementById('candidateOriginalText').textContent).toBe('夜に駆ける');
+            expect(document.getElementById('candidateNotice').textContent).toBe('1件の候補');
             expect(createEl).toHaveBeenCalledOnce();
         });
 
@@ -151,6 +152,7 @@ describe('CandidateTab', () => {
 
             await tab.load();
             expect(songApiService.fetchCandidates).toHaveBeenCalledTimes(1);
+            expect(document.getElementById('candidateTextArea').classList.contains('hidden')).toBe(false);
         });
 
         it('API失敗時にエラーメッセージを出す', async () => {
@@ -176,15 +178,14 @@ describe('CandidateTab', () => {
                 });
 
             const createEl = vi.fn(() => document.createElement('div'));
-            const timestamps = [{ id: '1', text: 'A' }];
+            let currentText = 'A';
             const tab = createTab({
-                getSelectedTimestamps: () => timestamps,
+                getSelectedTimestamps: () => [{ id: '1', text: currentText }],
                 createSongElement: createEl,
             });
 
             const first = tab.load();
-            timestamps[0] = { id: '2', text: 'B' };
-            tab.candidateTextKey = null;
+            currentText = 'B';
             const second = tab.load();
 
             resolveFirst({
@@ -198,6 +199,7 @@ describe('CandidateTab', () => {
             await second;
 
             expect(tab.candidateTextKey).toBe('B');
+            expect(document.getElementById('candidateResults').children.length).toBe(1);
         });
     });
 
