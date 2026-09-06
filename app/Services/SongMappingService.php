@@ -221,11 +221,7 @@ class SongMappingService
         $userId = $userId ?? Auth::id();
 
         $mapping = TimestampSongMapping::where('normalized_text', $normalizedText)
-            ->where(function ($q) {
-                $q->where('is_manual', false)
-                    ->orWhere('status', TimestampSongMapping::STATUS_PENDING);
-            })
-            ->whereNotNull('song_id')
+            ->confirmable()
             ->first();
 
         if (! $mapping) {

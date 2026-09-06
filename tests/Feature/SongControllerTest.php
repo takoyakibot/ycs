@@ -1478,6 +1478,23 @@ class SongControllerTest extends TestCase
     }
 
     /**
+     * 自動紐付け確定のテスト（手動保留は確定不可）
+     */
+    public function test_confirm_auto_link_manually_pending_without_song_not_found(): void
+    {
+        $mapping = TimestampSongMapping::factory()
+            ->withText('Manually Pending')
+            ->pending()
+            ->create();
+
+        $response = $this->actingAs($this->user)->postJson(route('songs.confirmAutoLink'), [
+            'normalized_text' => $mapping->normalized_text,
+        ]);
+
+        $response->assertStatus(404);
+    }
+
+    /**
      * 動画秒数取得のテスト（YouTube URL成功）
      */
     public function test_fetch_video_duration_with_youtube_url_success(): void

@@ -242,7 +242,7 @@ export class TimestampNormalization {
 
             const parsedPage = parseInt(data.current_page, 10);
             this.currentPage = Number.isNaN(parsedPage) ? 1 : parsedPage;
-            this.displayTimestamps(data.data);
+            this.displayTimestamps(data.data, data.total);
             this.displayPagination(data);
         } catch (error) {
             console.error('タイムスタンプの取得に失敗しました:', error);
@@ -252,7 +252,7 @@ export class TimestampNormalization {
         }
     }
 
-    displayTimestamps(timestamps) {
+    displayTimestamps(timestamps, total = 0) {
         this.currentPageTimestamps = timestamps;
         const container = document.getElementById('timestampsList');
         container.innerHTML = '';
@@ -264,7 +264,7 @@ export class TimestampNormalization {
 
         // pendingフィルタ時にナビゲーションバーを表示
         if (this.currentFilter === 'pending') {
-            container.appendChild(this.createPendingNavigation(timestamps));
+            container.appendChild(this.createPendingNavigation(total));
         }
 
         // DBでソート済みなのでそのまま表示
@@ -273,14 +273,13 @@ export class TimestampNormalization {
         });
     }
 
-    createPendingNavigation(timestamps) {
+    createPendingNavigation(total) {
         const nav = document.createElement('div');
         nav.className = 'flex items-center justify-between p-2 mb-2 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded text-sm';
 
-        const pendingItems = timestamps.filter(ts => ts.status === 'pending' && ts.pending_info?.matched_song);
         const countLabel = document.createElement('span');
         countLabel.className = 'text-orange-700 dark:text-orange-300';
-        countLabel.textContent = `確認待ち: ${pendingItems.length}件`;
+        countLabel.textContent = `確認待ち: 全${total}件`;
 
         const btnContainer = document.createElement('div');
         btnContainer.className = 'flex gap-2';
@@ -309,8 +308,10 @@ export class TimestampNormalization {
             ? this.currentPageTimestamps.findIndex(ts => ts.id === this.selectedTimestamps[0].id)
             : -1;
 
-        let nextIdx = currentIdx;
         const len = this.currentPageTimestamps.length;
+        let nextIdx = currentIdx === -1
+            ? (direction > 0 ? -1 : len)
+            : currentIdx;
 
         for (let i = 0; i < len; i++) {
             nextIdx = direction > 0
