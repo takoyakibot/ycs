@@ -955,7 +955,7 @@ class TimestampDecompositionServiceTest extends TestCase
         $this->assertNull($saved->artist_part_index);
     }
 
-    public function test_link_to_song_skips_when_artist_is_empty(): void
+    public function test_link_to_song_skips_when_artist_is_empty_and_no_matching_song(): void
     {
         $user = User::factory()->create();
         $this->actingAs($user);
@@ -981,7 +981,7 @@ class TimestampDecompositionServiceTest extends TestCase
         $this->assertNull($decomposition->song_id);
     }
 
-    public function test_link_to_song_skips_when_artist_is_empty_string(): void
+    public function test_link_to_song_skips_when_artist_is_empty_string_and_no_matching_song(): void
     {
         $user = User::factory()->create();
         $this->actingAs($user);

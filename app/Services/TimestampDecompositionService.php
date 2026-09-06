@@ -669,29 +669,43 @@ class TimestampDecompositionService
         $normalizedTitle = TextNormalizer::normalize($title);
         $normalizedArtist = TextNormalizer::normalize($artist);
 
+        $titleOnlyMatch = false;
+
         if ($normalizedArtist === '') {
-            return null;
-        }
+            if ($normalizedTitle === '') {
+                return null;
+            }
 
-        $song = Song::where('normalized_title', $normalizedTitle)
-            ->where('normalized_artist', $normalizedArtist)
-            ->first();
+            // アーティスト名なし：タイトルのみで楽曲マスタを検索し、1件だけなら紐付け
+            $candidates = Song::where('normalized_title', $normalizedTitle)->limit(2)->get();
 
-        // 正規化検索で見つからない場合、生テキストでも検索（ユニーク制約と同じ条件）
-        if (! $song) {
-            $song = Song::where('title', $title)
-                ->where('artist', $artist)
+            if ($candidates->count() !== 1) {
+                return null;
+            }
+
+            $song = $candidates->first();
+            $titleOnlyMatch = true;
+        } else {
+            $song = Song::where('normalized_title', $normalizedTitle)
+                ->where('normalized_artist', $normalizedArtist)
                 ->first();
-        }
 
-        // 見つからなければ新規作成
-        if (! $song) {
-            $song = Song::create([
-                'id' => (string) Str::ulid(),
-                'title' => $title,
-                'artist' => $artist,
-                'created_by' => Auth::id(),
-            ]);
+            // 正規化検索で見つからない場合、生テキストでも検索（ユニーク制約と同じ条件）
+            if (! $song) {
+                $song = Song::where('title', $title)
+                    ->where('artist', $artist)
+                    ->first();
+            }
+
+            // 見つからなければ新規作成
+            if (! $song) {
+                $song = Song::create([
+                    'id' => (string) Str::ulid(),
+                    'title' => $title,
+                    'artist' => $artist,
+                    'created_by' => Auth::id(),
+                ]);
+            }
         }
 
         // decompositionにsong_idを紐付け
@@ -713,9 +727,9 @@ class TimestampDecompositionService
         $mapping->fill([
             'song_id' => $song->id,
             'is_not_song' => false,
-            'is_manual' => true,
-            'status' => 'linked',
-            'confidence' => 1.0,
+            'is_manual' => ! $titleOnlyMatch,
+            'status' => $titleOnlyMatch ? TimestampSongMapping::STATUS_PENDING : TimestampSongMapping::STATUS_LINKED,
+            'confidence' => $titleOnlyMatch ? 0.8 : 1.0,
             'updated_by' => Auth::id(),
         ]);
         $mapping->save();
