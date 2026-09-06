@@ -670,28 +670,35 @@ class TimestampDecompositionService
         $normalizedArtist = TextNormalizer::normalize($artist);
 
         if ($normalizedArtist === '') {
-            return null;
-        }
+            // アーティスト名なし：タイトルのみで楽曲マスタを検索し、1件だけなら紐付け
+            $candidates = Song::where('normalized_title', $normalizedTitle)->get();
 
-        $song = Song::where('normalized_title', $normalizedTitle)
-            ->where('normalized_artist', $normalizedArtist)
-            ->first();
+            if ($candidates->count() !== 1) {
+                return null;
+            }
 
-        // 正規化検索で見つからない場合、生テキストでも検索（ユニーク制約と同じ条件）
-        if (! $song) {
-            $song = Song::where('title', $title)
-                ->where('artist', $artist)
+            $song = $candidates->first();
+        } else {
+            $song = Song::where('normalized_title', $normalizedTitle)
+                ->where('normalized_artist', $normalizedArtist)
                 ->first();
-        }
 
-        // 見つからなければ新規作成
-        if (! $song) {
-            $song = Song::create([
-                'id' => (string) Str::ulid(),
-                'title' => $title,
-                'artist' => $artist,
-                'created_by' => Auth::id(),
-            ]);
+            // 正規化検索で見つからない場合、生テキストでも検索（ユニーク制約と同じ条件）
+            if (! $song) {
+                $song = Song::where('title', $title)
+                    ->where('artist', $artist)
+                    ->first();
+            }
+
+            // 見つからなければ新規作成
+            if (! $song) {
+                $song = Song::create([
+                    'id' => (string) Str::ulid(),
+                    'title' => $title,
+                    'artist' => $artist,
+                    'created_by' => Auth::id(),
+                ]);
+            }
         }
 
         // decompositionにsong_idを紐付け
