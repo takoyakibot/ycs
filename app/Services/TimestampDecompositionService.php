@@ -523,6 +523,32 @@ class TimestampDecompositionService
     }
 
     /**
+     * 楽曲ではないとしてマーク
+     */
+    public function markAsNotSong(string $id): void
+    {
+        $decomposition = TimestampDecomposition::findOrFail($id);
+
+        TimestampSongMapping::updateOrCreate(
+            ['normalized_text' => $decomposition->normalized_text],
+            [
+                'id' => (string) Str::ulid(),
+                'is_not_song' => true,
+                'is_manual' => true,
+                'song_id' => null,
+                'status' => TimestampSongMapping::STATUS_LINKED,
+                'confidence' => 1.0,
+                'updated_by' => Auth::id(),
+            ]
+        );
+
+        $decomposition->update([
+            'status' => TimestampDecomposition::STATUS_SKIPPED,
+            'updated_by' => Auth::id(),
+        ]);
+    }
+
+    /**
      * 操作を取り消し（undo）
      *
      * @return array{undone_count: int}
@@ -542,6 +568,11 @@ class TimestampDecompositionService
                     'updated_by' => Auth::id(),
                 ]);
         }
+
+        // 「楽曲ではない」マークを解除
+        TimestampSongMapping::where('normalized_text', $decomposition->normalized_text)
+            ->where('is_not_song', true)
+            ->delete();
 
         // カスケード処理されたアイテムも元に戻す
         $cascadedItems = $decomposition->cascade_group_id
