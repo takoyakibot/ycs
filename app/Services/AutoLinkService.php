@@ -257,8 +257,8 @@ class AutoLinkService
     /**
      * 自動紐付けマッピングを作成
      *
-     * アーティスト名まで一致する場合は確定扱い（is_manual=true、即公開）、
-     * タイトルのみの一致（アーティスト情報なし・不一致）はレビュー待ち（is_manual=false）とする。
+     * アーティスト名まで一致する場合は確定扱い（is_manual=true、status=linked）、
+     * タイトルのみの一致（アーティスト情報なし・不一致）は確認待ち（is_manual=false、status=pending）とする。
      */
     protected function createAutoLinkMapping(string $normalizedText, string $songId, bool $artistMatched): void
     {

@@ -231,6 +231,7 @@ class AutoLinkServiceTest extends TestCase
         $this->assertDatabaseHas('timestamp_song_mappings', [
             'is_manual' => true,
             'status' => 'linked',
+            'confidence' => 0.9,
         ]);
     }
 
@@ -249,6 +250,7 @@ class AutoLinkServiceTest extends TestCase
         $this->assertDatabaseHas('timestamp_song_mappings', [
             'is_manual' => false,
             'status' => 'pending',
+            'confidence' => 0.8,
         ]);
     }
 

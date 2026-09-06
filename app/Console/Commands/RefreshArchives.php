@@ -122,6 +122,7 @@ class RefreshArchives extends Command
             [
                 ['処理件数', $result['processed']],
                 ['紐付け成功', $result['linked']],
+                ['確認待ち', $result['pending']],
                 ['検索結果なし/エラー', $result['failed']],
                 ['スキップ（類似曲あり）', $result['skipped']],
             ]
