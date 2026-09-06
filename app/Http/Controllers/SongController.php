@@ -637,15 +637,24 @@ class SongController extends Controller
         if (! empty($validated['force_create'])) {
             try {
                 $userId = Auth::id();
-                $song = Song::create([
-                    'id' => Str::ulid(),
-                    'title' => $title,
-                    'artist' => $artist,
-                    'spotify_track_id' => $validated['spotify_track_id'] ?? null,
-                    'spotify_data' => $validated['spotify_data'] ?? null,
-                    'created_by' => $userId,
-                    'updated_by' => $userId,
-                ]);
+                $song = DB::transaction(function () use ($title, $artist, $validated, $userId) {
+                    $song = Song::create([
+                        'id' => Str::ulid(),
+                        'title' => $title,
+                        'artist' => $artist,
+                        'spotify_track_id' => $validated['spotify_track_id'] ?? null,
+                        'spotify_data' => $validated['spotify_data'] ?? null,
+                        'created_by' => $userId,
+                        'updated_by' => $userId,
+                    ]);
+
+                    if (! empty($validated['tags'])) {
+                        $this->saveTags($song, $validated['tags']);
+                        $song->load('tags');
+                    }
+
+                    return $song;
+                });
 
                 // 操作ログを記録
                 if ($userId) {
@@ -724,6 +733,7 @@ class SongController extends Controller
                     'artist' => $artist,
                     'spotify_track_id' => $validated['spotify_track_id'] ?? null,
                     'spotify_data' => $validated['spotify_data'] ?? null,
+                    'tags' => $validated['tags'] ?? null,
                 ],
                 'message' => '類似する楽曲マスタが見つかりました。既存のマスタを使用するか、新規登録するか選択してください。',
             ], 200);
@@ -732,15 +742,24 @@ class SongController extends Controller
         // 新規登録
         try {
             $userId = Auth::id();
-            $song = Song::create([
-                'id' => Str::ulid(),
-                'title' => $title,
-                'artist' => $artist,
-                'spotify_track_id' => $validated['spotify_track_id'] ?? null,
-                'spotify_data' => $validated['spotify_data'] ?? null,
-                'created_by' => $userId,
-                'updated_by' => $userId,
-            ]);
+            $song = DB::transaction(function () use ($title, $artist, $validated, $userId) {
+                $song = Song::create([
+                    'id' => Str::ulid(),
+                    'title' => $title,
+                    'artist' => $artist,
+                    'spotify_track_id' => $validated['spotify_track_id'] ?? null,
+                    'spotify_data' => $validated['spotify_data'] ?? null,
+                    'created_by' => $userId,
+                    'updated_by' => $userId,
+                ]);
+
+                if (! empty($validated['tags'])) {
+                    $this->saveTags($song, $validated['tags']);
+                    $song->load('tags');
+                }
+
+                return $song;
+            });
 
             // 操作ログを記録
             if ($userId) {
@@ -1210,5 +1229,15 @@ class SongController extends Controller
         $result = $this->songNotationService->getNotationCandidates($id);
 
         return response()->json($result);
+    }
+
+    private function saveTags(Song $song, array $tags): void
+    {
+        foreach ($tags as $value) {
+            $value = trim($value);
+            if ($value !== '') {
+                $song->tags()->create(['value' => $value]);
+            }
+        }
     }
 }
