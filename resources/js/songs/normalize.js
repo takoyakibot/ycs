@@ -7,6 +7,7 @@ import { SimilarSongsDialog } from './components/SimilarSongsDialog.js';
 import { SongOperationDialog } from './components/SongOperationDialog.js';
 import { ArtistTagSyncDialog } from './components/ArtistTagSyncDialog.js';
 import { Pagination } from '../shared/components/Pagination.js';
+import { videoPlayerManager } from '../shared/managers/VideoPlayerManager.js';
 
 // axiosの設定: クロスオリジンリクエストでクッキーを送信
 axios.defaults.withCredentials = true;
@@ -56,6 +57,7 @@ export class TimestampNormalization {
         this.loadTimestamps();
         this.showTab('songsTab');
         this.updateSelectionDisplay();
+        this.initVideoPlayer();
         this.initHistoryPanel();
     }
 
@@ -2222,21 +2224,60 @@ export class TimestampNormalization {
             videoLinkBtn.classList.add('bg-red-600', 'hover:bg-red-700', 'cursor-pointer');
 
             videoLinkBtn.onclick = () => {
-                const videoUrl = this.generateVideoUrl(videoId, tsNum);
-                if (!videoUrl) {
-                    console.error('Failed to generate video URL');
-                    return;
-                }
-
-                const newWindow = window.open(videoUrl, '_blank');
-
-                if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
-                    toast.warning('ポップアップがブロックされました。ブラウザの設定を確認してください。');
-                }
+                this.playVideoInPlayer(videoId, tsNum || 0, title);
             };
         } else {
             videoLinkBtn.classList.add('bg-gray-400', 'cursor-not-allowed');
             videoLinkBtn.classList.remove('bg-red-600', 'hover:bg-red-700', 'cursor-pointer');
+        }
+    }
+
+    initVideoPlayer() {
+        videoPlayerManager.restoreVolume();
+
+        videoPlayerManager.onShowChange = (show) => {
+            const container = document.getElementById('pipPlayerContainer');
+            if (container) {
+                container.classList.toggle('hidden', !show);
+            }
+        };
+
+        videoPlayerManager.onError = (event) => {
+            const errorMessages = {
+                2: '無効なパラメータです',
+                5: 'HTML5プレイヤーエラーが発生しました',
+                100: '動画が見つかりません',
+                101: '動画の埋め込みが許可されていません',
+                150: '動画の埋め込みが許可されていません'
+            };
+            toast.error(errorMessages[event.data] || '動画の読み込みに失敗しました');
+        };
+
+        const closeBtn = document.getElementById('pipPlayerCloseBtn');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => {
+                videoPlayerManager.close();
+            });
+        }
+
+        videoPlayerManager.loadAPI(() => {
+            videoPlayerManager.preInitialize('youtube-player');
+        });
+    }
+
+    playVideoInPlayer(videoId, tsNum, title) {
+        const playerTitle = document.getElementById('pipPlayerTitle');
+        if (playerTitle) {
+            playerTitle.textContent = title || '動画プレビュー';
+        }
+
+        if (videoPlayerManager.currentVideoId === videoId && videoPlayerManager.isShowing()) {
+            if (videoPlayerManager.player && videoPlayerManager.playerInitialized) {
+                videoPlayerManager.player.seekTo(tsNum || 0, true);
+                videoPlayerManager.play();
+            }
+        } else {
+            videoPlayerManager.loadAndPlay(videoId, tsNum || 0);
         }
     }
 
