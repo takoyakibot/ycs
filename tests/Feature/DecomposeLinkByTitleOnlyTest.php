@@ -99,6 +99,38 @@ class DecomposeLinkByTitleOnlyTest extends TestCase
         $this->assertEquals($song->id, $result->id);
     }
 
+    public function test_title_only_match_creates_pending_mapping(): void
+    {
+        $song = Song::factory()->create([
+            'title' => 'テスト曲名',
+            'artist' => 'テストアーティスト',
+        ]);
+
+        $decomposition = $this->createDecomposition('テスト曲名', 'テスト曲名');
+
+        $this->service->linkToSong($decomposition);
+
+        $this->assertDatabaseHas('timestamp_song_mappings', [
+            'normalized_text' => $decomposition->normalized_text,
+            'song_id' => $song->id,
+            'is_manual' => false,
+            'status' => 'pending',
+        ]);
+    }
+
+    public function test_with_artist_creates_linked_mapping(): void
+    {
+        $decomposition = $this->createDecomposition('曲名/アーティスト', '曲名', 'アーティスト');
+
+        $this->service->linkToSong($decomposition);
+
+        $this->assertDatabaseHas('timestamp_song_mappings', [
+            'normalized_text' => $decomposition->normalized_text,
+            'is_manual' => true,
+            'status' => 'linked',
+        ]);
+    }
+
     public function test_with_artist_still_creates_new_song(): void
     {
         $decomposition = $this->createDecomposition('曲名/アーティスト', '曲名', 'アーティスト');

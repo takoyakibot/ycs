@@ -669,15 +669,22 @@ class TimestampDecompositionService
         $normalizedTitle = TextNormalizer::normalize($title);
         $normalizedArtist = TextNormalizer::normalize($artist);
 
+        $titleOnlyMatch = false;
+
         if ($normalizedArtist === '') {
+            if ($normalizedTitle === '') {
+                return null;
+            }
+
             // アーティスト名なし：タイトルのみで楽曲マスタを検索し、1件だけなら紐付け
-            $candidates = Song::where('normalized_title', $normalizedTitle)->get();
+            $candidates = Song::where('normalized_title', $normalizedTitle)->limit(2)->get();
 
             if ($candidates->count() !== 1) {
                 return null;
             }
 
             $song = $candidates->first();
+            $titleOnlyMatch = true;
         } else {
             $song = Song::where('normalized_title', $normalizedTitle)
                 ->where('normalized_artist', $normalizedArtist)
@@ -720,9 +727,9 @@ class TimestampDecompositionService
         $mapping->fill([
             'song_id' => $song->id,
             'is_not_song' => false,
-            'is_manual' => true,
-            'status' => 'linked',
-            'confidence' => 1.0,
+            'is_manual' => ! $titleOnlyMatch,
+            'status' => $titleOnlyMatch ? TimestampSongMapping::STATUS_PENDING : TimestampSongMapping::STATUS_LINKED,
+            'confidence' => $titleOnlyMatch ? 0.8 : 1.0,
             'updated_by' => Auth::id(),
         ]);
         $mapping->save();
