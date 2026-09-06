@@ -68,11 +68,6 @@ class TimestampDecompositionService
         // chunk()はGROUP BYと組み合わせるとオフセットドリフトが発生しうるため使用しない
         $items = $query->get();
         foreach ($items as $item) {
-            // 区切り文字を含むかチェック
-            if (! TextNormalizer::hasSeparators($item->text)) {
-                continue;
-            }
-
             // スペースの有無だけが異なる near-duplicate をスキップ
             $compactKey = self::compactSeparators($item->normalized_text);
             if (isset($existingCompactKeys[$compactKey])) {
@@ -81,22 +76,18 @@ class TimestampDecompositionService
 
             $decomposition = $this->decompose($item->text);
 
-            // パーツが2つ以上ある場合のみ保存
-            if ($decomposition['separator_count'] > 0) {
-                try {
-                    $this->createDecomposition($item->text, $item->normalized_text, $decomposition);
-                    $count++;
-                    $existingCompactKeys[$compactKey] = true;
-                } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
-                    // 正規化テキストが重複している場合はスキップ（異なる元テキストが同じ正規化結果になる場合）
-                    Log::debug('TimestampDecomposition: skipped duplicate normalized_text', [
-                        'normalized_text' => $item->normalized_text,
-                        'text' => $item->text,
-                    ]);
-                    $existingCompactKeys[$compactKey] = true;
+            try {
+                $this->createDecomposition($item->text, $item->normalized_text, $decomposition);
+                $count++;
+                $existingCompactKeys[$compactKey] = true;
+            } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+                Log::debug('TimestampDecomposition: skipped duplicate normalized_text', [
+                    'normalized_text' => $item->normalized_text,
+                    'text' => $item->text,
+                ]);
+                $existingCompactKeys[$compactKey] = true;
 
-                    continue;
-                }
+                continue;
             }
         }
 
