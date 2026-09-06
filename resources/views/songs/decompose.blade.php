@@ -155,6 +155,21 @@
                 </div>
             </div>
 
+            <!-- 動画プレビュー -->
+            <div id="videoPreviewArea" class="mt-4 bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg hidden">
+                <div class="p-4 text-gray-900 dark:text-gray-100">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="text-sm text-gray-500 dark:text-gray-400 font-medium">動画プレビュー</div>
+                        <button id="videoToggleBtn" class="px-2 py-1 text-xs bg-gray-200 dark:bg-gray-600 rounded hover:bg-gray-300 dark:hover:bg-gray-500">
+                            非表示
+                        </button>
+                    </div>
+                    <div id="videoPlayerContainer" class="flex justify-center">
+                        <div id="decomposePlayer"></div>
+                    </div>
+                </div>
+            </div>
+
             <!-- キーボードショートカット説明 -->
             <div class="mt-4 bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-4 text-gray-900 dark:text-gray-100">
@@ -167,6 +182,7 @@
                         <span class="ml-4">Enter: 確定</span>
                         <span class="ml-4">S: スキップ</span>
                         <span class="ml-4">N: 楽曲でない</span>
+                        <span class="ml-4">P: 動画プレビュー</span>
                         <span class="ml-4">R: リセット</span>
                         <span class="ml-4">Z: 戻る</span>
                     </div>
