@@ -4,9 +4,9 @@ import { CONSTANTS } from './utils/constants.js';
 import { timestampApiService } from './services/TimestampApiService.js';
 import { songApiService } from './services/SongApiService.js';
 import { SimilarSongsDialog } from './components/SimilarSongsDialog.js';
-import { SongOperationDialog } from './components/SongOperationDialog.js';
 import { ArtistTagSyncDialog } from './components/ArtistTagSyncDialog.js';
 import { CandidateTab } from './components/CandidateTab.js';
+import { SongRenderer } from './renderers/SongRenderer.js';
 import { Pagination } from '../shared/components/Pagination.js';
 import { videoPlayerManager } from '../shared/managers/VideoPlayerManager.js';
 
@@ -37,10 +37,21 @@ export class TimestampNormalization {
         this.songSearchMode = sessionStorage.getItem('songSearchMode') === CONSTANTS.SONG_SEARCH_MODE_EXACT
             ? CONSTANTS.SONG_SEARCH_MODE_EXACT
             : CONSTANTS.SONG_SEARCH_MODE_FUZZY;
+        this.songRenderer = new SongRenderer({
+            getSelectedSong: () => this.selectedSong,
+            setSelectedSong: (song) => { this.selectedSong = song; },
+            updateSelectionDisplay: () => this.updateSelectionDisplay(),
+            displaySongs: (songs, total) => this.displaySongs(songs, total),
+            loadSongs: (query) => this.loadSongs(query),
+            loadTimestamps: () => this.loadTimestamps(),
+            openEditModal: (song) => this.openEditModal(song),
+            deleteSong: (songId) => this.deleteSong(songId),
+            setSongFilter: (song) => this.setSongFilter(song),
+        });
         this.candidateTab = new CandidateTab({
             getSelectedTimestamps: () => this.selectedTimestamps,
             createSongElement: (song, songs, total, onSelectionChange, opts) =>
-                this.createSongElement(song, songs, total, onSelectionChange, opts),
+                this.songRenderer.createElement(song, songs, total, onSelectionChange, opts),
             onNarrowToSingle: () => {
                 this.selectedTimestamps = this.selectedTimestamps.slice(-1);
                 this.updateSelectionDisplay();
@@ -1186,138 +1197,8 @@ export class TimestampNormalization {
         }
 
         songs.forEach(song => {
-            container.appendChild(this.createSongElement(song, songs, total));
+            container.appendChild(this.songRenderer.createElement(song, songs, total));
         });
-    }
-
-    createSongElement(song, songs, total, onSelectionChange = null, { showActions = true } = {}) {
-        const div = document.createElement('div');
-        div.dataset.songId = song.id;
-        const isSelected = this.selectedSong?.id === song.id;
-        div.className = `p-2 border rounded cursor-pointer flex items-center justify-between ${
-            isSelected
-                ? 'bg-blue-100 dark:bg-blue-900 border-blue-500'
-                : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
-        }`;
-
-        const contentDiv = document.createElement('div');
-        contentDiv.className = 'flex-1 min-w-0';
-
-        const songInfo = document.createElement('div');
-        songInfo.className = 'text-sm flex items-center min-w-0';
-
-        const textWrapper = document.createElement('span');
-        textWrapper.className = 'truncate min-w-0';
-
-        const titleSpan = document.createElement('span');
-        titleSpan.className = 'font-medium';
-        titleSpan.textContent = song.title;
-
-        const separatorSpan = document.createElement('span');
-        separatorSpan.className = 'text-gray-500 dark:text-gray-400';
-        separatorSpan.textContent = ' / ' + song.artist;
-
-        textWrapper.appendChild(titleSpan);
-        textWrapper.appendChild(separatorSpan);
-        songInfo.appendChild(textWrapper);
-        songInfo.title = `${song.title} / ${song.artist}`;
-
-        if (song.tags && song.tags.length > 0) {
-            const tagContainer = document.createElement('span');
-            tagContainer.className = 'inline-flex gap-1 ml-2 overflow-hidden flex-shrink-0';
-            song.tags.forEach(tag => {
-                const badge = document.createElement('span');
-                badge.className = 'inline-block px-1.5 py-0.5 text-[10px] rounded bg-blue-600 text-white whitespace-nowrap';
-                badge.textContent = tag.value;
-                tagContainer.appendChild(badge);
-            });
-            songInfo.appendChild(tagContainer);
-        }
-
-        contentDiv.appendChild(songInfo);
-
-        // 楽曲の長さを表示（ある場合）
-        if (song.duration_ms) {
-            const durationSpan = document.createElement('span');
-            durationSpan.className = 'text-xs text-gray-400 dark:text-gray-500 ml-2';
-            durationSpan.textContent = this.formatDuration(song.duration_ms);
-            songInfo.appendChild(durationSpan);
-        }
-
-        // ボタンコンテナ
-        const buttonContainer = document.createElement('div');
-        buttonContainer.className = 'flex items-center gap-1 flex-shrink-0 ml-2';
-
-        // コピーボタン
-        const copyBtn = this.createSongCopyButton(song);
-        buttonContainer.appendChild(copyBtn);
-
-        if (showActions) {
-            // 絞り込みボタン
-            const filterBtn = this.createSongFilterButton(song);
-            buttonContainer.appendChild(filterBtn);
-
-            // 操作ボタン
-            const opBtn = document.createElement('button');
-            opBtn.className = 'px-2 py-1 text-xs bg-teal-600 text-white rounded hover:bg-teal-700';
-            opBtn.textContent = '操作';
-            opBtn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                const result = await SongOperationDialog.show(song);
-                if (result.action === 'merged' || result.action === 'artist_renamed') {
-                    this.selectedSong = null;
-                    this.loadSongs(document.getElementById('songsSearch')?.value ?? '');
-                    this.loadTimestamps();
-                } else {
-                    song.tags = result.tags;
-                    if (onSelectionChange) {
-                        onSelectionChange();
-                    } else {
-                        this.displaySongs(songs, total);
-                    }
-                }
-            });
-            buttonContainer.appendChild(opBtn);
-
-            // 編集ボタン
-            const editBtn = document.createElement('button');
-            editBtn.className = 'px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700';
-            editBtn.textContent = '編集';
-            editBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.openEditModal(song);
-            });
-
-            // 削除ボタン
-            const deleteBtn = document.createElement('button');
-            deleteBtn.className = 'px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700';
-            deleteBtn.textContent = '削除';
-            deleteBtn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                if (confirm(`楽曲マスタを削除しますか?\n${song.title} / ${song.artist}`)) {
-                    await this.deleteSong(song.id);
-                }
-            });
-
-            buttonContainer.appendChild(editBtn);
-            buttonContainer.appendChild(deleteBtn);
-        }
-
-        div.appendChild(contentDiv);
-        div.appendChild(buttonContainer);
-
-        div.addEventListener('click', () => {
-            // 選択済みの楽曲をもう一度クリックしたら選択を解除する
-            this.selectedSong = this.selectedSong?.id === song.id ? null : song;
-            if (onSelectionChange) {
-                onSelectionChange();
-            } else {
-                this.displaySongs(songs, total);
-            }
-            this.updateSelectionDisplay();
-        });
-
-        return div;
     }
 
     /**
@@ -1335,67 +1216,6 @@ export class TimestampNormalization {
                 countDiv.textContent = `${count}件`;
             }
         }
-    }
-
-    /**
-     * 楽曲マスタ用のコピーボタンを作成
-     * @param {Object} song - 楽曲オブジェクト
-     * @returns {HTMLElement} コピーボタン要素
-     */
-    createSongCopyButton(song) {
-        const copyBtn = document.createElement('button');
-        copyBtn.className = 'p-1.5 text-gray-600 dark:text-gray-400 bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors';
-        copyBtn.title = '楽曲名 / アーティスト名をコピー';
-        copyBtn.innerHTML = `
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-            </svg>
-        `;
-
-        const originalIcon = copyBtn.innerHTML;
-        const checkIcon = `
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-            </svg>
-        `;
-
-        copyBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const textToCopy = `${song.title} / ${song.artist}`;
-            navigator.clipboard.writeText(textToCopy);
-            copyBtn.innerHTML = checkIcon;
-            copyBtn.title = 'コピー済';
-            toast.success('コピーしました');
-            setTimeout(() => {
-                copyBtn.innerHTML = originalIcon;
-                copyBtn.title = '楽曲名 / アーティスト名をコピー';
-            }, 1000);
-        });
-
-        return copyBtn;
-    }
-
-    /**
-     * 楽曲マスタ用の絞り込みボタンを作成
-     * @param {Object} song - 楽曲オブジェクト
-     * @returns {HTMLElement} 絞り込みボタン要素
-     */
-    createSongFilterButton(song) {
-        const filterBtn = document.createElement('button');
-        filterBtn.className = 'p-1.5 text-gray-600 dark:text-gray-400 bg-gray-200 dark:bg-gray-700 rounded hover:bg-purple-300 dark:hover:bg-purple-600 transition-colors';
-        filterBtn.title = '紐づくTSを表示';
-        filterBtn.innerHTML = `
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-            </svg>
-        `;
-
-        filterBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.setSongFilter(song);
-        });
-
-        return filterBtn;
     }
 
     /**
@@ -2601,29 +2421,10 @@ export class TimestampNormalization {
      * @param {number|string} durationMs - ミリ秒
      */
     updateDurationDisplay(durationMs) {
-        const formatted = durationMs ? this.formatDuration(durationMs) : '';
+        const formatted = durationMs ? this.songRenderer.formatDuration(durationMs) : '';
         document.getElementById('editSongDurationFormatted').textContent = formatted;
     }
 
-    /**
-     * ミリ秒を時間フォーマットに変換
-     * @param {number|string} durationMs - ミリ秒
-     * @returns {string} フォーマットされた時間（例: "3:45" または "1:23:45"）
-     */
-    formatDuration(durationMs) {
-        const ms = parseInt(durationMs, 10);
-        if (isNaN(ms) || ms <= 0) return '';
-
-        const totalSeconds = Math.floor(ms / 1000);
-        const hours = Math.floor(totalSeconds / 3600);
-        const minutes = Math.floor((totalSeconds % 3600) / 60);
-        const seconds = totalSeconds % 60;
-
-        if (hours > 0) {
-            return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-        }
-        return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-    }
 }
 
 // 初期化
