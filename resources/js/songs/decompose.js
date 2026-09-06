@@ -263,11 +263,11 @@ class TimestampDecomposition {
     updateVideoPreview() {
         const area = document.getElementById('videoPreviewArea');
         if (!this.currentItem?.video_id || this.videoHidden) {
-            area.hidden = true;
+            area.classList.add('hidden');
             return;
         }
 
-        area.hidden = false;
+        area.classList.remove('hidden');
 
         if (!this.playerReady) return;
 
@@ -298,7 +298,7 @@ class TimestampDecomposition {
         btn.textContent = this.videoHidden ? '表示' : '非表示';
 
         if (this.videoHidden) {
-            document.getElementById('videoPreviewArea').hidden = true;
+            document.getElementById('videoPreviewArea').classList.add('hidden');
             if (this.player) {
                 this.player.stopVideo();
             }
