@@ -5037,6 +5037,26 @@ function createVolumeGraph() {
         margin-left: 4px;
       }
 
+      .vdg-zoom-btn {
+        font-size: 12px;
+        line-height: 1;
+        padding: 1px 5px;
+        background: #333;
+        color: #ccc;
+        border: 1px solid #555;
+        border-radius: 3px;
+        cursor: pointer;
+        vertical-align: middle;
+      }
+      .vdg-zoom-btn:hover {
+        background: #444;
+        color: #fff;
+      }
+      .vdg-zoom-btn:disabled {
+        opacity: 0.3;
+        cursor: default;
+      }
+
       .vdg-volume-mode {
         font-size: 9px;
         padding: 2px 6px;
@@ -5332,7 +5352,9 @@ function createVolumeGraph() {
       <div class="vdg-controls">
         <span class="vdg-playlist-info" id="vdg-playlist-info"></span>
         <span class="vdg-progress" id="vdg-progress" title="音量分析の完了率">分析 0%</span>
+        <button class="vdg-zoom-btn" id="vdg-zoom-out-btn" title="縮小">−</button>
         <span class="vdg-zoom-info" id="vdg-zoom-info" title="グラフの表示倍率（Ctrl+ホイールで変更）">倍率 1x</span>
+        <button class="vdg-zoom-btn" id="vdg-zoom-in-btn" title="拡大">+</button>
         <button class="vdg-volume-mode" id="vdg-volume-mode-btn" title="固定スケールでの絶対値表示中（クリックで相対表示に切替）">絶対</button>
         <button class="vdg-btn" id="vdg-scan-btn" title="動画全体をスキャンしてグラフを生成">スキャン</button>
         <button class="vdg-btn" id="vdg-rescan-btn" title="保存された音量データを破棄して最初からスキャンし直す">やり直し</button>
@@ -5371,7 +5393,7 @@ function createVolumeGraph() {
       </div>
       <div class="vdg-ts-footer">
         <div class="vdg-ts-help">
-          クリック: マーカー追加(付近は選択/ドラッグで移動) | Enter: 曲名入力/入力終了 | Del: 削除 | Esc: 入力終了・選択解除 | ←→: 1秒移動(2度押し5秒) | ↑↓: マーカー移動(入力中は行頭/行末へ) | Space: 再生/停止 | J/L: 再生を10秒戻す/進める | Ctrl+Z/Y: 操作を戻す/やり直す | Ctrl+ホイール: 拡大/縮小
+          クリック: マーカー追加(付近は選択/ドラッグで移動) | Enter: 曲名入力/入力終了 | Del/BS: 削除 | Esc: 入力終了・選択解除 | ←→: 1秒移動(2度押し5秒) | ↑↓: マーカー移動(入力中は行頭/行末へ) | Space: 再生/停止 | J/L: 再生を10秒戻す/進める | Ctrl+Z/Y: 操作を戻す/やり直す | −/+ボタン or Ctrl+ホイール: 拡大/縮小
         </div>
         <label class="vdg-ts-format-toggle">
           <input type="checkbox" id="vdg-ts-zeropad">
@@ -5486,6 +5508,8 @@ function changeZoomLevel(delta) {
     zoomInfo.textContent = `倍率 ${newZoom}x`;
   }
 
+  updateZoomButtons();
+
   // スクロール位置を維持するための計算
   const canvasContainer = volumeGraphContainer?.querySelector('#vdg-canvas-container');
   if (canvasContainer) {
@@ -5500,6 +5524,16 @@ function changeZoomLevel(delta) {
   } else {
     resizeCanvas();
   }
+}
+
+/**
+ * ズームボタンのdisabled状態を更新
+ */
+function updateZoomButtons() {
+  const zoomInBtn = volumeGraphContainer?.querySelector('#vdg-zoom-in-btn');
+  const zoomOutBtn = volumeGraphContainer?.querySelector('#vdg-zoom-out-btn');
+  if (zoomInBtn) zoomInBtn.disabled = zoomIndex >= ZOOM_LEVELS.length - 1;
+  if (zoomOutBtn) zoomOutBtn.disabled = zoomIndex <= 0;
 }
 
 /**
@@ -5725,6 +5759,24 @@ function setupVolumeGraphEvents() {
     e.preventDefault(); // ブラウザのページ拡大を抑止
     changeZoomLevel(e.deltaY > 0 ? -1 : 1);
   }, { passive: false });
+
+  // ズームボタン
+  const zoomInBtn = volumeGraphContainer.querySelector('#vdg-zoom-in-btn');
+  const zoomOutBtn = volumeGraphContainer.querySelector('#vdg-zoom-out-btn');
+  if (zoomInBtn) {
+    zoomInBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      changeZoomLevel(1);
+      updateZoomButtons();
+    });
+  }
+  if (zoomOutBtn) {
+    zoomOutBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      changeZoomLevel(-1);
+      updateZoomButtons();
+    });
+  }
 
   // 音量表示モード切り替えボタン
   const volumeModeBtn = volumeGraphContainer.querySelector('#vdg-volume-mode-btn');
@@ -5962,7 +6014,7 @@ function setupVolumeGraphEvents() {
 
     const now = Date.now();
 
-    if (e.key === 'Delete' && !isTextInput) {
+    if ((e.key === 'Delete' || e.key === 'Backspace') && !isTextInput) {
       e.preventDefault();
       e.stopImmediatePropagation();
       deleteSelectedMarker();
