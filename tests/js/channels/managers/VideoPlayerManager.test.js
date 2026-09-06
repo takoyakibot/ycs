@@ -14,7 +14,7 @@ vi.mock('../../../../resources/js/utils/youtube.js', () => ({
     isValidVideoId: vi.fn((id) => typeof id === 'string' && /^[a-zA-Z0-9_-]{11}$/.test(id)),
 }));
 
-vi.mock('../../../../resources/js/channels/utils/constants.js', () => ({
+const MOCK_CONSTANTS = {
     YOUTUBE_PLAYER_CONFIG: {
         height: '180',
         width: '320',
@@ -26,7 +26,10 @@ vi.mock('../../../../resources/js/channels/utils/constants.js', () => ({
         medium: { width: 320, height: 180, minimizedWidth: 160, label: '中' },
         large: { width: 480, height: 270, minimizedWidth: 240, label: '大' },
     },
-}));
+};
+
+vi.mock('../../../../resources/js/shared/utils/youtube-constants.js', () => MOCK_CONSTANTS);
+vi.mock('../../../../resources/js/channels/utils/constants.js', () => MOCK_CONSTANTS);
 
 let VideoPlayerManager;
 
