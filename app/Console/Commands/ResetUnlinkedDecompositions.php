@@ -34,6 +34,13 @@ class ResetUnlinkedDecompositions extends Command
             ['ステータス', '件数'],
             $byStatus->map(fn ($items, $status) => [$status, $items->count()])->values()
         );
+
+        $reviewedWithTitle = $targets->filter(
+            fn ($d) => $d->status === TimestampDecomposition::STATUS_SELECTED && $d->derived_title !== null
+        );
+        if ($reviewedWithTitle->isNotEmpty()) {
+            $this->warn("うち曲名確定済み（アーティスト未設定）のSELECTED: {$reviewedWithTitle->count()}件");
+        }
         $this->newLine();
 
         if ($targets->isEmpty()) {
@@ -75,8 +82,15 @@ class ResetUnlinkedDecompositions extends Command
         }
 
         $this->line('再スキャン中...');
-        $scannedCount = $service->scanAndDecompose();
-        $this->info("再スキャン完了: <comment>{$scannedCount}件</comment> が新たにTS分解対象に追加されました");
+        try {
+            $scannedCount = $service->scanAndDecompose();
+            $this->info("再スキャン完了: <comment>{$scannedCount}件</comment> が新たにTS分解対象に追加されました");
+        } catch (\Throwable $e) {
+            $this->error("再スキャンに失敗しました: {$e->getMessage()}");
+            $this->line('削除は完了しています。TS分解画面のスキャンボタン、または --skip-rescan なしで再実行してください。');
+
+            return self::FAILURE;
+        }
 
         return self::SUCCESS;
     }

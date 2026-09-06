@@ -3,9 +3,11 @@
 namespace Tests\Feature;
 
 use App\Helpers\TextNormalizer;
+use App\Models\Archive;
 use App\Models\Song;
 use App\Models\TimestampDecomposition;
 use App\Models\TimestampSongMapping;
+use App\Models\TsItem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -104,5 +106,47 @@ class ResetUnlinkedDecompositionsTest extends TestCase
 
         // auto-linked (is_manual=false) は confirmed ではないのでリセット対象
         $this->assertDatabaseMissing('timestamp_decompositions', ['id' => $autoLinked->id]);
+    }
+
+    public function test_apply_with_rescan_recreates_decompositions(): void
+    {
+        $archive = Archive::factory()->create(['is_display' => true]);
+        $text = '曲名/アーティスト名';
+        TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'text' => $text,
+            'is_display' => true,
+        ]);
+
+        $old = $this->createDecomposition($text, TimestampDecomposition::STATUS_SKIPPED);
+
+        $this->artisan('ts-decompositions:reset-unlinked', ['--apply' => true])
+            ->assertSuccessful()
+            ->expectsOutputToContain('削除完了')
+            ->expectsOutputToContain('再スキャン完了');
+
+        $this->assertDatabaseMissing('timestamp_decompositions', ['id' => $old->id]);
+        $this->assertDatabaseHas('timestamp_decompositions', [
+            'normalized_text' => TextNormalizer::normalize($text),
+            'status' => TimestampDecomposition::STATUS_PENDING,
+        ]);
+    }
+
+    public function test_shows_warning_for_selected_with_derived_title(): void
+    {
+        TimestampDecomposition::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize('曲名/アーティスト'),
+            'original_text' => '曲名/アーティスト',
+            'parts' => ['曲名', 'アーティスト'],
+            'separator_count' => 1,
+            'status' => TimestampDecomposition::STATUS_SELECTED,
+            'confidence' => 0.5,
+            'derived_title' => '曲名',
+        ]);
+
+        $this->artisan('ts-decompositions:reset-unlinked')
+            ->assertSuccessful()
+            ->expectsOutputToContain('曲名確定済み');
     }
 }
