@@ -262,10 +262,70 @@ export class TimestampNormalization {
             return;
         }
 
+        // pendingフィルタ時にナビゲーションバーを表示
+        if (this.currentFilter === 'pending') {
+            container.appendChild(this.createPendingNavigation(timestamps));
+        }
+
         // DBでソート済みなのでそのまま表示
         timestamps.forEach(ts => {
             container.appendChild(this.createTimestampElement(ts));
         });
+    }
+
+    createPendingNavigation(timestamps) {
+        const nav = document.createElement('div');
+        nav.className = 'flex items-center justify-between p-2 mb-2 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded text-sm';
+
+        const pendingItems = timestamps.filter(ts => ts.status === 'pending' && ts.pending_info?.matched_song);
+        const countLabel = document.createElement('span');
+        countLabel.className = 'text-orange-700 dark:text-orange-300';
+        countLabel.textContent = `確認待ち: ${pendingItems.length}件`;
+
+        const btnContainer = document.createElement('div');
+        btnContainer.className = 'flex gap-2';
+
+        const prevBtn = document.createElement('button');
+        prevBtn.className = 'px-2 py-1 text-xs bg-orange-100 dark:bg-orange-800 hover:bg-orange-200 dark:hover:bg-orange-700 text-orange-700 dark:text-orange-300 rounded transition-colors';
+        prevBtn.textContent = '◀ 前';
+        prevBtn.onclick = () => this.navigatePending(-1);
+
+        const nextBtn = document.createElement('button');
+        nextBtn.className = 'px-2 py-1 text-xs bg-orange-100 dark:bg-orange-800 hover:bg-orange-200 dark:hover:bg-orange-700 text-orange-700 dark:text-orange-300 rounded transition-colors';
+        nextBtn.textContent = '次 ▶';
+        nextBtn.onclick = () => this.navigatePending(1);
+
+        btnContainer.appendChild(prevBtn);
+        btnContainer.appendChild(nextBtn);
+
+        nav.appendChild(countLabel);
+        nav.appendChild(btnContainer);
+
+        return nav;
+    }
+
+    navigatePending(direction) {
+        const currentIdx = this.selectedTimestamps.length === 1
+            ? this.currentPageTimestamps.findIndex(ts => ts.id === this.selectedTimestamps[0].id)
+            : -1;
+
+        let nextIdx = currentIdx;
+        const len = this.currentPageTimestamps.length;
+
+        for (let i = 0; i < len; i++) {
+            nextIdx = direction > 0
+                ? (nextIdx + 1) % len
+                : (nextIdx - 1 + len) % len;
+            const ts = this.currentPageTimestamps[nextIdx];
+            if (ts.status === 'pending') {
+                this.selectedTimestamps = [ts];
+                this.refreshTimestampSelectionStyles();
+                this.updateSelectionDisplay();
+                const el = document.querySelector(`[data-ts-id="${ts.id}"]`);
+                if (el) el.scrollIntoView({ block: 'nearest' });
+                return;
+            }
+        }
     }
 
     createTimestampElement(ts) {
@@ -326,8 +386,8 @@ export class TimestampNormalization {
         buttonContainer.className = 'flex items-center gap-1 flex-shrink-0';
         buttonContainer.appendChild(copyBtn);
 
-        // 自動紐付け確定ボタン（自動紐付けの場合のみ表示）
-        if (ts.is_manual === false && ts.song) {
+        // 自動紐付け確定ボタン（自動紐付けまたは確認待ちの場合のみ表示）
+        if ((ts.is_manual === false && ts.song) || (ts.status === 'pending' && ts.pending_info?.matched_song)) {
             const confirmBtn = this.createConfirmButton(ts);
             buttonContainer.appendChild(confirmBtn);
         }
@@ -346,6 +406,15 @@ export class TimestampNormalization {
         if (ts.is_not_song) {
             statusDiv.className += ' text-red-600 dark:text-red-400';
             statusDiv.textContent = '楽曲ではない';
+        } else if (ts.status === 'pending' && ts.pending_info?.matched_song) {
+            // 確認待ち（候補曲あり）
+            statusDiv.className += ' text-orange-600 dark:text-orange-400';
+            const song = ts.pending_info.matched_song;
+            const statusText = `[確認待ち] ${song.title} / ${song.artist}`;
+            statusDiv.textContent = statusText.length > CONSTANTS.MAX_STATUS_LENGTH
+                ? statusText.substring(0, CONSTANTS.MAX_STATUS_LENGTH) + '...'
+                : statusText;
+            statusDiv.title = statusText;
         } else if (ts.status === 'pending') {
             // 保留状態
             statusDiv.className += ' text-orange-600 dark:text-orange-400';
@@ -591,6 +660,15 @@ export class TimestampNormalization {
             linkedSongSpan.classList.remove('hidden');
             confirmBtn.classList.add('hidden');
             confirmBtn.onclick = null;
+            unlinkIndividualBtn.classList.add('hidden');
+            unlinkIndividualBtn.onclick = null;
+        } else if (ts.status === 'pending' && ts.pending_info?.matched_song) {
+            const song = ts.pending_info.matched_song;
+            linkedSongSpan.textContent = `確認待ち: ${song.title} / ${song.artist}`;
+            linkedSongSpan.className = 'text-xs break-words text-orange-600 dark:text-orange-400';
+            linkedSongSpan.classList.remove('hidden');
+            confirmBtn.classList.remove('hidden');
+            confirmBtn.onclick = () => this.confirmAutoLink(ts);
             unlinkIndividualBtn.classList.add('hidden');
             unlinkIndividualBtn.onclick = null;
         } else if (ts.status === 'pending') {

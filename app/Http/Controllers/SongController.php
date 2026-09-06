@@ -418,6 +418,18 @@ class SongController extends Controller
             $data['is_manual'] = $isManual;
             $data['status'] = $status;
 
+            // pending状態のマッピングに候補曲情報を付与
+            if ($mapping && $mapping->status === TimestampSongMapping::STATUS_PENDING && $mapping->song) {
+                $data['pending_info'] = [
+                    'matched_song' => [
+                        'id' => $mapping->song->id,
+                        'title' => $mapping->song->title,
+                        'artist' => $mapping->song->artist,
+                    ],
+                    'confidence' => $mapping->confidence,
+                ];
+            }
+
             return $data;
         });
 

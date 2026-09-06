@@ -221,7 +221,10 @@ class SongMappingService
         $userId = $userId ?? Auth::id();
 
         $mapping = TimestampSongMapping::where('normalized_text', $normalizedText)
-            ->where('is_manual', false)
+            ->where(function ($q) {
+                $q->where('is_manual', false)
+                    ->orWhere('status', TimestampSongMapping::STATUS_PENDING);
+            })
             ->whereNotNull('song_id')
             ->first();
 
@@ -231,6 +234,7 @@ class SongMappingService
 
         $mapping->update([
             'is_manual' => true,
+            'status' => TimestampSongMapping::STATUS_LINKED,
             'confidence' => 1.0,
             'updated_by' => $userId,
         ]);
