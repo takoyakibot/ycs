@@ -37,6 +37,20 @@ vi.mock('@/songs/components/ArtistTagSyncDialog.js', () => ({
 vi.mock('@/shared/components/Pagination.js', () => ({
     Pagination: vi.fn(),
 }));
+vi.mock('@/songs/components/CandidateTab.js', () => ({
+    CandidateTab: vi.fn().mockImplementation(() => ({
+        isActive: vi.fn().mockReturnValue(false),
+        load: vi.fn(),
+        display: vi.fn(),
+        renderKeywords: vi.fn(),
+        searchByKeywords: vi.fn(),
+        removeSong: vi.fn(),
+        getSelectionKey: vi.fn().mockReturnValue(null),
+        setSelectionKey: vi.fn(),
+        lastDisplayedCandidates: [],
+        lastDisplayedCandidatesTotal: 0,
+    })),
+}));
 
 function setupMinimalDOM() {
     document.body.innerHTML = `
@@ -135,12 +149,20 @@ async function createInstance() {
     instance.songsRequestSeq = 0;
     instance.songsQueryActive = false;
     instance.songSearchMode = 'fuzzy';
-    instance.candidateKeywords = [];
-    instance.candidateTextKey = null;
-    instance.candidateRequestSeq = 0;
-    instance.lastDisplayedCandidates = [];
-    instance.lastDisplayedCandidatesTotal = 0;
-    instance.lastCandidateSelectionKey = null;
+    instance.candidateTab = {
+        isActive: () => document.getElementById('candidatesList')
+            ? !document.getElementById('candidatesList').classList.contains('hidden')
+            : false,
+        load: vi.fn(),
+        display: vi.fn(),
+        renderKeywords: vi.fn(),
+        searchByKeywords: vi.fn(),
+        removeSong: vi.fn(),
+        getSelectionKey: vi.fn().mockReturnValue(null),
+        setSelectionKey: vi.fn(),
+        lastDisplayedCandidates: [],
+        lastDisplayedCandidatesTotal: 0,
+    };
     instance.activeTabId = null;
     instance.currentPageTimestamps = [];
     instance.spotifyEnabled = false;
@@ -614,16 +636,16 @@ describe('TimestampNormalization', () => {
     });
 
     // =========================================================================
-    // isCandidateTabActive
+    // candidateTab.isActive (旧 isCandidateTabActive)
     // =========================================================================
-    describe('isCandidateTabActive', () => {
+    describe('candidateTab.isActive', () => {
         it('candidatesListが表示中のときtrueを返す', () => {
             document.getElementById('candidatesList').classList.remove('hidden');
-            expect(instance.isCandidateTabActive()).toBe(true);
+            expect(instance.candidateTab.isActive()).toBe(true);
         });
 
         it('candidatesListが非表示のときfalseを返す', () => {
-            expect(instance.isCandidateTabActive()).toBe(false);
+            expect(instance.candidateTab.isActive()).toBe(false);
         });
     });
 

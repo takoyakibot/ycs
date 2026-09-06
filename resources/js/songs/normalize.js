@@ -6,6 +6,7 @@ import { songApiService } from './services/SongApiService.js';
 import { SimilarSongsDialog } from './components/SimilarSongsDialog.js';
 import { SongOperationDialog } from './components/SongOperationDialog.js';
 import { ArtistTagSyncDialog } from './components/ArtistTagSyncDialog.js';
+import { CandidateTab } from './components/CandidateTab.js';
 import { Pagination } from '../shared/components/Pagination.js';
 import { videoPlayerManager } from '../shared/managers/VideoPlayerManager.js';
 
@@ -36,12 +37,16 @@ export class TimestampNormalization {
         this.songSearchMode = sessionStorage.getItem('songSearchMode') === CONSTANTS.SONG_SEARCH_MODE_EXACT
             ? CONSTANTS.SONG_SEARCH_MODE_EXACT
             : CONSTANTS.SONG_SEARCH_MODE_FUZZY;
-        this.candidateKeywords = [];           // 候補タブの検索キーワード
-        this.candidateTextKey = null;          // どのタイムスタンプのテキストかを判別する元テキスト
-        this.candidateRequestSeq = 0;          // 候補取得の世代番号（応答の追い越し防止）
-        this.lastDisplayedCandidates = [];     // 表示中の候補楽曲リスト
-        this.lastDisplayedCandidatesTotal = 0; // 表示中の候補楽曲の総件数
-        this.lastCandidateSelectionKey = null; // 候補を作り直すかの判定用（前回の選択）
+        this.candidateTab = new CandidateTab({
+            getSelectedTimestamps: () => this.selectedTimestamps,
+            createSongElement: (song, songs, total, onSelectionChange, opts) =>
+                this.createSongElement(song, songs, total, onSelectionChange, opts),
+            onNarrowToSingle: () => {
+                this.selectedTimestamps = this.selectedTimestamps.slice(-1);
+                this.updateSelectionDisplay();
+                this.loadTimestamps(this.currentPage, this.currentSearchQuery);
+            },
+        });
         this.activeTabId = null;               // 現在表示中のタブ（タブ切り替え判定用）
         this.currentPageTimestamps = [];       // 現在ページのタイムスタンプ（選択操作用）
         this.manualTags = [];                  // 手動登録フォームのタグ
@@ -357,7 +362,7 @@ export class TimestampNormalization {
         // 候補タブは1件のテキストに対する候補を出すため単一選択にする。
         // ただし複数選択中は、複数がチェックされたラジオボタンという矛盾した表示に
         // ならないようチェックボックスのまま描画する（選択を保持したまま案内を出す）
-        const singleSelect = this.isCandidateTabActive() && this.selectedTimestamps.length <= 1;
+        const singleSelect = this.candidateTab.isActive() && this.selectedTimestamps.length <= 1;
 
         const checkbox = document.createElement('input');
         checkbox.type = singleSelect ? 'radio' : 'checkbox';
@@ -543,7 +548,7 @@ export class TimestampNormalization {
     toggleTimestampSelection(timestamp) {
         const index = this.selectedTimestamps.findIndex(t => t.id === timestamp.id);
 
-        if (this.isCandidateTabActive() && this.selectedTimestamps.length <= 1) {
+        if (this.candidateTab.isActive() && this.selectedTimestamps.length <= 1) {
             this.selectedTimestamps = index >= 0 ? [] : [timestamp];
         } else if (index >= 0) {
             this.selectedTimestamps.splice(index, 1);
@@ -560,7 +565,7 @@ export class TimestampNormalization {
     }
 
     selectAll() {
-        if (this.isCandidateTabActive()) {
+        if (this.candidateTab.isActive()) {
             return;
         }
 
@@ -626,12 +631,12 @@ export class TimestampNormalization {
 
         // 候補は選択中のタイムスタンプに対するものなので、選択が変わったら作り直す。
         // 楽曲を選んだだけのときは作り直さない（同じ条件での再検索が無駄に走るため）
-        if (this.isCandidateTabActive()) {
+        if (this.candidateTab.isActive()) {
             const selectionKey = this.selectedTimestamps.map(t => t.id).join(',');
 
-            if (this.lastCandidateSelectionKey !== selectionKey) {
-                this.lastCandidateSelectionKey = selectionKey;
-                this.loadCandidates();
+            if (this.candidateTab.getSelectionKey() !== selectionKey) {
+                this.candidateTab.setSelectionKey(selectionKey);
+                this.candidateTab.load();
             }
         }
     }
@@ -1185,282 +1190,6 @@ export class TimestampNormalization {
         });
     }
 
-    /**
-     * 候補タブが開いているか
-     */
-    isCandidateTabActive() {
-        return !document.getElementById('candidatesList').classList.contains('hidden');
-    }
-
-    /**
-     * 候補タブの内容を読み込む
-     *
-     * タイムスタンプが1件だけ選択されているときに候補を取得する。
-     * 複数選択中は選択に触らず案内だけ出す（一括紐付けの選択を壊さないため）。
-     */
-    async loadCandidates() {
-        const notice = document.getElementById('candidateNotice');
-        const textArea = document.getElementById('candidateTextArea');
-        const keywordsArea = document.getElementById('candidateKeywordsArea');
-        const results = document.getElementById('candidateResults');
-
-        if (this.selectedTimestamps.length === 0) {
-            this.candidateRequestSeq++;
-            this.candidateTextKey = null;
-            this.candidateKeywords = [];
-
-            notice.textContent = 'タイムスタンプを1件選ぶと候補を表示します。';
-            textArea.classList.add('hidden');
-            keywordsArea.classList.add('hidden');
-            results.innerHTML = '';
-            return;
-        }
-
-        if (this.selectedTimestamps.length > 1) {
-            this.candidateRequestSeq++;
-            this.renderMultiSelectionNotice();
-            textArea.classList.add('hidden');
-            keywordsArea.classList.add('hidden');
-            results.innerHTML = '';
-            return;
-        }
-
-        const text = this.selectedTimestamps[0].text;
-
-        if (this.candidateTextKey === text) {
-            textArea.classList.remove('hidden');
-            this.renderCandidateKeywords();
-            await this.searchCandidatesByKeywords();
-            return;
-        }
-
-        notice.textContent = '候補を探しています…';
-        results.innerHTML = '';
-
-        this.candidateTextKey = null;
-        this.candidateKeywords = [];
-        textArea.classList.add('hidden');
-        keywordsArea.classList.add('hidden');
-
-        const seq = ++this.candidateRequestSeq;
-
-        try {
-            const data = await songApiService.fetchCandidates(text);
-
-            if (seq !== this.candidateRequestSeq) {
-                return;
-            }
-
-            this.candidateTextKey = text;
-
-            // 元テキストを選択可能な領域に表示
-            const originalTextEl = document.getElementById('candidateOriginalText');
-            originalTextEl.textContent = text;
-            textArea.classList.remove('hidden');
-
-            // ノイズ除去済みのパーツを初期キーワードとして設定
-            this.candidateKeywords = [...new Set(
-                data.parts.filter((_, i) => !data.ignored_indices.includes(i))
-            )];
-
-            this.renderCandidateKeywords();
-            this.setupTextSelection();
-            notice.textContent = '';
-            this.displayCandidates(data.songs, data.total);
-        } catch (error) {
-            if (seq !== this.candidateRequestSeq) {
-                return;
-            }
-
-            console.error('候補の取得に失敗しました:', error);
-            notice.textContent = '候補の取得に失敗しました。';
-            textArea.classList.add('hidden');
-        }
-    }
-
-    /**
-     * 複数選択中の案内を表示する
-     */
-    renderMultiSelectionNotice() {
-        const notice = document.getElementById('candidateNotice');
-        notice.textContent = '';
-
-        const message = document.createElement('p');
-        message.className = 'mb-2';
-        message.textContent = `${this.selectedTimestamps.length}件選択中です。候補を見るには1件だけ選んでください。`;
-
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'px-3 py-1 bg-amber-600 text-white text-sm rounded hover:bg-amber-700';
-        button.textContent = '最後に選んだ1件に絞る';
-        button.addEventListener('click', () => {
-            this.selectedTimestamps = this.selectedTimestamps.slice(-1);
-            // 選択が複数→単一に変わるので、updateSelectionDisplay() の判定キーの
-            // 差分検知により候補は自動的に作り直される（ここで明示的に呼ぶと二重取得になる）
-            this.updateSelectionDisplay();
-            this.loadTimestamps(this.currentPage, this.currentSearchQuery);
-        });
-
-        notice.appendChild(message);
-        notice.appendChild(button);
-    }
-
-    /**
-     * キーワードタグを描画する
-     */
-    renderCandidateKeywords() {
-        const keywordsArea = document.getElementById('candidateKeywordsArea');
-        const container = document.getElementById('candidateKeywords');
-
-        container.innerHTML = '';
-
-        if (this.candidateKeywords.length === 0) {
-            keywordsArea.classList.add('hidden');
-            return;
-        }
-
-        keywordsArea.classList.remove('hidden');
-
-        this.candidateKeywords.forEach((keyword, index) => {
-            const tag = document.createElement('span');
-            tag.className = 'inline-flex items-center gap-1 px-2 py-1 text-xs rounded bg-amber-600 text-white';
-            tag.textContent = keyword;
-
-            const removeBtn = document.createElement('button');
-            removeBtn.type = 'button';
-            removeBtn.className = 'ml-0.5 hover:text-amber-200';
-            removeBtn.textContent = '×';
-            removeBtn.addEventListener('click', () => this.removeCandidateKeyword(index));
-            tag.appendChild(removeBtn);
-
-            container.appendChild(tag);
-        });
-    }
-
-    /**
-     * 候補一覧を描画する
-     *
-     * 候補の見た目と選択の扱いは楽曲マスタ一覧と揃える（createSongElement を再利用する）
-     */
-    displayCandidates(songs, total) {
-        this.lastDisplayedCandidates = songs;
-        this.lastDisplayedCandidatesTotal = total;
-
-        const results = document.getElementById('candidateResults');
-        const notice = document.getElementById('candidateNotice');
-
-        results.innerHTML = '';
-
-        if (!Array.isArray(songs) || songs.length === 0) {
-            notice.textContent = this.candidateKeywords.length === 0
-                ? '検索語を追加してください。'
-                : '候補が見つかりませんでした。検索語を減らして条件を緩めてください。';
-            return;
-        }
-
-        notice.textContent = songs.length < total
-            ? `${total}件の候補（上位${songs.length}件を表示）`
-            : `${total}件の候補`;
-
-        songs.forEach(song => {
-            results.appendChild(this.createSongElement(song, songs, total, () => {
-                this.displayCandidates(songs, total);
-            }, { showActions: false }));
-        });
-    }
-
-    /**
-     * テキスト選択でキーワードを追加するイベントを設定する
-     */
-    setupTextSelection() {
-        const el = document.getElementById('candidateOriginalText');
-
-        if (this._textSelectionHandler) {
-            document.removeEventListener('mouseup', this._textSelectionHandler);
-        }
-
-        this._textSelectionHandler = () => {
-            const selection = window.getSelection();
-            if (!selection.rangeCount) return;
-
-            const range = selection.getRangeAt(0);
-            if (!el.contains(range.startContainer)) return;
-
-            const selectedText = selection.toString().trim();
-            if (!selectedText) return;
-
-            if (!this.candidateKeywords.includes(selectedText)) {
-                this.candidateKeywords.push(selectedText);
-                this.renderCandidateKeywords();
-                this.searchCandidatesByKeywords();
-            }
-
-            selection.removeAllRanges();
-        };
-
-        document.addEventListener('mouseup', this._textSelectionHandler);
-
-        const clearBtn = document.getElementById('candidateKeywordsClear');
-        if (clearBtn && !this._keywordsClearHandler) {
-            this._keywordsClearHandler = () => {
-                this.candidateKeywords = [];
-                this.renderCandidateKeywords();
-                this.searchCandidatesByKeywords();
-            };
-            clearBtn.addEventListener('click', this._keywordsClearHandler);
-        }
-    }
-
-    /**
-     * キーワードを削除して再検索する
-     */
-    async removeCandidateKeyword(index) {
-        this.candidateKeywords.splice(index, 1);
-        this.renderCandidateKeywords();
-        await this.searchCandidatesByKeywords();
-    }
-
-    /**
-     * キーワードで候補を再検索する
-     */
-    async searchCandidatesByKeywords() {
-        if (this.candidateTextKey === null
-            || this.candidateTextKey !== this.selectedTimestamps[0]?.text) {
-            return;
-        }
-
-        const results = document.getElementById('candidateResults');
-        const seq = ++this.candidateRequestSeq;
-
-        if (this.candidateKeywords.length === 0) {
-            results.innerHTML = '';
-            this.displayCandidates([], 0);
-            return;
-        }
-
-        try {
-            const response = await songApiService.fetchSongs(
-                this.candidateKeywords.join(' '),
-                null,
-                CONSTANTS.SONG_SEARCH_MODE_FUZZY
-            );
-
-            if (seq !== this.candidateRequestSeq) {
-                return;
-            }
-
-            const songs = response.data ?? response;
-            this.displayCandidates(songs, response.total ?? songs.length);
-        } catch (error) {
-            if (seq !== this.candidateRequestSeq) {
-                return;
-            }
-
-            console.error('候補の検索に失敗しました:', error);
-            document.getElementById('candidateNotice').textContent = '候補の検索に失敗しました。';
-        }
-    }
-
     createSongElement(song, songs, total, onSelectionChange = null, { showActions = true } = {}) {
         const div = document.createElement('div');
         div.dataset.songId = song.id;
@@ -1770,13 +1499,8 @@ export class TimestampNormalization {
             this.displaySongs(this.lastDisplayedSongs, this.lastDisplayedSongsTotal);
         }
 
-        if (this.isCandidateTabActive() && Array.isArray(this.lastDisplayedCandidates)) {
-            const before = this.lastDisplayedCandidates.length;
-            const filtered = this.lastDisplayedCandidates.filter(s => s.id !== songId);
-            if (filtered.length < before) {
-                const totalDiff = before - filtered.length;
-                this.displayCandidates(filtered, Math.max(0, (this.lastDisplayedCandidatesTotal ?? 0) - totalDiff));
-            }
+        if (this.candidateTab.isActive()) {
+            this.candidateTab.removeSong(songId);
         }
     }
 
@@ -2120,7 +1844,7 @@ export class TimestampNormalization {
         // 候補タブではタイムスタンプをラジオボタンで描画するため、
         // 他のタブへ移るときはチェックボックスに戻す必要がある。
         // タブ内容を隠す前に判定しておく
-        const leavingCandidateTab = this.isCandidateTabActive() && tabId !== 'candidatesTab';
+        const leavingCandidateTab = this.candidateTab.isActive() && tabId !== 'candidatesTab';
 
         // 選んでいた楽曲は切り替え前のタブの文脈でしか意味を持たない。
         // 残したまま別タブに切り替えると、そこで選んだ全く異なる楽曲が
@@ -2175,12 +1899,12 @@ export class TimestampNormalization {
             // ラジオ/チェックボックスの表示を選択状態に合わせて切り替える
             this.loadTimestamps(this.currentPage, this.currentSearchQuery);
 
-            // ここで直接 loadCandidates() を呼ぶため、updateSelectionDisplay() 側の
+            // ここで直接 candidateTab.load() を呼ぶため、updateSelectionDisplay() 側の
             // 判定用キーもここで揃えておく。揃えないと、タブを開いた直後に候補内の
             // 楽曲を1件クリックしただけで（選択自体は変わっていないのに）
             // updateSelectionDisplay() 経由で無駄な再取得が走ってしまう
-            this.lastCandidateSelectionKey = this.selectedTimestamps.map(t => t.id).join(',');
-            this.loadCandidates();
+            this.candidateTab.setSelectionKey(this.selectedTimestamps.map(t => t.id).join(','));
+            this.candidateTab.load();
         }
 
         // 候補タブから離れるときは一覧を再描画し、ラジオボタンを
