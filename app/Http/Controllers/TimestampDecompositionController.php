@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Helpers\SupplementStripper;
+use App\Models\TsItem;
 use App\Services\TimestampDecompositionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -64,17 +65,23 @@ class TimestampDecompositionController extends Controller
 
         $parts = $item->parts ?? [];
 
+        $tsItem = TsItem::where('normalized_text', $item->normalized_text)
+            ->where('is_display', true)
+            ->whereHas('archive', fn ($q) => $q->where('is_display', true))
+            ->first();
+
         return response()->json([
             'item' => [
                 'id' => $item->id,
                 'original_text' => $item->original_text,
                 'parts' => $parts,
-                // 補足を除去した候補。パーツと同じ並び・同じ要素数を保つ
                 'cleaned_parts' => SupplementStripper::stripParts($parts),
                 'separator_count' => $item->separator_count,
                 'title_part_index' => $item->title_part_index,
                 'artist_part_index' => $item->artist_part_index,
                 'confidence' => $item->confidence,
+                'video_id' => $tsItem?->video_id,
+                'ts_num' => $tsItem?->ts_num,
             ],
         ]);
     }

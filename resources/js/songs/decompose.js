@@ -22,6 +22,9 @@ class TimestampDecomposition {
         this.statistics = null;
         this.lastProcessedItem = null;   // 直前に処理したアイテム（undo用）
         this.cleanupOpen = false;        // 補足除去候補パネルの表示状態
+        this.player = null;
+        this.playerReady = false;
+        this.videoHidden = false;
 
         this.init();
     }
@@ -29,6 +32,7 @@ class TimestampDecomposition {
     init() {
         this.bindEvents();
         this.bindKeyboard();
+        this.loadYouTubeAPI();
         this.loadStatistics();
         this.loadNext();
         this.updateUndoButton();
@@ -62,6 +66,9 @@ class TimestampDecomposition {
         // 補足除去候補パネル
         document.getElementById('cleanupConfirmBtn').addEventListener('click', () => this.confirmCleanup());
         document.getElementById('cleanupCancelBtn').addEventListener('click', () => this.closeCleanup());
+
+        // 動画プレビュー非表示ボタン
+        document.getElementById('videoToggleBtn').addEventListener('click', () => this.toggleVideoPreview());
 
         // パネル内の入力欄では Enter で確定 / Esc でキャンセル
         ['cleanupTitle', 'cleanupArtist'].forEach((id) => {
@@ -187,6 +194,13 @@ class TimestampDecomposition {
                 return;
             }
 
+            // P: 動画プレビュー表示切替
+            if (e.key.toLowerCase() === 'p') {
+                e.preventDefault();
+                this.toggleVideoPreview();
+                return;
+            }
+
             // N: 楽曲ではない
             if (e.key.toLowerCase() === 'n') {
                 e.preventDefault();
@@ -226,6 +240,71 @@ class TimestampDecomposition {
         document.getElementById('statSelected').textContent = this.statistics.selected.toLocaleString();
         document.getElementById('statAutoMatched').textContent = this.statistics.auto_matched.toLocaleString();
         document.getElementById('statSkipped').textContent = this.statistics.skipped.toLocaleString();
+    }
+
+    loadYouTubeAPI() {
+        if (window.YT && window.YT.Player) {
+            this.playerReady = true;
+            return;
+        }
+
+        const tag = document.createElement('script');
+        tag.src = 'https://www.youtube.com/iframe_api';
+        document.head.appendChild(tag);
+
+        window.onYouTubeIframeAPIReady = () => {
+            this.playerReady = true;
+            if (this.currentItem?.video_id) {
+                this.updateVideoPreview();
+            }
+        };
+    }
+
+    updateVideoPreview() {
+        const area = document.getElementById('videoPreviewArea');
+        if (!this.currentItem?.video_id || this.videoHidden) {
+            area.hidden = true;
+            return;
+        }
+
+        area.hidden = false;
+
+        if (!this.playerReady) return;
+
+        const videoId = this.currentItem.video_id;
+        const startSeconds = this.currentItem.ts_num || 0;
+
+        if (this.player) {
+            this.player.loadVideoById({ videoId, startSeconds });
+        } else {
+            this.player = new YT.Player('decomposePlayer', {
+                height: '270',
+                width: '480',
+                videoId,
+                playerVars: {
+                    autoplay: 0,
+                    controls: 1,
+                    start: startSeconds,
+                    rel: 0,
+                    modestbranding: 1,
+                },
+            });
+        }
+    }
+
+    toggleVideoPreview() {
+        this.videoHidden = !this.videoHidden;
+        const btn = document.getElementById('videoToggleBtn');
+        btn.textContent = this.videoHidden ? '表示' : '非表示';
+
+        if (this.videoHidden) {
+            document.getElementById('videoPreviewArea').hidden = true;
+            if (this.player) {
+                this.player.stopVideo();
+            }
+        } else {
+            this.updateVideoPreview();
+        }
     }
 
     /**
@@ -291,6 +370,9 @@ class TimestampDecomposition {
 
         // 確定ボタンの状態を更新
         this.updateConfirmButton();
+
+        // 動画プレビュー更新
+        this.updateVideoPreview();
     }
 
     /**
