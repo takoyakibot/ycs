@@ -310,6 +310,134 @@ describe('CandidateTab', () => {
             expect(document.getElementById('candidateKeywordsArea').classList.contains('hidden')).toBe(true);
             expect(document.getElementById('candidateKeywords').children.length).toBe(0);
         });
+
+        it('×ボタンクリックでキーワードが削除されsearchByKeywordsが再実行される', async () => {
+            songApiService.fetchSongs.mockResolvedValue({ data: [], total: 0 });
+
+            const tab = createTab({
+                getSelectedTimestamps: () => [{ id: '1', text: 'A B' }],
+            });
+            tab.candidateTextKey = 'A B';
+            tab.candidateKeywords = ['A', 'B', 'C'];
+            tab.renderKeywords();
+
+            const container = document.getElementById('candidateKeywords');
+            expect(container.children.length).toBe(3);
+
+            const removeBtnB = container.children[1].querySelector('button');
+            removeBtnB.click();
+            await vi.waitFor(() => {
+                expect(tab.candidateKeywords).toEqual(['A', 'C']);
+            });
+        });
+    });
+
+    // =========================================================================
+    // _setupTextSelection (テキスト選択によるキーワード追加)
+    // =========================================================================
+    describe('テキスト選択によるキーワード追加', () => {
+        async function loadWithCandidates(tab) {
+            songApiService.fetchCandidates.mockResolvedValue({
+                parts: ['A', 'B'],
+                ignored_indices: [],
+                songs: [],
+                total: 0,
+            });
+            await tab.load();
+        }
+
+        function simulateTextSelection(text, container) {
+            const textNode = container.firstChild ?? container;
+            const mockRange = {
+                startContainer: textNode,
+            };
+            const mockSelection = {
+                rangeCount: 1,
+                getRangeAt: () => mockRange,
+                toString: () => text,
+                removeAllRanges: vi.fn(),
+            };
+            vi.spyOn(window, 'getSelection').mockReturnValue(mockSelection);
+            document.dispatchEvent(new Event('mouseup'));
+            window.getSelection.mockRestore();
+        }
+
+        it('テキスト選択でキーワードが追加される', async () => {
+            const tab = createTab({
+                getSelectedTimestamps: () => [{ id: '1', text: 'Hello World' }],
+            });
+            await loadWithCandidates(tab);
+
+            const originalText = document.getElementById('candidateOriginalText');
+            simulateTextSelection('Hello', originalText);
+
+            expect(tab.candidateKeywords).toContain('Hello');
+        });
+
+        it('重複するキーワードは追加されない', async () => {
+            const tab = createTab({
+                getSelectedTimestamps: () => [{ id: '1', text: 'Hello' }],
+            });
+            await loadWithCandidates(tab);
+
+            const originalText = document.getElementById('candidateOriginalText');
+            simulateTextSelection('A', originalText);
+            const countBefore = tab.candidateKeywords.filter(k => k === 'A').length;
+
+            simulateTextSelection('A', originalText);
+            const countAfter = tab.candidateKeywords.filter(k => k === 'A').length;
+
+            expect(countAfter).toBe(countBefore);
+        });
+
+        it('candidateOriginalText外の選択は無視される', async () => {
+            const tab = createTab({
+                getSelectedTimestamps: () => [{ id: '1', text: 'X' }],
+            });
+            await loadWithCandidates(tab);
+
+            const outsideEl = document.createElement('div');
+            outsideEl.textContent = 'outside';
+            document.body.appendChild(outsideEl);
+
+            const keywordsBefore = [...tab.candidateKeywords];
+            simulateTextSelection('outside', outsideEl);
+            expect(tab.candidateKeywords).toEqual(keywordsBefore);
+        });
+
+        it('再load時に古いmouseupリスナーが解除される', async () => {
+            const removeSpy = vi.spyOn(document, 'removeEventListener');
+            const tab = createTab({
+                getSelectedTimestamps: () => [{ id: '1', text: 'X' }],
+            });
+
+            await loadWithCandidates(tab);
+            const firstHandler = tab._textSelectionHandler;
+            expect(firstHandler).not.toBeNull();
+
+            tab.candidateTextKey = null;
+            await loadWithCandidates(tab);
+
+            expect(removeSpy).toHaveBeenCalledWith('mouseup', firstHandler);
+            removeSpy.mockRestore();
+        });
+
+        it('クリアボタンでキーワードが全削除される', async () => {
+            songApiService.fetchSongs.mockResolvedValue({ data: [], total: 0 });
+
+            const tab = createTab({
+                getSelectedTimestamps: () => [{ id: '1', text: 'X' }],
+            });
+            await loadWithCandidates(tab);
+
+            expect(tab.candidateKeywords.length).toBeGreaterThan(0);
+
+            document.getElementById('candidateKeywordsClear').click();
+
+            await vi.waitFor(() => {
+                expect(tab.candidateKeywords).toEqual([]);
+            });
+        });
     });
 
     // =========================================================================
