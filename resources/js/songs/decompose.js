@@ -42,6 +42,9 @@ class TimestampDecomposition {
         // スキャンボタン
         document.getElementById('scanBtn').addEventListener('click', () => this.scan());
 
+        // スキップを戻すボタン
+        document.getElementById('resetSkippedBtn').addEventListener('click', () => this.resetSkipped());
+
         // 一括紐付けボタン
         document.getElementById('bulkLinkBtn').addEventListener('click', () => this.bulkLink());
 
@@ -960,6 +963,36 @@ class TimestampDecomposition {
         } catch (error) {
             console.error('スキャンに失敗しました:', error);
             toast.error('スキャンに失敗しました');
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    /**
+     * スキップ済みをpendingに戻す
+     */
+    async resetSkipped() {
+        const skippedCount = this.statistics?.skipped || 0;
+        if (skippedCount === 0) {
+            toast.info('スキップ済みのアイテムはありません');
+            return;
+        }
+
+        if (!confirm(`スキップ済み${skippedCount}件を判定対象に戻します。続行しますか？（楽曲でないとマークしたものは除外されます）`)) {
+            return;
+        }
+
+        try {
+            this.showLoading();
+            const response = await axios.post('/api/songs/decompose/reset-skipped');
+
+            toast.success(`${response.data.reset_count}件を判定対象に戻しました`);
+            this.statistics = response.data.statistics;
+            this.displayStatistics();
+            await this.loadNext();
+        } catch (error) {
+            console.error('リセットに失敗しました:', error);
+            toast.error('リセットに失敗しました');
         } finally {
             this.hideLoading();
         }
