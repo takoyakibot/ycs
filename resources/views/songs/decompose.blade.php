@@ -135,6 +135,9 @@
                                 <button id="skipBtn" class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600">
                                     スキップ <span class="text-xs opacity-75">(S)</span>
                                 </button>
+                                <button id="notSongBtn" class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600">
+                                    楽曲でない <span class="text-xs opacity-75">(N)</span>
+                                </button>
                             </div>
                             <div class="flex gap-2">
                                 <button id="wholeTitleBtn" class="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700">
@@ -163,6 +166,7 @@
                         <span class="ml-4">]: 補足除去候補</span>
                         <span class="ml-4">Enter: 確定</span>
                         <span class="ml-4">S: スキップ</span>
+                        <span class="ml-4">N: 楽曲でない</span>
                         <span class="ml-4">R: リセット</span>
                         <span class="ml-4">Z: 戻る</span>
                     </div>

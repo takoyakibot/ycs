@@ -211,6 +211,18 @@ class TimestampDecompositionController extends Controller
     }
 
     /**
+     * 楽曲ではないとしてマーク
+     */
+    public function markAsNotSong(string $id): JsonResponse
+    {
+        $this->service->markAsNotSong($id);
+
+        return response()->json([
+            'success' => true,
+        ]);
+    }
+
+    /**
      * 操作を取り消し（undo）
      */
     public function undo(string $id): JsonResponse

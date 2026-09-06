@@ -44,6 +44,9 @@ class TimestampDecomposition {
         // スキップボタン
         document.getElementById('skipBtn').addEventListener('click', () => this.skip());
 
+        // 楽曲ではないボタン
+        document.getElementById('notSongBtn').addEventListener('click', () => this.markAsNotSong());
+
         // 全体を楽曲名ボタン
         document.getElementById('wholeTitleBtn').addEventListener('click', () => this.saveAsWholeTitle());
 
@@ -181,6 +184,13 @@ class TimestampDecomposition {
             if (e.key.toLowerCase() === 'r') {
                 e.preventDefault();
                 this.reset();
+                return;
+            }
+
+            // N: 楽曲ではない
+            if (e.key.toLowerCase() === 'n') {
+                e.preventDefault();
+                this.markAsNotSong();
                 return;
             }
 
@@ -742,6 +752,34 @@ class TimestampDecomposition {
         } catch (error) {
             console.error('スキップに失敗しました:', error);
             toast.error('スキップに失敗しました');
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    /**
+     * 楽曲ではないとしてマーク
+     */
+    async markAsNotSong() {
+        if (!this.currentItem) return;
+
+        try {
+            this.showLoading();
+            await axios.post(`/api/songs/decompose/${this.currentItem.id}/not-song`);
+
+            this.lastProcessedItem = {
+                id: this.currentItem.id,
+                action: 'notSong',
+                cascadedCount: 0
+            };
+            this.updateUndoButton();
+
+            toast.info('楽曲ではないとしてマークしました');
+            await this.loadStatistics();
+            await this.loadNext();
+        } catch (error) {
+            console.error('マークに失敗しました:', error);
+            toast.error('マークに失敗しました');
         } finally {
             this.hideLoading();
         }
