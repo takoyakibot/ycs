@@ -265,6 +265,20 @@ class TimestampDecompositionController extends Controller
     }
 
     /**
+     * スキップ済みアイテムをpendingに戻す
+     */
+    public function resetSkipped(): JsonResponse
+    {
+        $count = $this->service->resetSkippedToPending();
+
+        return response()->json([
+            'success' => true,
+            'reset_count' => $count,
+            'statistics' => $this->service->getStatistics(),
+        ]);
+    }
+
+    /**
      * 自動判定済みアイテムを一括で楽曲マスタに紐付け
      */
     public function bulkLink(): JsonResponse

@@ -549,6 +549,26 @@ class TimestampDecompositionService
     }
 
     /**
+     * スキップ済みアイテムをすべてpendingに戻す
+     *
+     * @return int 戻した件数
+     */
+    public function resetSkippedToPending(): int
+    {
+        return TimestampDecomposition::where('status', TimestampDecomposition::STATUS_SKIPPED)
+            ->whereNotExists(function ($query) {
+                $query->select(DB::raw(1))
+                    ->from('timestamp_song_mappings')
+                    ->whereColumn('timestamp_song_mappings.normalized_text', 'timestamp_decompositions.normalized_text')
+                    ->where('timestamp_song_mappings.is_not_song', true);
+            })
+            ->update([
+                'status' => TimestampDecomposition::STATUS_PENDING,
+                'updated_by' => Auth::id(),
+            ]);
+    }
+
+    /**
      * 操作を取り消し（undo）
      *
      * @return array{undone_count: int}
