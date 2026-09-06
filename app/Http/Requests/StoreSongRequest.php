@@ -28,6 +28,8 @@ class StoreSongRequest extends FormRequest
             'spotify_data' => 'nullable|array',
             'force_create' => 'nullable|boolean',
             'use_existing_id' => 'nullable|string|exists:songs,id',
+            'tags' => 'nullable|array|max:20',
+            'tags.*' => 'string|max:255',
         ];
     }
 }

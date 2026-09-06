@@ -181,6 +181,11 @@
                                     <label class="block text-sm font-medium mb-2">動画URL（任意）</label>
                                     <input type="text" id="songVideoUrl" name="video_url" placeholder="YouTube または ニコニコ動画のURL" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
                                 </div>
+                                <div>
+                                    <label class="block text-sm font-medium mb-2">タグ（任意）</label>
+                                    <div id="manualTagsContainer" class="flex flex-wrap gap-1 mb-2"></div>
+                                    <input type="text" id="manualTagInput" placeholder="タグを入力してEnterまたはカンマで追加" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                </div>
                                 <div class="flex gap-2">
                                     <button type="submit" class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
                                         楽曲マスタ作成

@@ -43,6 +43,7 @@ export class TimestampNormalization {
         this.lastCandidateSelectionKey = null; // 候補を作り直すかの判定用（前回の選択）
         this.activeTabId = null;               // 現在表示中のタブ（タブ切り替え判定用）
         this.currentPageTimestamps = [];       // 現在ページのタイムスタンプ（選択操作用）
+        this.manualTags = [];                  // 手動登録フォームのタグ
 
         this.init();
     }
@@ -113,9 +114,22 @@ export class TimestampNormalization {
             this.createSong();
         });
 
+        // 手動登録フォームのタグ入力
+        const manualTagInput = document.getElementById('manualTagInput');
+        if (manualTagInput) {
+            manualTagInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ',') {
+                    e.preventDefault();
+                    this.addManualTag();
+                }
+            });
+        }
+
         // 手動登録フォームクリアボタン
         document.getElementById('clearManualFormBtn').addEventListener('click', () => {
             document.getElementById('createSongForm').reset();
+            this.manualTags = [];
+            this.renderManualTags();
         });
 
         // 楽曲マスタ検索
@@ -908,6 +922,9 @@ export class TimestampNormalization {
         if (videoUrl) {
             songData.video_url = videoUrl;
         }
+        if (this.manualTags.length > 0) {
+            songData.tags = this.manualTags;
+        }
 
         await this.registerSong(songData);
     }
@@ -942,6 +959,8 @@ export class TimestampNormalization {
 
         if (document.getElementById('createSongForm')) {
             document.getElementById('createSongForm').reset();
+            this.manualTags = [];
+            this.renderManualTags();
         }
 
         if (this.selectedTimestamps.length > 0) {
@@ -972,6 +991,8 @@ export class TimestampNormalization {
 
         if (document.getElementById('createSongForm')) {
             document.getElementById('createSongForm').reset();
+            this.manualTags = [];
+            this.renderManualTags();
         }
 
         if (this.selectedTimestamps.length > 0) {
@@ -981,6 +1002,47 @@ export class TimestampNormalization {
         if (this.spotifyEnabled && songData.spotify_track_id) {
             this.searchSpotify();
         }
+    }
+
+    addManualTag() {
+        const input = document.getElementById('manualTagInput');
+        const value = input.value.replace(/,/g, '').trim();
+        if (!value) return;
+        if (this.manualTags.includes(value)) {
+            toast.warning('同じタグが既に追加されています。');
+            input.value = '';
+            return;
+        }
+        if (this.manualTags.length >= 20) {
+            toast.warning('タグは最大20個までです。');
+            return;
+        }
+        this.manualTags.push(value);
+        input.value = '';
+        this.renderManualTags();
+    }
+
+    removeManualTag(index) {
+        this.manualTags.splice(index, 1);
+        this.renderManualTags();
+    }
+
+    renderManualTags() {
+        const container = document.getElementById('manualTagsContainer');
+        if (!container) return;
+        container.innerHTML = '';
+        this.manualTags.forEach((tag, index) => {
+            const badge = document.createElement('span');
+            badge.className = 'inline-flex items-center gap-1 px-2 py-1 text-xs rounded bg-blue-600 text-white';
+            badge.textContent = tag;
+            const deleteBtn = document.createElement('button');
+            deleteBtn.type = 'button';
+            deleteBtn.className = 'ml-0.5 hover:text-red-200 focus:outline-none';
+            deleteBtn.innerHTML = '&times;';
+            deleteBtn.addEventListener('click', () => this.removeManualTag(index));
+            badge.appendChild(deleteBtn);
+            container.appendChild(badge);
+        });
     }
 
     /**

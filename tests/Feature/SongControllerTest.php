@@ -909,6 +909,60 @@ class SongControllerTest extends TestCase
         $response->assertJson(['status' => 'exact_match']);
     }
 
+    public function test_store_song_with_tags(): void
+    {
+        $response = $this->actingAs($this->user)->postJson(route('songs.storeSong'), [
+            'title' => 'Tagged Song',
+            'artist' => 'Tagged Artist',
+            'tags' => ['ボカロ', 'カバー'],
+        ]);
+
+        $response->assertStatus(201);
+        $response->assertJson(['status' => 'created']);
+
+        $song = Song::where('title', 'Tagged Song')->first();
+        $this->assertNotNull($song);
+        $this->assertCount(2, $song->tags);
+        $this->assertEquals('ボカロ', $song->tags[0]->value);
+        $this->assertEquals('カバー', $song->tags[1]->value);
+
+        $response->assertJsonPath('song.tags', fn ($tags) => count($tags) === 2);
+    }
+
+    public function test_store_song_force_create_with_tags(): void
+    {
+        $response = $this->actingAs($this->user)->postJson(route('songs.storeSong'), [
+            'title' => 'Force Created Song',
+            'artist' => 'Force Artist',
+            'force_create' => true,
+            'tags' => ['オリジナル'],
+        ]);
+
+        $response->assertStatus(201);
+        $response->assertJson(['status' => 'created']);
+
+        $song = Song::where('title', 'Force Created Song')->first();
+        $this->assertNotNull($song);
+        $this->assertCount(1, $song->tags);
+        $this->assertEquals('オリジナル', $song->tags[0]->value);
+
+        $response->assertJsonPath('song.tags', fn ($tags) => count($tags) === 1);
+    }
+
+    public function test_store_song_without_tags_succeeds(): void
+    {
+        $response = $this->actingAs($this->user)->postJson(route('songs.storeSong'), [
+            'title' => 'No Tags Song',
+            'artist' => 'No Tags Artist',
+        ]);
+
+        $response->assertStatus(201);
+
+        $song = Song::where('title', 'No Tags Song')->first();
+        $this->assertNotNull($song);
+        $this->assertCount(0, $song->tags);
+    }
+
     /**
      * タイムスタンプと楽曲を紐づけるテスト（新規作成）
      */

@@ -647,6 +647,11 @@ class SongController extends Controller
                     'updated_by' => $userId,
                 ]);
 
+                if (! empty($validated['tags'])) {
+                    $this->saveTags($song, $validated['tags']);
+                    $song->load('tags');
+                }
+
                 // 操作ログを記録
                 if ($userId) {
                     NormalizationLog::log(
@@ -741,6 +746,11 @@ class SongController extends Controller
                 'created_by' => $userId,
                 'updated_by' => $userId,
             ]);
+
+            if (! empty($validated['tags'])) {
+                $this->saveTags($song, $validated['tags']);
+                $song->load('tags');
+            }
 
             // 操作ログを記録
             if ($userId) {
@@ -1210,5 +1220,18 @@ class SongController extends Controller
         $result = $this->songNotationService->getNotationCandidates($id);
 
         return response()->json($result);
+    }
+
+    private function saveTags(Song $song, array $tags): void
+    {
+        foreach ($tags as $value) {
+            $value = trim($value);
+            if ($value !== '') {
+                SongTag::create([
+                    'song_id' => $song->id,
+                    'value' => $value,
+                ]);
+            }
+        }
     }
 }
