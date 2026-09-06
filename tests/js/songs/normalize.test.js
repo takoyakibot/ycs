@@ -52,6 +52,8 @@ vi.mock('@/songs/components/CandidateTab.js', () => ({
     })),
 }));
 
+let SongRendererClass;
+
 function setupMinimalDOM() {
     document.body.innerHTML = `
         <input id="timestampSearch" />
@@ -133,6 +135,8 @@ function setupMinimalDOM() {
  */
 async function createInstance() {
     const { TimestampNormalization } = await import('@/songs/normalize.js');
+    const { SongRenderer } = await import('@/songs/renderers/SongRenderer.js');
+    SongRendererClass = SongRenderer;
     const instance = Object.create(TimestampNormalization.prototype);
     instance.selectedTimestamps = [];
     instance.selectedSong = null;
@@ -166,6 +170,17 @@ async function createInstance() {
     instance.activeTabId = null;
     instance.currentPageTimestamps = [];
     instance.spotifyEnabled = false;
+    instance.songRenderer = new SongRendererClass({
+        getSelectedSong: () => instance.selectedSong,
+        setSelectedSong: (song) => { instance.selectedSong = song; },
+        updateSelectionDisplay: vi.fn(),
+        displaySongs: vi.fn(),
+        loadSongs: vi.fn(),
+        loadTimestamps: vi.fn(),
+        openEditModal: vi.fn(),
+        deleteSong: vi.fn(),
+        setSongFilter: vi.fn(),
+    });
     return instance;
 }
 
@@ -186,43 +201,43 @@ describe('TimestampNormalization', () => {
     // =========================================================================
     describe('formatDuration', () => {
         it('ミリ秒を分:秒にフォーマットする', () => {
-            expect(instance.formatDuration(225000)).toBe('3:45');
+            expect(instance.songRenderer.formatDuration(225000)).toBe('3:45');
         });
 
         it('秒が1桁のときゼロ埋めする', () => {
-            expect(instance.formatDuration(61000)).toBe('1:01');
+            expect(instance.songRenderer.formatDuration(61000)).toBe('1:01');
         });
 
         it('1時間以上のとき時:分:秒にフォーマットする', () => {
-            expect(instance.formatDuration(5025000)).toBe('1:23:45');
+            expect(instance.songRenderer.formatDuration(5025000)).toBe('1:23:45');
         });
 
         it('0ミリ秒は空文字を返す', () => {
-            expect(instance.formatDuration(0)).toBe('');
+            expect(instance.songRenderer.formatDuration(0)).toBe('');
         });
 
         it('負の値は空文字を返す', () => {
-            expect(instance.formatDuration(-1000)).toBe('');
+            expect(instance.songRenderer.formatDuration(-1000)).toBe('');
         });
 
         it('NaNは空文字を返す', () => {
-            expect(instance.formatDuration('abc')).toBe('');
+            expect(instance.songRenderer.formatDuration('abc')).toBe('');
         });
 
         it('文字列の数値も変換できる', () => {
-            expect(instance.formatDuration('225000')).toBe('3:45');
+            expect(instance.songRenderer.formatDuration('225000')).toBe('3:45');
         });
 
         it('ちょうど60秒は1:00', () => {
-            expect(instance.formatDuration(60000)).toBe('1:00');
+            expect(instance.songRenderer.formatDuration(60000)).toBe('1:00');
         });
 
         it('ちょうど1時間は1:00:00', () => {
-            expect(instance.formatDuration(3600000)).toBe('1:00:00');
+            expect(instance.songRenderer.formatDuration(3600000)).toBe('1:00:00');
         });
 
         it('1秒未満（999ms）は0:00', () => {
-            expect(instance.formatDuration(999)).toBe('0:00');
+            expect(instance.songRenderer.formatDuration(999)).toBe('0:00');
         });
     });
 
@@ -479,24 +494,24 @@ describe('TimestampNormalization', () => {
         };
 
         it('楽曲タイトルとアーティストを表示する', () => {
-            const el = instance.createSongElement(baseSong, [baseSong], 1);
+            const el = instance.songRenderer.createElement(baseSong, [baseSong], 1);
             expect(el.querySelector('.font-medium').textContent).toBe('夜に駆ける');
             expect(el.textContent).toContain('YOASOBI');
         });
 
         it('data-song-id属性を設定する', () => {
-            const el = instance.createSongElement(baseSong, [baseSong], 1);
+            const el = instance.songRenderer.createElement(baseSong, [baseSong], 1);
             expect(el.dataset.songId).toBe('song-001');
         });
 
         it('選択中の楽曲はハイライトされる', () => {
             instance.selectedSong = { id: 'song-001' };
-            const el = instance.createSongElement(baseSong, [baseSong], 1);
+            const el = instance.songRenderer.createElement(baseSong, [baseSong], 1);
             expect(el.className).toContain('bg-blue-100');
         });
 
         it('未選択の楽曲はデフォルトスタイル', () => {
-            const el = instance.createSongElement(baseSong, [baseSong], 1);
+            const el = instance.songRenderer.createElement(baseSong, [baseSong], 1);
             expect(el.className).toContain('border-gray-300');
             expect(el.className).not.toContain('bg-blue-100');
         });
@@ -506,7 +521,7 @@ describe('TimestampNormalization', () => {
                 ...baseSong,
                 tags: [{ value: 'カバー' }, { value: 'オリジナル' }],
             };
-            const el = instance.createSongElement(songWithTags, [songWithTags], 1);
+            const el = instance.songRenderer.createElement(songWithTags, [songWithTags], 1);
             const badges = el.querySelectorAll('span.bg-blue-600');
             expect(badges.length).toBe(2);
             expect(badges[0].textContent).toBe('カバー');
@@ -515,12 +530,12 @@ describe('TimestampNormalization', () => {
 
         it('duration_msがあれば楽曲の長さを表示する', () => {
             const songWithDuration = { ...baseSong, duration_ms: 225000 };
-            const el = instance.createSongElement(songWithDuration, [songWithDuration], 1);
+            const el = instance.songRenderer.createElement(songWithDuration, [songWithDuration], 1);
             expect(el.textContent).toContain('3:45');
         });
 
         it('showActions=trueのとき操作ボタンを表示する', () => {
-            const el = instance.createSongElement(baseSong, [baseSong], 1);
+            const el = instance.songRenderer.createElement(baseSong, [baseSong], 1);
             const buttons = el.querySelectorAll('button');
             const hasEditBtn = Array.from(buttons).some(b => b.textContent === '編集');
             const hasDeleteBtn = Array.from(buttons).some(b => b.textContent === '削除');
@@ -531,28 +546,28 @@ describe('TimestampNormalization', () => {
         });
 
         it('showActions=falseのとき操作ボタンを非表示にする', () => {
-            const el = instance.createSongElement(baseSong, [baseSong], 1, null, { showActions: false });
+            const el = instance.songRenderer.createElement(baseSong, [baseSong], 1, null, { showActions: false });
             const buttons = el.querySelectorAll('button');
             const hasEditBtn = Array.from(buttons).some(b => b.textContent === '編集');
             expect(hasEditBtn).toBe(false);
         });
 
         it('クリックでselectedSongを更新する', () => {
-            const el = instance.createSongElement(baseSong, [baseSong], 1);
+            const el = instance.songRenderer.createElement(baseSong, [baseSong], 1);
             el.click();
             expect(instance.selectedSong).toEqual(baseSong);
         });
 
         it('選択済み楽曲のクリックで選択を解除する', () => {
             instance.selectedSong = { id: 'song-001' };
-            const el = instance.createSongElement(baseSong, [baseSong], 1);
+            const el = instance.songRenderer.createElement(baseSong, [baseSong], 1);
             el.click();
             expect(instance.selectedSong).toBeNull();
         });
 
         it('onSelectionChangeコールバックが渡されたらクリック時に呼ばれる', () => {
             const callback = vi.fn();
-            const el = instance.createSongElement(baseSong, [baseSong], 1, callback);
+            const el = instance.songRenderer.createElement(baseSong, [baseSong], 1, callback);
             el.click();
             expect(callback).toHaveBeenCalledOnce();
         });
