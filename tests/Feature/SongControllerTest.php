@@ -1446,6 +1446,55 @@ class SongControllerTest extends TestCase
     }
 
     /**
+     * 自動紐付け確定のテスト（pendingステータスのマッピングも確定可能）
+     */
+    public function test_confirm_auto_link_pending_mapping_success(): void
+    {
+        $song = Song::factory()->create();
+        $mapping = TimestampSongMapping::factory()
+            ->withSong($song)
+            ->withText('Pending Song')
+            ->create([
+                'status' => TimestampSongMapping::STATUS_PENDING,
+                'is_manual' => false,
+                'confidence' => 0.8,
+            ]);
+
+        $this->assertEquals('pending', $mapping->status);
+
+        $response = $this->actingAs($this->user)->postJson(route('songs.confirmAutoLink'), [
+            'normalized_text' => $mapping->normalized_text,
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'message' => '自動紐付けを確定しました。',
+        ]);
+
+        $mapping->refresh();
+        $this->assertTrue($mapping->is_manual);
+        $this->assertEquals('linked', $mapping->status);
+        $this->assertEquals(1.0, $mapping->confidence);
+    }
+
+    /**
+     * 自動紐付け確定のテスト（手動保留は確定不可）
+     */
+    public function test_confirm_auto_link_manually_pending_without_song_not_found(): void
+    {
+        $mapping = TimestampSongMapping::factory()
+            ->withText('Manually Pending')
+            ->pending()
+            ->create();
+
+        $response = $this->actingAs($this->user)->postJson(route('songs.confirmAutoLink'), [
+            'normalized_text' => $mapping->normalized_text,
+        ]);
+
+        $response->assertStatus(404);
+    }
+
+    /**
      * 動画秒数取得のテスト（YouTube URL成功）
      */
     public function test_fetch_video_duration_with_youtube_url_success(): void
@@ -2026,6 +2075,42 @@ class SongControllerTest extends TestCase
         $response->assertStatus(200);
         $this->assertEquals(1, $response->json('total'));
         $this->assertEquals('Pending Song', $response->json('data.0.text'));
+    }
+
+    public function test_fetch_timestamps_pending_with_matched_song_returns_pending_info(): void
+    {
+        $channel = Channel::factory()->create();
+        $archive = Archive::factory()->create(['channel_id' => $channel->channel_id]);
+
+        $song = Song::factory()->create(['title' => 'テスト曲', 'artist' => 'テストアーティスト']);
+
+        $pendingTs = TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'text' => 'Pending With Song',
+            'is_display' => 1,
+        ]);
+
+        TimestampSongMapping::factory()
+            ->withSong($song)
+            ->withText($pendingTs->text)
+            ->create([
+                'status' => TimestampSongMapping::STATUS_PENDING,
+                'is_manual' => false,
+                'confidence' => 0.8,
+            ]);
+
+        $response = $this->actingAs($this->user)->getJson(route('songs.fetchTimestamps', [
+            'filter' => 'pending',
+        ]));
+
+        $response->assertStatus(200);
+        $this->assertEquals(1, $response->json('total'));
+        $data = $response->json('data.0');
+        $this->assertEquals('pending', $data['status']);
+        $this->assertNotNull($data['pending_info']);
+        $this->assertEquals('テスト曲', $data['pending_info']['matched_song']['title']);
+        $this->assertEquals('テストアーティスト', $data['pending_info']['matched_song']['artist']);
+        $this->assertEquals(0.8, $data['pending_info']['confidence']);
     }
 
     /**

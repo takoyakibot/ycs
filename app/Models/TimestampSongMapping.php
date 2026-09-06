@@ -83,6 +83,19 @@ class TimestampSongMapping extends Model
     }
 
     /**
+     * 確定可能なマッピング: 未レビューの自動紐付け or 候補曲付きのpending
+     *
+     * confirmAutoLink() で使用。直接条件を書かず、このスコープを使うこと。
+     */
+    public function scopeConfirmable($query)
+    {
+        return $query->where(function ($q) {
+            $q->where('is_manual', false)
+                ->orWhere('status', self::STATUS_PENDING);
+        })->whereNotNull('song_id');
+    }
+
+    /**
      * 未レビューの自動紐付け: 自動紐付けされたがまだ確定されていない
      *
      * is_manual と status の複合条件。直接条件を書かず、このスコープを使うこと。
