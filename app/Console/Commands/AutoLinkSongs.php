@@ -89,6 +89,7 @@ class AutoLinkSongs extends Command
             [
                 ['処理件数', $result['processed']],
                 ['紐付け成功', $result['linked']],
+                ['確認待ち', $result['pending']],
                 ['一致なし', $result['skipped']],
                 ['エラー', $result['failed']],
             ]

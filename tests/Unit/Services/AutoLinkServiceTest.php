@@ -42,6 +42,7 @@ class AutoLinkServiceTest extends TestCase
 
         $this->assertEquals(0, $result['processed']);
         $this->assertEquals(0, $result['linked']);
+        $this->assertEquals(0, $result['pending']);
         $this->assertEquals(0, $result['failed']);
         $this->assertEquals(0, $result['skipped']);
     }
@@ -58,11 +59,13 @@ class AutoLinkServiceTest extends TestCase
         $result = $this->service->autoLinkUnlinkedTimestamps(10);
 
         $this->assertEquals(1, $result['processed']);
-        $this->assertEquals(1, $result['linked']);
+        $this->assertEquals(0, $result['linked']);
+        $this->assertEquals(1, $result['pending']);
 
         $this->assertDatabaseHas('timestamp_song_mappings', [
             'song_id' => $existingSong->id,
             'is_manual' => false,
+            'status' => 'pending',
         ]);
     }
 
@@ -228,6 +231,7 @@ class AutoLinkServiceTest extends TestCase
         $this->assertDatabaseHas('timestamp_song_mappings', [
             'is_manual' => true,
             'status' => 'linked',
+            'confidence' => 0.9,
         ]);
     }
 
@@ -245,7 +249,8 @@ class AutoLinkServiceTest extends TestCase
 
         $this->assertDatabaseHas('timestamp_song_mappings', [
             'is_manual' => false,
-            'status' => 'linked',
+            'status' => 'pending',
+            'confidence' => 0.8,
         ]);
     }
 
@@ -264,7 +269,7 @@ class AutoLinkServiceTest extends TestCase
 
         $this->assertDatabaseHas('timestamp_song_mappings', [
             'is_manual' => false,
-            'status' => 'linked',
+            'status' => 'pending',
         ]);
     }
 
@@ -324,7 +329,7 @@ class AutoLinkServiceTest extends TestCase
         $this->assertDatabaseHas('timestamp_song_mappings', [
             'song_id' => $song->id,
             'is_manual' => false,
-            'status' => 'linked',
+            'status' => 'pending',
         ]);
     }
 
@@ -344,7 +349,7 @@ class AutoLinkServiceTest extends TestCase
         $this->assertDatabaseHas('timestamp_song_mappings', [
             'song_id' => $song->id,
             'is_manual' => false,
-            'status' => 'linked',
+            'status' => 'pending',
         ]);
     }
 
@@ -447,6 +452,7 @@ class AutoLinkServiceTest extends TestCase
         $this->assertDatabaseHas('timestamp_song_mappings', [
             'song_id' => $song->id,
             'is_manual' => false,
+            'status' => 'pending',
         ]);
     }
 

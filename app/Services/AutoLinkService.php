@@ -19,13 +19,14 @@ class AutoLinkService
      * @param  int  $limit  処理件数上限
      * @param  callable|null  $onProgress  進捗コールバック function(string $message): void
      * @param  string|null  $channelId  チャンネルIDフィルタ
-     * @return array{processed: int, linked: int, failed: int, skipped: int}
+     * @return array{processed: int, linked: int, pending: int, failed: int, skipped: int}
      */
     public function autoLinkUnlinkedTimestamps(int $limit = 100, ?callable $onProgress = null, ?string $channelId = null): array
     {
         $result = [
             'processed' => 0,
             'linked' => 0,
+            'pending' => 0,
             'failed' => 0,
             'skipped' => 0,
         ];
@@ -49,6 +50,9 @@ class AutoLinkService
                 if ($linkResult === 'linked') {
                     $result['linked']++;
                     $onProgress && $onProgress(sprintf('[%d/%d] 紐付け成功: %s', $index + 1, count($unlinkedTexts), $item['text']));
+                } elseif ($linkResult === 'pending') {
+                    $result['pending']++;
+                    $onProgress && $onProgress(sprintf('[%d/%d] 確認待ち: %s', $index + 1, count($unlinkedTexts), $item['text']));
                 } else {
                     $result['skipped']++;
                     $onProgress && $onProgress(sprintf('[%d/%d] 一致なし: %s', $index + 1, count($unlinkedTexts), $item['text']));
@@ -105,7 +109,7 @@ class AutoLinkService
      * 完全一致で見つからない場合、楽曲マスタのアーティスト名がテキストに含まれるかで
      * フォールバック検索を行う。
      *
-     * @return string 'linked'|'not_found'
+     * @return string 'linked'|'pending'|'not_found'
      */
     protected function processAutoLink(string $normalizedText): string
     {
@@ -118,7 +122,7 @@ class AutoLinkService
         if ($result) {
             $this->createAutoLinkMapping($normalizedText, $result['song']->id, $result['artist_matched']);
 
-            return 'linked';
+            return $result['artist_matched'] ? 'linked' : 'pending';
         }
 
         return 'not_found';
@@ -253,8 +257,8 @@ class AutoLinkService
     /**
      * 自動紐付けマッピングを作成
      *
-     * アーティスト名まで一致する場合は確定扱い（is_manual=true、即公開）、
-     * タイトルのみの一致（アーティスト情報なし・不一致）はレビュー待ち（is_manual=false）とする。
+     * アーティスト名まで一致する場合は確定扱い（is_manual=true、status=linked）、
+     * タイトルのみの一致（アーティスト情報なし・不一致）は確認待ち（is_manual=false、status=pending）とする。
      */
     protected function createAutoLinkMapping(string $normalizedText, string $songId, bool $artistMatched): void
     {
@@ -263,7 +267,7 @@ class AutoLinkService
             [
                 'song_id' => $songId,
                 'is_not_song' => false,
-                'status' => TimestampSongMapping::STATUS_LINKED,
+                'status' => $artistMatched ? TimestampSongMapping::STATUS_LINKED : TimestampSongMapping::STATUS_PENDING,
                 'is_manual' => $artistMatched,
                 'confidence' => $artistMatched ? 0.9 : 0.8,
             ]
