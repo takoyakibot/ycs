@@ -800,6 +800,26 @@ class SongControllerTest extends TestCase
         $this->assertArrayHasKey('similar_songs', $response->json());
     }
 
+    public function test_store_song_similar_found_preserves_tags_in_input(): void
+    {
+        Song::factory()->create([
+            'title' => 'Yesterday',
+            'artist' => 'The Beatles',
+        ]);
+
+        Config::set('songs.similarity_threshold', 0.75);
+
+        $response = $this->actingAs($this->user)->postJson(route('songs.storeSong'), [
+            'title' => 'Yesterday!',
+            'artist' => 'Beatles',
+            'tags' => ['ロック', 'カバー'],
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJson(['status' => 'similar_found']);
+        $response->assertJsonPath('input.tags', ['ロック', 'カバー']);
+    }
+
     /**
      * 楽曲マスタ登録のテスト（force_createフラグで強制新規作成）
      */
