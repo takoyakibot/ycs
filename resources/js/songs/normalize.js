@@ -39,7 +39,6 @@ export class TimestampNormalization {
             : CONSTANTS.SONG_SEARCH_MODE_FUZZY;
         this.candidateTab = new CandidateTab({
             getSelectedTimestamps: () => this.selectedTimestamps,
-            getSelectedSong: () => this.selectedSong,
             createSongElement: (song, songs, total, onSelectionChange, opts) =>
                 this.createSongElement(song, songs, total, onSelectionChange, opts),
             onNarrowToSingle: () => {
@@ -1900,7 +1899,7 @@ export class TimestampNormalization {
             // ラジオ/チェックボックスの表示を選択状態に合わせて切り替える
             this.loadTimestamps(this.currentPage, this.currentSearchQuery);
 
-            // ここで直接 loadCandidates() を呼ぶため、updateSelectionDisplay() 側の
+            // ここで直接 candidateTab.load() を呼ぶため、updateSelectionDisplay() 側の
             // 判定用キーもここで揃えておく。揃えないと、タブを開いた直後に候補内の
             // 楽曲を1件クリックしただけで（選択自体は変わっていないのに）
             // updateSelectionDisplay() 経由で無駄な再取得が走ってしまう

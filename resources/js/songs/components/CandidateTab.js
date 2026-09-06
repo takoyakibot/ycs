@@ -10,9 +10,8 @@ export class CandidateTab {
     /**
      * @param {Object} deps
      * @param {() => Array} deps.getSelectedTimestamps
-     * @param {() => Object|null} deps.getSelectedSong
      * @param {(song, songs, total, onSelectionChange, opts) => HTMLElement} deps.createSongElement
-     * @param {(msg: string) => void} deps.onNarrowToSingle - 「1件に絞る」ボタン押下時のコールバック
+     * @param {() => void} deps.onNarrowToSingle - 「1件に絞る」ボタン押下時のコールバック
      */
     constructor(deps) {
         this.candidateKeywords = [];
@@ -23,7 +22,6 @@ export class CandidateTab {
         this.lastCandidateSelectionKey = null;
 
         this._getSelectedTimestamps = deps.getSelectedTimestamps;
-        this._getSelectedSong = deps.getSelectedSong;
         this._createSongElement = deps.createSongElement;
         this._onNarrowToSingle = deps.onNarrowToSingle;
 
