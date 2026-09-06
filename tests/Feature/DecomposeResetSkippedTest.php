@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Helpers\TextNormalizer;
+use App\Models\Song;
 use App\Models\TimestampDecomposition;
 use App\Models\TimestampSongMapping;
 use App\Models\User;
@@ -59,6 +60,27 @@ class DecomposeResetSkippedTest extends TestCase
         ]);
 
         $normalSkipped = $this->createDecomposition('曲名/アーティスト', TimestampDecomposition::STATUS_SKIPPED);
+
+        $response = $this->postJson('/api/songs/decompose/reset-skipped');
+
+        $response->assertOk()->assertJson(['reset_count' => 1]);
+
+        $this->assertDatabaseHas('timestamp_decompositions', ['id' => $skipped->id, 'status' => 'skipped']);
+        $this->assertDatabaseHas('timestamp_decompositions', ['id' => $normalSkipped->id, 'status' => 'pending']);
+    }
+
+    public function test_excludes_confirmed_mapping_from_reset(): void
+    {
+        $skipped = $this->createDecomposition('曲名/アーティスト', TimestampDecomposition::STATUS_SKIPPED);
+        $song = Song::factory()->create();
+        TimestampSongMapping::factory()->create([
+            'normalized_text' => TextNormalizer::normalize('曲名/アーティスト'),
+            'song_id' => $song->id,
+            'status' => 'linked',
+            'is_manual' => true,
+        ]);
+
+        $normalSkipped = $this->createDecomposition('曲名2/アーティスト2', TimestampDecomposition::STATUS_SKIPPED);
 
         $response = $this->postJson('/api/songs/decompose/reset-skipped');
 

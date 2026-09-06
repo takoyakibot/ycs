@@ -562,6 +562,13 @@ class TimestampDecompositionService
                     ->whereColumn('timestamp_song_mappings.normalized_text', 'timestamp_decompositions.normalized_text')
                     ->where('timestamp_song_mappings.is_not_song', true);
             })
+            ->whereNotExists(function ($query) {
+                $query->select(DB::raw(1))
+                    ->from('timestamp_song_mappings')
+                    ->whereColumn('timestamp_song_mappings.normalized_text', 'timestamp_decompositions.normalized_text')
+                    ->whereNotNull('timestamp_song_mappings.song_id')
+                    ->where(TimestampSongMapping::confirmedJoinConditions());
+            })
             ->update([
                 'status' => TimestampDecomposition::STATUS_PENDING,
                 'updated_by' => Auth::id(),
