@@ -61,7 +61,7 @@ export class SongRenderer {
 
         if (song.tags && song.tags.length > 0) {
             const tagContainer = document.createElement('div');
-            tagContainer.className = 'flex gap-1 mt-0.5 overflow-hidden';
+            tagContainer.className = 'flex flex-nowrap gap-1 mt-0.5 overflow-hidden';
             song.tags.forEach(tag => {
                 const badge = document.createElement('span');
                 badge.className = 'inline-block px-1.5 py-0.5 text-[10px] rounded bg-blue-600 text-white whitespace-nowrap';
