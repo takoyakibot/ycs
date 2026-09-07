@@ -198,7 +198,7 @@ class SongCleansingTest extends TestCase
             ->assertJsonValidationErrors(['song_ids']);
     }
 
-    public function test_find_title_groups_ordered_by_artist_count_desc(): void
+    public function test_find_title_groups_ordered_by_normalized_title(): void
     {
         Song::factory()->create(['title' => 'ソングA', 'artist' => 'X']);
         Song::factory()->create(['title' => 'ソングA', 'artist' => 'Y']);
@@ -213,8 +213,8 @@ class SongCleansingTest extends TestCase
         $response->assertStatus(200);
         $data = $response->json();
         $this->assertCount(2, $data);
-        $this->assertEquals('ソングB', $data[0]['songs'][0]['title']);
-        $this->assertEquals('ソングA', $data[1]['songs'][0]['title']);
+        $this->assertEquals('ソングA', $data[0]['songs'][0]['title']);
+        $this->assertEquals('ソングB', $data[1]['songs'][0]['title']);
     }
 
     // --- findDuplicates ---
@@ -334,7 +334,7 @@ class SongCleansingTest extends TestCase
         $this->assertNotEmpty($data[0]['song_ids_hash']);
     }
 
-    public function test_find_duplicates_preserves_count_desc_order(): void
+    public function test_find_duplicates_ordered_by_normalized_title(): void
     {
         Song::factory()->create(['title' => 'AAA', 'artist' => 'Alpha']);
         Song::factory()->create(['title' => 'aaa', 'artist' => 'Aleph']);
@@ -349,8 +349,8 @@ class SongCleansingTest extends TestCase
         $response->assertStatus(200);
         $data = $response->json();
         $this->assertCount(2, $data);
-        $this->assertEquals('zzz', $data[0]['normalized_title']);
-        $this->assertEquals('aaa', $data[1]['normalized_title']);
+        $this->assertEquals('aaa', $data[0]['normalized_title']);
+        $this->assertEquals('zzz', $data[1]['normalized_title']);
     }
 
     public function test_find_duplicates_shows_lower_ranked_groups_after_review(): void

@@ -151,7 +151,6 @@ class SongCleansingService
             ->where('normalized_title', '!=', '')
             ->groupBy('normalized_title')
             ->having('artist_count', '>', 1)
-            ->orderByDesc('artist_count')
             ->orderBy('normalized_title');
 
         if ($search !== '') {
@@ -177,7 +176,6 @@ class SongCleansingService
             ->where('normalized_title', '!=', '')
             ->groupBy('normalized_title')
             ->having('count', '>', 1)
-            ->orderBy('count', 'desc')
             ->orderBy('normalized_title');
 
         if ($search !== '') {

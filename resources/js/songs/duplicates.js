@@ -18,8 +18,22 @@ function registerDuplicatesComponent() {
             await this.fetchDuplicates();
         },
 
-        async fetchDuplicates() {
+        async fetchDuplicates({ preserveState = false } = {}) {
             this.groupsLoading = true;
+
+            let prevByTitle = {};
+            if (preserveState) {
+                for (const group of this.groups) {
+                    prevByTitle[group.normalized_title] = {
+                        selectedIds: this.groupSelectedIds[group.song_ids_hash] || [],
+                        targetId: this.groupTargetId[group.song_ids_hash],
+                    };
+                }
+            }
+
+            const scrollContainer = document.querySelector('#duplicates-app .overflow-y-auto');
+            const scrollTop = preserveState && scrollContainer ? scrollContainer.scrollTop : 0;
+
             try {
                 const params = new URLSearchParams({ filter: this.groupFilter });
                 if (this.groupSearch.trim()) params.set('search', this.groupSearch);
@@ -28,9 +42,25 @@ function registerDuplicatesComponent() {
                 this.groups = await res.json();
                 this.groupSelectedIds = {};
                 this.groupTargetId = {};
-                this.activeGroupHash = null;
+                if (!preserveState) this.activeGroupHash = null;
                 for (const group of this.groups) {
-                    this.groupSelectedIds[group.song_ids_hash] = group.songs.map(s => s.id);
+                    const songIds = group.songs.map(s => s.id);
+                    const prev = prevByTitle[group.normalized_title];
+                    if (preserveState && prev) {
+                        this.groupSelectedIds[group.song_ids_hash] = prev.selectedIds.filter(id => songIds.includes(id));
+                        if (prev.targetId && songIds.includes(prev.targetId)) {
+                            this.groupTargetId[group.song_ids_hash] = prev.targetId;
+                        }
+                    } else {
+                        this.groupSelectedIds[group.song_ids_hash] = songIds;
+                    }
+                }
+
+                if (preserveState && scrollTop > 0) {
+                    this.$nextTick(() => {
+                        const container = document.querySelector('#duplicates-app .overflow-y-auto');
+                        if (container) container.scrollTop = scrollTop;
+                    });
                 }
             } catch (e) {
                 this.message = e.message;
@@ -135,7 +165,7 @@ function registerDuplicatesComponent() {
                 this.messageType = 'error';
             } finally {
                 this.groupMerging[hash] = false;
-                await this.fetchDuplicates();
+                await this.fetchDuplicates({ preserveState: true });
             }
         },
 
