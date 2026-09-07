@@ -17,3 +17,4 @@ deploy.sh
 pre-commit-check.sh
 setup-git-hooks.sh
 node_modules
+public/hot
