@@ -70,6 +70,22 @@ function registerDuplicatesComponent() {
             this.groupTargetId[hash] = songId;
         },
 
+        isAllSelected(group) {
+            const hash = group.song_ids_hash;
+            const selected = this.groupSelectedIds[hash] || [];
+            return selected.length === group.songs.length;
+        },
+
+        toggleSelectAll(group) {
+            const hash = group.song_ids_hash;
+            if (this.isAllSelected(group)) {
+                this.groupSelectedIds[hash] = [];
+                delete this.groupTargetId[hash];
+            } else {
+                this.groupSelectedIds[hash] = group.songs.map(s => s.id);
+            }
+        },
+
         canMergeGroup(hash) {
             const selected = this.groupSelectedIds[hash] || [];
             return selected.length >= 2 && this.groupTargetId[hash] && selected.includes(this.groupTargetId[hash]);
