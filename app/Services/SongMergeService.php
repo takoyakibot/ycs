@@ -70,10 +70,12 @@ class SongMergeService
             ->get();
 
         $songIds = $songs->pluck('id')->toArray();
-        $tsItemCounts = TsItem::selectRaw('song_id, COUNT(*) as count')
-            ->whereIn('song_id', $songIds)
-            ->groupBy('song_id')
-            ->pluck('count', 'song_id');
+        $tsItemCounts = DB::table('timestamp_song_mappings')
+            ->join('ts_items', 'ts_items.normalized_text', '=', 'timestamp_song_mappings.normalized_text')
+            ->whereIn('timestamp_song_mappings.song_id', $songIds)
+            ->where('ts_items.is_display', true)
+            ->groupBy('timestamp_song_mappings.song_id')
+            ->pluck(DB::raw('COUNT(*) as count'), 'timestamp_song_mappings.song_id');
 
         // 「別の曲」判定情報を取得
         $normalizedTitles = $songs->pluck('normalized_title')->unique()->filter(fn ($v) => $v !== null && $v !== '')->toArray();
