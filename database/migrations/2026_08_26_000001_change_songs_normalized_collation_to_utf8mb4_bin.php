@@ -19,7 +19,7 @@ return new class extends Migration
      * 誤マッチが起こり得る。
      *
      * 【変換で影響を受ける範囲】
-     * SongMergeService::findDuplicates は normalized_title / normalized_artist で
+     * SongCleansingService::findTitleGroups は normalized_title / normalized_artist で
      * GROUP BY した後、PHP の === で絞り込む「SQL曖昧比較 → PHP厳密比較」の構造を持つ。
      * 変換後は絵文字・半角全角カナ・アクセント記号だけが異なる行が別グループ扱いになり、
      * これまで重複候補として出ていた組が出なくなる（AutoLinkService の完全一致検索も同様）。
