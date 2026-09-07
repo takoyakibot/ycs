@@ -283,4 +283,18 @@ class SongCleansingTest extends TestCase
         $response->assertStatus(200)
             ->assertJsonCount(0);
     }
+
+    public function test_artists_with_count_excludes_empty_artist(): void
+    {
+        Song::factory()->create(['title' => 'Song A', 'artist' => 'Alpha']);
+        Song::factory()->create(['title' => 'Song C', 'artist' => '']);
+
+        $response = $this->actingAs($this->user)
+            ->getJson('/api/songs/artists-with-count');
+
+        $response->assertStatus(200);
+        $data = $response->json();
+        $this->assertCount(1, $data);
+        $this->assertEquals('Alpha', $data[0]['name']);
+    }
 }

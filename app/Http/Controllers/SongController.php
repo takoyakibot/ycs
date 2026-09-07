@@ -165,6 +165,8 @@ class SongController extends Controller
     {
         $artists = Song::select('artist')
             ->selectRaw('COUNT(*) as count')
+            ->whereNotNull('artist')
+            ->where('artist', '!=', '')
             ->groupBy('artist')
             ->orderBy('artist')
             ->get()
