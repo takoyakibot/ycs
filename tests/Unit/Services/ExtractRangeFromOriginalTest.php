@@ -52,13 +52,40 @@ class ExtractRangeFromOriginalTest extends TestCase
         $this->assertEquals('Song', $result);
     }
 
-    public function test_trailing_separator_with_space(): void
+    public function test_single_part_does_not_include_trailing_separator(): void
     {
         $original = 'Song- Artist';
         $parts = ['Song', 'Artist'];
 
         $result = $this->extract($original, $parts, 0, 0);
-        $this->assertEquals('Song-', $result);
+        $this->assertEquals('Song', $result);
+    }
+
+    public function test_colon_separator_not_included(): void
+    {
+        $original = 'Title: Artist';
+        $parts = ['Title', 'Artist'];
+
+        $result = $this->extract($original, $parts, 0, 0);
+        $this->assertEquals('Title', $result);
+    }
+
+    public function test_fullwidth_slash_separator_not_included(): void
+    {
+        $original = '曲名／ アーティスト';
+        $parts = ['曲名', 'アーティスト'];
+
+        $result = $this->extract($original, $parts, 0, 0);
+        $this->assertEquals('曲名', $result);
+    }
+
+    public function test_colon_separator_not_included_multi_parts(): void
+    {
+        $original = 'Title-Subtitle: Artist';
+        $parts = ['Title', 'Subtitle', 'Artist'];
+
+        $result = $this->extract($original, $parts, 0, 1);
+        $this->assertEquals('Title-Subtitle', $result);
     }
 
     public function test_last_part_includes_trailing(): void
