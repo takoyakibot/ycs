@@ -1778,12 +1778,21 @@ export class TimestampNormalization {
 
     initVideoPlayer() {
         videoPlayerManager.restoreVolume();
+        this._playerCollapsed = false;
+        this._docPipWindow = null;
 
         videoPlayerManager.onShowChange = (show) => {
+            const toggleBar = document.getElementById('pipPlayerToggleBar');
             const container = document.getElementById('pipPlayerContainer');
+            const toggleIcon = document.getElementById('pipPlayerToggleIcon');
+            if (toggleBar) toggleBar.classList.toggle('hidden', !show);
             if (container) {
-                container.classList.toggle('hidden', !show);
+                container.classList.toggle('hidden', !show || this._playerCollapsed);
             }
+            if (toggleIcon) {
+                toggleIcon.style.transform = (show && !this._playerCollapsed) ? '' : 'rotate(-90deg)';
+            }
+            if (show) this._updateDocPipButton();
         };
 
         videoPlayerManager.onError = (event) => {
@@ -1797,16 +1806,92 @@ export class TimestampNormalization {
             toast.error(errorMessages[event.data] || '動画の読み込みに失敗しました');
         };
 
+        const toggleBar = document.getElementById('pipPlayerToggleBar');
+        if (toggleBar) {
+            toggleBar.addEventListener('click', (e) => {
+                if (e.target.closest('#pipPlayerCloseBtn') || e.target.closest('#pipPlayerDocPipBtn')) return;
+                this._togglePlayerCollapse();
+            });
+        }
+
         const closeBtn = document.getElementById('pipPlayerCloseBtn');
         if (closeBtn) {
-            closeBtn.addEventListener('click', () => {
+            closeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
                 videoPlayerManager.close();
             });
         }
 
+        const docPipBtn = document.getElementById('pipPlayerDocPipBtn');
+        if (docPipBtn) {
+            docPipBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this._openDocumentPiP();
+            });
+        }
+
+        this._updateDocPipButton();
+
         videoPlayerManager.loadAPI(() => {
             videoPlayerManager.preInitialize('youtube-player');
         });
+    }
+
+    _togglePlayerCollapse() {
+        this._playerCollapsed = !this._playerCollapsed;
+        const container = document.getElementById('pipPlayerContainer');
+        const toggleIcon = document.getElementById('pipPlayerToggleIcon');
+        if (container) container.classList.toggle('hidden', this._playerCollapsed);
+        if (toggleIcon) {
+            toggleIcon.style.transform = this._playerCollapsed ? 'rotate(-90deg)' : '';
+        }
+    }
+
+    _updateDocPipButton() {
+        const btn = document.getElementById('pipPlayerDocPipBtn');
+        if (!btn) return;
+        btn.classList.toggle('hidden', !('documentPictureInPicture' in window));
+    }
+
+    async _openDocumentPiP() {
+        if (!('documentPictureInPicture' in window)) return;
+
+        try {
+            const pipWindow = await window.documentPictureInPicture.requestWindow({
+                width: 320,
+                height: 180,
+            });
+
+            this._docPipWindow = pipWindow;
+
+            pipWindow.document.head.innerHTML = '<style>body{margin:0;background:#000;overflow:hidden}iframe,video{width:100%;height:100%}</style>';
+
+            const playerContainer = document.getElementById('pipPlayerContainer');
+            const playerContent = playerContainer.querySelector('.bg-black');
+            if (playerContent) {
+                pipWindow.document.body.appendChild(playerContent);
+            }
+
+            const container = document.getElementById('pipPlayerContainer');
+            if (container) container.classList.add('hidden');
+
+            const title = document.getElementById('pipPlayerTitle');
+            if (title) title.textContent = '別ウィンドウで再生中';
+
+            pipWindow.addEventListener('pagehide', () => {
+                this._docPipWindow = null;
+                const wrapper = document.getElementById('pipPlayerContainer');
+                if (wrapper && playerContent) {
+                    wrapper.appendChild(playerContent);
+                    wrapper.classList.toggle('hidden', this._playerCollapsed);
+                }
+                const titleEl = document.getElementById('pipPlayerTitle');
+                if (titleEl) titleEl.textContent = '動画プレビュー';
+            });
+        } catch (e) {
+            console.error('Document PiP failed:', e);
+            toast.error('別ウィンドウでの表示に失敗しました');
+        }
     }
 
     playVideoInPlayer(videoId, tsNum, title) {

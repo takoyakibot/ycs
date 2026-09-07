@@ -87,17 +87,32 @@
                         </div>
 
                         <!-- PIPプレーヤー -->
-                        <div id="pipPlayerContainer" class="hidden mt-2 mb-2 rounded-lg overflow-hidden shadow-lg border border-gray-200 dark:border-gray-700">
-                            <div class="bg-gray-800 text-white px-2 py-1 flex items-center justify-between">
-                                <span id="pipPlayerTitle" class="text-xs truncate flex-1">動画プレビュー</span>
-                                <button id="pipPlayerCloseBtn" class="text-gray-400 hover:text-white p-1" aria-label="プレイヤーを閉じる">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        <div id="pipPlayerWrapper" class="mt-2 mb-2">
+                            <div id="pipPlayerToggleBar" class="hidden bg-gray-800 text-white px-2 py-1 flex items-center justify-between rounded-t-lg cursor-pointer select-none border border-gray-700"
+                                 title="クリックでプレビューを開閉">
+                                <div class="flex items-center gap-1.5 min-w-0">
+                                    <svg id="pipPlayerToggleIcon" class="w-3 h-3 flex-shrink-0 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                                     </svg>
-                                </button>
+                                    <span id="pipPlayerTitle" class="text-xs truncate">動画プレビュー</span>
+                                </div>
+                                <div class="flex items-center gap-1 flex-shrink-0">
+                                    <button id="pipPlayerDocPipBtn" class="hidden text-gray-400 hover:text-white p-0.5" aria-label="別ウィンドウで表示" title="別ウィンドウで表示">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                                        </svg>
+                                    </button>
+                                    <button id="pipPlayerCloseBtn" class="text-gray-400 hover:text-white p-0.5" aria-label="プレイヤーを閉じる">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                        </svg>
+                                    </button>
+                                </div>
                             </div>
-                            <div class="bg-black" style="aspect-ratio: 16/9;">
-                                <div id="youtube-player"></div>
+                            <div id="pipPlayerContainer" class="hidden rounded-b-lg overflow-hidden shadow-lg border border-t-0 border-gray-200 dark:border-gray-700">
+                                <div class="bg-black" style="height: 180px;">
+                                    <div id="youtube-player"></div>
+                                </div>
                             </div>
                         </div>
 
