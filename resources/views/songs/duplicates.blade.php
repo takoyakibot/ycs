@@ -19,8 +19,7 @@
                      x-text="message"></div>
             </template>
 
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {{-- 左ペイン: 重複グループ --}}
+            <div>
                 <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
                     <div class="p-4 text-gray-900 dark:text-gray-100">
                         <h4 class="font-semibold mb-2">重複検出グループ</h4>
@@ -132,113 +131,6 @@
                     </div>
                 </div>
 
-                {{-- 右ペイン: 検索・選択・マージ --}}
-                <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
-                    <div class="p-4 text-gray-900 dark:text-gray-100">
-                        <h4 class="font-semibold mb-3">名寄せ候補</h4>
-
-                        {{-- 検索欄 --}}
-                        <div class="flex gap-2 mb-3">
-                            <div class="relative flex-1">
-                                <input type="text"
-                                       x-model="search"
-                                       @keydown.enter="doSearch()"
-                                       placeholder="タイトル・アーティストで検索..."
-                                       class="w-full px-3 py-2 pr-8 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
-                                <button x-show="search"
-                                        x-cloak
-                                        @click="clearSearch()"
-                                        class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-                                        aria-label="クリア">
-                                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
-                                </button>
-                            </div>
-                            <button @click="doSearch()"
-                                    :disabled="searchLoading"
-                                    class="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50">
-                                検索
-                            </button>
-                        </div>
-
-                        {{-- マージボタン --}}
-                        <div x-show="selectedIds.length >= 2" class="mb-3 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-md">
-                            <div class="text-xs text-gray-600 dark:text-gray-400 mb-1">
-                                <span x-text="selectedIds.length"></span>件選択中
-                                <template x-if="targetId">
-                                    <span> (マージ先を選択済み)</span>
-                                </template>
-                            </div>
-                            <button @click="doMerge()"
-                                    :disabled="!canMerge || merging"
-                                    class="px-4 py-1.5 bg-orange-600 text-white text-sm rounded-md hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed">
-                                <span x-show="!merging">選択した楽曲をマージ</span>
-                                <span x-show="merging">マージ中...</span>
-                            </button>
-                            <span x-show="selectedIds.length >= 2 && !targetId" class="text-xs text-orange-600 ml-2">マージ先を選んでください</span>
-                        </div>
-
-                        {{-- 検索結果 --}}
-                        <template x-if="searchLoading">
-                            <div class="text-center py-4 text-gray-500 dark:text-gray-400 text-sm">検索中...</div>
-                        </template>
-
-                        <template x-if="!searchLoading && searchResults.length === 0 && search">
-                            <div class="text-center py-4 text-gray-500 dark:text-gray-400 text-sm">該当する楽曲がありません</div>
-                        </template>
-
-                        <template x-if="!searchLoading && !search">
-                            <div class="text-center py-4 text-gray-500 dark:text-gray-400 text-sm">左のグループをクリックするか、検索してください</div>
-                        </template>
-
-                        <div class="space-y-1 max-h-[60vh] overflow-y-auto">
-                            <template x-for="song in searchResults" :key="song.id">
-                                <div class="flex items-center gap-2 p-2 border rounded-md transition-colors"
-                                     :class="{
-                                         'border-blue-500 bg-blue-50 dark:bg-blue-900/20': isSelected(song.id),
-                                         'border-orange-500 bg-orange-50 dark:bg-orange-900/20 ring-2 ring-orange-300': targetId === song.id,
-                                         'border-gray-200 dark:border-gray-700': !isSelected(song.id)
-                                     }">
-                                    {{-- チェックボックス --}}
-                                    <input type="checkbox"
-                                           :checked="isSelected(song.id)"
-                                           @change="toggleSelect(song.id)"
-                                           class="w-4 h-4 flex-shrink-0 text-blue-600 rounded focus:ring-blue-500">
-
-                                    {{-- 楽曲情報 --}}
-                                    <span class="text-sm truncate" x-text="song.title"></span>
-                                    <span class="text-sm text-gray-500 dark:text-gray-400 truncate" x-text="song.artist || '(アーティスト未設定)'"></span>
-
-                                    <template x-if="song.distinct_review">
-                                        <span class="text-xs text-amber-600 flex-shrink-0">別の曲判定あり</span>
-                                    </template>
-
-                                    <span class="text-xs text-gray-400 dark:text-gray-500 flex-shrink-0 tabular-nums ml-auto">TS: <span x-text="song.ts_items_count"></span></span>
-
-                                    <a :href="'https://www.youtube.com/results?search_query=' + encodeURIComponent(song.title + ' ' + (song.artist || ''))"
-                                       target="_blank"
-                                       rel="noopener noreferrer"
-                                       class="flex-shrink-0 text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300"
-                                       @click.stop
-                                       title="YouTubeで検索">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                                            <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-                                        </svg>
-                                    </a>
-
-                                    {{-- マージ先ボタン --}}
-                                    <button x-show="isSelected(song.id)"
-                                            @click="setTarget(song.id)"
-                                            class="flex-shrink-0 px-2 py-1 text-xs rounded-md transition-colors"
-                                            :class="targetId === song.id
-                                                ? 'bg-orange-600 text-white'
-                                                : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 hover:bg-orange-100 dark:hover:bg-orange-900/30'"
-                                            x-text="targetId === song.id ? 'マージ先' : '残す'">
-                                    </button>
-                                </div>
-                            </template>
-                        </div>
-                    </div>
-                </div>
             </div>
         </div>
     </div>

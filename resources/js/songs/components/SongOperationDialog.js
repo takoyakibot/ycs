@@ -75,7 +75,6 @@ export class SongOperationDialog {
 
             const tabDefs = [
                 { key: 'tags', label: 'タグ' },
-                { key: 'merge', label: 'マージ' },
                 { key: 'artist', label: 'アーティスト変更' },
             ];
 
@@ -92,11 +91,9 @@ export class SongOperationDialog {
             content.className = 'flex-1 overflow-y-auto px-6 py-4';
 
             const { panel: tagPanel, focusInput: focusTagInput } = buildTagPanel();
-            const { panel: mergePanel, doSearch: mergeDoSearch } = buildMergePanel();
             const { panel: artistPanel, loadArtists } = buildArtistPanel();
 
             content.appendChild(tagPanel);
-            content.appendChild(mergePanel);
             content.appendChild(artistPanel);
 
             dialog.appendChild(header);
@@ -114,7 +111,6 @@ export class SongOperationDialog {
                         : 'px-4 py-2 text-sm font-medium border-b-2 -mb-px border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200';
                 });
                 tagPanel.style.display = key === 'tags' ? '' : 'none';
-                mergePanel.style.display = key === 'merge' ? '' : 'none';
                 artistPanel.style.display = key === 'artist' ? '' : 'none';
 
                 if (key === 'tags') focusTagInput();
@@ -230,225 +226,6 @@ export class SongOperationDialog {
                 renderTags();
 
                 return { panel, focusInput: () => input.focus() };
-            }
-
-            // ========================================
-            // Merge panel
-            // ========================================
-            function buildMergePanel() {
-                const panel = document.createElement('div');
-
-                const msgArea = createMessageArea();
-                panel.appendChild(msgArea);
-
-                const desc = document.createElement('p');
-                desc.className = 'text-xs text-gray-500 dark:text-gray-400 mb-3';
-                desc.textContent = '楽曲を検索し、2件以上を選択して統合先を指定してください。統合先以外の楽曲は削除され、紐付けが統合先に移行します。';
-                panel.appendChild(desc);
-
-                const searchRow = document.createElement('div');
-                searchRow.className = 'flex gap-2 mb-3';
-
-                const searchWrapper = document.createElement('div');
-                searchWrapper.className = 'relative flex-1';
-
-                const searchInput = document.createElement('input');
-                searchInput.type = 'text';
-                searchInput.value = song.title;
-                searchInput.placeholder = '楽曲名で検索';
-                searchInput.className = 'w-full px-3 py-2 pr-8 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500';
-
-                const clearBtn = document.createElement('button');
-                clearBtn.className = 'absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hidden';
-                clearBtn.setAttribute('aria-label', 'クリア');
-                clearBtn.innerHTML = '<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>';
-
-                function updateClearBtn() {
-                    clearBtn.classList.toggle('hidden', !searchInput.value);
-                }
-                searchInput.addEventListener('input', updateClearBtn);
-                updateClearBtn();
-
-                clearBtn.addEventListener('click', () => {
-                    searchInput.value = '';
-                    searchResults = [];
-                    selectedIds = [];
-                    targetId = null;
-                    resultsList.innerHTML = '';
-                    updateMergeBtn();
-                    updateClearBtn();
-                    msgArea.clear();
-                });
-
-                searchWrapper.appendChild(searchInput);
-                searchWrapper.appendChild(clearBtn);
-
-                const searchBtn = document.createElement('button');
-                searchBtn.className = 'px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 flex-shrink-0';
-                searchBtn.textContent = '検索';
-
-                searchRow.appendChild(searchWrapper);
-                searchRow.appendChild(searchBtn);
-                panel.appendChild(searchRow);
-
-                const resultsList = document.createElement('div');
-                resultsList.className = 'space-y-1 max-h-[40vh] overflow-y-auto mb-3';
-                panel.appendChild(resultsList);
-
-                const mergeBtn = document.createElement('button');
-                mergeBtn.className = 'px-4 py-2 text-sm bg-orange-600 text-white rounded hover:bg-orange-700 disabled:opacity-50';
-                mergeBtn.textContent = 'マージ実行';
-                mergeBtn.disabled = true;
-                panel.appendChild(mergeBtn);
-
-                let searchResults = [];
-                let selectedIds = [];
-                let targetId = null;
-                let merging = false;
-
-                function updateMergeBtn() {
-                    mergeBtn.disabled = !(targetId && selectedIds.length >= 2 && selectedIds.includes(targetId) && !merging);
-                }
-
-                function renderResults() {
-                    resultsList.innerHTML = '';
-                    if (searchResults.length === 0) return;
-                    searchResults.forEach(s => {
-                        const row = document.createElement('div');
-                        row.className = 'flex items-center gap-2 p-2 border rounded border-gray-200 dark:border-gray-700 text-sm';
-
-                        const cb = document.createElement('input');
-                        cb.type = 'checkbox';
-                        cb.checked = selectedIds.includes(s.id);
-                        cb.className = 'flex-shrink-0';
-                        cb.addEventListener('change', () => {
-                            if (cb.checked) {
-                                selectedIds.push(s.id);
-                            } else {
-                                selectedIds = selectedIds.filter(id => id !== s.id);
-                                if (targetId === s.id) targetId = null;
-                            }
-                            renderResults();
-                            updateMergeBtn();
-                        });
-
-                        const info = document.createElement('div');
-                        info.className = 'flex-1 min-w-0 truncate';
-                        info.innerHTML = `<span class="font-medium">${escapeHtml(s.title)}</span> <span class="text-gray-500 dark:text-gray-400">/ ${escapeHtml(s.artist)}</span>`;
-                        if (s.ts_items_count !== undefined) {
-                            info.innerHTML += ` <span class="text-xs text-gray-400">(TS:${escapeHtml(String(s.ts_items_count))})</span>`;
-                        }
-
-                        const isTarget = targetId === s.id;
-                        const isSelected = selectedIds.includes(s.id);
-                        const targetBtn = document.createElement('button');
-                        targetBtn.className = `px-2 py-1 text-xs rounded flex-shrink-0 ${
-                            isTarget
-                                ? 'bg-green-600 text-white'
-                                : isSelected
-                                    ? 'bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300 hover:bg-green-100 dark:hover:bg-green-900'
-                                    : 'bg-gray-200 dark:bg-gray-600 text-gray-400 dark:text-gray-500 opacity-50 cursor-not-allowed'
-                        }`;
-                        targetBtn.textContent = isTarget ? '統合先 ✓' : '統合先';
-                        if (isSelected && !isTarget) {
-                            targetBtn.addEventListener('click', () => {
-                                targetId = s.id;
-                                renderResults();
-                                updateMergeBtn();
-                            });
-                        }
-
-                        row.appendChild(cb);
-                        row.appendChild(info);
-                        if (s.distinct_review) {
-                            const badge = document.createElement('span');
-                            badge.className = 'ml-2 px-1.5 py-0.5 text-xs bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200 rounded flex-shrink-0';
-                            badge.textContent = '別の曲と判定済み';
-                            badge.title = '同名異表記グループで「別の曲」と判定されています';
-                            row.appendChild(badge);
-                        }
-                        row.appendChild(targetBtn);
-                        resultsList.appendChild(row);
-                    });
-                }
-
-                async function doSearch() {
-                    const query = searchInput.value.trim();
-                    if (!query) return;
-                    searchBtn.disabled = true;
-                    searchBtn.textContent = '検索中...';
-                    msgArea.clear();
-                    try {
-                        const params = new URLSearchParams({ search: query });
-                        const res = await fetch(`/api/songs/search-for-merge?${params}`);
-                        if (!res.ok) throw new Error('検索に失敗しました');
-                        searchResults = await res.json();
-                        selectedIds = searchResults.map(s => s.id);
-                        targetId = null;
-                        renderResults();
-                        updateMergeBtn();
-                    } catch (e) {
-                        msgArea.show(e.message, 'error');
-                    } finally {
-                        searchBtn.disabled = false;
-                        searchBtn.textContent = '検索';
-                    }
-                }
-
-                searchBtn.addEventListener('click', doSearch);
-                searchInput.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') doSearch();
-                });
-
-                mergeBtn.addEventListener('click', async () => {
-                    const target = searchResults.find(s => s.id === targetId);
-                    const sources = selectedIds.filter(id => id !== targetId);
-                    if (!target || sources.length === 0) return;
-
-                    if (!confirm(`「${target.title}」に統合します。${sources.length}件の楽曲が削除されます。よろしいですか？`)) return;
-
-                    merging = true;
-                    mergeBtn.disabled = true;
-                    mergeBtn.textContent = 'マージ中...';
-                    msgArea.clear();
-
-                    let mergedCount = 0;
-                    try {
-                        for (const sourceId of sources) {
-                            const res = await fetch('/api/songs/merge', {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'X-CSRF-TOKEN': getCsrfToken(),
-                                },
-                                body: JSON.stringify({
-                                    source_song_id: sourceId,
-                                    target_song_id: targetId,
-                                }),
-                            });
-                            if (!res.ok) {
-                                const data = await res.json();
-                                throw new Error(data.message || 'マージに失敗しました');
-                            }
-                            mergedCount++;
-                        }
-                        actionPerformed = 'merged';
-                        toast.success(`${sources.length}件の楽曲を統合しました`);
-                        close();
-                    } catch (e) {
-                        if (mergedCount > 0) {
-                            actionPerformed = 'merged';
-                            await doSearch();
-                        }
-                        msgArea.show(e.message, 'error');
-                    } finally {
-                        merging = false;
-                        mergeBtn.textContent = 'マージ実行';
-                        updateMergeBtn();
-                    }
-                });
-
-                return { panel, doSearch };
             }
 
             // ========================================
@@ -720,10 +497,9 @@ export class SongOperationDialog {
                 return { panel, loadArtists: doLoadArtists };
             }
 
+            if (lastTab === 'merge') lastTab = 'tags';
             switchTab(lastTab);
             document.body.appendChild(overlay);
-
-            if (lastTab === 'merge') mergeDoSearch();
         });
     }
 }
