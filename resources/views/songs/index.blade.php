@@ -247,6 +247,15 @@
                                 <div id="candidateOriginalText" class="p-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-sm select-text cursor-text break-all leading-relaxed"></div>
                             </div>
 
+                            <div id="candidateDelimitersArea" class="mb-3 hidden">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">区切り文字</span>
+                                    <div id="candidateDelimiters" class="flex flex-wrap gap-1"></div>
+                                    <input id="candidateDelimiterInput" type="text" maxlength="1" placeholder="文字を入力" class="w-20 px-2 py-0.5 text-xs border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded focus:outline-none focus:ring-1 focus:ring-amber-500">
+                                    <button id="candidateDelimiterAdd" type="button" class="px-2 py-0.5 text-xs bg-amber-600 text-white rounded hover:bg-amber-700 flex-shrink-0">追加</button>
+                                </div>
+                            </div>
+
                             <div id="candidateKeywordsArea" class="mb-3 hidden">
                                 <div class="flex items-center justify-between mb-1">
                                     <span class="text-xs text-gray-500 dark:text-gray-400">検索語</span>

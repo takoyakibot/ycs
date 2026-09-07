@@ -21,12 +21,18 @@ export class CandidateTab {
         this.lastDisplayedCandidatesTotal = 0;
         this.lastCandidateSelectionKey = null;
 
+        this._originalParts = [];
+        this._originalIgnoredIndices = [];
+        this._customDelimiters = [];
+
         this._getSelectedTimestamps = deps.getSelectedTimestamps;
         this._createSongElement = deps.createSongElement;
         this._onNarrowToSingle = deps.onNarrowToSingle;
 
         this._textSelectionHandler = null;
         this._keywordsClearHandler = null;
+        this._delimiterAddHandler = null;
+        this._delimiterInputHandler = null;
     }
 
     isActive() {
@@ -51,6 +57,7 @@ export class CandidateTab {
         const notice = document.getElementById('candidateNotice');
         const textArea = document.getElementById('candidateTextArea');
         const keywordsArea = document.getElementById('candidateKeywordsArea');
+        const delimitersArea = document.getElementById('candidateDelimitersArea');
         const results = document.getElementById('candidateResults');
         const selectedTimestamps = this._getSelectedTimestamps();
 
@@ -58,10 +65,14 @@ export class CandidateTab {
             this.candidateRequestSeq++;
             this.candidateTextKey = null;
             this.candidateKeywords = [];
+            this._originalParts = [];
+            this._originalIgnoredIndices = [];
+            this._customDelimiters = [];
 
             notice.textContent = 'タイムスタンプを1件選ぶと候補を表示します。';
             textArea.classList.add('hidden');
             keywordsArea.classList.add('hidden');
+            delimitersArea.classList.add('hidden');
             results.innerHTML = '';
             return;
         }
@@ -71,6 +82,7 @@ export class CandidateTab {
             this._renderMultiSelectionNotice(selectedTimestamps.length);
             textArea.classList.add('hidden');
             keywordsArea.classList.add('hidden');
+            delimitersArea.classList.add('hidden');
             results.innerHTML = '';
             return;
         }
@@ -79,6 +91,7 @@ export class CandidateTab {
 
         if (this.candidateTextKey === text) {
             textArea.classList.remove('hidden');
+            delimitersArea.classList.remove('hidden');
             this.renderKeywords();
             await this.searchByKeywords();
             return;
@@ -89,8 +102,12 @@ export class CandidateTab {
 
         this.candidateTextKey = null;
         this.candidateKeywords = [];
+        this._originalParts = [];
+        this._originalIgnoredIndices = [];
+        this._customDelimiters = [];
         textArea.classList.add('hidden');
         keywordsArea.classList.add('hidden');
+        delimitersArea.classList.add('hidden');
 
         const seq = ++this.candidateRequestSeq;
 
@@ -102,17 +119,20 @@ export class CandidateTab {
             }
 
             this.candidateTextKey = text;
+            this._originalParts = data.parts;
+            this._originalIgnoredIndices = data.ignored_indices;
 
             const originalTextEl = document.getElementById('candidateOriginalText');
             originalTextEl.textContent = text;
             textArea.classList.remove('hidden');
+            delimitersArea.classList.remove('hidden');
 
-            this.candidateKeywords = [...new Set(
-                data.parts.filter((_, i) => !data.ignored_indices.includes(i))
-            )];
+            this._recomputeKeywords();
 
             this.renderKeywords();
+            this._renderDelimiters();
             this._setupTextSelection();
+            this._setupDelimiterInput();
             notice.textContent = '';
             this.display(data.songs, data.total);
         } catch (error) {
@@ -123,7 +143,27 @@ export class CandidateTab {
             console.error('候補の取得に失敗しました:', error);
             notice.textContent = '候補の取得に失敗しました。';
             textArea.classList.add('hidden');
+            delimitersArea.classList.add('hidden');
         }
+    }
+
+    _recomputeKeywords() {
+        const activeParts = this._originalParts
+            .filter((_, i) => !this._originalIgnoredIndices.includes(i));
+
+        if (this._customDelimiters.length === 0) {
+            this.candidateKeywords = [...new Set(activeParts)];
+            return;
+        }
+
+        const escaped = this._customDelimiters.map(d => d.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+        const pattern = new RegExp(`[${escaped.join('')}]`);
+
+        const split = activeParts.flatMap(part =>
+            part.split(pattern).map(s => s.trim()).filter(s => s !== '')
+        );
+
+        this.candidateKeywords = [...new Set(split)];
     }
 
     _renderMultiSelectionNotice(count) {
@@ -173,6 +213,75 @@ export class CandidateTab {
 
             container.appendChild(tag);
         });
+    }
+
+    _renderDelimiters() {
+        const container = document.getElementById('candidateDelimiters');
+        container.innerHTML = '';
+
+        this._customDelimiters.forEach((delim, index) => {
+            const tag = document.createElement('span');
+            tag.className = 'inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200';
+
+            const charSpan = document.createElement('span');
+            charSpan.className = 'font-mono';
+            charSpan.textContent = delim;
+            tag.appendChild(charSpan);
+
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'ml-0.5 hover:text-red-500';
+            removeBtn.textContent = '×';
+            removeBtn.addEventListener('click', () => this._removeDelimiter(index));
+            tag.appendChild(removeBtn);
+
+            container.appendChild(tag);
+        });
+    }
+
+    _setupDelimiterInput() {
+        const addBtn = document.getElementById('candidateDelimiterAdd');
+        const input = document.getElementById('candidateDelimiterInput');
+
+        if (addBtn && !this._delimiterAddHandler) {
+            this._delimiterAddHandler = () => this._addDelimiterFromInput();
+            addBtn.addEventListener('click', this._delimiterAddHandler);
+        }
+
+        if (input && !this._delimiterInputHandler) {
+            this._delimiterInputHandler = (e) => {
+                if (e.key === 'Enter') this._addDelimiterFromInput();
+            };
+            input.addEventListener('keydown', this._delimiterInputHandler);
+        }
+    }
+
+    _addDelimiterFromInput() {
+        const input = document.getElementById('candidateDelimiterInput');
+        const char = input.value.trim();
+
+        if (!char || char.length !== 1) return;
+        if (this._customDelimiters.includes(char)) {
+            input.value = '';
+            return;
+        }
+
+        this._customDelimiters.push(char);
+        input.value = '';
+
+        this._recomputeKeywords();
+        this._renderDelimiters();
+        this.renderKeywords();
+        this.searchByKeywords();
+    }
+
+    _removeDelimiter(index) {
+        this._customDelimiters.splice(index, 1);
+
+        this._recomputeKeywords();
+        this._renderDelimiters();
+        this.renderKeywords();
+        this.searchByKeywords();
     }
 
     /**
