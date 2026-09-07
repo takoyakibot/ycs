@@ -54,13 +54,17 @@ npm run build
 composer install --no-dev --optimize-autoloader
 DEV_DEPS_STRIPPED=1
 
-echo "▶ 1.5. 環境依存キャッシュの検知・削除"
+echo "▶ 1.5. 環境依存ファイルの検知・削除"
 for cache_file in bootstrap/cache/config.php bootstrap/cache/routes-v7.php; do
   if [ -f "$cache_file" ]; then
     echo "⚠ $cache_file が存在します。ローカル設定が本番に送られる可能性がありました。削除して続行します。"
     rm "$cache_file"
   fi
 done
+if [ -f "public/hot" ]; then
+  echo "⚠ public/hot が存在します（Vite devサーバー用）。本番に送ると全アセットが読み込めなくなるため削除します。"
+  rm "public/hot"
+fi
 
 echo "▶ 2. rsync で本番転送"
 rsync -avz --exclude-from=".exclude-list" --delete \

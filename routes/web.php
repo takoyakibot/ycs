@@ -145,6 +145,7 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::delete('api/songs/unlink-ts-item', [SongController::class, 'unlinkTsItem'])->name('songs.unlinkTsItem');
     Route::get('api/songs/ts-items-by-normalized-text', [SongController::class, 'getTsItemsByNormalizedText'])->name('songs.getTsItemsByNormalizedText');
     Route::get('api/songs/duplicates', [SongController::class, 'findDuplicates'])->name('songs.findDuplicates');
+    Route::get('api/songs/search-for-merge', [SongController::class, 'searchSongsForMerge'])->name('songs.searchForMerge');
     Route::post('api/songs/merge', [SongController::class, 'mergeSongs'])->name('songs.mergeSongs');
     Route::get('api/songs/artists', [SongController::class, 'distinctArtists'])->name('songs.distinctArtists');
     Route::get('api/songs/cleansing/artist-rename-preview', [SongController::class, 'previewArtistRename'])->name('songs.previewArtistRename');
