@@ -10,6 +10,7 @@ use App\Models\TimestampSongMapping;
 use App\Models\TsItem;
 use App\Models\User;
 use App\Services\SongCleansingService;
+use App\Services\SongMergeService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -72,5 +73,17 @@ class TsItemsCountTest extends TestCase
 
         $this->assertEquals(3, $songA['ts_items_count']);
         $this->assertEquals(2, $songB['ts_items_count']);
+    }
+
+    public function test_merge_service_counts_via_mappings(): void
+    {
+        $song = $this->createSongWithMappedTsItems('検索テスト曲', 'テストアーティスト', 5);
+
+        $service = app(SongMergeService::class);
+        $results = $service->searchSongs('検索テスト曲');
+
+        $this->assertNotEmpty($results);
+        $found = collect($results)->firstWhere('id', $song->id);
+        $this->assertEquals(5, $found['ts_items_count']);
     }
 }

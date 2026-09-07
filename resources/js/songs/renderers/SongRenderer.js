@@ -98,13 +98,6 @@ export class SongRenderer {
                     this._setSelectedSong(null);
                     this._loadSongs(document.getElementById('songsSearch')?.value ?? '');
                     this._loadTimestamps();
-                } else {
-                    song.tags = result.tags;
-                    if (onSelectionChange) {
-                        onSelectionChange();
-                    } else {
-                        this._displaySongs(songs, total);
-                    }
                 }
             });
             buttonContainer.appendChild(opBtn);
