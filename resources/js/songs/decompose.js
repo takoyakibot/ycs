@@ -541,6 +541,19 @@ class TimestampDecomposition {
                 joined = joined + trailing;
             }
 
+            const lastIndex = group[group.length - 1];
+            if (lastIndex < originalParts.length - 1) {
+                const nextSep = separators[lastIndex] ?? '';
+                const match = nextSep.match(/^(\S+)\s/);
+                if (match) {
+                    const leadingChars = match[1];
+                    const leadingChar = [...leadingChars][0];
+                    if (joined.includes(leadingChar)) {
+                        joined += leadingChars;
+                    }
+                }
+            }
+
             return joined.trim();
         });
 
