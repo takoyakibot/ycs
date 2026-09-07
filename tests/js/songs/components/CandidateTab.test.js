@@ -15,6 +15,10 @@ function setupDOM() {
         <div id="candidatesList" class="hidden"></div>
         <div id="candidateNotice"></div>
         <div id="candidateTextArea" class="hidden"></div>
+        <div id="candidateDelimitersArea" class="hidden"></div>
+        <div id="candidateDelimiters"></div>
+        <input id="candidateDelimiterInput" type="text" maxlength="1">
+        <button id="candidateDelimiterAdd"></button>
         <div id="candidateKeywordsArea" class="hidden"></div>
         <div id="candidateResults"></div>
         <div id="candidateKeywords"></div>
@@ -438,6 +442,122 @@ describe('CandidateTab', () => {
 
             await vi.waitFor(() => {
                 expect(tab.candidateKeywords).toEqual([]);
+            });
+        });
+    });
+
+    // =========================================================================
+    // カスタム区切り文字
+    // =========================================================================
+    describe('カスタム区切り文字', () => {
+        async function loadWithParts(tab, parts, ignoredIndices = []) {
+            songApiService.fetchCandidates.mockResolvedValue({
+                parts,
+                ignored_indices: ignoredIndices,
+                songs: [],
+                total: 0,
+            });
+            songApiService.fetchSongs.mockResolvedValue({ data: [], total: 0 });
+            await tab.load();
+        }
+
+        it('区切り文字を追加するとキーワードが再分割される', async () => {
+            const tab = createTab({
+                getSelectedTimestamps: () => [{ id: '1', text: 'A×B' }],
+            });
+            await loadWithParts(tab, ['A×B']);
+
+            expect(tab.candidateKeywords).toEqual(['A×B']);
+
+            const input = document.getElementById('candidateDelimiterInput');
+            input.value = '×';
+            document.getElementById('candidateDelimiterAdd').click();
+
+            await vi.waitFor(() => {
+                expect(tab.candidateKeywords).toEqual(['A', 'B']);
+            });
+        });
+
+        it('区切り文字を削除するとキーワードが元に戻る', async () => {
+            const tab = createTab({
+                getSelectedTimestamps: () => [{ id: '1', text: 'A×B' }],
+            });
+            await loadWithParts(tab, ['A×B']);
+
+            const input = document.getElementById('candidateDelimiterInput');
+            input.value = '×';
+            document.getElementById('candidateDelimiterAdd').click();
+
+            await vi.waitFor(() => {
+                expect(tab.candidateKeywords).toEqual(['A', 'B']);
+            });
+
+            const removeBtn = document.getElementById('candidateDelimiters').querySelector('button');
+            removeBtn.click();
+
+            await vi.waitFor(() => {
+                expect(tab.candidateKeywords).toEqual(['A×B']);
+            });
+        });
+
+        it('重複する区切り文字は追加されない', async () => {
+            const tab = createTab({
+                getSelectedTimestamps: () => [{ id: '1', text: 'A×B' }],
+            });
+            await loadWithParts(tab, ['A×B']);
+
+            const input = document.getElementById('candidateDelimiterInput');
+            input.value = '×';
+            document.getElementById('candidateDelimiterAdd').click();
+
+            input.value = '×';
+            document.getElementById('candidateDelimiterAdd').click();
+
+            expect(tab._customDelimiters).toEqual(['×']);
+        });
+
+        it('空文字は区切り文字として追加されない', async () => {
+            const tab = createTab({
+                getSelectedTimestamps: () => [{ id: '1', text: 'AB' }],
+            });
+            await loadWithParts(tab, ['AB']);
+
+            const input = document.getElementById('candidateDelimiterInput');
+            input.value = '';
+            document.getElementById('candidateDelimiterAdd').click();
+
+            expect(tab._customDelimiters).toEqual([]);
+        });
+
+        it('ignored partsは区切り文字追加後も無視される', async () => {
+            const tab = createTab({
+                getSelectedTimestamps: () => [{ id: '1', text: 'A×B C' }],
+            });
+            await loadWithParts(tab, ['A×B', 'C'], [1]);
+
+            expect(tab.candidateKeywords).toEqual(['A×B']);
+
+            const input = document.getElementById('candidateDelimiterInput');
+            input.value = '×';
+            document.getElementById('candidateDelimiterAdd').click();
+
+            await vi.waitFor(() => {
+                expect(tab.candidateKeywords).toEqual(['A', 'B']);
+            });
+        });
+
+        it('Enterキーで区切り文字を追加できる', async () => {
+            const tab = createTab({
+                getSelectedTimestamps: () => [{ id: '1', text: 'A×B' }],
+            });
+            await loadWithParts(tab, ['A×B']);
+
+            const input = document.getElementById('candidateDelimiterInput');
+            input.value = '×';
+            input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+
+            await vi.waitFor(() => {
+                expect(tab.candidateKeywords).toEqual(['A', 'B']);
             });
         });
     });
