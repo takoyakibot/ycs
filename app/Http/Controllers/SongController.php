@@ -151,6 +151,31 @@ class SongController extends Controller
     }
 
     /**
+     * アーティスト名変更画面を表示
+     */
+    public function artistRename()
+    {
+        return view('songs.artist-rename');
+    }
+
+    /**
+     * アーティスト名ごとの楽曲数を取得
+     */
+    public function artistsWithCount(): JsonResponse
+    {
+        $artists = Song::select('artist')
+            ->selectRaw('COUNT(*) as count')
+            ->whereNotNull('artist')
+            ->where('artist', '!=', '')
+            ->groupBy('artist')
+            ->orderBy('artist')
+            ->get()
+            ->map(fn ($row) => ['name' => $row->artist, 'count' => $row->count]);
+
+        return response()->json($artists);
+    }
+
+    /**
      * アーティスト名一括変換のプレビューを取得
      */
     public function previewArtistRename(Request $request)

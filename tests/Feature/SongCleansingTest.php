@@ -255,4 +255,46 @@ class SongCleansingTest extends TestCase
         $data = $response->json();
         $this->assertCount(2, $data);
     }
+
+    public function test_artists_with_count_returns_artist_names_and_counts(): void
+    {
+        Song::factory()->create(['title' => 'Song A', 'artist' => 'Alpha']);
+        Song::factory()->create(['title' => 'Song B', 'artist' => 'Alpha']);
+        Song::factory()->create(['title' => 'Song C', 'artist' => 'Beta']);
+
+        $response = $this->actingAs($this->user)
+            ->getJson('/api/songs/artists-with-count');
+
+        $response->assertStatus(200);
+        $data = $response->json();
+        $this->assertCount(2, $data);
+
+        $alpha = collect($data)->firstWhere('name', 'Alpha');
+        $beta = collect($data)->firstWhere('name', 'Beta');
+        $this->assertEquals(2, $alpha['count']);
+        $this->assertEquals(1, $beta['count']);
+    }
+
+    public function test_artists_with_count_returns_empty_for_no_songs(): void
+    {
+        $response = $this->actingAs($this->user)
+            ->getJson('/api/songs/artists-with-count');
+
+        $response->assertStatus(200)
+            ->assertJsonCount(0);
+    }
+
+    public function test_artists_with_count_excludes_empty_artist(): void
+    {
+        Song::factory()->create(['title' => 'Song A', 'artist' => 'Alpha']);
+        Song::factory()->create(['title' => 'Song C', 'artist' => '']);
+
+        $response = $this->actingAs($this->user)
+            ->getJson('/api/songs/artists-with-count');
+
+        $response->assertStatus(200);
+        $data = $response->json();
+        $this->assertCount(1, $data);
+        $this->assertEquals('Alpha', $data[0]['name']);
+    }
 }
