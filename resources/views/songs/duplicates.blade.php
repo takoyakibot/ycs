@@ -86,6 +86,12 @@
                                     </div>
 
                                     <div class="flex-1 min-w-0 space-y-1">
+                                        <div class="flex justify-end mb-1">
+                                            <button @click="toggleSelectAll(group)"
+                                                    class="px-2 py-0.5 text-xs rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600"
+                                                    x-text="isAllSelected(group) ? '全解除' : '全選択'">
+                                            </button>
+                                        </div>
                                         <template x-for="song in group.songs" :key="song.id">
                                             <div class="flex items-center gap-2 px-2 py-1 border rounded transition-colors"
                                                  :class="{
