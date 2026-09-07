@@ -481,15 +481,25 @@ class SongController extends Controller
             $positiveSearch = implode(' ', $positiveTerms);
 
             if ($positiveSearch !== '') {
-                $keywords = $searchMode === self::SEARCH_MODE_EXACT
-                    ? []
-                    : QueryHelper::splitFuzzyKeywords($positiveSearch);
+                $query->where(function ($outer) use ($positiveSearch, $searchMode) {
+                    $outer->where(function ($q) use ($positiveSearch, $searchMode) {
+                        $keywords = $searchMode === self::SEARCH_MODE_EXACT
+                            ? []
+                            : QueryHelper::splitFuzzyKeywords($positiveSearch);
 
-                if ($searchMode === self::SEARCH_MODE_EXACT || $keywords === []) {
-                    QueryHelper::applyAndSearchAny($query, $positiveSearch, ['title', 'artist']);
-                } else {
-                    QueryHelper::applyFuzzySearch($query, $positiveSearch, ['normalized_title', 'normalized_artist']);
-                }
+                        if ($searchMode === self::SEARCH_MODE_EXACT || $keywords === []) {
+                            QueryHelper::applyAndSearchAny($q, $positiveSearch, ['title', 'artist']);
+                        } else {
+                            QueryHelper::applyFuzzySearch($q, $positiveSearch, ['normalized_title', 'normalized_artist']);
+                        }
+                    })->orWhereHas('tags', function ($q) use ($positiveSearch) {
+                        $terms = QueryHelper::splitSearchKeywords($positiveSearch);
+                        foreach ($terms as $term) {
+                            $escaped = QueryHelper::escapeLikeString($term);
+                            $q->where('value', 'like', "%{$escaped}%");
+                        }
+                    });
+                });
             }
 
             foreach ($exclusions as $excl) {

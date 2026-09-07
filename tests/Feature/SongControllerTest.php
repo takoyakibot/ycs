@@ -413,6 +413,35 @@ class SongControllerTest extends TestCase
         $this->assertEquals(2, $response->json('total'));
     }
 
+    public function test_fetch_songs_search_by_tag(): void
+    {
+        $song1 = Song::factory()->create(['title' => 'Song A', 'artist' => 'Artist A']);
+        Song::factory()->create(['title' => 'Song B', 'artist' => 'Artist B']);
+        SongTag::create(['song_id' => $song1->id, 'value' => 'ボカロ']);
+
+        $response = $this->actingAs($this->user)->getJson(route('songs.fetchSongs', [
+            'search' => 'ボカロ',
+        ]));
+
+        $response->assertStatus(200);
+        $this->assertEquals(1, $response->json('total'));
+        $this->assertEquals('Song A', $response->json('data.0.title'));
+    }
+
+    public function test_fetch_songs_search_by_tag_does_not_duplicate(): void
+    {
+        $song1 = Song::factory()->create(['title' => '夜に駆ける', 'artist' => 'YOASOBI']);
+        Song::factory()->create(['title' => '群青', 'artist' => 'YOASOBI']);
+        SongTag::create(['song_id' => $song1->id, 'value' => 'ボカロ']);
+
+        $response = $this->actingAs($this->user)->getJson(route('songs.fetchSongs', [
+            'search' => '夜に駆ける',
+        ]));
+
+        $response->assertStatus(200);
+        $this->assertEquals(1, $response->json('total'));
+    }
+
     /**
      * 楽曲マスタ一覧取得のテスト（review_statusフィルタ: needs_review）
      */
