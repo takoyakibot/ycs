@@ -546,6 +546,21 @@ describe('CandidateTab', () => {
             });
         });
 
+        it('ハイフンを区切り文字として追加しても正規表現エラーにならない', async () => {
+            const tab = createTab({
+                getSelectedTimestamps: () => [{ id: '1', text: 'A-B' }],
+            });
+            await loadWithParts(tab, ['A-B']);
+
+            const input = document.getElementById('candidateDelimiterInput');
+            input.value = '-';
+            document.getElementById('candidateDelimiterAdd').click();
+
+            await vi.waitFor(() => {
+                expect(tab.candidateKeywords).toEqual(['A', 'B']);
+            });
+        });
+
         it('Enterキーで区切り文字を追加できる', async () => {
             const tab = createTab({
                 getSelectedTimestamps: () => [{ id: '1', text: 'A×B' }],
