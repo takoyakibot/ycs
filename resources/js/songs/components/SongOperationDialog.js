@@ -40,7 +40,7 @@ export class SongOperationDialog {
             overlay.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
 
             const dialog = document.createElement('div');
-            dialog.className = 'bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full mx-4 max-h-[80vh] flex flex-col';
+            dialog.className = 'bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full mx-4 min-h-[50vh] max-h-[80vh] flex flex-col';
             dialog.addEventListener('mousedown', (e) => e.stopPropagation());
 
             const header = document.createElement('div');
