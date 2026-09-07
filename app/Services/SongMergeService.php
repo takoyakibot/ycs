@@ -2,10 +2,8 @@
 
 namespace App\Services;
 
-use App\Helpers\QueryHelper;
 use App\Models\NormalizationLog;
 use App\Models\Song;
-use App\Models\SongGroupReview;
 use App\Models\SongTag;
 use App\Models\TimestampDecomposition;
 use App\Models\TimestampSongMapping;
@@ -15,90 +13,6 @@ use Illuminate\Support\Facades\DB;
 
 class SongMergeService
 {
-    /**
-     * 楽曲をあいまい検索する（名寄せ候補用）
-     *
-     * @param  string  $search  検索文字列（スペース区切りでAND検索）
-     * @return array 楽曲の配列（マッピング数・ts_item数付き）
-     */
-    public function searchSongs(string $search): array
-    {
-        if (trim($search) === '') {
-            return [];
-        }
-
-        $rawKeywords = QueryHelper::splitSearchKeywords($search);
-        $exclusions = [];
-        $positiveTerms = [];
-        foreach ($rawKeywords as $kw) {
-            $parsed = QueryHelper::parseSearchTerm($kw);
-            if ($parsed['exclude']) {
-                $exclusions[] = $parsed['term'];
-            } else {
-                $positiveTerms[] = $parsed['term'];
-            }
-        }
-
-        $positiveSearch = implode(' ', $positiveTerms);
-
-        $query = Song::query();
-
-        if ($positiveSearch !== '') {
-            $keywords = QueryHelper::splitFuzzyKeywords($positiveSearch);
-            if ($keywords !== []) {
-                QueryHelper::applyFuzzySearch($query, $positiveSearch, ['normalized_title', 'normalized_artist']);
-            } else {
-                QueryHelper::applyAndSearchAny($query, $positiveSearch, ['title', 'artist']);
-            }
-        }
-
-        foreach ($exclusions as $excl) {
-            $escaped = QueryHelper::escapeLikeString($excl);
-            $query->where(function ($q) use ($escaped) {
-                $q->where('title', 'not like', "%{$escaped}%")
-                    ->where('artist', 'not like', "%{$escaped}%");
-            });
-        }
-
-        if ($positiveSearch === '' && $exclusions === []) {
-            return [];
-        }
-
-        $songs = $query
-            ->orderBy('title')
-            ->limit(100)
-            ->get();
-
-        $songIds = $songs->pluck('id')->toArray();
-        $tsItemCounts = DB::table('timestamp_song_mappings')
-            ->join('ts_items', 'ts_items.normalized_text', '=', 'timestamp_song_mappings.normalized_text')
-            ->whereIn('timestamp_song_mappings.song_id', $songIds)
-            ->where('ts_items.is_display', true)
-            ->groupBy('timestamp_song_mappings.song_id')
-            ->pluck(DB::raw('COUNT(*) as count'), 'timestamp_song_mappings.song_id');
-
-        // 「別の曲」判定情報を取得
-        $normalizedTitles = $songs->pluck('normalized_title')->unique()->filter(fn ($v) => $v !== null && $v !== '')->toArray();
-        $distinctSongIds = collect();
-        if ($normalizedTitles) {
-            $distinctReviews = SongGroupReview::where('decision', SongGroupReview::DECISION_DISTINCT)
-                ->whereIn('normalized_title', $normalizedTitles)
-                ->get(['song_ids']);
-            foreach ($distinctReviews as $review) {
-                $distinctSongIds = $distinctSongIds->merge($review->song_ids);
-            }
-            $distinctSongIds = $distinctSongIds->unique();
-        }
-
-        return $songs->map(fn ($song) => [
-            'id' => $song->id,
-            'title' => $song->title,
-            'artist' => $song->artist,
-            'ts_items_count' => $tsItemCounts->get($song->id, 0),
-            'distinct_review' => $distinctSongIds->contains($song->id),
-        ])->toArray();
-    }
-
     /**
      * 2つの楽曲をマージする
      *
