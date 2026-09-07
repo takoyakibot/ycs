@@ -1782,6 +1782,12 @@ export class TimestampNormalization {
         this._docPipWindow = null;
 
         videoPlayerManager.onShowChange = (show) => {
+            if (this._docPipWindow && !this._docPipWindow.closed) {
+                if (!show) {
+                    this._docPipWindow.close();
+                }
+                return;
+            }
             const toggleBar = document.getElementById('pipPlayerToggleBar');
             const container = document.getElementById('pipPlayerContainer');
             const toggleIcon = document.getElementById('pipPlayerToggleIcon');
@@ -1816,16 +1822,17 @@ export class TimestampNormalization {
 
         const closeBtn = document.getElementById('pipPlayerCloseBtn');
         if (closeBtn) {
-            closeBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
+            closeBtn.addEventListener('click', () => {
+                if (this._docPipWindow && !this._docPipWindow.closed) {
+                    this._docPipWindow.close();
+                }
                 videoPlayerManager.close();
             });
         }
 
         const docPipBtn = document.getElementById('pipPlayerDocPipBtn');
         if (docPipBtn) {
-            docPipBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
+            docPipBtn.addEventListener('click', () => {
                 this._openDocumentPiP();
             });
         }
@@ -1855,6 +1862,7 @@ export class TimestampNormalization {
 
     async _openDocumentPiP() {
         if (!('documentPictureInPicture' in window)) return;
+        if (this._docPipWindow && !this._docPipWindow.closed) return;
 
         try {
             const pipWindow = await window.documentPictureInPicture.requestWindow({
@@ -1880,10 +1888,11 @@ export class TimestampNormalization {
 
             pipWindow.addEventListener('pagehide', () => {
                 this._docPipWindow = null;
+                const isShowing = videoPlayerManager.isShowing();
                 const wrapper = document.getElementById('pipPlayerContainer');
                 if (wrapper && playerContent) {
                     wrapper.appendChild(playerContent);
-                    wrapper.classList.toggle('hidden', this._playerCollapsed);
+                    wrapper.classList.toggle('hidden', !isShowing || this._playerCollapsed);
                 }
                 const titleEl = document.getElementById('pipPlayerTitle');
                 if (titleEl) titleEl.textContent = '動画プレビュー';
