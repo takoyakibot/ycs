@@ -32,6 +32,9 @@
                         <x-nav-link :href="route('songs.titleGroups')" :active="request()->routeIs('songs.titleGroups')">
                             {{ __('楽曲整理') }}
                         </x-nav-link>
+                        <x-nav-link :href="route('songs.artistRename')" :active="request()->routeIs('songs.artistRename')">
+                            {{ __('アーティスト変更') }}
+                        </x-nav-link>
                     @endif
                 </div>
             </div>
@@ -115,6 +118,9 @@
                 </x-responsive-nav-link>
                 <x-responsive-nav-link :href="route('songs.titleGroups')" :active="request()->routeIs('songs.titleGroups')">
                     {{ __('楽曲整理') }}
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('songs.artistRename')" :active="request()->routeIs('songs.artistRename')">
+                    {{ __('アーティスト変更') }}
                 </x-responsive-nav-link>
             </div>
 
