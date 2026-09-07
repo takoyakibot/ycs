@@ -297,4 +297,20 @@ class SongCleansingTest extends TestCase
         $this->assertCount(1, $data);
         $this->assertEquals('Alpha', $data[0]['name']);
     }
+
+    public function test_songs_by_artist_returns_songs_for_given_artist(): void
+    {
+        Song::factory()->create(['title' => 'Song A', 'artist' => 'Alpha']);
+        Song::factory()->create(['title' => 'Song B', 'artist' => 'Alpha']);
+        Song::factory()->create(['title' => 'Song C', 'artist' => 'Beta']);
+
+        $response = $this->actingAs($this->user)
+            ->getJson('/api/songs/by-artist?artist=Alpha');
+
+        $response->assertStatus(200);
+        $data = $response->json();
+        $this->assertCount(2, $data);
+        $this->assertEquals('Song A', $data[0]['title']);
+        $this->assertEquals('Song B', $data[1]['title']);
+    }
 }

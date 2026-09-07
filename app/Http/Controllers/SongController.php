@@ -176,6 +176,22 @@ class SongController extends Controller
     }
 
     /**
+     * 指定アーティストの楽曲一覧を取得
+     */
+    public function songsByArtist(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'artist' => 'required|string|max:255',
+        ]);
+
+        $songs = Song::where('artist', $validated['artist'])
+            ->orderBy('title')
+            ->get(['id', 'title']);
+
+        return response()->json($songs);
+    }
+
+    /**
      * アーティスト名一括変換のプレビューを取得
      */
     public function previewArtistRename(Request $request)
