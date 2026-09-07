@@ -17,8 +17,23 @@ function registerTitleGroupsComponent() {
             await this.fetchTitleGroups();
         },
 
-        async fetchTitleGroups() {
+        async fetchTitleGroups({ preserveState = false } = {}) {
             this.groupsLoading = true;
+
+            let prevByTitle = {};
+            if (preserveState) {
+                for (const group of this.groups) {
+                    const key = this.groupKey(group);
+                    prevByTitle[group.normalized_title] = {
+                        selectedIds: this.selectedIds[key] || [],
+                        targetId: this.targetId[key],
+                    };
+                }
+            }
+
+            const scrollContainer = this.$root?.querySelector('.overflow-y-auto');
+            const scrollTop = preserveState && scrollContainer ? scrollContainer.scrollTop : 0;
+
             try {
                 const params = new URLSearchParams({ filter: this.groupFilter });
                 if (this.groupSearch.trim()) params.set('search', this.groupSearch);
@@ -29,7 +44,23 @@ function registerTitleGroupsComponent() {
                 this.targetId = {};
                 for (const group of this.groups) {
                     const key = this.groupKey(group);
-                    this.selectedIds[key] = group.songs.map(s => s.id);
+                    const songIds = group.songs.map(s => s.id);
+                    const prev = prevByTitle[group.normalized_title];
+                    if (preserveState && prev) {
+                        this.selectedIds[key] = prev.selectedIds.filter(id => songIds.includes(id));
+                        if (prev.targetId && songIds.includes(prev.targetId)) {
+                            this.targetId[key] = prev.targetId;
+                        }
+                    } else {
+                        this.selectedIds[key] = songIds;
+                    }
+                }
+
+                if (preserveState && scrollTop > 0) {
+                    this.$nextTick(() => {
+                        const container = this.$root?.querySelector('.overflow-y-auto');
+                        if (container) container.scrollTop = scrollTop;
+                    });
                 }
             } catch (e) {
                 this.message = e.message;
@@ -118,7 +149,7 @@ function registerTitleGroupsComponent() {
                 this.messageType = 'error';
             } finally {
                 this.merging[groupKey] = false;
-                await this.fetchTitleGroups();
+                await this.fetchTitleGroups({ preserveState: true });
             }
         },
 
