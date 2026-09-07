@@ -150,14 +150,6 @@ class SongController extends Controller
         ]);
     }
 
-    /**
-     * アーティスト名一括変換画面を表示
-     */
-    public function artistRename()
-    {
-        return view('songs.artist-rename');
-    }
-
     public function distinctArtists(): JsonResponse
     {
         $artists = Song::distinct()->orderBy('artist')->pluck('artist');
