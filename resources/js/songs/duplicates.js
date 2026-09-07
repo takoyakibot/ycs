@@ -22,16 +22,20 @@ function registerDuplicatesComponent() {
             this.groupsLoading = true;
 
             let prevByTitle = {};
+            let prevActiveTitle = null;
             if (preserveState) {
                 for (const group of this.groups) {
                     prevByTitle[group.normalized_title] = {
                         selectedIds: this.groupSelectedIds[group.song_ids_hash] || [],
                         targetId: this.groupTargetId[group.song_ids_hash],
                     };
+                    if (group.song_ids_hash === this.activeGroupHash) {
+                        prevActiveTitle = group.normalized_title;
+                    }
                 }
             }
 
-            const scrollContainer = document.querySelector('#duplicates-app .overflow-y-auto');
+            const scrollContainer = this.$root?.querySelector('.overflow-y-auto');
             const scrollTop = preserveState && scrollContainer ? scrollContainer.scrollTop : 0;
 
             try {
@@ -42,7 +46,7 @@ function registerDuplicatesComponent() {
                 this.groups = await res.json();
                 this.groupSelectedIds = {};
                 this.groupTargetId = {};
-                if (!preserveState) this.activeGroupHash = null;
+                this.activeGroupHash = null;
                 for (const group of this.groups) {
                     const songIds = group.songs.map(s => s.id);
                     const prev = prevByTitle[group.normalized_title];
@@ -54,11 +58,14 @@ function registerDuplicatesComponent() {
                     } else {
                         this.groupSelectedIds[group.song_ids_hash] = songIds;
                     }
+                    if (prevActiveTitle && group.normalized_title === prevActiveTitle) {
+                        this.activeGroupHash = group.song_ids_hash;
+                    }
                 }
 
                 if (preserveState && scrollTop > 0) {
                     this.$nextTick(() => {
-                        const container = document.querySelector('#duplicates-app .overflow-y-auto');
+                        const container = this.$root?.querySelector('.overflow-y-auto');
                         if (container) container.scrollTop = scrollTop;
                     });
                 }
