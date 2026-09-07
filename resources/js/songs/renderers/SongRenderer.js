@@ -29,7 +29,7 @@ export class SongRenderer {
         div.dataset.songId = song.id;
         const selectedSong = this._getSelectedSong();
         const isSelected = selectedSong?.id === song.id;
-        div.className = `p-2 border rounded cursor-pointer flex items-center justify-between ${
+        div.className = `p-2 border rounded cursor-pointer flex items-start justify-between ${
             isSelected
                 ? 'bg-blue-100 dark:bg-blue-900 border-blue-500'
                 : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
@@ -57,19 +57,19 @@ export class SongRenderer {
         songInfo.appendChild(textWrapper);
         songInfo.title = `${song.title} / ${song.artist}`;
 
+        contentDiv.appendChild(songInfo);
+
         if (song.tags && song.tags.length > 0) {
-            const tagContainer = document.createElement('span');
-            tagContainer.className = 'inline-flex gap-1 ml-2 overflow-hidden flex-shrink-0';
+            const tagContainer = document.createElement('div');
+            tagContainer.className = 'flex gap-1 mt-0.5 overflow-hidden';
             song.tags.forEach(tag => {
                 const badge = document.createElement('span');
                 badge.className = 'inline-block px-1.5 py-0.5 text-[10px] rounded bg-blue-600 text-white whitespace-nowrap';
                 badge.textContent = tag.value;
                 tagContainer.appendChild(badge);
             });
-            songInfo.appendChild(tagContainer);
+            contentDiv.appendChild(tagContainer);
         }
-
-        contentDiv.appendChild(songInfo);
 
         if (song.duration_ms) {
             const durationSpan = document.createElement('span');
