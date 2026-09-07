@@ -1780,6 +1780,7 @@ export class TimestampNormalization {
         videoPlayerManager.restoreVolume();
         this._playerCollapsed = false;
         this._docPipWindow = null;
+        this._openingPip = false;
 
         videoPlayerManager.onShowChange = (show) => {
             if (this._docPipWindow && !this._docPipWindow.closed) {
@@ -1845,6 +1846,7 @@ export class TimestampNormalization {
     }
 
     _togglePlayerCollapse() {
+        if (this._docPipWindow && !this._docPipWindow.closed) return;
         this._playerCollapsed = !this._playerCollapsed;
         const container = document.getElementById('pipPlayerContainer');
         const toggleIcon = document.getElementById('pipPlayerToggleIcon');
@@ -1862,8 +1864,10 @@ export class TimestampNormalization {
 
     async _openDocumentPiP() {
         if (!('documentPictureInPicture' in window)) return;
+        if (this._openingPip) return;
         if (this._docPipWindow && !this._docPipWindow.closed) return;
 
+        this._openingPip = true;
         try {
             const pipWindow = await window.documentPictureInPicture.requestWindow({
                 width: 320,
@@ -1898,8 +1902,11 @@ export class TimestampNormalization {
                 if (titleEl) titleEl.textContent = '動画プレビュー';
             });
         } catch (e) {
+            this._docPipWindow = null;
             console.error('Document PiP failed:', e);
             toast.error('別ウィンドウでの表示に失敗しました');
+        } finally {
+            this._openingPip = false;
         }
     }
 
