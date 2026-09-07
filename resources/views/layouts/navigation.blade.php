@@ -32,9 +32,6 @@
                         <x-nav-link :href="route('songs.duplicates')" :active="request()->routeIs('songs.duplicates')">
                             {{ __('名寄せ') }}
                         </x-nav-link>
-                        <x-nav-link :href="route('songs.artistRename')" :active="request()->routeIs('songs.artistRename')">
-                            {{ __('名前変換') }}
-                        </x-nav-link>
                         <x-nav-link :href="route('songs.titleGroups')" :active="request()->routeIs('songs.titleGroups')">
                             {{ __('異表記') }}
                         </x-nav-link>
@@ -121,9 +118,6 @@
                 </x-responsive-nav-link>
                 <x-responsive-nav-link :href="route('songs.duplicates')" :active="request()->routeIs('songs.duplicates')">
                     {{ __('名寄せ') }}
-                </x-responsive-nav-link>
-                <x-responsive-nav-link :href="route('songs.artistRename')" :active="request()->routeIs('songs.artistRename')">
-                    {{ __('名前変換') }}
                 </x-responsive-nav-link>
                 <x-responsive-nav-link :href="route('songs.titleGroups')" :active="request()->routeIs('songs.titleGroups')">
                     {{ __('異表記') }}

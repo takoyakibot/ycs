@@ -19,7 +19,6 @@ export default defineConfig(() => {
                     'resources/js/songs/normalize.js',
                     'resources/js/songs/decompose.js',
                     'resources/js/songs/duplicates.js',
-                    'resources/js/songs/artist-rename.js',
                     'resources/js/songs/title-groups.js',
                 ],
                 refresh: true,
