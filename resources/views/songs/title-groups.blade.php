@@ -8,7 +8,7 @@
             {{-- ヘッダー --}}
             <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg mb-4">
                 <div class="p-4 text-gray-900 dark:text-gray-100">
-                    <h3 class="text-lg font-semibold">同名異表記グループ</h3>
+                    <h3 class="text-lg font-semibold">楽曲整理</h3>
                 </div>
             </div>
 

@@ -53,7 +53,6 @@ Route::middleware(['auth', 'admin'])->group(function () {
 
     // 楽曲マスタ管理
     Route::get('/songs/normalize', [SongController::class, 'index'])->name('songs.index');
-    Route::get('/songs/duplicates', [SongController::class, 'duplicates'])->name('songs.duplicates');
     Route::get('/songs/title-groups', [SongController::class, 'titleGroups'])->name('songs.titleGroups');
 
     // タイムスタンプ分解・選別
@@ -144,7 +143,6 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::post('api/songs/link-ts-item', [SongController::class, 'linkTsItemToSong'])->name('songs.linkTsItemToSong');
     Route::delete('api/songs/unlink-ts-item', [SongController::class, 'unlinkTsItem'])->name('songs.unlinkTsItem');
     Route::get('api/songs/ts-items-by-normalized-text', [SongController::class, 'getTsItemsByNormalizedText'])->name('songs.getTsItemsByNormalizedText');
-    Route::get('api/songs/duplicates', [SongController::class, 'findDuplicates'])->name('songs.findDuplicates');
     Route::get('api/songs/search-for-merge', [SongController::class, 'searchSongsForMerge'])->name('songs.searchForMerge');
     Route::post('api/songs/merge', [SongController::class, 'mergeSongs'])->name('songs.mergeSongs');
     Route::get('api/songs/artists', [SongController::class, 'distinctArtists'])->name('songs.distinctArtists');

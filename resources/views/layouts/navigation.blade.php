@@ -29,11 +29,8 @@
                         <x-nav-link :href="route('songs.decompose')" :active="request()->routeIs('songs.decompose')">
                             {{ __('TS分解') }}
                         </x-nav-link>
-                        <x-nav-link :href="route('songs.duplicates')" :active="request()->routeIs('songs.duplicates')">
-                            {{ __('名寄せ') }}
-                        </x-nav-link>
                         <x-nav-link :href="route('songs.titleGroups')" :active="request()->routeIs('songs.titleGroups')">
-                            {{ __('異表記') }}
+                            {{ __('楽曲整理') }}
                         </x-nav-link>
                     @endif
                 </div>
@@ -116,11 +113,8 @@
                 <x-responsive-nav-link :href="route('songs.decompose')" :active="request()->routeIs('songs.decompose')">
                     {{ __('TS分解') }}
                 </x-responsive-nav-link>
-                <x-responsive-nav-link :href="route('songs.duplicates')" :active="request()->routeIs('songs.duplicates')">
-                    {{ __('名寄せ') }}
-                </x-responsive-nav-link>
                 <x-responsive-nav-link :href="route('songs.titleGroups')" :active="request()->routeIs('songs.titleGroups')">
-                    {{ __('異表記') }}
+                    {{ __('楽曲整理') }}
                 </x-responsive-nav-link>
             </div>
 
