@@ -156,7 +156,7 @@ export class CandidateTab {
             return;
         }
 
-        const escaped = this._customDelimiters.map(d => d.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+        const escaped = this._customDelimiters.map(d => d.replace(/[-.*+?^${}()|[\]\\]/g, '\\$&'));
         const pattern = new RegExp(`[${escaped.join('')}]`);
 
         const split = activeParts.flatMap(part =>
