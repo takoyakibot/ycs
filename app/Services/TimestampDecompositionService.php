@@ -314,6 +314,20 @@ class TimestampDecompositionService
             }
             if ($i === $endIndex) {
                 $endPos = $partPos + mb_strlen($parts[$i]);
+
+                // 次のパーツがある場合、gap 内で空白より前に隣接する区切り文字を含める
+                // 例: "STEEL-鉄血の絆- / TRUE" → gap "- / " → "-" は曲名の一部
+                if ($endIndex < count($parts) - 1) {
+                    $nextSearchFrom = $endPos;
+                    $nextPartPos = mb_strpos($originalText, $parts[$endIndex + 1], $nextSearchFrom);
+                    if ($nextPartPos !== false && $nextPartPos > $endPos) {
+                        $gap = mb_substr($originalText, $endPos, $nextPartPos - $endPos);
+                        if (preg_match('/^(\S+)\s/u', $gap, $m)) {
+                            $endPos += mb_strlen($m[1]);
+                        }
+                    }
+                }
+
                 break;
             }
             $currentPos = $partPos + mb_strlen($parts[$i]);
