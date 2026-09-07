@@ -314,6 +314,26 @@ class TimestampDecompositionService
             }
             if ($i === $endIndex) {
                 $endPos = $partPos + mb_strlen($parts[$i]);
+
+                // 次のパーツがある場合、gap 先頭の区切り文字が選択範囲内部にも
+                // 存在するときだけ含める（曲名の一部として使われている証拠）
+                // 例: "STEEL-鉄血の絆- / TRUE" → 内部に "-" あり → 末尾 "-" を含める
+                // 例: "Title: Artist" → 内部に ":" なし → 含めない
+                if ($endIndex < count($parts) - 1 && $startPos !== -1) {
+                    $nextSearchFrom = $endPos;
+                    $nextPartPos = mb_strpos($originalText, $parts[$endIndex + 1], $nextSearchFrom);
+                    if ($nextPartPos !== false && $nextPartPos > $endPos) {
+                        $gap = mb_substr($originalText, $endPos, $nextPartPos - $endPos);
+                        if (preg_match('/^(\S+)\s/u', $gap, $m)) {
+                            $leadingChar = mb_substr($m[1], 0, 1);
+                            $selectedText = mb_substr($originalText, $startPos, $endPos - $startPos);
+                            if (mb_strpos($selectedText, $leadingChar) !== false) {
+                                $endPos += mb_strlen($m[1]);
+                            }
+                        }
+                    }
+                }
+
                 break;
             }
             $currentPos = $partPos + mb_strlen($parts[$i]);
