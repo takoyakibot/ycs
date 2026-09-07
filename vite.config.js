@@ -18,7 +18,6 @@ export default defineConfig(() => {
                     'resources/js/channels/play-history.js',
                     'resources/js/songs/normalize.js',
                     'resources/js/songs/decompose.js',
-                    'resources/js/songs/duplicates.js',
                     'resources/js/songs/title-groups.js',
                 ],
                 refresh: true,

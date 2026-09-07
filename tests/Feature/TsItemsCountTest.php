@@ -63,7 +63,7 @@ class TsItemsCountTest extends TestCase
         $song2 = $this->createSongWithMappedTsItems('テスト曲', 'アーティストB', 2);
 
         $service = app(SongCleansingService::class);
-        $groups = $service->findDuplicates();
+        $groups = $service->findTitleGroups();
 
         $this->assertNotEmpty($groups);
 

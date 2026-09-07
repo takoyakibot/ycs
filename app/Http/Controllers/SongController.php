@@ -95,32 +95,6 @@ class SongController extends Controller
     }
 
     /**
-     * 楽曲名寄せ画面を表示
-     */
-    public function duplicates()
-    {
-        return view('songs.duplicates');
-    }
-
-    /**
-     * 重複楽曲グループを取得
-     */
-    public function findDuplicates(Request $request)
-    {
-        $validated = $request->validate([
-            'search' => 'nullable|string|max:255',
-            'filter' => 'nullable|string|in:active,pending',
-        ]);
-
-        $groups = $this->songCleansingService->findDuplicates(
-            $validated['search'] ?? '',
-            $validated['filter'] ?? 'active'
-        );
-
-        return response()->json($groups);
-    }
-
-    /**
      * 名寄せ用の楽曲検索（部分一致）
      */
     public function searchSongsForMerge(Request $request)
