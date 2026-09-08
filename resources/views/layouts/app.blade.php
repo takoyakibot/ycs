@@ -79,15 +79,14 @@
                     </div>
                     @isset($timestampStats)
                     <div class="min-w-0 truncate text-xs text-gray-400 dark:text-gray-500 cursor-default"
-                         title="楽曲マスタ {{ number_format($timestampStats['songs_count']) }}件 / 未紐付け {{ number_format($timestampStats['unlinked']) }}件 / 紐付け済み {{ number_format($timestampStats['linked']) }}件 / 楽曲でない {{ number_format($timestampStats['not_song']) }}件 / 紐付け率 {{ $timestampStats['linked_rate'] }}%{{ $timestampStats['recent_count'] > 0 ? ' / 直近7日の新着 ' . number_format($timestampStats['recent_count']) . '件' : '' }}">
-                        楽曲マスタ <span class="font-medium">{{ number_format($timestampStats['songs_count']) }}</span>件
-                        / 未紐付け <span class="font-medium">{{ number_format($timestampStats['unlinked']) }}</span>件
-                        / 紐付け済み <span class="font-medium">{{ number_format($timestampStats['linked']) }}</span>件
-                        / 楽曲でない <span class="font-medium">{{ number_format($timestampStats['not_song']) }}</span>件
+                         title="TS全件 {{ number_format($timestampStats['total']) }}件 / 未分類 {{ number_format($timestampStats['unlinked']) }}件 / 紐付け率 {{ $timestampStats['linked_rate'] }}%{{ $timestampStats['recent_count'] > 0 ? ' / 直近7日 ' . number_format($timestampStats['recent_count']) . '件' : '' }} / 楽曲マスタ {{ number_format($timestampStats['songs_count']) }}件">
+                        TS全件 <span class="font-medium">{{ number_format($timestampStats['total']) }}</span>件
+                        / 未分類 <span class="font-medium">{{ number_format($timestampStats['unlinked']) }}</span>件
                         / 紐付け率 <span class="font-medium">{{ $timestampStats['linked_rate'] }}%</span>
                         @if($timestampStats['recent_count'] > 0)
-                            / 直近7日の新着 <span class="font-medium text-orange-500">{{ number_format($timestampStats['recent_count']) }}</span>件
+                            / 直近7日 <span class="font-medium text-orange-500">{{ number_format($timestampStats['recent_count']) }}</span>件
                         @endif
+                        / 楽曲マスタ <span class="font-medium">{{ number_format($timestampStats['songs_count']) }}</span>件
                     </div>
                     @endisset
                 </div>

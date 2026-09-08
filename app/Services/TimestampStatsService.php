@@ -8,7 +8,7 @@ use App\Models\TsItem;
 class TimestampStatsService
 {
     /**
-     * @return array{unlinked: int, linked: int, not_song: int, linked_rate: float, recent_count: int, songs_count: int}
+     * @return array{total: int, unlinked: int, linked_rate: float, recent_count: int, songs_count: int}
      */
     public function getSummary(): array
     {
@@ -27,6 +27,7 @@ class TimestampStatsService
         $total = (int) $counts->total;
         $linked = (int) $counts->linked;
         $notSong = (int) $counts->not_song;
+        $totalExcludingNotSong = $total - $notSong;
         $unlinked = $total - $linked - $notSong;
 
         $recentCount = (clone $base)
@@ -40,9 +41,8 @@ class TimestampStatsService
             : 0;
 
         return [
+            'total' => $totalExcludingNotSong,
             'unlinked' => $unlinked,
-            'linked' => $linked,
-            'not_song' => $notSong,
             'linked_rate' => $linkedRate,
             'recent_count' => $recentCount,
             'songs_count' => Song::count(),
