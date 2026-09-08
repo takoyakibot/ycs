@@ -42,15 +42,14 @@ class TimestampStatsServiceTest extends TestCase
     {
         $summary = $this->service->getSummary();
 
+        $this->assertEquals(0, $summary['total']);
         $this->assertEquals(0, $summary['unlinked']);
-        $this->assertEquals(0, $summary['linked']);
-        $this->assertEquals(0, $summary['not_song']);
         $this->assertEquals(0, $summary['linked_rate']);
         $this->assertEquals(0, $summary['recent_count']);
         $this->assertEquals(0, $summary['songs_count']);
     }
 
-    public function test_counts_unlinked_linked_and_not_song(): void
+    public function test_total_excludes_not_song(): void
     {
         $song = Song::factory()->create();
 
@@ -64,9 +63,9 @@ class TimestampStatsServiceTest extends TestCase
 
         $summary = $this->service->getSummary();
 
+        // total = 3 - 1(not_song) = 2
+        $this->assertEquals(2, $summary['total']);
         $this->assertEquals(1, $summary['unlinked']);
-        $this->assertEquals(1, $summary['linked']);
-        $this->assertEquals(1, $summary['not_song']);
         $this->assertEquals(1, $summary['songs_count']);
     }
 
