@@ -48,6 +48,11 @@ class TextNormalizer
             return '';
         }
 
+        // Unicode NFC正規化（合成用濁点・半濁点を結合済み文字に統一）
+        if (class_exists('Normalizer')) {
+            $text = \Normalizer::normalize($text, \Normalizer::FORM_C) ?: $text;
+        }
+
         // 全角英数→半角、半角カナ→全角カナ（濁点結合含む）
         $text = mb_convert_kana($text, 'asKV', 'UTF-8');
 

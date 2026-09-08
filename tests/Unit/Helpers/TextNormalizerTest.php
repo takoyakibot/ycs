@@ -654,4 +654,37 @@ class TextNormalizerTest extends TestCase
     {
         $this->assertEquals('A B', TextNormalizer::stripDecorations('A ✦ B'));
     }
+
+    public function test_normalize_nfc_combining_dakuten(): void
+    {
+        // U+30D8 (ヘ) + U+3099 (合成用濁点) → U+30D9 (ベ) via NFC
+        $nfd = "\u{30D8}\u{3099}"; // ヘ + ゙
+        $nfc = "\u{30D9}";         // ベ
+        $this->assertEquals(
+            TextNormalizer::normalize($nfc),
+            TextNormalizer::normalize($nfd)
+        );
+    }
+
+    public function test_normalize_nfc_combining_handakuten(): void
+    {
+        // U+30CF (ハ) + U+309A (合成用半濁点) → U+30D1 (パ) via NFC
+        $nfd = "\u{30CF}\u{309A}"; // ハ + ゚
+        $nfc = "\u{30D1}";         // パ
+        $this->assertEquals(
+            TextNormalizer::normalize($nfc),
+            TextNormalizer::normalize($nfd)
+        );
+    }
+
+    public function test_normalize_nfc_mixed_text(): void
+    {
+        // 実際のケース: "ベートーヴェン" のNFD表記
+        $nfd = "\u{30D8}\u{3099}\u{30FC}\u{30C8}\u{30FC}\u{30F4}\u{30A7}\u{30F3}";
+        $nfc = 'ベートーヴェン';
+        $this->assertEquals(
+            TextNormalizer::normalize($nfc),
+            TextNormalizer::normalize($nfd)
+        );
+    }
 }
