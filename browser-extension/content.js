@@ -5330,6 +5330,17 @@ function createVolumeGraph() {
         color: #999;
         cursor: default;
       }
+      .vdg-paste-popup-item.action {
+        color: #6af;
+        cursor: pointer;
+        text-align: center;
+        border-top: 1px solid #444;
+        margin-top: 2px;
+        padding-top: 6px;
+      }
+      .vdg-paste-popup-item.action:hover {
+        color: #8cf;
+      }
 
       .vdg-ts-format-toggle {
         display: flex;
@@ -7024,7 +7035,7 @@ function closeSongCandidatePopup() {
  * 「候補」ボタンから曲名候補を表示するフロー
  * 字幕がサーバー未送信の場合は取得→送信してから再問い合わせする
  */
-async function showSongCandidates(marker) {
+async function showSongCandidates(marker, threshold = null) {
   const input = volumeGraphContainer?.querySelector(`.vdg-ts-text-input[data-marker-id="${marker.id}"]`);
   if (!input) return;
 
@@ -7055,7 +7066,7 @@ async function showSongCandidates(marker) {
     }
 
     const sec = Math.floor(marker.time);
-    let result = await fetchSongCandidates(videoId, sec);
+    let result = await fetchSongCandidates(videoId, sec, threshold);
     if (isStale()) return;
 
     // 字幕が未送信なら取得→送信してから再問い合わせ
@@ -7063,7 +7074,7 @@ async function showSongCandidates(marker) {
       openSongCandidatePopup(input, [{ type: 'message', label: '字幕を取得しています…' }]);
       await ensureSubtitlesOnServer(videoId);
       if (isStale()) return;
-      result = await fetchSongCandidates(videoId, sec);
+      result = await fetchSongCandidates(videoId, sec, threshold);
       if (isStale()) return;
     }
 
@@ -7073,12 +7084,23 @@ async function showSongCandidates(marker) {
     }
 
     const candidates = (result.candidates || []).slice(0, 5);
+    const currentThreshold = result.threshold || 0.15;
+
     if (candidates.length === 0) {
-      openSongCandidatePopup(input, [{ type: 'message', label: '候補が見つかりませんでした' }]);
+      if (currentThreshold > 0.05) {
+        const lowerThreshold = Math.max(0.05, Math.round((currentThreshold - 0.05) * 100) / 100);
+        openSongCandidatePopup(input, [{
+          type: 'action',
+          label: `候補が見つかりませんでした（閾値を下げて再検索）`,
+          action: () => retryWithLowerThreshold(marker, lowerThreshold),
+        }]);
+      } else {
+        openSongCandidatePopup(input, [{ type: 'message', label: '候補が見つかりませんでした' }]);
+      }
       return;
     }
 
-    openSongCandidatePopup(input, candidates.map(c => {
+    const items = candidates.map(c => {
       // マスタ未登録の候補は元の表記（text）を優先する。
       // normalized_textは小文字寄せ済みのフォールバック（#633）
       const title = c.song_title || c.text || c.normalized_text || '';
@@ -7090,20 +7112,38 @@ async function showSongCandidates(marker) {
         insertValue: c.song_artist ? `${title} / ${c.song_artist}` : title,
         similarity: c.similarity,
       };
-    }));
+    });
+
+    // 候補が少ない場合、閾値を下げて追加検索できるボタンを付与
+    if (candidates.length < 3 && currentThreshold > 0.05) {
+      const lowerThreshold = Math.max(0.05, Math.round((currentThreshold - 0.05) * 100) / 100);
+      items.push({
+        type: 'action',
+        label: '閾値を下げてもっと検索',
+        action: () => retryWithLowerThreshold(marker, lowerThreshold),
+      });
+    }
+
+    openSongCandidatePopup(input, items);
   } catch (error) {
     console.warn('[YCS] 曲名候補の取得エラー:', error.message);
     if (!isStale()) openSongCandidatePopup(input, [{ type: 'message', label: 'エラー: ' + error.message }]);
   }
 }
 
+function retryWithLowerThreshold(marker, threshold) {
+  showSongCandidates(marker, threshold);
+}
+
 /**
  * 曲名候補APIを呼び出す
  */
-async function fetchSongCandidates(videoId, sec) {
-  const response = await fetch(
-    `${ycsServerUrl}/api/extension/subtitle-matches?video_id=${encodeURIComponent(videoId)}&sec=${sec}`,
-    {
+async function fetchSongCandidates(videoId, sec, threshold = null) {
+  let url = `${ycsServerUrl}/api/extension/subtitle-matches?video_id=${encodeURIComponent(videoId)}&sec=${sec}`;
+  if (threshold !== null) {
+    url += `&threshold=${threshold}`;
+  }
+  const response = await fetch(url, {
       headers: {
         'Accept': 'application/json',
         'Authorization': `Bearer ${ycsApiToken}`,
@@ -7165,7 +7205,7 @@ function pickPreferredCaptionTrack(tracks) {
  * 曲名候補ポップアップを表示する（既存のペースト変換ポップアップと同じ操作感）
  * 候補クリックで入力欄の内容を置き換え、Esc・外側クリック・他のキーで閉じる
  * @param {HTMLInputElement} input - 挿入先の入力欄
- * @param {Array<{type: string, label: string, artist?: string, similarity?: number}>} items
+ * @param {Array<{type: 'candidate'|'message'|'action', label: string, artist?: string, similarity?: number, insertValue?: string, action?: Function}>} items
  */
 function openSongCandidatePopup(input, items) {
   closeSongCandidatePopup();
@@ -7178,6 +7218,8 @@ function openSongCandidatePopup(input, items) {
     <div class="vdg-paste-popup-title">曲名候補（クリックで挿入）</div>
     ${items.map((item, i) => item.type === 'candidate' ? `
       <div class="vdg-paste-popup-item" data-index="${i}">${escapeHtml(item.label)}${item.artist ? `<span class="artist">${escapeHtml(item.artist)}</span>` : ''}<span class="similarity">${Math.round((item.similarity || 0) * 100)}%</span></div>
+    ` : item.type === 'action' ? `
+      <div class="vdg-paste-popup-item action" data-action-index="${i}">${escapeHtml(item.label)}</div>
     ` : `
       <div class="vdg-paste-popup-item message">${escapeHtml(item.label)}</div>
     `).join('')}
@@ -7198,9 +7240,18 @@ function openSongCandidatePopup(input, items) {
   popup.addEventListener('mousedown', (e) => {
     e.preventDefault();
     e.stopPropagation();
-    const item = e.target.closest('.vdg-paste-popup-item');
-    if (item && item.dataset.index !== undefined) {
-      const selected = items[parseInt(item.dataset.index)];
+    const el = e.target.closest('.vdg-paste-popup-item');
+    if (!el) return;
+    if (el.dataset.actionIndex !== undefined) {
+      const selected = items[parseInt(el.dataset.actionIndex)];
+      if (selected?.action) {
+        closeSongCandidatePopup();
+        selected.action();
+      }
+      return;
+    }
+    if (el.dataset.index !== undefined) {
+      const selected = items[parseInt(el.dataset.index)];
       const value = selected?.insertValue ?? selected?.label ?? '';
       closeSongCandidatePopup();
       input.focus({ preventScroll: true });

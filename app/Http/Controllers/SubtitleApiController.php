@@ -236,6 +236,7 @@ class SubtitleApiController extends Controller
         $validated = $request->validate([
             'video_id' => ['required', 'string', 'size:11', 'regex:/^[A-Za-z0-9_-]{11}$/'],
             'sec' => ['required', 'integer', 'min:0', 'max:86400'],
+            'threshold' => ['sometimes', 'numeric', 'min:0.01', 'max:1.0'],
         ]);
 
         // アーカイブの存在確認とアクセス権チェック
@@ -250,14 +251,20 @@ class SubtitleApiController extends Controller
         }
 
         try {
+            $threshold = isset($validated['threshold'])
+                ? (float) $validated['threshold']
+                : SubtitleMatchingService::DEFAULT_THRESHOLD;
+
             $result = $this->matchingService->getCandidateSongsForPosition(
                 $validated['video_id'],
-                $validated['sec']
+                $validated['sec'],
+                $threshold
             );
 
             return response()->json(array_merge([
                 'video_id' => $validated['video_id'],
                 'sec' => $validated['sec'],
+                'threshold' => $threshold,
             ], $result));
         } catch (Exception $e) {
             Log::error('再生位置の楽曲マッチングエラー', [

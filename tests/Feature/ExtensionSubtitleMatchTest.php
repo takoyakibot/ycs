@@ -271,4 +271,45 @@ class ExtensionSubtitleMatchTest extends TestCase
             ->getJson('/api/extension/subtitle-matches?video_id=dQw4w9WgXcQ')
             ->assertStatus(422);
     }
+
+    public function test_validates_threshold_param(): void
+    {
+        $token = $this->user->createToken('extension')->plainTextToken;
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson('/api/extension/subtitle-matches?video_id=dQw4w9WgXcQ&sec=60&threshold=0')
+            ->assertStatus(422);
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson('/api/extension/subtitle-matches?video_id=dQw4w9WgXcQ&sec=60&threshold=1.5')
+            ->assertStatus(422);
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson('/api/extension/subtitle-matches?video_id=dQw4w9WgXcQ&sec=60&threshold=abc')
+            ->assertStatus(422);
+    }
+
+    public function test_response_includes_threshold(): void
+    {
+        $this->createTargetSubtitle();
+        $this->createMappedFingerprint();
+
+        $response = $this->requestMatch('dQw4w9WgXcQ', 60);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('threshold', 0.15);
+    }
+
+    public function test_accepts_custom_threshold(): void
+    {
+        $this->createTargetSubtitle();
+        $this->createMappedFingerprint();
+
+        $token = $this->user->createToken('extension')->plainTextToken;
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson('/api/extension/subtitle-matches?video_id=dQw4w9WgXcQ&sec=60&threshold=0.05');
+
+        $response->assertStatus(200)
+            ->assertJsonPath('threshold', 0.05);
+    }
 }
