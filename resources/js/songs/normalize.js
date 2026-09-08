@@ -1730,10 +1730,14 @@ export class TimestampNormalization {
             }
             const toggleBar = document.getElementById('pipPlayerToggleBar');
             const container = document.getElementById('pipPlayerContainer');
+            const controls = document.getElementById('pipPlayerControls');
             const toggleIcon = document.getElementById('pipPlayerToggleIcon');
             if (toggleBar) toggleBar.classList.toggle('hidden', !show);
             if (container) {
                 container.classList.toggle('hidden', !show || this._playerCollapsed);
+            }
+            if (controls) {
+                controls.classList.toggle('hidden', !show || this._playerCollapsed);
             }
             if (toggleIcon) {
                 toggleIcon.style.transform = (show && !this._playerCollapsed) ? '' : 'rotate(-90deg)';
@@ -1802,8 +1806,10 @@ export class TimestampNormalization {
         if (this._docPipWindow && !this._docPipWindow.closed) return;
         this._playerCollapsed = !this._playerCollapsed;
         const container = document.getElementById('pipPlayerContainer');
+        const controls = document.getElementById('pipPlayerControls');
         const toggleIcon = document.getElementById('pipPlayerToggleIcon');
         if (container) container.classList.toggle('hidden', this._playerCollapsed);
+        if (controls) controls.classList.toggle('hidden', this._playerCollapsed);
         if (toggleIcon) {
             toggleIcon.style.transform = this._playerCollapsed ? 'rotate(-90deg)' : '';
         }
@@ -1851,6 +1857,8 @@ export class TimestampNormalization {
                     wrapper.appendChild(playerContent);
                     wrapper.classList.toggle('hidden', !isShowing || this._playerCollapsed);
                 }
+                const controlsEl = document.getElementById('pipPlayerControls');
+                if (controlsEl) controlsEl.classList.toggle('hidden', !isShowing || this._playerCollapsed);
                 const titleEl = document.getElementById('pipPlayerTitle');
                 if (titleEl) titleEl.textContent = '動画プレビュー';
             });

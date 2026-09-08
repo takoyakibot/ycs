@@ -399,7 +399,7 @@ export class VideoPlayerManager {
      * @param {number} seconds - シークする秒数（負の値で巻き戻し）
      */
     seekRelative(seconds) {
-        if (!this.player || !this.playerInitialized) return;
+        if (!this.player || !this.playerInitialized || typeof this.player.seekTo !== 'function') return;
         const current = this.getCurrentTime();
         const duration = this.getDuration();
         const target = Math.max(0, duration > 0 ? Math.min(current + seconds, duration) : current + seconds);
