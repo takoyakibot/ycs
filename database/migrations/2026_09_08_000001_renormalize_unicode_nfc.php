@@ -71,6 +71,7 @@ return new class extends Migration
                 if ($mapping->is_manual && ! $existingMapping->is_manual) {
                     $existingMapping->update([
                         'song_id' => $mapping->song_id,
+                        'status' => $mapping->status,
                         'is_manual' => $mapping->is_manual,
                         'is_not_song' => $mapping->is_not_song,
                         'confidence' => $mapping->confidence,
@@ -137,26 +138,84 @@ return new class extends Migration
     private function renormalizeSongs(): void
     {
         $updated = 0;
+        $merged = 0;
 
-        Song::chunk(500, function ($songs) use (&$updated) {
-            foreach ($songs as $song) {
-                $newTitle = TextNormalizer::normalize($song->title);
-                $newArtist = TextNormalizer::normalize($song->artist);
+        $songIds = Song::pluck('id')->toArray();
 
-                if ($song->normalized_title !== $newTitle || $song->normalized_artist !== $newArtist) {
-                    DB::table('songs')
-                        ->where('id', $song->id)
-                        ->update([
-                            'normalized_title' => $newTitle,
-                            'normalized_artist' => $newArtist,
-                            'updated_at' => now(),
-                        ]);
-                    $updated++;
-                }
+        foreach ($songIds as $songId) {
+            $song = Song::find($songId);
+            if (! $song) {
+                continue;
             }
-        });
 
-        Log::info('[Migration] Renormalized songs (NFC)', ['updated_count' => $updated]);
+            $newTitle = TextNormalizer::normalize($song->title);
+            $newArtist = TextNormalizer::normalize($song->artist);
+
+            if ($song->normalized_title === $newTitle && $song->normalized_artist === $newArtist) {
+                continue;
+            }
+
+            $existingSong = Song::where('normalized_title', $newTitle)
+                ->where('normalized_artist', $newArtist)
+                ->where('id', '!=', $song->id)
+                ->first();
+
+            if ($existingSong) {
+                $this->mergeSongs($song, $existingSong);
+                $merged++;
+            } else {
+                DB::table('songs')
+                    ->where('id', $song->id)
+                    ->update([
+                        'normalized_title' => $newTitle,
+                        'normalized_artist' => $newArtist,
+                        'updated_at' => now(),
+                    ]);
+                $updated++;
+            }
+        }
+
+        Log::info('[Migration] Renormalized songs (NFC)', [
+            'updated_count' => $updated,
+            'merged_count' => $merged,
+        ]);
+    }
+
+    private function mergeSongs(Song $song, Song $existingSong): void
+    {
+        $keepSong = $existingSong;
+        $deleteSong = $song;
+
+        if ($song->spotify_track_id && ! $existingSong->spotify_track_id) {
+            $keepSong = $song;
+            $deleteSong = $existingSong;
+        } elseif (! $song->spotify_track_id && $existingSong->spotify_track_id) {
+            $keepSong = $existingSong;
+            $deleteSong = $song;
+        } elseif ($song->created_at < $existingSong->created_at) {
+            $keepSong = $song;
+            $deleteSong = $existingSong;
+        }
+
+        TimestampSongMapping::where('song_id', $deleteSong->id)
+            ->update(['song_id' => $keepSong->id]);
+
+        DB::table('ts_items')
+            ->where('song_id', $deleteSong->id)
+            ->update(['song_id' => $keepSong->id]);
+
+        DB::table('timestamp_decompositions')
+            ->where('song_id', $deleteSong->id)
+            ->update(['song_id' => $keepSong->id]);
+
+        Log::info('[Migration] Merged duplicate song (NFC)', [
+            'kept_id' => $keepSong->id,
+            'kept_title' => $keepSong->title,
+            'deleted_id' => $deleteSong->id,
+            'deleted_title' => $deleteSong->title,
+        ]);
+
+        $deleteSong->delete();
     }
 
     public function down(): void
