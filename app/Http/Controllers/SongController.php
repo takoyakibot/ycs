@@ -349,9 +349,10 @@ class SongController extends Controller
                     ->whereNull('ts_items.song_id');
                 break;
             case 'pending':
-                // 保留: マッピングあり かつ status=pending
+                // 保留: マッピングあり かつ status=pending かつ is_not_song=false
                 $query->whereNotNull('timestamp_song_mappings.id')
-                    ->where('timestamp_song_mappings.status', TimestampSongMapping::STATUS_PENDING);
+                    ->where('timestamp_song_mappings.status', TimestampSongMapping::STATUS_PENDING)
+                    ->where('timestamp_song_mappings.is_not_song', false);
                 break;
             case 'active':
                 // 有効: 非楽曲(is_not_song)と保留(pending)を除外
