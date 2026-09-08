@@ -173,7 +173,20 @@ class TimestampDecompositionService
      */
     public function getNextPending(): ?TimestampDecomposition
     {
-        return TimestampDecomposition::pending()
+        return TimestampDecomposition::query()
+            ->where(function ($q) {
+                $q->where('status', TimestampDecomposition::STATUS_PENDING)
+                    ->orWhere(function ($q2) {
+                        // auto_matchedだがマッピングが解除されたレコードも対象にする
+                        $q2->where('status', TimestampDecomposition::STATUS_AUTO_MATCHED)
+                            ->whereNotExists(function ($sub) {
+                                $sub->select(DB::raw(1))
+                                    ->from('timestamp_song_mappings')
+                                    ->whereColumn('timestamp_song_mappings.normalized_text', 'timestamp_decompositions.normalized_text')
+                                    ->whereNotNull('timestamp_song_mappings.song_id');
+                            });
+                    });
+            })
             // 「楽曲でない」とマークされたタイムスタンプを除外
             ->whereNotExists(function ($query) {
                 $query->select(DB::raw(1))
@@ -188,7 +201,7 @@ class TimestampDecompositionService
                     ->whereNotNull('timestamp_song_mappings.song_id')
                     ->where(TimestampSongMapping::confirmedJoinConditions());
             })
-            ->orderBy('separator_count', 'asc') // パーツが少ないものから処理（簡単なものから）
+            ->orderBy('separator_count', 'asc')
             ->orderBy('created_at', 'asc')
             ->first();
     }
@@ -762,8 +775,21 @@ class TimestampDecompositionService
      */
     public function getStatistics(): array
     {
-        // 「楽曲でない」および「手動紐付け済み」を除外したpending件数
-        $pendingCount = TimestampDecomposition::where('status', TimestampDecomposition::STATUS_PENDING)
+        // 「楽曲でない」および「手動紐付け済み」を除外した処理待ち件数
+        // auto_matchedでもマッピングが解除されたレコードは処理待ちに含める
+        $pendingCount = TimestampDecomposition::query()
+            ->where(function ($q) {
+                $q->where('status', TimestampDecomposition::STATUS_PENDING)
+                    ->orWhere(function ($q2) {
+                        $q2->where('status', TimestampDecomposition::STATUS_AUTO_MATCHED)
+                            ->whereNotExists(function ($sub) {
+                                $sub->select(DB::raw(1))
+                                    ->from('timestamp_song_mappings')
+                                    ->whereColumn('timestamp_song_mappings.normalized_text', 'timestamp_decompositions.normalized_text')
+                                    ->whereNotNull('timestamp_song_mappings.song_id');
+                            });
+                    });
+            })
             ->whereNotExists(function ($query) {
                 $query->select(DB::raw(1))
                     ->from('timestamp_song_mappings')

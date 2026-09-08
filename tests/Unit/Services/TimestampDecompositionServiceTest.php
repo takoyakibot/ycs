@@ -885,6 +885,63 @@ class TimestampDecompositionServiceTest extends TestCase
         $this->assertNull($next);
     }
 
+    public function test_get_next_pending_includes_auto_matched_without_mapping(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        // auto_matchedだがマッピングが解除されたレコード
+        $decomposition = TimestampDecomposition::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize('アーティスト / 曲名'),
+            'original_text' => 'アーティスト / 曲名',
+            'parts' => ['アーティスト', '曲名'],
+            'separator_count' => 1,
+            'status' => TimestampDecomposition::STATUS_AUTO_MATCHED,
+            'confidence' => 0.8,
+        ]);
+
+        $next = $this->service->getNextPending();
+
+        $this->assertNotNull($next);
+        $this->assertEquals($decomposition->id, $next->id);
+    }
+
+    public function test_get_next_pending_excludes_auto_matched_with_active_mapping(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $song = \App\Models\Song::create([
+            'id' => (string) Str::ulid(),
+            'title' => '曲名',
+            'artist' => 'アーティスト',
+        ]);
+
+        TimestampDecomposition::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize('アーティスト / 曲名2'),
+            'original_text' => 'アーティスト / 曲名2',
+            'parts' => ['アーティスト', '曲名2'],
+            'separator_count' => 1,
+            'status' => TimestampDecomposition::STATUS_AUTO_MATCHED,
+            'confidence' => 0.8,
+        ]);
+
+        TimestampSongMapping::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize('アーティスト / 曲名2'),
+            'song_id' => $song->id,
+            'is_not_song' => false,
+            'is_manual' => false,
+            'status' => 'pending',
+        ]);
+
+        $next = $this->service->getNextPending();
+
+        $this->assertNull($next);
+    }
+
     /**
      * linkToSongが文字バリエーション（例: ' vs '）のある既存楽曲を正しく検出するテスト
      */
