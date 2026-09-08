@@ -294,71 +294,10 @@ export class TimestampNormalization {
             return;
         }
 
-        // pendingフィルタ時にナビゲーションバーを表示
-        if (this.currentFilter === 'pending') {
-            container.appendChild(this.createPendingNavigation(total));
-        }
-
         // DBでソート済みなのでそのまま表示
         timestamps.forEach(ts => {
             container.appendChild(this.createTimestampElement(ts));
         });
-    }
-
-    createPendingNavigation(total) {
-        const nav = document.createElement('div');
-        nav.className = 'flex items-center justify-between p-2 mb-2 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded text-sm';
-
-        const countLabel = document.createElement('span');
-        countLabel.className = 'text-orange-700 dark:text-orange-300';
-        countLabel.textContent = `確認待ち: 全${total}件`;
-
-        const btnContainer = document.createElement('div');
-        btnContainer.className = 'flex gap-2';
-
-        const prevBtn = document.createElement('button');
-        prevBtn.className = 'px-2 py-1 text-xs bg-orange-100 dark:bg-orange-800 hover:bg-orange-200 dark:hover:bg-orange-700 text-orange-700 dark:text-orange-300 rounded transition-colors';
-        prevBtn.textContent = '◀ 前';
-        prevBtn.onclick = () => this.navigatePending(-1);
-
-        const nextBtn = document.createElement('button');
-        nextBtn.className = 'px-2 py-1 text-xs bg-orange-100 dark:bg-orange-800 hover:bg-orange-200 dark:hover:bg-orange-700 text-orange-700 dark:text-orange-300 rounded transition-colors';
-        nextBtn.textContent = '次 ▶';
-        nextBtn.onclick = () => this.navigatePending(1);
-
-        btnContainer.appendChild(prevBtn);
-        btnContainer.appendChild(nextBtn);
-
-        nav.appendChild(countLabel);
-        nav.appendChild(btnContainer);
-
-        return nav;
-    }
-
-    navigatePending(direction) {
-        const currentIdx = this.selectedTimestamps.length === 1
-            ? this.currentPageTimestamps.findIndex(ts => ts.id === this.selectedTimestamps[0].id)
-            : -1;
-
-        const len = this.currentPageTimestamps.length;
-        let nextIdx = currentIdx === -1
-            ? (direction > 0 ? -1 : len)
-            : currentIdx;
-
-        for (let i = 0; i < len; i++) {
-            nextIdx = direction > 0
-                ? (nextIdx + 1) % len
-                : (nextIdx - 1 + len) % len;
-            const ts = this.currentPageTimestamps[nextIdx];
-            if (ts.status === 'pending') {
-                this.selectedTimestamps = [ts];
-                this.refreshTimestampSelectionStyles();
-                this.updateSelectionDisplay();
-                const el = document.querySelector(`[data-ts-id="${ts.id}"]`);
-                if (el) el.scrollIntoView({ block: 'nearest' });
-                return;
-            }
-        }
     }
 
     createTimestampElement(ts) {
