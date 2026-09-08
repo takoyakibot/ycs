@@ -2449,6 +2449,7 @@ export class TimestampNormalization {
             this.editingTagsModified = false;
             this.closeEditModal();
             await this.loadSongs(document.getElementById('songsSearch').value);
+            await this.loadTimestamps(this.currentPage, this.currentSearchQuery);
 
             // 選択中の楽曲が更新された場合は更新
             if (this.selectedSong?.id === songId) {
