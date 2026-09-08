@@ -885,6 +885,163 @@ class TimestampDecompositionServiceTest extends TestCase
         $this->assertNull($next);
     }
 
+    public function test_get_next_pending_includes_auto_matched_without_mapping(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        // auto_matchedだがマッピングが解除されたレコード
+        $decomposition = TimestampDecomposition::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize('アーティスト / 曲名'),
+            'original_text' => 'アーティスト / 曲名',
+            'parts' => ['アーティスト', '曲名'],
+            'separator_count' => 1,
+            'status' => TimestampDecomposition::STATUS_AUTO_MATCHED,
+            'confidence' => 0.8,
+        ]);
+
+        $next = $this->service->getNextPending();
+
+        $this->assertNotNull($next);
+        $this->assertEquals($decomposition->id, $next->id);
+    }
+
+    public function test_get_next_pending_includes_auto_matched_with_pending_mapping(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $song = \App\Models\Song::create([
+            'id' => (string) Str::ulid(),
+            'title' => '曲名',
+            'artist' => 'アーティスト',
+        ]);
+
+        $decomposition = TimestampDecomposition::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize('アーティスト / 曲名2'),
+            'original_text' => 'アーティスト / 曲名2',
+            'parts' => ['アーティスト', '曲名2'],
+            'separator_count' => 1,
+            'status' => TimestampDecomposition::STATUS_AUTO_MATCHED,
+            'confidence' => 0.8,
+        ]);
+
+        // 未確定マッピング（status=pending, is_manual=false）
+        TimestampSongMapping::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize('アーティスト / 曲名2'),
+            'song_id' => $song->id,
+            'is_not_song' => false,
+            'is_manual' => false,
+            'status' => 'pending',
+        ]);
+
+        $next = $this->service->getNextPending();
+
+        // 未確定マッピングは確定扱いしないので、処理待ちに含まれる
+        $this->assertNotNull($next);
+        $this->assertEquals($decomposition->id, $next->id);
+    }
+
+    public function test_get_next_pending_excludes_auto_matched_with_confirmed_mapping(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $song = \App\Models\Song::create([
+            'id' => (string) Str::ulid(),
+            'title' => '曲名',
+            'artist' => 'アーティスト',
+        ]);
+
+        TimestampDecomposition::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize('アーティスト / 曲名3'),
+            'original_text' => 'アーティスト / 曲名3',
+            'parts' => ['アーティスト', '曲名3'],
+            'separator_count' => 1,
+            'status' => TimestampDecomposition::STATUS_AUTO_MATCHED,
+            'confidence' => 0.8,
+        ]);
+
+        // 確定マッピング（status=linked, is_manual=true）
+        TimestampSongMapping::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize('アーティスト / 曲名3'),
+            'song_id' => $song->id,
+            'is_not_song' => false,
+            'is_manual' => true,
+            'status' => 'linked',
+        ]);
+
+        $next = $this->service->getNextPending();
+
+        $this->assertNull($next);
+    }
+
+    public function test_get_statistics_counts_auto_matched_without_mapping_as_pending(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        // auto_matchedだがマッピングなし → pending扱い
+        TimestampDecomposition::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize('アーティスト / 統計テスト曲'),
+            'original_text' => 'アーティスト / 統計テスト曲',
+            'parts' => ['アーティスト', '統計テスト曲'],
+            'separator_count' => 1,
+            'status' => TimestampDecomposition::STATUS_AUTO_MATCHED,
+            'confidence' => 0.8,
+        ]);
+
+        $stats = $this->service->getStatistics();
+
+        $this->assertGreaterThanOrEqual(1, $stats['pending']);
+        $this->assertGreaterThanOrEqual(1, $stats['auto_matched']);
+    }
+
+    public function test_get_statistics_excludes_auto_matched_with_confirmed_mapping_from_pending(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $song = \App\Models\Song::create([
+            'id' => (string) Str::ulid(),
+            'title' => '統計テスト曲2',
+            'artist' => 'アーティスト',
+        ]);
+
+        TimestampDecomposition::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize('アーティスト / 統計テスト曲2'),
+            'original_text' => 'アーティスト / 統計テスト曲2',
+            'parts' => ['アーティスト', '統計テスト曲2'],
+            'separator_count' => 1,
+            'status' => TimestampDecomposition::STATUS_AUTO_MATCHED,
+            'confidence' => 0.8,
+        ]);
+
+        // 確定マッピング
+        TimestampSongMapping::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize('アーティスト / 統計テスト曲2'),
+            'song_id' => $song->id,
+            'is_not_song' => false,
+            'is_manual' => true,
+            'status' => 'linked',
+        ]);
+
+        $stats = $this->service->getStatistics();
+
+        // 確定マッピング済みはpendingに含まれない
+        $this->assertEquals(0, $stats['pending']);
+        // auto_matchedカウントには含まれる（ステータス自体はauto_matched）
+        $this->assertEquals(1, $stats['auto_matched']);
+    }
+
     /**
      * linkToSongが文字バリエーション（例: ' vs '）のある既存楽曲を正しく検出するテスト
      */
