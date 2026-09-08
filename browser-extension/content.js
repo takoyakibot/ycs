@@ -7088,7 +7088,7 @@ async function showSongCandidates(marker, threshold = null) {
 
     if (candidates.length === 0) {
       if (currentThreshold > 0.05) {
-        const lowerThreshold = Math.max(0.05, currentThreshold - 0.05);
+        const lowerThreshold = Math.max(0.05, Math.round((currentThreshold - 0.05) * 100) / 100);
         openSongCandidatePopup(input, [{
           type: 'action',
           label: `候補が見つかりませんでした（閾値を下げて再検索）`,
@@ -7116,7 +7116,7 @@ async function showSongCandidates(marker, threshold = null) {
 
     // 候補が少ない場合、閾値を下げて追加検索できるボタンを付与
     if (candidates.length < 3 && currentThreshold > 0.05) {
-      const lowerThreshold = Math.max(0.05, currentThreshold - 0.05);
+      const lowerThreshold = Math.max(0.05, Math.round((currentThreshold - 0.05) * 100) / 100);
       items.push({
         type: 'action',
         label: '閾値を下げてもっと検索',
@@ -7205,7 +7205,7 @@ function pickPreferredCaptionTrack(tracks) {
  * 曲名候補ポップアップを表示する（既存のペースト変換ポップアップと同じ操作感）
  * 候補クリックで入力欄の内容を置き換え、Esc・外側クリック・他のキーで閉じる
  * @param {HTMLInputElement} input - 挿入先の入力欄
- * @param {Array<{type: string, label: string, artist?: string, similarity?: number}>} items
+ * @param {Array<{type: 'candidate'|'message'|'action', label: string, artist?: string, similarity?: number, insertValue?: string, action?: Function}>} items
  */
 function openSongCandidatePopup(input, items) {
   closeSongCandidatePopup();
