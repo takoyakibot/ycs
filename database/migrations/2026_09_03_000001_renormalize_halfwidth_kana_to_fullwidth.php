@@ -69,6 +69,7 @@ return new class extends Migration
                 if ($mapping->is_manual && ! $existingMapping->is_manual) {
                     $existingMapping->update([
                         'song_id' => $mapping->song_id,
+                        'status' => $mapping->status,
                         'is_manual' => $mapping->is_manual,
                         'is_not_song' => $mapping->is_not_song,
                         'confidence' => $mapping->confidence,
