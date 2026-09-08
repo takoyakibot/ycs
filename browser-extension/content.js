@@ -4952,7 +4952,7 @@ function createVolumeGraph() {
              コンテナ高さの測定値に跳ね返り、ズームのたびに高さが増え続ける） */
         height: 60px;
         min-height: 40px;
-        overflow-x: auto;
+        overflow-x: scroll;
         overflow-y: hidden;
       }
 
