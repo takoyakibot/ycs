@@ -2216,6 +2216,46 @@ class SongControllerTest extends TestCase
         $this->assertEquals(0.8, $data['pending_info']['confidence']);
     }
 
+    public function test_fetch_timestamps_pending_filter_excludes_not_song(): void
+    {
+        $channel = Channel::factory()->create();
+        $archive = Archive::factory()->create(['channel_id' => $channel->channel_id]);
+
+        // 保留 かつ 楽曲ではない（保留タブから除外されるべき）
+        $notSongTs = TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'text' => 'Not A Song',
+            'is_display' => 1,
+        ]);
+
+        TimestampSongMapping::factory()
+            ->withText($notSongTs->text)
+            ->create([
+                'status' => TimestampSongMapping::STATUS_PENDING,
+                'is_not_song' => true,
+            ]);
+
+        // 通常の保留（表示されるべき）
+        $pendingTs = TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'text' => 'Pending Song',
+            'is_display' => 1,
+        ]);
+
+        TimestampSongMapping::factory()
+            ->withText($pendingTs->text)
+            ->pending()
+            ->create();
+
+        $response = $this->actingAs($this->user)->getJson(route('songs.fetchTimestamps', [
+            'filter' => 'pending',
+        ]));
+
+        $response->assertStatus(200);
+        $this->assertEquals(1, $response->json('total'));
+        $this->assertEquals('Pending Song', $response->json('data.0.text'));
+    }
+
     /**
      * activeフィルターのテスト
      * 非楽曲(is_not_song)と保留(pending)を除外し、未紐付け・紐付け済み・自動紐付けを含むこと
