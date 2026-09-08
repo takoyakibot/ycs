@@ -1770,6 +1770,20 @@ export class TimestampNormalization {
             });
         }
 
+        const skipBackBtn = document.getElementById('pipPlayerSkipBack');
+        if (skipBackBtn) {
+            skipBackBtn.addEventListener('click', () => {
+                videoPlayerManager.seekRelative(-10);
+            });
+        }
+
+        const skipForwardBtn = document.getElementById('pipPlayerSkipForward');
+        if (skipForwardBtn) {
+            skipForwardBtn.addEventListener('click', () => {
+                videoPlayerManager.seekRelative(10);
+            });
+        }
+
         const docPipBtn = document.getElementById('pipPlayerDocPipBtn');
         if (docPipBtn) {
             docPipBtn.addEventListener('click', () => {

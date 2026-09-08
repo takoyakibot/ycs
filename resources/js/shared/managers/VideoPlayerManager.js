@@ -395,6 +395,18 @@ export class VideoPlayerManager {
     }
 
     /**
+     * 現在位置から相対シーク
+     * @param {number} seconds - シークする秒数（負の値で巻き戻し）
+     */
+    seekRelative(seconds) {
+        if (!this.player || !this.playerInitialized) return;
+        const current = this.getCurrentTime();
+        const duration = this.getDuration();
+        const target = Math.max(0, duration > 0 ? Math.min(current + seconds, duration) : current + seconds);
+        this.player.seekTo(target, true);
+    }
+
+    /**
      * 現在の再生時間を取得
      * @returns {number}
      */
