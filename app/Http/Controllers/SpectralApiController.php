@@ -19,8 +19,8 @@ class SpectralApiController extends Controller
             'video_id' => ['required', 'string', 'size:11', 'regex:/^[A-Za-z0-9_-]{11}$/'],
             'sampling_interval' => ['required', 'integer', 'min:1'],
             'duration' => ['required', 'numeric', 'min:0'],
-            'spectral_data' => ['required', 'array', 'min:1'],
-            'spectral_data.*' => ['nullable'],
+            'spectral_data' => ['required', 'array', 'min:1', 'max:10000'],
+            'spectral_data.*' => ['nullable', 'array'],
             'spectral_data.*.flatness' => ['numeric', 'min:0', 'max:1'],
             'spectral_data.*.voiceBandRatio' => ['numeric', 'min:0', 'max:1'],
         ]);

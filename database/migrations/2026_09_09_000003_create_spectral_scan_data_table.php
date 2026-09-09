@@ -13,7 +13,7 @@ return new class extends Migration
             $table->string('video_id', 11)->unique();
             $table->integer('sampling_interval');
             $table->float('duration');
-            $table->longText('spectral_data');
+            $table->json('spectral_data');
             $table->timestamps();
         });
     }

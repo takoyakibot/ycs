@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Models\Archive;
 use App\Models\SpectralScanData;
 use App\Models\TimestampSongMapping;
 use App\Models\TsItem;
@@ -32,10 +33,23 @@ class AnalyzeSpectralCommand extends Command
 
         $rows = [];
 
+        $confirmedTexts = TimestampSongMapping::confirmed()
+            ->pluck('normalized_text')
+            ->toArray();
+
         foreach ($records as $record) {
             $spectral = $record->spectral_data;
             $dataLength = count($spectral);
             if ($dataLength === 0 || $record->duration <= 0) {
+                continue;
+            }
+
+            $archive = Archive::where('video_id', $record->video_id)
+                ->where('is_display', true)
+                ->first();
+            if (! $archive) {
+                $this->line("  {$record->video_id}: 非表示アーカイブ（スキップ）");
+
                 continue;
             }
 
@@ -48,11 +62,6 @@ class AnalyzeSpectralCommand extends Command
 
                 continue;
             }
-
-            $confirmedTexts = TimestampSongMapping::where('status', 'linked')
-                ->where('is_manual', true)
-                ->pluck('normalized_text')
-                ->toArray();
 
             $songPositions = [];
             foreach ($tsItems as $ts) {
