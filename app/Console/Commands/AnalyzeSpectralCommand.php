@@ -116,7 +116,7 @@ class AnalyzeSpectralCommand extends Command
         $count = 0;
 
         for ($i = max(0, $center - $radius); $i <= min(count($spectral) - 1, $center + $radius); $i++) {
-            if ($spectral[$i] !== null && isset($spectral[$i]['flatness'])) {
+            if ($spectral[$i] !== null && isset($spectral[$i]['flatness'], $spectral[$i]['voiceBandRatio'])) {
                 $flatnessSum += $spectral[$i]['flatness'];
                 $voiceBandSum += $spectral[$i]['voiceBandRatio'];
                 $count++;
@@ -147,7 +147,7 @@ class AnalyzeSpectralCommand extends Command
             if ($nearSong) {
                 continue;
             }
-            if ($spectral[$i] !== null && isset($spectral[$i]['flatness'])) {
+            if ($spectral[$i] !== null && isset($spectral[$i]['flatness'], $spectral[$i]['voiceBandRatio'])) {
                 $flatnessSum += $spectral[$i]['flatness'];
                 $voiceBandSum += $spectral[$i]['voiceBandRatio'];
                 $count++;
