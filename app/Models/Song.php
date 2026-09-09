@@ -58,9 +58,11 @@ class Song extends Model
                 return;
             }
 
-            $tags = ArtistTagHelper::splitArtistToTags($song->artist);
-            foreach ($tags as $value) {
-                $song->tags()->create(['value' => $value]);
+            $tags = array_unique(ArtistTagHelper::splitArtistToTags($song->artist));
+            if (! empty($tags)) {
+                $song->tags()->createMany(
+                    array_map(fn ($v) => ['value' => $v], $tags)
+                );
             }
         });
     }

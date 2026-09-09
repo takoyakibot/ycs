@@ -87,4 +87,16 @@ class SongAutoTagTest extends TestCase
         $tags = $song->tags()->pluck('value')->sort()->values()->all();
         $this->assertSame(['A', 'B', 'C'], $tags);
     }
+
+    public function test_duplicate_artist_names_do_not_create_duplicate_tags(): void
+    {
+        $song = Song::create([
+            'id' => (string) Str::ulid(),
+            'title' => '重複テスト',
+            'artist' => 'A / A',
+        ]);
+
+        $tags = $song->tags()->pluck('value')->all();
+        $this->assertSame(['A'], $tags);
+    }
 }
