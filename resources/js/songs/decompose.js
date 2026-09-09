@@ -22,6 +22,9 @@ class TimestampDecomposition {
         this.statistics = null;
         this.lastProcessedItem = null;   // 直前に処理したアイテム（undo用）
         this.cleanupOpen = false;        // 補足除去候補パネルの表示状態
+        this.artistCandidates = [];
+        this.filteredArtistCandidates = [];
+        this.artistCandidateDebounceTimer = null;
         this.player = null;
         this.playerReady = false;
         this.videoHidden = false;
@@ -90,6 +93,26 @@ class TimestampDecomposition {
                     this.closeCleanup();
                 }
             });
+        });
+
+        // アーティスト名入力で候補を絞り込み
+        document.getElementById('cleanupArtist').addEventListener('input', () => {
+            this.filterArtistCandidates();
+        });
+
+        // 楽曲名変更で候補を再検索
+        document.getElementById('cleanupTitle').addEventListener('input', () => {
+            clearTimeout(this.artistCandidateDebounceTimer);
+            this.artistCandidateDebounceTimer = setTimeout(() => {
+                const title = document.getElementById('cleanupTitle').value.trim();
+                if (title) {
+                    this.fetchArtistCandidates(title);
+                } else {
+                    this.artistCandidates = [];
+                    this.filteredArtistCandidates = [];
+                    this.displayArtistCandidates();
+                }
+            }, 300);
         });
     }
 
@@ -722,6 +745,11 @@ class TimestampDecomposition {
         document.getElementById('cleanupPanel').classList.remove('hidden');
         this.cleanupOpen = true;
 
+        // アーティスト名が空なら楽曲マスタから候補を検索
+        if (cleanedArtist === '' && cleanedTitle !== '') {
+            this.fetchArtistCandidates(cleanedTitle);
+        }
+
         // 微調整しやすいよう、変化があった方の入力欄にフォーカスする
         const focusTarget = currentTitle !== cleanedTitle ? 'cleanupTitle' : 'cleanupArtist';
         const input = document.getElementById(focusTarget);
@@ -754,6 +782,67 @@ class TimestampDecomposition {
             panel.classList.add('hidden');
         }
         this.cleanupOpen = false;
+        this.artistCandidates = [];
+        this.filteredArtistCandidates = [];
+        this.displayArtistCandidates();
+    }
+
+    async fetchArtistCandidates(title) {
+        try {
+            const response = await axios.get('/api/songs/decompose/artist-candidates', {
+                params: { title }
+            });
+            this.artistCandidates = response.data.artists || [];
+            this.filterArtistCandidates();
+        } catch (error) {
+            console.error('アーティスト候補の取得に失敗しました:', error);
+            this.artistCandidates = [];
+            this.filteredArtistCandidates = [];
+            this.displayArtistCandidates();
+        }
+    }
+
+    filterArtistCandidates() {
+        const input = document.getElementById('cleanupArtist').value.trim().toLowerCase();
+
+        if (input === '') {
+            this.filteredArtistCandidates = [...this.artistCandidates];
+        } else {
+            this.filteredArtistCandidates = this.artistCandidates.filter(
+                artist => artist.toLowerCase().includes(input)
+            );
+        }
+        this.displayArtistCandidates();
+    }
+
+    displayArtistCandidates() {
+        const area = document.getElementById('artistCandidatesArea');
+        const list = document.getElementById('artistCandidatesList');
+
+        if (!area || !list) return;
+
+        if (this.filteredArtistCandidates.length === 0) {
+            area.classList.add('hidden');
+            list.innerHTML = '';
+            return;
+        }
+
+        list.innerHTML = '';
+        this.filteredArtistCandidates.forEach(artist => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'px-2 py-1 text-xs rounded border border-green-300 dark:border-green-600 bg-green-50 dark:bg-green-900 text-green-700 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-800 transition-colors';
+            btn.textContent = artist;
+            btn.addEventListener('click', () => this.selectArtistCandidate(artist));
+            list.appendChild(btn);
+        });
+        area.classList.remove('hidden');
+    }
+
+    selectArtistCandidate(artist) {
+        document.getElementById('cleanupArtist').value = artist;
+        this.filteredArtistCandidates = [];
+        this.displayArtistCandidates();
     }
 
     /**
