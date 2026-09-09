@@ -50,9 +50,10 @@ class DecomposeVideoPreviewTest extends TestCase
         $response->assertOk();
         $response->assertJsonPath('item.video_id', $archive->video_id);
         $response->assertJsonPath('item.ts_num', 120);
+        $response->assertJsonPath('item.archive_title', $archive->title);
     }
 
-    public function test_next_returns_null_video_when_no_ts_item(): void
+    public function test_next_returns_null_archive_title_when_no_ts_item(): void
     {
         $text = '曲名/アーティスト';
 
@@ -71,5 +72,6 @@ class DecomposeVideoPreviewTest extends TestCase
         $response->assertOk();
         $response->assertJsonPath('item.video_id', null);
         $response->assertJsonPath('item.ts_num', null);
+        $response->assertJsonPath('item.archive_title', null);
     }
 }

@@ -166,8 +166,11 @@
             <div id="videoPreviewArea" class="mt-4 bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg hidden">
                 <div class="p-4 text-gray-900 dark:text-gray-100">
                     <div class="flex items-center justify-between mb-2">
-                        <div class="text-sm text-gray-500 dark:text-gray-400 font-medium">動画プレビュー</div>
-                        <button id="videoToggleBtn" class="px-2 py-1 text-xs bg-gray-200 dark:bg-gray-600 rounded hover:bg-gray-300 dark:hover:bg-gray-500">
+                        <div class="flex items-center gap-2">
+                            <div class="text-sm text-gray-500 dark:text-gray-400 font-medium">動画プレビュー</div>
+                            <span id="archiveTitle" class="text-sm text-gray-700 dark:text-gray-300 truncate max-w-md"></span>
+                        </div>
+                        <button id="videoToggleBtn" class="px-2 py-1 text-xs bg-gray-200 dark:bg-gray-600 rounded hover:bg-gray-300 dark:hover:bg-gray-500 shrink-0">
                             非表示
                         </button>
                     </div>
