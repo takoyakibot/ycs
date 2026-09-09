@@ -3962,6 +3962,44 @@ async function saveVolumeData() {
   });
 }
 
+async function sendSpectralDataToServer() {
+  const videoId = getVideoId();
+  if (!videoId) return;
+
+  const hasSpectral = spectralData.some(s => s !== null);
+  if (!hasSpectral) return;
+
+  if (!ycsApiToken) {
+    await loadYcsApiSettings();
+  }
+  if (!ycsApiToken) return;
+
+  try {
+    const response = await fetch(`${ycsServerUrl}/api/extension/spectral-data`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${ycsApiToken}`,
+      },
+      body: JSON.stringify({
+        video_id: videoId,
+        sampling_interval: SAMPLING_INTERVAL_SEC,
+        duration: videoDuration,
+        spectral_data: spectralData,
+      }),
+    });
+
+    if (response.ok) {
+      console.log(`[YCS] スペクトルデータをサーバーに送信しました: ${videoId}`);
+    } else {
+      console.warn(`[YCS] スペクトルデータ送信エラー: ${response.status}`);
+    }
+  } catch (error) {
+    console.warn('[YCS] スペクトルデータ送信エラー:', error.message);
+  }
+}
+
 /**
  * 保存された音量データを読み込み
  */
@@ -8176,6 +8214,7 @@ function handleMessage(message, sender, sendResponse) {
       // スキャン完了時に結果を保存
       if (volumeData.length > 0) {
         saveVolumeData();
+        sendSpectralDataToServer();
       }
       // ボタン状態を更新
       getScanStatus().then(status => {
