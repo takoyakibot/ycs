@@ -303,9 +303,9 @@ class TimestampDecompositionController extends Controller
             'title' => ['required', 'string', 'max:255'],
         ]);
 
-        $normalizedTitle = TextNormalizer::normalize($request->input('title'));
+        $normalizedTitle = preg_replace('/\s+/', '', TextNormalizer::normalize($request->input('title')));
 
-        $artists = Song::where('normalized_title', $normalizedTitle)
+        $artists = Song::whereRaw("REPLACE(normalized_title, ' ', '') = ?", [$normalizedTitle])
             ->whereNotNull('artist')
             ->where('artist', '!=', '')
             ->distinct()
