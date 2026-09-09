@@ -70,10 +70,10 @@ class SeedSongTagsFromArtistTest extends TestCase
 
     public function test_seed_creates_tags_for_existing_songs(): void
     {
-        $song = Song::factory()->create(['artist' => 'AAA,BBB']);
+        $song = Song::factory()->create(['artist' => '']);
 
         // マイグレーション再実行相当のロジック
-        $tags = $this->splitArtistToTags($song->artist);
+        $tags = $this->splitArtistToTags('AAA,BBB');
         foreach ($tags as $tag) {
             SongTag::create(['song_id' => $song->id, 'value' => $tag]);
         }

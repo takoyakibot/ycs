@@ -22,7 +22,7 @@ class SongTagApiTest extends TestCase
 
     public function test_list_tags(): void
     {
-        $song = Song::factory()->create();
+        $song = Song::factory()->create(['artist' => '']);
         SongTag::factory()->create(['song_id' => $song->id, 'value' => 'タグA']);
         SongTag::factory()->create(['song_id' => $song->id, 'value' => 'タグB']);
 

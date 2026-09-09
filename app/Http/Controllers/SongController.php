@@ -1251,10 +1251,12 @@ class SongController extends Controller
 
     private function saveTags(Song $song, array $tags): void
     {
+        $existing = $song->tags()->pluck('value')->all();
         foreach ($tags as $value) {
             $value = trim($value);
-            if ($value !== '') {
+            if ($value !== '' && ! in_array($value, $existing, true)) {
                 $song->tags()->create(['value' => $value]);
+                $existing[] = $value;
             }
         }
     }
