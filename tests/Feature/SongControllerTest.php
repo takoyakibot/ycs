@@ -696,7 +696,7 @@ class SongControllerTest extends TestCase
 
     public function test_fetch_songs_includes_tags(): void
     {
-        $song = Song::factory()->create();
+        $song = Song::factory()->create(['artist' => '']);
         SongTag::factory()->create(['song_id' => $song->id, 'value' => 'タグX']);
         SongTag::factory()->create(['song_id' => $song->id, 'value' => 'タグY']);
 
@@ -971,11 +971,13 @@ class SongControllerTest extends TestCase
 
         $song = Song::where('title', 'Tagged Song')->first();
         $this->assertNotNull($song);
-        $this->assertCount(2, $song->tags);
-        $this->assertEquals('ボカロ', $song->tags[0]->value);
-        $this->assertEquals('カバー', $song->tags[1]->value);
+        $tagValues = $song->tags->pluck('value')->sort()->values()->all();
+        $this->assertContains('ボカロ', $tagValues);
+        $this->assertContains('カバー', $tagValues);
+        $this->assertContains('Tagged Artist', $tagValues);
+        $this->assertCount(3, $tagValues);
 
-        $response->assertJsonPath('song.tags', fn ($tags) => count($tags) === 2);
+        $response->assertJsonPath('song.tags', fn ($tags) => count($tags) === 3);
     }
 
     public function test_store_song_force_create_with_tags(): void
@@ -992,10 +994,12 @@ class SongControllerTest extends TestCase
 
         $song = Song::where('title', 'Force Created Song')->first();
         $this->assertNotNull($song);
-        $this->assertCount(1, $song->tags);
-        $this->assertEquals('オリジナル', $song->tags[0]->value);
+        $tagValues = $song->tags->pluck('value')->sort()->values()->all();
+        $this->assertContains('オリジナル', $tagValues);
+        $this->assertContains('Force Artist', $tagValues);
+        $this->assertCount(2, $tagValues);
 
-        $response->assertJsonPath('song.tags', fn ($tags) => count($tags) === 1);
+        $response->assertJsonPath('song.tags', fn ($tags) => count($tags) === 2);
     }
 
     public function test_store_song_without_tags_succeeds(): void
@@ -1009,7 +1013,8 @@ class SongControllerTest extends TestCase
 
         $song = Song::where('title', 'No Tags Song')->first();
         $this->assertNotNull($song);
-        $this->assertCount(0, $song->tags);
+        $this->assertCount(1, $song->tags);
+        $this->assertEquals('No Tags Artist', $song->tags[0]->value);
     }
 
     /**
@@ -1894,7 +1899,8 @@ class SongControllerTest extends TestCase
             'title' => 'Song',
             'artist' => 'YOASOBI',
         ]);
-        $tag = SongTag::factory()->create(['song_id' => $song->id, 'value' => 'YOASOBI']);
+        $autoTag = $song->tags()->where('value', 'YOASOBI')->first();
+        $this->assertNotNull($autoTag);
 
         $response = $this->actingAs($this->user)->putJson(route('songs.updateSong', $song->id), [
             'title' => 'Song',
@@ -1905,12 +1911,12 @@ class SongControllerTest extends TestCase
 
         $response->assertStatus(200);
         $response->assertJsonCount(1, 'updated_tags');
-        $response->assertJsonPath('updated_tags.0.id', $tag->id);
+        $response->assertJsonPath('updated_tags.0.id', $autoTag->id);
         $response->assertJsonPath('updated_tags.0.old_value', 'YOASOBI');
         $response->assertJsonPath('updated_tags.0.new_value', 'Ayase');
 
         $this->assertDatabaseHas('song_tags', [
-            'id' => $tag->id,
+            'id' => $autoTag->id,
             'value' => 'Ayase',
         ]);
     }
@@ -1924,7 +1930,7 @@ class SongControllerTest extends TestCase
             'title' => 'Song',
             'artist' => 'YOASOBI',
         ]);
-        $matchingTag = SongTag::factory()->create(['song_id' => $song->id, 'value' => 'YOASOBI']);
+        $autoTag = $song->tags()->where('value', 'YOASOBI')->first();
         $otherTag = SongTag::factory()->create(['song_id' => $song->id, 'value' => 'J-POP']);
 
         $response = $this->actingAs($this->user)->putJson(route('songs.updateSong', $song->id), [
@@ -1938,7 +1944,7 @@ class SongControllerTest extends TestCase
         $response->assertJsonCount(1, 'updated_tags');
 
         $this->assertDatabaseHas('song_tags', [
-            'id' => $matchingTag->id,
+            'id' => $autoTag->id,
             'value' => 'Ayase',
         ]);
         $this->assertDatabaseHas('song_tags', [
@@ -1999,8 +2005,7 @@ class SongControllerTest extends TestCase
     {
         $song1 = Song::factory()->create(['artist' => 'YOASOBI']);
         $song2 = Song::factory()->create(['artist' => 'YOASOBI']);
-        SongTag::factory()->create(['song_id' => $song1->id, 'value' => 'YOASOBI']);
-        $otherSongTag = SongTag::factory()->create(['song_id' => $song2->id, 'value' => 'YOASOBI']);
+        $otherSongTag = $song2->tags()->where('value', 'YOASOBI')->first();
 
         $response = $this->actingAs($this->user)->putJson(route('songs.updateSong', $song1->id), [
             'artist' => 'Ayase',
@@ -2023,7 +2028,7 @@ class SongControllerTest extends TestCase
     public function test_update_song_tag_sync_multiple_matching_tags(): void
     {
         $song = Song::factory()->create(['artist' => 'YOASOBI']);
-        $tag1 = SongTag::factory()->create(['song_id' => $song->id, 'value' => 'YOASOBI']);
+        $autoTag = $song->tags()->where('value', 'YOASOBI')->first();
         $tag2 = SongTag::factory()->create(['song_id' => $song->id, 'value' => 'YOASOBI']);
         $tag3 = SongTag::factory()->create(['song_id' => $song->id, 'value' => 'J-POP']);
 
@@ -2036,7 +2041,7 @@ class SongControllerTest extends TestCase
         $response->assertStatus(200);
         $response->assertJsonCount(2, 'updated_tags');
 
-        $this->assertDatabaseHas('song_tags', ['id' => $tag1->id, 'value' => 'Ayase']);
+        $this->assertDatabaseHas('song_tags', ['id' => $autoTag->id, 'value' => 'Ayase']);
         $this->assertDatabaseHas('song_tags', ['id' => $tag2->id, 'value' => 'Ayase']);
         $this->assertDatabaseHas('song_tags', ['id' => $tag3->id, 'value' => 'J-POP']);
     }

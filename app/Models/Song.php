@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Helpers\ArtistTagHelper;
 use App\Helpers\TextNormalizer;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -49,6 +50,19 @@ class Song extends Model
 
             if ($song->exists && ($song->isDirty('title') || $song->isDirty('artist')) && ! $song->isDirty('review_status')) {
                 $song->review_status = null;
+            }
+        });
+
+        static::created(function (Song $song) {
+            if ($song->artist === null || $song->artist === '') {
+                return;
+            }
+
+            $tags = array_unique(ArtistTagHelper::splitArtistToTags($song->artist));
+            if (! empty($tags)) {
+                $song->tags()->createMany(
+                    array_map(fn ($v) => ['value' => $v], $tags)
+                );
             }
         });
     }

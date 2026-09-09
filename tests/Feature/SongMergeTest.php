@@ -252,8 +252,8 @@ class SongMergeTest extends TestCase
 
     public function test_merge_songs_migrates_tags(): void
     {
-        $targetSong = Song::factory()->create(['title' => 'Target', 'artist' => 'Artist']);
-        $sourceSong = Song::factory()->create(['title' => 'Source', 'artist' => 'Artist']);
+        $targetSong = Song::factory()->create(['title' => 'Target', 'artist' => '']);
+        $sourceSong = Song::factory()->create(['title' => 'Source', 'artist' => '']);
 
         SongTag::factory()->create(['song_id' => $targetSong->id, 'value' => 'BBB']);
         SongTag::factory()->create(['song_id' => $sourceSong->id, 'value' => 'AAA']);
@@ -274,8 +274,8 @@ class SongMergeTest extends TestCase
 
     public function test_merge_songs_with_no_tags(): void
     {
-        $targetSong = Song::factory()->create(['title' => 'Target']);
-        $sourceSong = Song::factory()->create(['title' => 'Source']);
+        $targetSong = Song::factory()->create(['title' => 'Target', 'artist' => '']);
+        $sourceSong = Song::factory()->create(['title' => 'Source', 'artist' => '']);
 
         $response = $this->actingAs($this->user)
             ->postJson('/api/songs/merge', [

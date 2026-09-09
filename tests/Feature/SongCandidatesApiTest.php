@@ -243,7 +243,7 @@ class SongCandidatesApiTest extends TestCase
     {
         $this->actingAs(User::factory()->create());
 
-        $song = Song::factory()->create(['title' => '候補タグ曲', 'artist' => 'アーティスト']);
+        $song = Song::factory()->create(['title' => '候補タグ曲', 'artist' => '']);
         SongTag::factory()->create(['song_id' => $song->id, 'value' => 'テストタグ']);
 
         $response = $this->getJson('/api/songs/candidates?'.http_build_query([

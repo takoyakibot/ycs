@@ -13,7 +13,7 @@ class SongTagTest extends TestCase
 
     public function test_song_has_many_tags(): void
     {
-        $song = Song::factory()->create();
+        $song = Song::factory()->create(['artist' => '']);
         SongTag::factory()->create(['song_id' => $song->id, 'value' => 'バルーン']);
         SongTag::factory()->create(['song_id' => $song->id, 'value' => 'ボカロ']);
 
@@ -51,7 +51,7 @@ class SongTagTest extends TestCase
 
     public function test_same_value_tags_allowed_on_same_song(): void
     {
-        $song = Song::factory()->create();
+        $song = Song::factory()->create(['artist' => '']);
         SongTag::factory()->create(['song_id' => $song->id, 'value' => 'AAA']);
         SongTag::factory()->create(['song_id' => $song->id, 'value' => 'AAA']);
 
