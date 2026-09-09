@@ -50,6 +50,9 @@ class TimestampDecompositionServiceTest extends TestCase
         $user = User::factory()->create();
         $this->actingAs($user);
 
+        $this->createVisibleTsItem('星街すいせい / GHOST');
+        $this->createVisibleTsItem('星街すいせい / NEXT COLOR PLANET / cover');
+
         // ソースとなるタイムスタンプ（選別元）
         $sourceDecomposition = TimestampDecomposition::create([
             'id' => (string) Str::ulid(),
@@ -131,6 +134,8 @@ class TimestampDecompositionServiceTest extends TestCase
     {
         $user = User::factory()->create();
         $this->actingAs($user);
+
+        $this->createVisibleTsItem('Ado / 踊');
 
         // ソースとなるタイムスタンプ
         $sourceDecomposition = TimestampDecomposition::create([
@@ -249,6 +254,8 @@ class TimestampDecompositionServiceTest extends TestCase
         $user = User::factory()->create();
         $this->actingAs($user);
 
+        $this->createVisibleTsItem('YOASOBI / アイドル');
+
         // ソース（全角のYOASOBI）
         $sourceDecomposition = TimestampDecomposition::create([
             'id' => (string) Str::ulid(),
@@ -293,6 +300,8 @@ class TimestampDecompositionServiceTest extends TestCase
     {
         $user = User::factory()->create();
         $this->actingAs($user);
+
+        $this->createVisibleTsItem('YOASOBI / cover2');
 
         // 画面側では無視対象になるパーツ（キーワード＋連番）
         $this->assertTrue(TextNormalizer::isIgnorablePart('cover2'));
@@ -1618,7 +1627,7 @@ class TimestampDecompositionServiceTest extends TestCase
 
         TsItem::factory()->create([
             'video_id' => $archive->video_id,
-            'normalized_text' => $source->normalized_text,
+            'text' => '夜に駆ける / YOASOBI',
         ]);
 
         // カスケード対象
@@ -1632,7 +1641,7 @@ class TimestampDecompositionServiceTest extends TestCase
 
         TsItem::factory()->create([
             'video_id' => $archive->video_id,
-            'normalized_text' => $target->normalized_text,
+            'text' => '群青 / YOASOBI',
         ]);
 
         $result = $this->service->saveSelection($source->id, [0], [1]);
@@ -1907,5 +1916,86 @@ class TimestampDecompositionServiceTest extends TestCase
         $stats = $this->service->getStatistics();
 
         $this->assertEquals(1, $stats['pending']);
+    }
+
+    public function test_cascade_excludes_hidden_ts_items(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $this->createVisibleTsItem('星街すいせい / Stellar Stellar');
+
+        $sourceDecomposition = TimestampDecomposition::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize('星街すいせい / Stellar Stellar'),
+            'original_text' => '星街すいせい / Stellar Stellar',
+            'parts' => ['星街すいせい', 'Stellar Stellar'],
+            'separator_count' => 1,
+            'status' => TimestampDecomposition::STATUS_SELECTED,
+            'confidence' => 0.9,
+        ]);
+
+        // 非表示のts_itemしか持たないdecomposition
+        $channel = Channel::factory()->create();
+        $archive = Archive::factory()->create([
+            'channel_id' => $channel->channel_id,
+            'is_display' => true,
+        ]);
+        TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'text' => '星街すいせい / GHOST',
+            'is_display' => false,
+        ]);
+
+        $hiddenTarget = TimestampDecomposition::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize('星街すいせい / GHOST'),
+            'original_text' => '星街すいせい / GHOST',
+            'parts' => ['星街すいせい', 'GHOST'],
+            'separator_count' => 1,
+            'status' => TimestampDecomposition::STATUS_PENDING,
+            'confidence' => 0.5,
+        ]);
+
+        $count = $this->service->cascadeArtistSelection('星街すいせい', $sourceDecomposition->id);
+
+        $this->assertEquals(0, $count);
+        $hiddenTarget->refresh();
+        $this->assertEquals(TimestampDecomposition::STATUS_PENDING, $hiddenTarget->status);
+    }
+
+    public function test_bulk_link_excludes_hidden_ts_items(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        // 非表示のts_itemしか持たないauto_matched decomposition
+        $channel = Channel::factory()->create();
+        $archive = Archive::factory()->create([
+            'channel_id' => $channel->channel_id,
+            'is_display' => false,
+        ]);
+        TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'text' => 'アーティスト / 曲名',
+            'is_display' => true,
+        ]);
+
+        TimestampDecomposition::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize('アーティスト / 曲名'),
+            'original_text' => 'アーティスト / 曲名',
+            'parts' => ['アーティスト', '曲名'],
+            'separator_count' => 1,
+            'status' => TimestampDecomposition::STATUS_AUTO_MATCHED,
+            'confidence' => 0.9,
+            'derived_title' => '曲名',
+            'derived_artist' => 'アーティスト',
+        ]);
+
+        $count = $this->service->bulkLinkAutoMatched();
+
+        $this->assertEquals(0, $count);
+        $this->assertEquals(0, Song::count());
     }
 }
