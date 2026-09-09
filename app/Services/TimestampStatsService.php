@@ -15,7 +15,8 @@ class TimestampStatsService
         $base = TsItem::query()
             ->where('ts_items.is_display', 1)
             ->where('ts_items.type', '!=', '3')
-            ->whereNotNull('ts_items.normalized_text');
+            ->whereNotNull('ts_items.normalized_text')
+            ->whereHas('archive', fn ($q) => $q->where('is_display', 1));
 
         $counts = (clone $base)
             ->leftJoin('timestamp_song_mappings', 'ts_items.normalized_text', '=', 'timestamp_song_mappings.normalized_text')
