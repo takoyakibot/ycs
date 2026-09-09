@@ -111,6 +111,33 @@ class TimestampStatsServiceTest extends TestCase
         $this->assertEquals(1, $summary['unlinked']);
     }
 
+    public function test_excludes_items_from_hidden_archives(): void
+    {
+        $this->createTsItem('非表示アーカイブの曲', [], ['is_display' => false]);
+        $this->createTsItem('表示アーカイブの曲', [], ['is_display' => true]);
+
+        $summary = $this->service->getSummary();
+
+        $this->assertEquals(1, $summary['total']);
+        $this->assertEquals(1, $summary['unlinked']);
+    }
+
+    public function test_recent_count_excludes_hidden_archives(): void
+    {
+        $this->createTsItem('表示中の最近の曲', [], [
+            'published_at' => now()->subDays(3)->toDateString(),
+            'is_display' => true,
+        ]);
+        $this->createTsItem('非表示の最近の曲', [], [
+            'published_at' => now()->subDays(3)->toDateString(),
+            'is_display' => false,
+        ]);
+
+        $summary = $this->service->getSummary();
+
+        $this->assertEquals(1, $summary['recent_count']);
+    }
+
     public function test_duplicate_normalized_text_counted_once(): void
     {
         $channel = Channel::factory()->create();
