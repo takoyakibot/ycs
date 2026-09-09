@@ -11,6 +11,7 @@ let volumeGraphContainer = null;
 let volumeCanvas = null;
 let volumeCtx = null;
 let volumeData = []; // 音量データを蓄積
+let spectralData = []; // スペクトル特徴量（spectral flatness, 歌声帯域比率）
 let videoDuration = 0;
 let isGraphVisible = false;
 
@@ -3942,9 +3943,10 @@ async function saveVolumeData() {
 
   const storageKey = `volumeData_${videoId}`;
   const dataToSave = {
-    version: 2, // v2: 等間隔サンプリング（v1/未指定: 固定500ポイント）
+    version: 3, // v3: spectralData追加（v2: 等間隔サンプリング、v1/未指定: 固定500ポイント）
     samplingInterval: SAMPLING_INTERVAL_SEC,
     data: volumeData,
+    spectral: spectralData.some(s => s !== null) ? spectralData : undefined,
     duration: videoDuration,
     timestamps: detectedTimestamps,
     savedAt: Date.now()
@@ -3955,7 +3957,8 @@ async function saveVolumeData() {
       console.error(`音量データの保存に失敗しました: ${chrome.runtime.lastError.message}`);
       return;
     }
-    console.log(`音量データを保存しました: ${videoId} (${volumeData.length}サンプル, ${detectedTimestamps.length}候補)`);
+    const spectralCount = spectralData.filter(s => s !== null).length;
+    console.log(`音量データを保存しました: ${videoId} (${volumeData.length}サンプル, スペクトル${spectralCount}件, ${detectedTimestamps.length}候補)`);
   });
 }
 
@@ -3978,6 +3981,7 @@ function loadVolumeData() {
       }
 
       volumeData = saved.data;
+      spectralData = saved.spectral || new Array(saved.data.length).fill(null);
       if (saved.duration) {
         videoDuration = saved.duration;
       }
@@ -4086,6 +4090,7 @@ async function discardVolumeDataAndReset() {
   }
 
   volumeData = [];
+  spectralData = [];
   detectedTimestamps = [];
   drawVolumeGraph();
   updateProgress(0);
@@ -4379,6 +4384,7 @@ function handleStorageChange(changes, areaName) {
       if (isScanning) return;
       console.log(`音量データが削除されたためグラフをリセットします: ${videoId}`);
       volumeData = [];
+      spectralData = [];
       detectedTimestamps = [];
       drawVolumeGraph();
       updateProgress(0);
@@ -4394,6 +4400,7 @@ function handleStorageChange(changes, areaName) {
 
       // データを更新
       volumeData = newData.data;
+      spectralData = newData.spectral || new Array(newData.data.length).fill(null);
       if (newData.duration) {
         videoDuration = newData.duration;
       }
@@ -6231,6 +6238,66 @@ function proceedToNextVideoOrFinish() {
 }
 
 /**
+ * 周波数スペクトルからスペクトル特徴量を計算
+ *
+ * @param {Float32Array} freqData - getFloatFrequencyData()の結果（dB値）
+ * @param {number} sampleRate - AudioContextのサンプルレート
+ * @returns {{ flatness: number, voiceBandRatio: number }|null}
+ */
+function computeSpectralFeatures(freqData, sampleRate) {
+  const binCount = freqData.length;
+  const binWidth = sampleRate / (binCount * 2); // Hz per bin
+
+  // dB→リニアパワーに変換（無音ビンは極小値にクランプ）
+  const minDb = -100;
+  const powers = new Float32Array(binCount);
+  for (let i = 0; i < binCount; i++) {
+    const db = Math.max(freqData[i], minDb);
+    powers[i] = Math.pow(10, db / 10);
+  }
+
+  // 全帯域のエネルギー
+  let totalEnergy = 0;
+  for (let i = 0; i < binCount; i++) {
+    totalEnergy += powers[i];
+  }
+  if (totalEnergy === 0) return null;
+
+  // 歌声帯域 (80Hz - 1100Hz) のエネルギー比率
+  const voiceLowBin = Math.ceil(80 / binWidth);
+  const voiceHighBin = Math.min(Math.floor(1100 / binWidth), binCount - 1);
+  let voiceEnergy = 0;
+  for (let i = voiceLowBin; i <= voiceHighBin; i++) {
+    voiceEnergy += powers[i];
+  }
+  const voiceBandRatio = voiceEnergy / totalEnergy;
+
+  // Spectral flatness（幾何平均 / 算術平均）
+  // 対数空間で計算して数値アンダーフロー防止
+  let logSum = 0;
+  let linearSum = 0;
+  let count = 0;
+  for (let i = voiceLowBin; i <= voiceHighBin; i++) {
+    if (powers[i] > 0) {
+      logSum += Math.log(powers[i]);
+      linearSum += powers[i];
+      count++;
+    }
+  }
+  let flatness = 1;
+  if (count > 0 && linearSum > 0) {
+    const geometricMean = Math.exp(logSum / count);
+    const arithmeticMean = linearSum / count;
+    flatness = geometricMean / arithmeticMean;
+  }
+
+  return {
+    flatness: Math.round(flatness * 1000) / 1000,
+    voiceBandRatio: Math.round(voiceBandRatio * 1000) / 1000,
+  };
+}
+
+/**
  * 音声解析を初期化（Video要素から直接解析）
  */
 function initAudioAnalysis() {
@@ -6333,6 +6400,7 @@ async function startDirectScan() {
   isScanning = true;
   const resolution = calcGraphResolution(videoDuration);
   volumeData = new Array(resolution).fill(0);
+  spectralData = new Array(resolution).fill(null);
 
   // 現在の状態を保存
   originalPlaybackRate = videoElement.playbackRate;
@@ -6356,6 +6424,7 @@ async function startDirectScan() {
 
   // 音量データの収集を開始
   const dataArray = new Float32Array(analyserNode.fftSize);
+  const freqArray = new Float32Array(analyserNode.frequencyBinCount);
 
   scanInterval = setInterval(() => {
     if (!isScanning || !analyserNode) {
@@ -6376,6 +6445,10 @@ async function startDirectScan() {
     // 正規化（0-1の範囲に）
     const normalizedVolume = Math.min(1, rms * 5);
 
+    // 周波数スペクトルを取得してスペクトル特徴量を計算
+    analyserNode.getFloatFrequencyData(freqArray);
+    const spectralFeatures = computeSpectralFeatures(freqArray, audioContext.sampleRate);
+
     // データポイントのインデックスを計算
     const currentResolution = volumeData.length;
     const index = Math.floor((videoElement.currentTime / videoDuration) * currentResolution);
@@ -6383,6 +6456,9 @@ async function startDirectScan() {
     if (index >= 0 && index < currentResolution) {
       if (normalizedVolume > volumeData[index]) {
         volumeData[index] = normalizedVolume;
+        if (spectralFeatures) spectralData[index] = spectralFeatures;
+      } else if (!spectralData[index] && spectralFeatures) {
+        spectralData[index] = spectralFeatures;
       }
     }
 
@@ -7866,6 +7942,7 @@ function observePageChanges() {
 
       // 以前のwatchページのステートが残っている場合のためリセット
       volumeData = [];
+      spectralData = [];
       videoDuration = 0;
       backgroundScanVideoId = null;
       detectedTimestamps = [];
@@ -7891,6 +7968,7 @@ function observePageChanges() {
       // watchページ → 別の動画のwatchページへの遷移
       lastVideoId = currentVideoId;
       volumeData = [];
+      spectralData = [];
       videoDuration = 0;
       backgroundScanVideoId = null;
       detectedTimestamps = []; // タイムスタンプもクリア
@@ -8053,6 +8131,7 @@ function handleMessage(message, sender, sendResponse) {
       }
       // 音量データを更新
       volumeData = message.data;
+      if (message.spectral) spectralData = message.spectral;
       updateProgress(message.progress || 0);
       drawVolumeGraph();
       // 定期的にデータを保存（スキャン中断に備える）
