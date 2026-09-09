@@ -27,6 +27,21 @@ class TimestampDecompositionServiceTest extends TestCase
         $this->service = new TimestampDecompositionService;
     }
 
+    private function createVisibleTsItem(string $text): TsItem
+    {
+        $channel = Channel::factory()->create();
+        $archive = Archive::factory()->create([
+            'channel_id' => $channel->channel_id,
+            'is_display' => true,
+        ]);
+
+        return TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'text' => $text,
+            'is_display' => true,
+        ]);
+    }
+
     /**
      * カスケード処理: 同じアーティストを持つpendingなタイムスタンプが処理されることをテスト
      */
@@ -626,6 +641,9 @@ class TimestampDecompositionServiceTest extends TestCase
         $user = User::factory()->create();
         $this->actingAs($user);
 
+        $this->createVisibleTsItem('アーティスト / 曲名');
+        $this->createVisibleTsItem('MC / トーク');
+
         // 通常のタイムスタンプ（表示対象）
         $normalDecomposition = TimestampDecomposition::create([
             'id' => (string) Str::ulid(),
@@ -831,6 +849,9 @@ class TimestampDecompositionServiceTest extends TestCase
         $user = User::factory()->create();
         $this->actingAs($user);
 
+        $this->createVisibleTsItem('未紐付けアーティスト / 未紐付け曲');
+        $this->createVisibleTsItem('紐付済アーティスト / 紐付済曲');
+
         // 通常のタイムスタンプ（表示対象）
         $normalDecomposition = TimestampDecomposition::create([
             'id' => (string) Str::ulid(),
@@ -890,6 +911,8 @@ class TimestampDecompositionServiceTest extends TestCase
         $user = User::factory()->create();
         $this->actingAs($user);
 
+        $this->createVisibleTsItem('アーティスト / 曲名');
+
         // auto_matchedだがマッピングが解除されたレコード
         $decomposition = TimestampDecomposition::create([
             'id' => (string) Str::ulid(),
@@ -911,6 +934,8 @@ class TimestampDecompositionServiceTest extends TestCase
     {
         $user = User::factory()->create();
         $this->actingAs($user);
+
+        $this->createVisibleTsItem('アーティスト / 曲名2');
 
         $song = \App\Models\Song::create([
             'id' => (string) Str::ulid(),
@@ -985,6 +1010,8 @@ class TimestampDecompositionServiceTest extends TestCase
     {
         $user = User::factory()->create();
         $this->actingAs($user);
+
+        $this->createVisibleTsItem('アーティスト / 統計テスト曲');
 
         // auto_matchedだがマッピングなし → pending扱い
         TimestampDecomposition::create([
@@ -1772,5 +1799,113 @@ class TimestampDecompositionServiceTest extends TestCase
         // 統計の unscanned が 0 であること（near-duplicate も「スキャン済み」として扱われる）
         $stats = $this->service->getStatistics();
         $this->assertEquals(0, $stats['unscanned']);
+    }
+
+    public function test_get_next_pending_excludes_hidden_ts_items(): void
+    {
+        $channel = Channel::factory()->create();
+        $archive = Archive::factory()->create([
+            'channel_id' => $channel->channel_id,
+            'is_display' => true,
+        ]);
+
+        $text = '曲名 / アーティスト';
+        $normalizedText = TextNormalizer::normalize($text);
+
+        TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'text' => $text,
+            'is_display' => false,
+        ]);
+
+        TimestampDecomposition::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => $normalizedText,
+            'original_text' => $text,
+            'parts' => ['曲名', 'アーティスト'],
+            'separator_count' => 1,
+            'status' => TimestampDecomposition::STATUS_PENDING,
+            'confidence' => 0.5,
+        ]);
+
+        $this->assertNull($this->service->getNextPending());
+    }
+
+    public function test_get_next_pending_excludes_hidden_archives(): void
+    {
+        $channel = Channel::factory()->create();
+        $archive = Archive::factory()->create([
+            'channel_id' => $channel->channel_id,
+            'is_display' => false,
+        ]);
+
+        $text = '曲名 / アーティスト';
+        $normalizedText = TextNormalizer::normalize($text);
+
+        TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'text' => $text,
+            'is_display' => true,
+        ]);
+
+        TimestampDecomposition::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => $normalizedText,
+            'original_text' => $text,
+            'parts' => ['曲名', 'アーティスト'],
+            'separator_count' => 1,
+            'status' => TimestampDecomposition::STATUS_PENDING,
+            'confidence' => 0.5,
+        ]);
+
+        $this->assertNull($this->service->getNextPending());
+    }
+
+    public function test_statistics_pending_excludes_hidden_ts_items(): void
+    {
+        $channel = Channel::factory()->create();
+        $archive = Archive::factory()->create([
+            'channel_id' => $channel->channel_id,
+            'is_display' => true,
+        ]);
+
+        $visibleText = '表示曲 / アーティストA';
+        $hiddenText = '非表示曲 / アーティストB';
+
+        TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'text' => $visibleText,
+            'is_display' => true,
+        ]);
+
+        TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'text' => $hiddenText,
+            'is_display' => false,
+        ]);
+
+        TimestampDecomposition::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize($visibleText),
+            'original_text' => $visibleText,
+            'parts' => ['表示曲', 'アーティストA'],
+            'separator_count' => 1,
+            'status' => TimestampDecomposition::STATUS_PENDING,
+            'confidence' => 0.5,
+        ]);
+
+        TimestampDecomposition::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize($hiddenText),
+            'original_text' => $hiddenText,
+            'parts' => ['非表示曲', 'アーティストB'],
+            'separator_count' => 1,
+            'status' => TimestampDecomposition::STATUS_PENDING,
+            'confidence' => 0.5,
+        ]);
+
+        $stats = $this->service->getStatistics();
+
+        $this->assertEquals(1, $stats['pending']);
     }
 }
