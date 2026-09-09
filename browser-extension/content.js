@@ -5206,6 +5206,14 @@ function createVolumeGraph() {
         background: #1976d2 !important;
       }
 
+      .vdg-btn-import {
+        background: #6a1b9a !important;
+      }
+
+      .vdg-btn-import:hover {
+        background: #7b1fa2 !important;
+      }
+
       .vdg-btn-clear-markers {
         background: #555 !important;
       }
@@ -5442,6 +5450,7 @@ function createVolumeGraph() {
           <button class="vdg-btn" id="vdg-ts-undo-btn" title="元に戻す (Ctrl+Z)" disabled>↶ 戻る</button>
           <button class="vdg-btn" id="vdg-ts-redo-btn" title="やり直す (Ctrl+Y)" disabled>↷ 進む</button>
           <button class="vdg-btn vdg-btn-copy" id="vdg-ts-copy-btn" title="テキストとしてコピー">コピー</button>
+          <button class="vdg-btn vdg-btn-import" id="vdg-ts-import-btn" title="クリップボードのタイムスタンプテキストを取り込み（既存マーカーは洗い替え）">貼り付け</button>
           <button class="vdg-btn vdg-btn-clear-markers" id="vdg-ts-clear-btn" title="すべてのマーカーを削除">クリア</button>
         </div>
       </div>
@@ -5948,6 +5957,15 @@ function setupVolumeGraphEvents() {
     tsCopyBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       copyTimestamps();
+    });
+  }
+
+  // タイムスタンプエディタ: 貼り付け（インポート）ボタン
+  const tsImportBtn = volumeGraphContainer.querySelector('#vdg-ts-import-btn');
+  if (tsImportBtn) {
+    tsImportBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      importTimestamps();
     });
   }
 
@@ -7902,6 +7920,80 @@ function copyTimestamps() {
       setTimeout(() => { copyBtn.textContent = original; }, 1500);
     }
   });
+}
+
+/**
+ * タイムスタンプテキストをパースしてマーカー配列に変換する
+ * 対応形式: "H:MM:SS テキスト", "MM:SS テキスト", "HH:MM:SS テキスト"
+ * @param {string} text - 改行区切りのタイムスタンプテキスト
+ * @returns {Array<{time: number, text: string}>} パース結果
+ */
+function parseTimestampText(text) {
+  const results = [];
+  const lines = text.split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const match = trimmed.match(/^(\d{1,2}):(\d{2}):(\d{2})\s*(.*)/);
+    if (match) {
+      const time = parseInt(match[1], 10) * 3600 + parseInt(match[2], 10) * 60 + parseInt(match[3], 10);
+      results.push({ time, text: match[4].trim() });
+      continue;
+    }
+    const matchShort = trimmed.match(/^(\d{1,2}):(\d{2})\s*(.*)/);
+    if (matchShort) {
+      const time = parseInt(matchShort[1], 10) * 60 + parseInt(matchShort[2], 10);
+      results.push({ time, text: matchShort[3].trim() });
+    }
+  }
+  return results;
+}
+
+/**
+ * クリップボードからタイムスタンプテキストを取り込み、マーカーとして反映する。
+ * 既存マーカーがある場合は洗い替え（全削除して置換）の確認を行う。
+ * 取り込み後、各マーカーの位置で楽曲候補を自動検索する。
+ */
+async function importTimestamps() {
+  let clipText;
+  try {
+    clipText = await navigator.clipboard.readText();
+  } catch {
+    showTsEditorNotice('クリップボードの読み取りに失敗しました', true);
+    return;
+  }
+
+  if (!clipText || !clipText.trim()) {
+    showTsEditorNotice('クリップボードにテキストがありません', true);
+    return;
+  }
+
+  const parsed = parseTimestampText(clipText);
+  if (parsed.length === 0) {
+    showTsEditorNotice('タイムスタンプを検出できませんでした', true);
+    return;
+  }
+
+  if (tsMarkers.length > 0) {
+    if (!confirm(`既存の${tsMarkers.length}件のマーカーを削除して、${parsed.length}件のタイムスタンプを取り込みますか？`)) return;
+  }
+
+  pushMarkerHistory();
+  tsMarkers = parsed.map(p => ({ id: nextMarkerId++, time: p.time, text: p.text }));
+  selectedMarkerId = null;
+  updateTimestampList();
+  drawVolumeGraph();
+  saveMarkersToStorage();
+
+  showTsEditorNotice(`${parsed.length}件のタイムスタンプを取り込みました`);
+
+  // 各マーカーについて楽曲候補を自動検索する
+  for (const marker of tsMarkers) {
+    if (marker.text) continue;
+    try {
+      await showSongCandidates(marker);
+    } catch { /* 候補検索の失敗は無視して続行 */ }
+  }
 }
 
 /**
