@@ -13,6 +13,7 @@ let currentTabId = null;
 
 // 音量グラフ用データ
 let volumeGraphData = [];
+let spectralGraphData = [];
 let videoDuration = 0;
 let isScanning = false;
 const SAMPLING_INTERVAL_SEC = 2; // サンプリング間隔（秒）
@@ -175,6 +176,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const oldValue = volumeGraphData[message.index] || 0;
         if (message.volume > oldValue) {
           volumeGraphData[message.index] = message.volume;
+          if (message.spectral) spectralGraphData[message.index] = message.spectral;
+        } else if (!spectralGraphData[message.index] && message.spectral) {
+          spectralGraphData[message.index] = message.spectral;
         }
       }
       // 200msごとにUIを更新
@@ -210,6 +214,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case 'CLEAR_VOLUME_DATA':
       volumeGraphData = [];
+      spectralGraphData = [];
       videoDuration = 0;
       sendResponse({ success: true });
       return true;
@@ -377,9 +382,11 @@ async function sendVolumeDataToContent() {
         nonZeroCount: filledData.filter(v => v > 0).length
       });
 
+      const hasSpectral = spectralGraphData.some(s => s !== null);
       chrome.tabs.sendMessage(tab.id, {
         type: 'VOLUME_DATA_UPDATE',
         data: filledData,
+        spectral: hasSpectral ? spectralGraphData : undefined,
         progress
       });
     }
@@ -446,9 +453,13 @@ async function startScan() {
     // 既存データがあれば引き継ぐ、なければ新規作成
     if (scanStatus.hasData && scanStatus.data) {
       volumeGraphData = [...scanStatus.data];
+      spectralGraphData = scanStatus.spectral ? [...scanStatus.spectral] : new Array(currentGraphResolution).fill(null);
       // 配列の長さが足りなければ埋める
       while (volumeGraphData.length < currentGraphResolution) {
         volumeGraphData.push(0);
+      }
+      while (spectralGraphData.length < currentGraphResolution) {
+        spectralGraphData.push(null);
       }
       // デバッグ: データの状態を確認
       const nonZeroCount = volumeGraphData.filter(v => v > 0).length;
@@ -462,6 +473,7 @@ async function startScan() {
       });
     } else {
       volumeGraphData = new Array(currentGraphResolution).fill(0);
+      spectralGraphData = new Array(currentGraphResolution).fill(null);
       console.log('新規スキャン開始');
     }
 

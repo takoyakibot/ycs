@@ -247,6 +247,61 @@ function formatTime(seconds) {
 }
 
 /**
+ * 周波数スペクトルからスペクトル特徴量を計算
+ *
+ * @param {Float32Array} freqData - getFloatFrequencyData()の結果（dB値）
+ * @param {number} sampleRate - AudioContextのサンプルレート
+ * @returns {{ flatness: number, voiceBandRatio: number }|null}
+ */
+function computeSpectralFeatures(freqData, sampleRate) {
+  const binCount = freqData.length;
+  const binWidth = sampleRate / (binCount * 2);
+
+  const minDb = -100;
+  const powers = new Float32Array(binCount);
+  for (let i = 0; i < binCount; i++) {
+    const db = Math.max(freqData[i], minDb);
+    powers[i] = Math.pow(10, db / 10);
+  }
+
+  let totalEnergy = 0;
+  for (let i = 0; i < binCount; i++) {
+    totalEnergy += powers[i];
+  }
+  if (totalEnergy === 0) return null;
+
+  const voiceLowBin = Math.ceil(80 / binWidth);
+  const voiceHighBin = Math.min(Math.floor(1100 / binWidth), binCount - 1);
+  let voiceEnergy = 0;
+  for (let i = voiceLowBin; i <= voiceHighBin; i++) {
+    voiceEnergy += powers[i];
+  }
+  const voiceBandRatio = voiceEnergy / totalEnergy;
+
+  let logSum = 0;
+  let linearSum = 0;
+  let count = 0;
+  for (let i = voiceLowBin; i <= voiceHighBin; i++) {
+    if (powers[i] > 0) {
+      logSum += Math.log(powers[i]);
+      linearSum += powers[i];
+      count++;
+    }
+  }
+  let flatness = 1;
+  if (count > 0 && linearSum > 0) {
+    const geometricMean = Math.exp(logSum / count);
+    const arithmeticMean = linearSum / count;
+    flatness = geometricMean / arithmeticMean;
+  }
+
+  return {
+    flatness: Math.round(flatness * 1000) / 1000,
+    voiceBandRatio: Math.round(voiceBandRatio * 1000) / 1000,
+  };
+}
+
+/**
  * 音量データを記録してbackground.jsに送信
  */
 let lastLoggedIndex = -1;
@@ -266,13 +321,18 @@ function recordVolumeData() {
   // 正規化（0-1の範囲に）
   const normalizedVolume = Math.min(1, rms * 5);
 
+  // 周波数スペクトルを取得してスペクトル特徴量を計算
+  const freqArray = new Float32Array(analyser.frequencyBinCount);
+  analyser.getFloatFrequencyData(freqArray);
+  const spectral = computeSpectralFeatures(freqArray, audioContext.sampleRate);
+
   // データポイントのインデックスを計算
   const index = Math.floor((currentVideoTime / videoDuration) * graphResolution);
 
   if (index >= 0 && index < graphResolution) {
     // デバッグ: 10インデックスごとにログ
     if (Math.floor(index / 10) !== Math.floor(lastLoggedIndex / 10)) {
-      console.log('recordVolumeData送信', { index, volume: normalizedVolume.toFixed(3), currentVideoTime: currentVideoTime.toFixed(1) });
+      console.log('recordVolumeData送信', { index, volume: normalizedVolume.toFixed(3), currentVideoTime: currentVideoTime.toFixed(1), spectral });
       lastLoggedIndex = index;
     }
 
@@ -280,7 +340,8 @@ function recordVolumeData() {
     chrome.runtime.sendMessage({
       type: 'VOLUME_DATA_FROM_OFFSCREEN',
       index: index,
-      volume: normalizedVolume
+      volume: normalizedVolume,
+      spectral: spectral
     });
   }
 }

@@ -4253,6 +4253,7 @@ function getScanStatus() {
         resumeTime: resumeTime,
         isComplete: isComplete,
         data: data,
+        spectral: saved.spectral || null,
         duration: duration
       });
     });
