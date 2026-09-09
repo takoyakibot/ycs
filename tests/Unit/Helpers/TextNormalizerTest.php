@@ -690,4 +690,32 @@ class TextNormalizerTest extends TestCase
             TextNormalizer::normalize($nfd)
         );
     }
+
+    public function test_to_comparison_key_removes_spaces(): void
+    {
+        $this->assertEquals('abc', TextNormalizer::toComparisonKey('a b c'));
+        $this->assertEquals('曲名アーティスト', TextNormalizer::toComparisonKey('曲名 / アーティスト'));
+    }
+
+    public function test_to_comparison_key_removes_slashes(): void
+    {
+        $this->assertEquals('ab', TextNormalizer::toComparisonKey('a/b'));
+    }
+
+    public function test_to_comparison_key_handles_null_and_empty(): void
+    {
+        $this->assertEquals('', TextNormalizer::toComparisonKey(null));
+        $this->assertEquals('', TextNormalizer::toComparisonKey(''));
+    }
+
+    public function test_to_comparison_key_absorbs_space_difference(): void
+    {
+        $a = TextNormalizer::normalize('花に亡霊 / ヨルシカ');
+        $b = TextNormalizer::normalize('花に亡霊/ヨルシカ');
+        $this->assertNotEquals($a, $b);
+        $this->assertEquals(
+            TextNormalizer::toComparisonKey($a),
+            TextNormalizer::toComparisonKey($b)
+        );
+    }
 }

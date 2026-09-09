@@ -158,6 +158,21 @@ class TextNormalizer
     }
 
     /**
+     * 正規化済みテキストからスペース・区切り文字を除去した比較用キーを生成
+     *
+     * normalize() 済みの文字列を前提とし、内部スペースの有無による不一致を吸収する。
+     * DB の comparison_key カラムに格納してインデックス検索に使う。
+     */
+    public static function toComparisonKey(?string $normalizedText): string
+    {
+        if ($normalizedText === null || $normalizedText === '') {
+            return '';
+        }
+
+        return str_replace([' ', '/'], '', $normalizedText);
+    }
+
+    /**
      * 2つのテキストが正規化後に一致するか判定
      */
     public static function equals(?string $text1, ?string $text2): bool

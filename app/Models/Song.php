@@ -25,6 +25,8 @@ class Song extends Model
         'duration_ms',
         'normalized_title',
         'normalized_artist',
+        'title_comparison_key',
+        'artist_comparison_key',
         'review_status',
         'created_by',
         'updated_by',
@@ -46,6 +48,13 @@ class Song extends Model
             }
             if ($song->isDirty('artist') || $song->normalized_artist === null) {
                 $song->normalized_artist = TextNormalizer::normalize($song->artist);
+            }
+
+            if ($song->isDirty('normalized_title') || $song->title_comparison_key === null) {
+                $song->title_comparison_key = TextNormalizer::toComparisonKey($song->normalized_title) ?: null;
+            }
+            if ($song->isDirty('normalized_artist') || $song->artist_comparison_key === null) {
+                $song->artist_comparison_key = TextNormalizer::toComparisonKey($song->normalized_artist) ?: null;
             }
 
             if ($song->exists && ($song->isDirty('title') || $song->isDirty('artist')) && ! $song->isDirty('review_status')) {

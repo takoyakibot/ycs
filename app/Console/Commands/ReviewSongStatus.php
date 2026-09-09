@@ -90,26 +90,28 @@ class ReviewSongStatus extends Command
             return Song::REVIEW_STATUS_NEEDS_REVIEW;
         }
 
-        $normalizedTitle = $song->normalized_title ?? '';
-        $normalizedArtist = $song->normalized_artist ?? '';
+        $titleKey = $song->title_comparison_key ?? '';
+        $artistKey = $song->artist_comparison_key ?? '';
 
-        foreach ($mappedTexts as $text) {
-            if ($normalizedTitle !== '' && str_contains($text, $normalizedTitle)) {
+        $mappedKeys = array_map(fn ($t) => TextNormalizer::toComparisonKey($t), $mappedTexts);
+
+        foreach ($mappedKeys as $textKey) {
+            if ($titleKey !== '' && str_contains($textKey, $titleKey)) {
                 return Song::REVIEW_STATUS_SAFE;
             }
-            if ($normalizedArtist !== '' && str_contains($text, $normalizedArtist)) {
+            if ($artistKey !== '' && str_contains($textKey, $artistKey)) {
                 return Song::REVIEW_STATUS_SAFE;
             }
         }
 
-        // タグベースの判定: タグの正規化値がマッピングテキストに含まれていればsafe
+        // タグベースの判定: タグのcomparison_keyがマッピングテキストに含まれていればsafe
         foreach ($song->tags as $tag) {
-            $normalizedTagValue = TextNormalizer::normalize($tag->value);
-            if ($normalizedTagValue === '') {
+            $tagKey = TextNormalizer::toComparisonKey(TextNormalizer::normalize($tag->value));
+            if ($tagKey === '') {
                 continue;
             }
-            foreach ($mappedTexts as $text) {
-                if (str_contains($text, $normalizedTagValue)) {
+            foreach ($mappedKeys as $textKey) {
+                if (str_contains($textKey, $tagKey)) {
                     return Song::REVIEW_STATUS_SAFE;
                 }
             }

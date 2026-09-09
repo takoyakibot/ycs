@@ -102,6 +102,19 @@ class SongSearchService
             return $song;
         }
 
+        // 2.5. comparison_keyでスペース差異を吸収して再検索
+        $titleKey = TextNormalizer::toComparisonKey($normalizedTitle);
+        $artistKey = TextNormalizer::toComparisonKey($normalizedArtist);
+        if ($titleKey !== '' && $artistKey !== '') {
+            $song = Song::where('title_comparison_key', $titleKey)
+                ->where('artist_comparison_key', $artistKey)
+                ->first();
+
+            if ($song) {
+                return $song;
+            }
+        }
+
         // 3. 生のカラムでも検索（ユニーク制約はtitle + artistにかかっている）
         if ($rawTitle !== null && $rawArtist !== null) {
             return Song::where('title', $rawTitle)
