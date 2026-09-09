@@ -7925,34 +7925,39 @@ function copyTimestamps() {
 /**
  * タイムスタンプテキストをパースしてマーカー配列に変換する
  * 対応形式: "H:MM:SS テキスト", "MM:SS テキスト", "HH:MM:SS テキスト"
+ * 行頭の番号付きリスト（"1. 0:15 ..."）にも対応
  * @param {string} text - 改行区切りのタイムスタンプテキスト
- * @returns {Array<{time: number, text: string}>} パース結果
+ * @returns {{parsed: Array<{time: number, text: string}>, skippedLines: number}}
  */
 function parseTimestampText(text) {
-  const results = [];
+  const parsed = [];
+  let skippedLines = 0;
   const lines = text.split(/\r?\n/);
   for (const line of lines) {
     const trimmed = line.trim();
     if (!trimmed) continue;
-    const match = trimmed.match(/^(\d{1,2}):(\d{2}):(\d{2})\s*(.*)/);
+    const stripped = trimmed.replace(/^(?:\d+[.)]\s*|[・\-]\s*)/, '');
+    const match = stripped.match(/^(\d{1,2}):(\d{2}):(\d{2})\s*(.*)/);
     if (match) {
       const time = parseInt(match[1], 10) * 3600 + parseInt(match[2], 10) * 60 + parseInt(match[3], 10);
-      results.push({ time, text: match[4].trim() });
+      parsed.push({ time, text: match[4].trim() });
       continue;
     }
-    const matchShort = trimmed.match(/^(\d{1,2}):(\d{2})\s*(.*)/);
+    const matchShort = stripped.match(/^(\d{1,2}):(\d{2})\s*(.*)/);
     if (matchShort) {
       const time = parseInt(matchShort[1], 10) * 60 + parseInt(matchShort[2], 10);
-      results.push({ time, text: matchShort[3].trim() });
+      parsed.push({ time, text: matchShort[3].trim() });
+      continue;
     }
+    skippedLines++;
   }
-  return results;
+  return { parsed, skippedLines };
 }
 
 /**
  * クリップボードからタイムスタンプテキストを取り込み、マーカーとして反映する。
  * 既存マーカーがある場合は洗い替え（全削除して置換）の確認を行う。
- * 取り込み後、各マーカーの位置で楽曲候補を自動検索する。
+ * 取り込み後、字幕データを事前取得して楽曲候補検索に備える。
  */
 async function importTimestamps() {
   let clipText;
@@ -7968,31 +7973,48 @@ async function importTimestamps() {
     return;
   }
 
-  const parsed = parseTimestampText(clipText);
+  const { parsed, skippedLines } = parseTimestampText(clipText);
   if (parsed.length === 0) {
     showTsEditorNotice('タイムスタンプを検出できませんでした', true);
     return;
   }
 
+  let outOfRange = 0;
+  const valid = videoDuration
+    ? parsed.filter(p => {
+        if (p.time > videoDuration) { outOfRange++; return false; }
+        return true;
+      })
+    : parsed;
+
+  if (valid.length === 0) {
+    showTsEditorNotice('すべてのタイムスタンプが動画の長さを超えています', true);
+    return;
+  }
+
   if (tsMarkers.length > 0) {
-    if (!confirm(`既存の${tsMarkers.length}件のマーカーを削除して、${parsed.length}件のタイムスタンプを取り込みますか？`)) return;
+    if (!confirm(`既存の${tsMarkers.length}件のマーカーを削除して、${valid.length}件のタイムスタンプを取り込みますか？`)) return;
   }
 
   pushMarkerHistory();
-  tsMarkers = parsed.map(p => ({ id: nextMarkerId++, time: p.time, text: p.text }));
+  tsMarkers = valid.map(p => ({ id: nextMarkerId++, time: p.time, text: p.text }));
+  tsMarkers.sort((a, b) => a.time - b.time);
   selectedMarkerId = null;
   updateTimestampList();
   drawVolumeGraph();
   saveMarkersToStorage();
 
-  showTsEditorNotice(`${parsed.length}件のタイムスタンプを取り込みました`);
+  const notes = [];
+  if (skippedLines > 0) notes.push(`${skippedLines}行はスキップ`);
+  if (outOfRange > 0) notes.push(`${outOfRange}件は動画長超過で除外`);
+  const suffix = notes.length > 0 ? `（${notes.join('、')}）` : '';
+  showTsEditorNotice(`${valid.length}件のタイムスタンプを取り込みました${suffix}`);
 
-  // 各マーカーについて楽曲候補を自動検索する
-  for (const marker of tsMarkers) {
-    if (marker.text) continue;
+  const videoId = getVideoId();
+  if (videoId && ycsApiToken) {
     try {
-      await showSongCandidates(marker);
-    } catch { /* 候補検索の失敗は無視して続行 */ }
+      await ensureSubtitlesOnServer(videoId);
+    } catch { /* 字幕取得失敗は候補ボタン押下時に再試行される */ }
   }
 }
 
