@@ -423,6 +423,7 @@ class TimestampDecompositionService
 
         // pendingなタイムスタンプを検索
         TimestampDecomposition::pending()
+            ->where(self::hasVisibleTsItem())
             ->where('id', '!=', $excludeId)
             ->chunk(100, function ($decompositions) use ($normalizedArtist, $artistName, &$count, $cascadeGroupId) {
                 foreach ($decompositions as $decomposition) {
@@ -892,6 +893,7 @@ class TimestampDecompositionService
         $count = 0;
 
         TimestampDecomposition::where('status', TimestampDecomposition::STATUS_AUTO_MATCHED)
+            ->where(self::hasVisibleTsItem())
             ->whereNull('song_id')
             ->whereNotNull('derived_title')
             ->where('derived_artist', '!=', '')
