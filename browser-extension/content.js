@@ -6570,6 +6570,72 @@ function updateScanButtonUI(scanning) {
 }
 
 /**
+ * スペクトルデータに基づいて歌唱区間を別色で上書き描画
+ */
+function drawSingingOverlay(height, barWidth, maxVolume) {
+  if (!volumeCtx || spectralData.length === 0) return;
+
+  const flatnessValues = [];
+  for (let i = 0; i < spectralData.length; i++) {
+    if (spectralData[i] && spectralData[i].flatness !== undefined) {
+      flatnessValues.push(spectralData[i].flatness);
+    }
+  }
+  if (flatnessValues.length < 10) return;
+
+  flatnessValues.sort((a, b) => a - b);
+  const median = flatnessValues[Math.floor(flatnessValues.length / 2)];
+
+  // 中央値以下をtrueにしたマスクを作成
+  const raw = [];
+  for (let i = 0; i < volumeData.length; i++) {
+    const s = i < spectralData.length ? spectralData[i] : null;
+    raw.push(s && s.flatness !== undefined && s.flatness <= median);
+  }
+
+  // 3ポイント未満の連続区間を除去（ノイズ除去）
+  const mask = [...raw];
+  let runStart = -1;
+  for (let i = 0; i <= mask.length; i++) {
+    if (i < mask.length && mask[i]) {
+      if (runStart === -1) runStart = i;
+    } else {
+      if (runStart !== -1 && (i - runStart) < 3) {
+        for (let j = runStart; j < i; j++) mask[j] = false;
+      }
+      runStart = -1;
+    }
+  }
+
+  const width = volumeCanvas.width / window.devicePixelRatio;
+  const sGrad = volumeCtx.createLinearGradient(0, height, 0, 0);
+  sGrad.addColorStop(0, '#1a237e');
+  sGrad.addColorStop(0.5, '#5c6bc0');
+  sGrad.addColorStop(0.8, '#ce93d8');
+  sGrad.addColorStop(1, '#f48fb1');
+
+  // 連続するtrue区間ごとにパスを描画
+  let i = 0;
+  while (i < mask.length) {
+    if (!mask[i]) { i++; continue; }
+    const start = i;
+    while (i < mask.length && mask[i]) i++;
+    const end = i;
+
+    volumeCtx.fillStyle = sGrad;
+    volumeCtx.beginPath();
+    volumeCtx.moveTo(start * barWidth, height);
+    for (let k = start; k < end; k++) {
+      const val = isRelativeVolumeMode ? volumeData[k] / maxVolume : volumeData[k];
+      volumeCtx.lineTo(k * barWidth, height - val * height);
+    }
+    volumeCtx.lineTo((end - 1) * barWidth, height);
+    volumeCtx.closePath();
+    volumeCtx.fill();
+  }
+}
+
+/**
  * 音量グラフを描画
  */
 function drawVolumeGraph() {
@@ -6626,6 +6692,9 @@ function drawVolumeGraph() {
   volumeCtx.lineTo(width, height);
   volumeCtx.closePath();
   volumeCtx.fill();
+
+  // スペクトルデータに基づく歌唱区間の色分け
+  drawSingingOverlay(height, barWidth, maxVolume);
 
   // 中心線
   volumeCtx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
