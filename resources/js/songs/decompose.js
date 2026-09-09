@@ -297,7 +297,8 @@ class TimestampDecomposition {
 
         const titleEl = document.getElementById('archiveTitle');
         if (titleEl) {
-            titleEl.textContent = this.currentItem.archive_title || '';
+            titleEl.textContent = this.currentItem.archive_title ?? '';
+            titleEl.title = this.currentItem.archive_title ?? '';
         }
 
         if (!this.playerReady) return;

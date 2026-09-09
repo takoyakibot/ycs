@@ -67,7 +67,8 @@ class TimestampDecompositionController extends Controller
 
         $parts = $item->parts ?? [];
 
-        $tsItem = TsItem::where('normalized_text', $item->normalized_text)
+        $tsItem = TsItem::with('archive')
+            ->where('normalized_text', $item->normalized_text)
             ->where('is_display', true)
             ->whereHas('archive', fn ($q) => $q->where('is_display', true))
             ->first();
