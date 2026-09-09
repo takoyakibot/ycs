@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Helpers\SupplementStripper;
+use App\Helpers\TextNormalizer;
+use App\Models\Song;
 use App\Models\TsItem;
 use App\Services\TimestampDecompositionService;
 use Illuminate\Http\JsonResponse;
@@ -290,5 +292,27 @@ class TimestampDecompositionController extends Controller
             'linked_count' => $count,
             'statistics' => $this->service->getStatistics(),
         ]);
+    }
+
+    /**
+     * 楽曲名からアーティスト名の候補を取得
+     */
+    public function artistCandidates(Request $request): JsonResponse
+    {
+        $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+        ]);
+
+        $normalizedTitle = TextNormalizer::normalize($request->input('title'));
+
+        $artists = Song::where('normalized_title', $normalizedTitle)
+            ->whereNotNull('artist')
+            ->where('artist', '!=', '')
+            ->distinct()
+            ->pluck('artist')
+            ->values()
+            ->all();
+
+        return response()->json(['artists' => $artists]);
     }
 }

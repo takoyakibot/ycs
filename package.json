@@ -1,4 +1,5 @@
 {
+    "name": "ycs",
     "private": true,
     "type": "module",
     "scripts": {
