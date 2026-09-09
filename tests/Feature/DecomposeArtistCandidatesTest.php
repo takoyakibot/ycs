@@ -82,6 +82,28 @@ class DecomposeArtistCandidatesTest extends TestCase
         $this->assertContains('テストアーティスト', $response->json('artists'));
     }
 
+    public function test_matches_ignoring_spaces(): void
+    {
+        Song::factory()->create(['title' => 'TEST SONG', 'artist' => 'スペースあり']);
+
+        $response = $this->callArtistCandidates('TESTSONG');
+
+        $response->assertOk();
+        $this->assertCount(1, $response->json('artists'));
+        $this->assertContains('スペースあり', $response->json('artists'));
+    }
+
+    public function test_matches_when_query_has_extra_spaces(): void
+    {
+        Song::factory()->create(['title' => 'TESTSONG', 'artist' => 'スペースなし']);
+
+        $response = $this->callArtistCandidates('TEST SONG');
+
+        $response->assertOk();
+        $this->assertCount(1, $response->json('artists'));
+        $this->assertContains('スペースなし', $response->json('artists'));
+    }
+
     public function test_requires_title_parameter(): void
     {
         $response = $this->getJson('/api/songs/decompose/artist-candidates');
