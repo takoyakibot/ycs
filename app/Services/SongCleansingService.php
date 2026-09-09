@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Helpers\QueryHelper;
+use App\Helpers\TextNormalizer;
 use App\Models\NormalizationLog;
 use App\Models\Song;
 use App\Models\SongGroupReview;
@@ -155,7 +156,11 @@ class SongCleansingService
 
         if ($search !== '') {
             $escaped = QueryHelper::escapeLikeString($search);
-            $titleQuery->where('title', 'LIKE', "%{$escaped}%");
+            $normalizedSearch = QueryHelper::escapeLikeString(TextNormalizer::normalize($search));
+            $titleQuery->where(function ($q) use ($escaped, $normalizedSearch) {
+                $q->where('title', 'LIKE', "%{$escaped}%")
+                    ->orWhere('normalized_title', 'LIKE', "%{$normalizedSearch}%");
+            });
         }
 
         $normalizedTitles = $titleQuery->limit(self::PRE_FILTER_LIMIT)->pluck('normalized_title');

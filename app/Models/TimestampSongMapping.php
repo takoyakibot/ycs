@@ -25,6 +25,7 @@ class TimestampSongMapping extends Model
     protected $fillable = [
         'id',
         'normalized_text',
+        'comparison_key',
         'song_id',
         'is_not_song',
         'status',
@@ -51,6 +52,12 @@ class TimestampSongMapping extends Model
         static::creating(function ($model) {
             if (empty($model->id)) {
                 $model->id = Str::ulid();
+            }
+        });
+
+        static::saving(function ($model) {
+            if ($model->isDirty('normalized_text') || $model->comparison_key === null) {
+                $model->comparison_key = \App\Helpers\TextNormalizer::toComparisonKey($model->normalized_text) ?: null;
             }
         });
     }

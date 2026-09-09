@@ -25,8 +25,8 @@ class SimilarityService
 
         // levenshtein()は255文字までしか対応していないため、超える場合は切り詰める
         if (strlen($str1) > 255 || strlen($str2) > 255) {
-            $str1 = substr($str1, 0, 255);
-            $str2 = substr($str2, 0, 255);
+            $str1 = mb_substr($str1, 0, 255, 'UTF-8');
+            $str2 = mb_substr($str2, 0, 255, 'UTF-8');
         }
 
         $distance = levenshtein($str1, $str2);

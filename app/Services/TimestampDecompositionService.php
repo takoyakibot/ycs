@@ -715,7 +715,8 @@ class TimestampDecompositionService
             }
 
             // アーティスト名なし：タイトルのみで楽曲マスタを検索し、1件だけなら紐付け
-            $candidates = Song::where('normalized_title', $normalizedTitle)->limit(2)->get();
+            $titleKey = TextNormalizer::toComparisonKey($normalizedTitle);
+            $candidates = Song::where('title_comparison_key', $titleKey)->limit(2)->get();
 
             if ($candidates->count() !== 1) {
                 return null;
@@ -724,11 +725,13 @@ class TimestampDecompositionService
             $song = $candidates->first();
             $titleOnlyMatch = true;
         } else {
-            $song = Song::where('normalized_title', $normalizedTitle)
-                ->where('normalized_artist', $normalizedArtist)
+            $titleKey = TextNormalizer::toComparisonKey($normalizedTitle);
+            $artistKey = TextNormalizer::toComparisonKey($normalizedArtist);
+            $song = Song::where('title_comparison_key', $titleKey)
+                ->where('artist_comparison_key', $artistKey)
                 ->first();
 
-            // 正規化検索で見つからない場合、生テキストでも検索（ユニーク制約と同じ条件）
+            // comparison_keyで見つからない場合、生テキストでも検索（ユニーク制約と同じ条件）
             if (! $song) {
                 $song = Song::where('title', $title)
                     ->where('artist', $artist)

@@ -305,9 +305,9 @@ class TimestampDecompositionController extends Controller
             'title' => ['required', 'string', 'max:255'],
         ]);
 
-        $normalizedTitle = preg_replace('/\s+/', '', TextNormalizer::normalize($request->input('title')));
+        $comparisonKey = TextNormalizer::toComparisonKey(TextNormalizer::normalize($request->input('title')));
 
-        $artists = Song::whereRaw("REPLACE(normalized_title, ' ', '') = ?", [$normalizedTitle])
+        $artists = Song::where('title_comparison_key', $comparisonKey)
             ->whereNotNull('artist')
             ->where('artist', '!=', '')
             ->distinct()

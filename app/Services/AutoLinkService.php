@@ -143,17 +143,19 @@ class AutoLinkService
 
         $candidates = [];
 
-        // parts[1]（title部分）でnormalized_titleを検索
+        // parts[1]（title部分）でtitle_comparison_keyを検索（スペース差異を吸収）
         if (! empty($songInfo['title'])) {
-            $songs = Song::where('normalized_title', $songInfo['title'])->with('tags')->get();
+            $titleKey = TextNormalizer::toComparisonKey($songInfo['title']);
+            $songs = Song::where('title_comparison_key', $titleKey)->with('tags')->get();
             foreach ($songs as $song) {
                 $candidates[] = $song;
             }
         }
 
-        // parts[0]（artist部分）でもnormalized_titleを検索（順序が逆の場合に対応）
+        // parts[0]（artist部分）でもtitle_comparison_keyを検索（順序が逆の場合に対応）
         if (! empty($songInfo['artist'])) {
-            $songs = Song::where('normalized_title', $songInfo['artist'])->with('tags')->get();
+            $artistKey = TextNormalizer::toComparisonKey($songInfo['artist']);
+            $songs = Song::where('title_comparison_key', $artistKey)->with('tags')->get();
             foreach ($songs as $song) {
                 if (! in_array($song->id, array_map(fn ($s) => $s->id, $candidates))) {
                     $candidates[] = $song;
@@ -180,19 +182,23 @@ class AutoLinkService
         }
 
         // タグマッチング Pass 2: アーティスト側からの部分一致（敬称付き対応）
+        // comparison_keyでスペース差異を吸収してから部分一致判定する
         foreach ($candidates as $candidate) {
             [$tagValues, $normalizedMatchPart] = $this->getArtistMatchParts($candidate, $songInfo);
+            $matchPartKey = TextNormalizer::toComparisonKey($normalizedMatchPart);
 
             foreach ($tagValues as $tagValue) {
-                if ($tagValue !== '' && mb_strlen($tagValue) >= self::MIN_ARTIST_LENGTH_FOR_CONTAINMENT
-                    && str_contains($normalizedMatchPart, $tagValue)) {
-                    return ['song' => $candidate, 'artist_matched' => true];
+                if ($tagValue !== '' && mb_strlen($tagValue) >= self::MIN_ARTIST_LENGTH_FOR_CONTAINMENT) {
+                    $tagKey = TextNormalizer::toComparisonKey($tagValue);
+                    if (str_contains($matchPartKey, $tagKey)) {
+                        return ['song' => $candidate, 'artist_matched' => true];
+                    }
                 }
             }
 
-            if ($candidate->normalized_artist !== null && $candidate->normalized_artist !== ''
+            if ($candidate->artist_comparison_key !== null && $candidate->artist_comparison_key !== ''
                 && mb_strlen($candidate->normalized_artist) >= self::MIN_ARTIST_LENGTH_FOR_CONTAINMENT) {
-                if (str_contains($normalizedMatchPart, $candidate->normalized_artist)) {
+                if (str_contains($matchPartKey, $candidate->artist_comparison_key)) {
                     return ['song' => $candidate, 'artist_matched' => true];
                 }
             }
@@ -244,9 +250,10 @@ class AutoLinkService
             return null;
         }
 
+        $textKey = TextNormalizer::toComparisonKey($normalizedText);
         foreach ($songs as $song) {
-            if ($song->normalized_title !== null && $song->normalized_title !== ''
-                && str_contains($normalizedText, $song->normalized_title)) {
+            if ($song->title_comparison_key !== null && $song->title_comparison_key !== ''
+                && str_contains($textKey, $song->title_comparison_key)) {
                 return ['song' => $song, 'artist_matched' => true];
             }
         }

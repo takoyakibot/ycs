@@ -23,6 +23,7 @@ class TsItem extends Model
         'ts_num',
         'text',
         'normalized_text',
+        'comparison_key',
         'song_id',
         'comment_id',
         'is_display',
@@ -60,6 +61,10 @@ class TsItem extends Model
                 if (($tsItem->attributes['normalized_text'] ?? null) !== $normalized) {
                     $tsItem->attributes['normalized_text'] = $normalized;
                 }
+            }
+
+            if ($tsItem->isDirty('normalized_text') || ! array_key_exists('comparison_key', $tsItem->attributes) || $tsItem->attributes['comparison_key'] === null) {
+                $tsItem->attributes['comparison_key'] = TextNormalizer::toComparisonKey($tsItem->attributes['normalized_text'] ?? null) ?: null;
             }
         });
     }
