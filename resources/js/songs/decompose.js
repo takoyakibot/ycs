@@ -295,6 +295,11 @@ class TimestampDecomposition {
 
         area.classList.remove('hidden');
 
+        const titleEl = document.getElementById('archiveTitle');
+        if (titleEl) {
+            titleEl.textContent = this.currentItem.archive_title || '';
+        }
+
         if (!this.playerReady) return;
 
         const videoId = this.currentItem.video_id;

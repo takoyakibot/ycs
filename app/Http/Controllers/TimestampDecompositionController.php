@@ -84,6 +84,7 @@ class TimestampDecompositionController extends Controller
                 'confidence' => $item->confidence,
                 'video_id' => $tsItem?->video_id,
                 'ts_num' => $tsItem?->ts_num,
+                'archive_title' => $tsItem?->archive?->title,
             ],
         ]);
     }
