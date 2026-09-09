@@ -174,6 +174,7 @@ class TimestampDecompositionService
     public function getNextPending(): ?TimestampDecomposition
     {
         return TimestampDecomposition::query()
+            ->where(self::hasVisibleTsItem())
             ->where(function ($q) {
                 $q->where('status', TimestampDecomposition::STATUS_PENDING)
                     ->orWhere(function ($q2) {
@@ -781,6 +782,7 @@ class TimestampDecompositionService
         // 「楽曲でない」および「確定マッピング済み」を除外した処理待ち件数
         // auto_matchedでも確定マッピングがないレコードは処理待ちに含める
         $pendingCount = TimestampDecomposition::query()
+            ->where(self::hasVisibleTsItem())
             ->where(function ($q) {
                 $q->where('status', TimestampDecomposition::STATUS_PENDING)
                     ->orWhere(function ($q2) {
@@ -819,6 +821,24 @@ class TimestampDecompositionService
             'auto_matched' => TimestampDecomposition::where('status', TimestampDecomposition::STATUS_AUTO_MATCHED)->count(),
             'unscanned' => $this->countUnscannedTimestamps(),
         ];
+    }
+
+    private static function hasVisibleTsItem(): \Closure
+    {
+        return function ($query) {
+            $query->whereExists(function ($sub) {
+                $sub->select(DB::raw(1))
+                    ->from('ts_items')
+                    ->whereColumn('ts_items.normalized_text', 'timestamp_decompositions.normalized_text')
+                    ->where('ts_items.is_display', true)
+                    ->whereExists(function ($archiveSub) {
+                        $archiveSub->select(DB::raw(1))
+                            ->from('archives')
+                            ->whereColumn('archives.video_id', 'ts_items.video_id')
+                            ->where('archives.is_display', true);
+                    });
+            });
+        };
     }
 
     /**

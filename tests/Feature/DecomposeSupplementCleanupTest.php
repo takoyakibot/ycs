@@ -4,8 +4,10 @@ namespace Tests\Feature;
 
 use App\Helpers\SupplementStripper;
 use App\Helpers\TextNormalizer;
+use App\Models\Archive;
 use App\Models\Song;
 use App\Models\TimestampDecomposition;
+use App\Models\TsItem;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -34,6 +36,13 @@ class DecomposeSupplementCleanupTest extends TestCase
 
     private function createDecomposition(string $text, array $parts, array $attributes = []): TimestampDecomposition
     {
+        $archive = Archive::factory()->create(['is_display' => true]);
+        TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'text' => $text,
+            'is_display' => true,
+        ]);
+
         return TimestampDecomposition::create(array_merge([
             'id' => (string) Str::ulid(),
             'normalized_text' => TextNormalizer::normalize($text),

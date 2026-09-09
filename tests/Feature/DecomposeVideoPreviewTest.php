@@ -53,9 +53,16 @@ class DecomposeVideoPreviewTest extends TestCase
         $response->assertJsonPath('item.archive_title', $archive->title);
     }
 
-    public function test_next_returns_null_archive_title_when_no_ts_item(): void
+    public function test_next_returns_no_item_when_ts_item_hidden(): void
     {
         $text = '曲名/アーティスト';
+        $archive = Archive::factory()->create(['is_display' => true]);
+
+        TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'text' => $text,
+            'is_display' => false,
+        ]);
 
         TimestampDecomposition::create([
             'id' => (string) Str::ulid(),
@@ -70,8 +77,6 @@ class DecomposeVideoPreviewTest extends TestCase
         $response = $this->getJson('/api/songs/decompose/next');
 
         $response->assertOk();
-        $response->assertJsonPath('item.video_id', null);
-        $response->assertJsonPath('item.ts_num', null);
-        $response->assertJsonPath('item.archive_title', null);
+        $response->assertJsonPath('item', null);
     }
 }
