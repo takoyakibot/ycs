@@ -102,9 +102,14 @@ async function startCapture(settings) {
     streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id });
   } catch (error) {
     if (error.message?.includes('active stream')) {
-      await stopCapture();
-      await ensureOffscreenDocument();
-      streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id });
+      try {
+        await stopCapture();
+        await ensureOffscreenDocument();
+        streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id });
+      } catch (retryError) {
+        await closeOffscreenDocument();
+        throw retryError;
+      }
     } else {
       await closeOffscreenDocument();
       throw error;

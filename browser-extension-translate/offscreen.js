@@ -183,7 +183,7 @@ async function processChunk() {
       original: text.trim(),
       translated: translated,
       elapsed
-    });
+    }).catch(() => {});
   } catch (error) {
     console.error('処理エラー:', error);
     if (!mediaRecorder && !isStopping) {
