@@ -62,17 +62,22 @@ async function startRecognition(streamId) {
   isStopping = false;
   audioChunks = [];
 
+  createRecorder();
+  scheduleProcessing();
+
+  return { success: true };
+}
+
+function createRecorder() {
+  if (!captureStream || !captureStream.active || isStopping) return;
+  audioChunks = [];
   mediaRecorder = new MediaRecorder(captureStream, { mimeType: 'audio/webm;codecs=opus' });
   mediaRecorder.ondataavailable = (event) => {
     if (event.data.size > 0) {
       audioChunks.push(event.data);
     }
   };
-  mediaRecorder.start(CHUNK_INTERVAL_MS);
-
-  scheduleProcessing();
-
-  return { success: true };
+  mediaRecorder.start();
 }
 
 function stopRecognition() {
@@ -106,7 +111,7 @@ function scheduleProcessing() {
     if (!isStopping) {
       scheduleProcessing();
     }
-  }, CHUNK_INTERVAL_MS + 500);
+  }, CHUNK_INTERVAL_MS);
 }
 
 function isSilent() {
@@ -122,16 +127,31 @@ function isSilent() {
 }
 
 async function processChunk() {
-  if (isProcessing || isStopping) return;
+  if (isProcessing || isStopping || !mediaRecorder) return;
   isProcessing = true;
 
   try {
-    if (isSilent()) {
-      audioChunks = [];
+    const silent = isSilent();
+
+    // stop()でondataavailableが発火し、完全なWebMファイルが得られる
+    const recorder = mediaRecorder;
+    mediaRecorder = null;
+
+    await new Promise(resolve => {
+      recorder.onstop = resolve;
+      recorder.stop();
+    });
+
+    if (isStopping) return;
+
+    if (silent) {
+      createRecorder();
       return;
     }
 
     const chunks = audioChunks.splice(0);
+    createRecorder();
+
     if (chunks.length === 0) return;
 
     const audioBlob = new Blob(chunks, { type: 'audio/webm;codecs=opus' });
