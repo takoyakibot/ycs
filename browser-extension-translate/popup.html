@@ -166,12 +166,21 @@
   </div>
 
   <div class="api-key-section">
+    <label>OpenAI APIキー (Whisper):</label>
+    <div class="api-key-row">
+      <input type="password" id="openai-key" placeholder="sk-...">
+      <button class="btn-save" id="save-openai-key">保存</button>
+    </div>
+    <div class="api-status" id="openai-key-status"></div>
+  </div>
+
+  <div class="api-key-section">
     <label>DeepL API Free キー:</label>
     <div class="api-key-row">
       <input type="password" id="deepl-key" placeholder="xxxxxxxx-xxxx-...">
-      <button class="btn-save" id="save-key">保存</button>
+      <button class="btn-save" id="save-deepl-key">保存</button>
     </div>
-    <div class="api-status" id="key-status"></div>
+    <div class="api-status" id="deepl-key-status"></div>
   </div>
 
   <div class="log-area" id="log"></div>

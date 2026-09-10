@@ -1,12 +1,19 @@
 let captureStream = null;
 let audioContext = null;
-let recognition = null;
+let mediaRecorder = null;
+let analyser = null;
+let chunkTimer = null;
+let audioChunks = [];
 let settings = {
   lang: 'ko',
-  mode: 'full',   // 'full' | 'partial'
+  mode: 'full',
   partialN: 3,
+  openaiKey: '',
   deeplKey: ''
 };
+
+const CHUNK_INTERVAL_MS = 3000;
+const SILENCE_THRESHOLD = 0.01;
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   switch (message.type) {
@@ -24,10 +31,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case 'UPDATE_SETTINGS_TO_OFFSCREEN':
       if (message.settings) Object.assign(settings, message.settings);
-      if (recognition) {
-        recognition.lang = settings.lang === 'en' ? 'en-US' : 'ko';
-        recognition.stop(); // onendで新しいlangで自動再開される
-      }
       sendResponse({ success: true });
       return true;
   }
@@ -47,51 +50,39 @@ async function startRecognition(streamId) {
     return { success: false, error: 'ストリームを取得できませんでした' };
   }
 
-  // AudioContextに接続して音声をアクティブに保つ
   audioContext = new AudioContext();
   const source = audioContext.createMediaStreamSource(captureStream);
-  source.connect(audioContext.createAnalyser());
 
-  recognition = new webkitSpeechRecognition();
-  recognition.lang = settings.lang === 'en' ? 'en-US' : 'ko';
-  recognition.continuous = true;
-  recognition.interimResults = true;
+  analyser = audioContext.createAnalyser();
+  analyser.fftSize = 2048;
+  source.connect(analyser);
 
-  recognition.onresult = async (event) => {
-    for (let i = event.resultIndex; i < event.results.length; i++) {
-      if (event.results[i].isFinal) {
-        const text = event.results[i][0].transcript.trim();
-        if (!text) continue;
-        await handleFinalText(text);
-      }
+  mediaRecorder = new MediaRecorder(captureStream, { mimeType: 'audio/webm;codecs=opus' });
+  audioChunks = [];
+
+  mediaRecorder.ondataavailable = (event) => {
+    if (event.data.size > 0) {
+      audioChunks.push(event.data);
     }
   };
 
-  recognition.onerror = (event) => {
-    console.error('SpeechRecognition error:', event.error);
-    if (event.error === 'no-speech' || event.error === 'aborted') {
-      // 自動再開
-      try { recognition.start(); } catch (e) {}
-    }
-  };
+  mediaRecorder.start();
 
-  recognition.onend = () => {
-    // continuous modeでも環境によって停止する場合がある — 自動再開
-    if (captureStream) {
-      try { recognition.start(); } catch (e) {}
-    }
-  };
+  chunkTimer = setInterval(() => processChunk(), CHUNK_INTERVAL_MS);
 
-  recognition.start();
   return { success: true };
 }
 
 function stopRecognition() {
-  if (recognition) {
-    recognition.onend = null; // 自動再開を防ぐ
-    recognition.abort();
-    recognition = null;
+  if (chunkTimer) {
+    clearInterval(chunkTimer);
+    chunkTimer = null;
   }
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop();
+    mediaRecorder = null;
+  }
+  audioChunks = [];
   if (captureStream) {
     captureStream.getTracks().forEach(track => track.stop());
     captureStream = null;
@@ -100,22 +91,117 @@ function stopRecognition() {
     audioContext.close();
     audioContext = null;
   }
+  analyser = null;
 }
 
-async function handleFinalText(text) {
-  let translated;
+function isSilent() {
+  if (!analyser) return true;
+  const dataArray = new Float32Array(analyser.fftSize);
+  analyser.getFloatTimeDomainData(dataArray);
+  let sum = 0;
+  for (let i = 0; i < dataArray.length; i++) {
+    sum += dataArray[i] * dataArray[i];
+  }
+  const rms = Math.sqrt(sum / dataArray.length);
+  return rms < SILENCE_THRESHOLD;
+}
 
-  if (settings.mode === 'partial') {
-    translated = await translatePartial(text, settings.partialN);
-  } else {
-    translated = await translateFull(text);
+async function processChunk() {
+  if (!mediaRecorder || mediaRecorder.state === 'inactive') return;
+
+  if (isSilent()) {
+    audioChunks = [];
+    return;
   }
 
-  chrome.runtime.sendMessage({
-    type: 'TRANSLATION_RESULT',
-    original: text,
-    translated: translated
+  // 現在のレコーダーを停止して新しいのを開始し、チャンクを回収
+  const chunks = await collectChunks();
+  if (!chunks || chunks.length === 0) return;
+
+  const audioBlob = new Blob(chunks, { type: 'audio/webm;codecs=opus' });
+  if (audioBlob.size < 1000) return;
+
+  try {
+    const text = await transcribeWithWhisper(audioBlob);
+    if (!text || text.trim() === '') return;
+
+    const translated = await translateText(text.trim());
+
+    chrome.runtime.sendMessage({
+      type: 'TRANSLATION_RESULT',
+      original: text.trim(),
+      translated: translated
+    });
+  } catch (error) {
+    console.error('処理エラー:', error);
+  }
+}
+
+async function collectChunks() {
+  return new Promise((resolve) => {
+    if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+      resolve(null);
+      return;
+    }
+
+    const collected = [...audioChunks];
+    audioChunks = [];
+
+    // 一旦停止して溜まったデータを回収、すぐ再開
+    mediaRecorder.stop();
+
+    mediaRecorder.onstop = () => {
+      const allChunks = [...collected, ...audioChunks];
+      audioChunks = [];
+
+      if (captureStream && captureStream.active) {
+        mediaRecorder = new MediaRecorder(captureStream, { mimeType: 'audio/webm;codecs=opus' });
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            audioChunks.push(event.data);
+          }
+        };
+        mediaRecorder.start();
+      }
+
+      resolve(allChunks);
+    };
   });
+}
+
+async function transcribeWithWhisper(audioBlob) {
+  if (!settings.openaiKey) return null;
+
+  const lang = settings.lang === 'en' ? 'en' : 'ko';
+
+  const formData = new FormData();
+  formData.append('file', audioBlob, 'audio.webm');
+  formData.append('model', 'whisper-1');
+  formData.append('language', lang);
+
+  const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${settings.openaiKey}`
+    },
+    body: formData
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Whisper API error:', response.status, errorText);
+    return null;
+  }
+
+  const data = await response.json();
+  return data.text || null;
+}
+
+async function translateText(text) {
+  if (settings.mode === 'partial') {
+    return await translatePartial(text, settings.partialN);
+  }
+  return await translateFull(text);
 }
 
 async function translateFull(text) {
@@ -151,7 +237,6 @@ async function translatePartial(text, n) {
   const words = text.split(/\s+/).filter(w => w.length > 0);
   if (words.length === 0) return text;
 
-  // N単語ごとに1つの単語を翻訳対象として選ぶ
   const indicesToTranslate = [];
   for (let i = 0; i < words.length; i += n) {
     indicesToTranslate.push(i);
@@ -159,7 +244,6 @@ async function translatePartial(text, n) {
 
   if (indicesToTranslate.length === 0) return text;
 
-  // 翻訳対象の単語をまとめてDeepL APIに送る
   const wordsToTranslate = indicesToTranslate.map(i => words[i]);
   const sourceLang = settings.lang === 'en' ? 'EN' : 'KO';
 
@@ -184,7 +268,6 @@ async function translatePartial(text, n) {
   const data = await response.json();
   const translations = data.translations || [];
 
-  // 翻訳結果を原文に差し込む
   const result = [...words];
   indicesToTranslate.forEach((wordIndex, transIndex) => {
     if (translations[transIndex]?.text) {
