@@ -32,6 +32,14 @@ async function init() {
     elements.status.textContent = '開始ボタンを押してください';
   }
 
+  const captureStatus = await chrome.runtime.sendMessage({ type: 'GET_CAPTURE_STATUS' });
+  if (captureStatus?.isCapturing) {
+    isCapturing = true;
+    elements.startBtn.textContent = '停止';
+    elements.startBtn.classList.add('capturing');
+    elements.status.textContent = '音声を認識中...';
+  }
+
   elements.lang.addEventListener('change', saveSettings);
   elements.mode.addEventListener('change', () => {
     updatePartialVisibility();

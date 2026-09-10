@@ -1,4 +1,5 @@
 let captureStream = null;
+let audioContext = null;
 let recognition = null;
 let settings = {
   lang: 'ko',
@@ -46,7 +47,7 @@ async function startRecognition(streamId) {
   }
 
   // AudioContextに接続して音声をアクティブに保つ
-  const audioContext = new AudioContext();
+  audioContext = new AudioContext();
   const source = audioContext.createMediaStreamSource(captureStream);
   source.connect(audioContext.createAnalyser());
 
@@ -93,6 +94,10 @@ function stopRecognition() {
   if (captureStream) {
     captureStream.getTracks().forEach(track => track.stop());
     captureStream = null;
+  }
+  if (audioContext) {
+    audioContext.close();
+    audioContext = null;
   }
 }
 

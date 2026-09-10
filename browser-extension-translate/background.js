@@ -26,6 +26,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }).catch(() => {});
       sendResponse({ success: true });
       return true;
+
+    case 'GET_CAPTURE_STATUS':
+      sendResponse({ isCapturing });
+      return true;
   }
 });
 
