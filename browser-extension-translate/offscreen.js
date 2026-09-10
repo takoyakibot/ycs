@@ -2,8 +2,10 @@ let captureStream = null;
 let audioContext = null;
 let mediaRecorder = null;
 let analyser = null;
-let chunkTimer = null;
+let processTimer = null;
 let audioChunks = [];
+let isProcessing = false;
+let isStopping = false;
 let settings = {
   lang: 'ko',
   mode: 'full',
@@ -57,31 +59,33 @@ async function startRecognition(streamId) {
   analyser.fftSize = 2048;
   source.connect(analyser);
 
-  mediaRecorder = new MediaRecorder(captureStream, { mimeType: 'audio/webm;codecs=opus' });
+  isStopping = false;
   audioChunks = [];
 
+  mediaRecorder = new MediaRecorder(captureStream, { mimeType: 'audio/webm;codecs=opus' });
   mediaRecorder.ondataavailable = (event) => {
     if (event.data.size > 0) {
       audioChunks.push(event.data);
     }
   };
+  mediaRecorder.start(CHUNK_INTERVAL_MS);
 
-  mediaRecorder.start();
-
-  chunkTimer = setInterval(() => processChunk(), CHUNK_INTERVAL_MS);
+  scheduleProcessing();
 
   return { success: true };
 }
 
 function stopRecognition() {
-  if (chunkTimer) {
-    clearInterval(chunkTimer);
-    chunkTimer = null;
+  isStopping = true;
+
+  if (processTimer) {
+    clearTimeout(processTimer);
+    processTimer = null;
   }
   if (mediaRecorder && mediaRecorder.state !== 'inactive') {
     mediaRecorder.stop();
-    mediaRecorder = null;
   }
+  mediaRecorder = null;
   audioChunks = [];
   if (captureStream) {
     captureStream.getTracks().forEach(track => track.stop());
@@ -92,6 +96,17 @@ function stopRecognition() {
     audioContext = null;
   }
   analyser = null;
+  isProcessing = false;
+}
+
+function scheduleProcessing() {
+  processTimer = setTimeout(async () => {
+    if (isStopping) return;
+    await processChunk();
+    if (!isStopping) {
+      scheduleProcessing();
+    }
+  }, CHUNK_INTERVAL_MS + 500);
 }
 
 function isSilent() {
@@ -107,25 +122,26 @@ function isSilent() {
 }
 
 async function processChunk() {
-  if (!mediaRecorder || mediaRecorder.state === 'inactive') return;
-
-  if (isSilent()) {
-    audioChunks = [];
-    return;
-  }
-
-  // 現在のレコーダーを停止して新しいのを開始し、チャンクを回収
-  const chunks = await collectChunks();
-  if (!chunks || chunks.length === 0) return;
-
-  const audioBlob = new Blob(chunks, { type: 'audio/webm;codecs=opus' });
-  if (audioBlob.size < 1000) return;
+  if (isProcessing || isStopping) return;
+  isProcessing = true;
 
   try {
+    if (isSilent()) {
+      audioChunks = [];
+      return;
+    }
+
+    const chunks = audioChunks.splice(0);
+    if (chunks.length === 0) return;
+
+    const audioBlob = new Blob(chunks, { type: 'audio/webm;codecs=opus' });
+    if (audioBlob.size < 1000) return;
+
     const text = await transcribeWithWhisper(audioBlob);
-    if (!text || text.trim() === '') return;
+    if (isStopping || !text || text.trim() === '') return;
 
     const translated = await translateText(text.trim());
+    if (isStopping) return;
 
     chrome.runtime.sendMessage({
       type: 'TRANSLATION_RESULT',
@@ -134,39 +150,9 @@ async function processChunk() {
     });
   } catch (error) {
     console.error('処理エラー:', error);
+  } finally {
+    isProcessing = false;
   }
-}
-
-async function collectChunks() {
-  return new Promise((resolve) => {
-    if (!mediaRecorder || mediaRecorder.state === 'inactive') {
-      resolve(null);
-      return;
-    }
-
-    const collected = [...audioChunks];
-    audioChunks = [];
-
-    // 一旦停止して溜まったデータを回収、すぐ再開
-    mediaRecorder.stop();
-
-    mediaRecorder.onstop = () => {
-      const allChunks = [...collected, ...audioChunks];
-      audioChunks = [];
-
-      if (captureStream && captureStream.active) {
-        mediaRecorder = new MediaRecorder(captureStream, { mimeType: 'audio/webm;codecs=opus' });
-        mediaRecorder.ondataavailable = (event) => {
-          if (event.data.size > 0) {
-            audioChunks.push(event.data);
-          }
-        };
-        mediaRecorder.start();
-      }
-
-      resolve(allChunks);
-    };
-  });
 }
 
 async function transcribeWithWhisper(audioBlob) {
