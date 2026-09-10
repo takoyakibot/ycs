@@ -151,7 +151,8 @@ async function saveTranslationResult(message) {
   await chrome.storage.local.set({ translationResults: results });
 }
 
-// インストール・更新時のみクリーンアップ（Service Worker再起動時には実行しない）
+chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
+
 chrome.runtime.onInstalled.addListener(async () => {
   if (await hasOffscreenDocument()) {
     await chrome.offscreen.closeDocument();
