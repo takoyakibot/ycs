@@ -43,6 +43,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ isCapturing: capturing });
       });
       return true;
+
+    case 'GET_VIDEO_TIME':
+      if (captureTabId) {
+        chrome.tabs.sendMessage(captureTabId, { type: 'GET_VIDEO_TIME' })
+          .then(response => sendResponse(response))
+          .catch(() => sendResponse({ currentTime: null }));
+      } else {
+        sendResponse({ currentTime: null });
+      }
+      return true;
   }
 });
 

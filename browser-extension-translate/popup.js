@@ -118,11 +118,35 @@ function getSettings() {
 
 async function getFullSettings() {
   const s = getSettings();
-  const result = await chrome.storage.local.get(['translateSettings']);
+  const result = await chrome.storage.local.get(['translateSettings', 'videoContexts']);
   const saved = result.translateSettings || {};
   s.openaiKey = saved.openaiKey || '';
   s.deeplKey = saved.deeplKey || '';
+  s.chunkInterval = saved.chunkInterval || 10;
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tab?.url) {
+    const contexts = result.videoContexts || {};
+    const key = extractVideoKey(tab.url);
+    if (key && contexts[key]) s.context = contexts[key];
+  }
   return s;
+}
+
+function extractVideoKey(url) {
+  try {
+    const u = new URL(url);
+    if (u.hostname.includes('youtube.com')) {
+      const videoId = u.searchParams.get('v');
+      if (videoId) return `yt:${videoId}`;
+    }
+    if (u.hostname.includes('youtu.be')) {
+      const videoId = u.pathname.slice(1).split('/')[0];
+      if (videoId) return `yt:${videoId}`;
+    }
+    return u.origin + u.pathname;
+  } catch {
+    return null;
+  }
 }
 
 async function saveSettings() {
