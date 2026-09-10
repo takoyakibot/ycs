@@ -6,15 +6,16 @@ let processTimer = null;
 let audioChunks = [];
 let isProcessing = false;
 let isStopping = false;
+let captureStartTime = null;
 let settings = {
   lang: 'ko',
   mode: 'full',
   partialN: 3,
+  chunkInterval: 10,
+  context: '',
   openaiKey: '',
   deeplKey: ''
 };
-
-const CHUNK_INTERVAL_MS = 3000;
 const SILENCE_THRESHOLD = 0.01;
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -53,6 +54,9 @@ async function startRecognition(streamId) {
   }
 
   audioContext = new AudioContext();
+  if (audioContext.state === 'suspended') {
+    await audioContext.resume();
+  }
   const source = audioContext.createMediaStreamSource(captureStream);
 
   analyser = audioContext.createAnalyser();
@@ -61,6 +65,7 @@ async function startRecognition(streamId) {
 
   isStopping = false;
   audioChunks = [];
+  captureStartTime = Date.now();
 
   createRecorder();
   scheduleProcessing();
@@ -105,13 +110,14 @@ function stopRecognition() {
 }
 
 function scheduleProcessing() {
+  const intervalMs = (settings.chunkInterval || 10) * 1000;
   processTimer = setTimeout(async () => {
     if (isStopping) return;
     await processChunk();
     if (!isStopping) {
       scheduleProcessing();
     }
-  }, CHUNK_INTERVAL_MS);
+  }, intervalMs);
 }
 
 function isSilent() {
@@ -163,13 +169,26 @@ async function processChunk() {
     const translated = await translateText(text.trim());
     if (isStopping) return;
 
+    let videoTime = null;
+    try {
+      const vtResponse = await chrome.runtime.sendMessage({ type: 'GET_VIDEO_TIME' });
+      videoTime = vtResponse?.currentTime;
+    } catch {}
+    const elapsed = videoTime != null
+      ? Math.round(videoTime)
+      : (captureStartTime ? Math.round((Date.now() - captureStartTime) / 1000) : null);
+
     chrome.runtime.sendMessage({
       type: 'TRANSLATION_RESULT',
       original: text.trim(),
-      translated: translated
+      translated: translated,
+      elapsed
     });
   } catch (error) {
     console.error('処理エラー:', error);
+    if (!mediaRecorder && !isStopping) {
+      createRecorder();
+    }
   } finally {
     isProcessing = false;
   }
@@ -184,6 +203,9 @@ async function transcribeWithWhisper(audioBlob) {
   formData.append('file', audioBlob, 'audio.webm');
   formData.append('model', 'whisper-1');
   formData.append('language', lang);
+  if (settings.context) {
+    formData.append('prompt', settings.context);
+  }
 
   const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
     method: 'POST',

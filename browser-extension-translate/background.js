@@ -1,4 +1,5 @@
 let isCapturing = false;
+let captureTabId = null;
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   switch (message.type) {
@@ -15,11 +16,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
 
     case 'TRANSLATION_RESULT':
-      // offscreenからの翻訳結果をそのまま中継（popupが受け取る）
       break;
 
     case 'UPDATE_SETTINGS':
-      // offscreenに設定を転送
       chrome.runtime.sendMessage({
         type: 'UPDATE_SETTINGS_TO_OFFSCREEN',
         settings: message.settings
@@ -28,7 +27,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
 
     case 'GET_CAPTURE_STATUS':
-      sendResponse({ isCapturing });
+      hasOffscreenDocument().then(hasDoc => {
+        const capturing = isCapturing && hasDoc;
+        if (isCapturing && !hasDoc) {
+          isCapturing = false;
+          captureTabId = null;
+        }
+        sendResponse({ isCapturing: capturing });
+      });
       return true;
   }
 });
@@ -68,7 +74,20 @@ async function startCapture(settings) {
 
   await ensureOffscreenDocument();
 
-  const streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id });
+  let streamId;
+  try {
+    streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id });
+  } catch (error) {
+    if (error.message?.includes('active stream')) {
+      await stopCapture();
+      await ensureOffscreenDocument();
+      streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id });
+    } else {
+      await closeOffscreenDocument();
+      throw error;
+    }
+  }
+
   if (!streamId) {
     await closeOffscreenDocument();
     return { success: false, error: 'Stream IDを取得できませんでした' };
@@ -86,6 +105,7 @@ async function startCapture(settings) {
   }
 
   isCapturing = true;
+  captureTabId = tab.id;
   return { success: true };
 }
 
@@ -93,6 +113,7 @@ async function stopCapture() {
   await chrome.runtime.sendMessage({ type: 'STOP_RECOGNITION' }).catch(() => {});
   await closeOffscreenDocument();
   isCapturing = false;
+  captureTabId = null;
   return { success: true };
 }
 
