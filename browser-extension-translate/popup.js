@@ -66,10 +66,21 @@ async function init() {
   elements.startBtn.addEventListener('click', toggleCapture);
   elements.saveOpenaiKey.addEventListener('click', saveOpenaiKeyHandler);
   elements.saveDeeplKey.addEventListener('click', saveDeeplKeyHandler);
+  document.getElementById('clear-log').addEventListener('click', async () => {
+    await chrome.storage.local.remove('translationResults');
+    elements.log.innerHTML = '';
+  });
+
+  const savedResults = await chrome.runtime.sendMessage({ type: 'GET_RESULTS' });
+  if (savedResults?.results?.length) {
+    for (const r of savedResults.results) {
+      appendLog(r.original, r.translated, r.elapsed);
+    }
+  }
 
   chrome.runtime.onMessage.addListener((message) => {
     if (message.type === 'TRANSLATION_RESULT') {
-      appendLog(message.original, message.translated);
+      appendLog(message.original, message.translated, message.elapsed);
     }
   });
 }
@@ -217,10 +228,18 @@ async function toggleCapture() {
   }
 }
 
-function appendLog(original, translated) {
+function formatElapsed(seconds) {
+  if (seconds == null) return '';
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function appendLog(original, translated, elapsed) {
   const entry = document.createElement('div');
   entry.className = 'log-entry';
-  entry.innerHTML = `<div class="log-original">${escapeHtml(original)}</div><div class="log-translated">${escapeHtml(translated)}</div>`;
+  const ts = elapsed != null ? `<span class="log-time">${formatElapsed(elapsed)}</span> ` : '';
+  entry.innerHTML = `<div class="log-original">${ts}${escapeHtml(original)}</div><div class="log-translated">${escapeHtml(translated)}</div>`;
   elements.log.appendChild(entry);
   elements.log.scrollTop = elements.log.scrollHeight;
 }

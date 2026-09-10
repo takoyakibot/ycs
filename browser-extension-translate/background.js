@@ -16,7 +16,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
 
     case 'TRANSLATION_RESULT':
+      saveTranslationResult(message).catch(() => {});
       break;
+
+    case 'GET_RESULTS':
+      chrome.storage.local.get(['translationResults']).then(data => {
+        sendResponse({ results: data.translationResults || [] });
+      });
+      return true;
 
     case 'UPDATE_SETTINGS':
       chrome.runtime.sendMessage({
@@ -115,6 +122,23 @@ async function stopCapture() {
   isCapturing = false;
   captureTabId = null;
   return { success: true };
+}
+
+const MAX_RESULTS = 500;
+
+async function saveTranslationResult(message) {
+  const data = await chrome.storage.local.get(['translationResults']);
+  const results = data.translationResults || [];
+  results.push({
+    original: message.original,
+    translated: message.translated,
+    elapsed: message.elapsed ?? null,
+    timestamp: Date.now()
+  });
+  if (results.length > MAX_RESULTS) {
+    results.splice(0, results.length - MAX_RESULTS);
+  }
+  await chrome.storage.local.set({ translationResults: results });
 }
 
 // インストール・更新時のみクリーンアップ（Service Worker再起動時には実行しない）
