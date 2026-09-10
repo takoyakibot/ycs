@@ -173,6 +173,7 @@ export class SongOperationDialog {
                     selectedIds = [];
                     targetId = null;
                     resultsList.innerHTML = '';
+                    resultsHeader.classList.add('hidden');
                     updateMergeBtn();
                     updateClearBtn();
                     msgArea.clear();
@@ -188,6 +189,28 @@ export class SongOperationDialog {
                 searchRow.appendChild(searchWrapper);
                 searchRow.appendChild(searchBtn);
                 panel.appendChild(searchRow);
+
+                const resultsHeader = document.createElement('div');
+                resultsHeader.className = 'flex items-center gap-2 mb-1 hidden';
+                const headerCb = document.createElement('input');
+                headerCb.type = 'checkbox';
+                headerCb.className = 'flex-shrink-0';
+                headerCb.addEventListener('change', () => {
+                    if (headerCb.checked) {
+                        selectedIds = searchResults.map(s => s.id);
+                    } else {
+                        selectedIds = [];
+                        targetId = null;
+                    }
+                    renderResults();
+                    updateMergeBtn();
+                });
+                const headerLabel = document.createElement('span');
+                headerLabel.className = 'text-xs text-gray-500 dark:text-gray-400';
+                headerLabel.textContent = '全選択';
+                resultsHeader.appendChild(headerCb);
+                resultsHeader.appendChild(headerLabel);
+                panel.appendChild(resultsHeader);
 
                 const resultsList = document.createElement('div');
                 resultsList.className = 'space-y-1 max-h-[40vh] overflow-y-auto mb-3';
@@ -210,7 +233,13 @@ export class SongOperationDialog {
 
                 function renderResults() {
                     resultsList.innerHTML = '';
-                    if (searchResults.length === 0) return;
+                    if (searchResults.length === 0) {
+                        resultsHeader.classList.add('hidden');
+                        return;
+                    }
+                    resultsHeader.classList.remove('hidden');
+                    headerCb.checked = searchResults.length > 0 && selectedIds.length === searchResults.length;
+                    headerCb.indeterminate = selectedIds.length > 0 && selectedIds.length < searchResults.length;
                     searchResults.forEach(s => {
                         const row = document.createElement('div');
                         row.className = 'flex items-center gap-2 p-2 border rounded border-gray-200 dark:border-gray-700 text-sm';
