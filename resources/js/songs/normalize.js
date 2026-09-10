@@ -1730,14 +1730,10 @@ export class TimestampNormalization {
             }
             const toggleBar = document.getElementById('pipPlayerToggleBar');
             const container = document.getElementById('pipPlayerContainer');
-            const controls = document.getElementById('pipPlayerControls');
             const toggleIcon = document.getElementById('pipPlayerToggleIcon');
             if (toggleBar) toggleBar.classList.toggle('hidden', !show);
             if (container) {
                 container.classList.toggle('hidden', !show || this._playerCollapsed);
-            }
-            if (controls) {
-                controls.classList.toggle('hidden', !show || this._playerCollapsed);
             }
             if (toggleIcon) {
                 toggleIcon.style.transform = (show && !this._playerCollapsed) ? '' : 'rotate(-90deg)';
@@ -1759,7 +1755,7 @@ export class TimestampNormalization {
         const toggleBar = document.getElementById('pipPlayerToggleBar');
         if (toggleBar) {
             toggleBar.addEventListener('click', (e) => {
-                if (e.target.closest('#pipPlayerCloseBtn') || e.target.closest('#pipPlayerDocPipBtn')) return;
+                if (e.target.closest('#pipPlayerCloseBtn') || e.target.closest('#pipPlayerDocPipBtn') || e.target.closest('#pipPlayerSkipBack') || e.target.closest('#pipPlayerSkipForward')) return;
                 this._togglePlayerCollapse();
             });
         }
@@ -1806,10 +1802,8 @@ export class TimestampNormalization {
         if (this._docPipWindow && !this._docPipWindow.closed) return;
         this._playerCollapsed = !this._playerCollapsed;
         const container = document.getElementById('pipPlayerContainer');
-        const controls = document.getElementById('pipPlayerControls');
         const toggleIcon = document.getElementById('pipPlayerToggleIcon');
         if (container) container.classList.toggle('hidden', this._playerCollapsed);
-        if (controls) controls.classList.toggle('hidden', this._playerCollapsed);
         if (toggleIcon) {
             toggleIcon.style.transform = this._playerCollapsed ? 'rotate(-90deg)' : '';
         }

@@ -97,6 +97,12 @@
                                     <span id="pipPlayerTitle" class="text-xs truncate">動画プレビュー</span>
                                 </div>
                                 <div class="flex items-center gap-1 flex-shrink-0">
+                                    <button id="pipPlayerSkipBack" class="text-gray-400 hover:text-white p-0.5" title="10秒戻す" aria-label="10秒戻す">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0019 16V8a1 1 0 00-1.6-.8l-5.334 4zM4.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0011 16V8a1 1 0 00-1.6-.8l-5.334 4z"></path></svg>
+                                    </button>
+                                    <button id="pipPlayerSkipForward" class="text-gray-400 hover:text-white p-0.5" title="10秒進む" aria-label="10秒進む">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.933 12.8a1 1 0 000-1.6L6.6 7.2A1 1 0 005 8v8a1 1 0 001.6.8l5.333-4zM19.933 12.8a1 1 0 000-1.6l-5.333-4A1 1 0 0013 8v8a1 1 0 001.6.8l5.333-4z"></path></svg>
+                                    </button>
                                     <button id="pipPlayerDocPipBtn" class="hidden text-gray-400 hover:text-white p-0.5" aria-label="別ウィンドウで表示" title="別ウィンドウで表示">
                                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
@@ -113,20 +119,6 @@
                                 <div class="bg-black" style="height: 180px;">
                                     <div id="youtube-player"></div>
                                 </div>
-                            </div>
-                            <div id="pipPlayerControls" class="hidden flex items-center justify-center gap-2 bg-gray-800 rounded-b-lg px-2 py-1 -mt-px">
-                                <button id="pipPlayerSkipBack" class="text-gray-300 hover:text-white text-xs px-1.5 py-0.5 rounded hover:bg-gray-700 transition-colors" title="10秒戻す" aria-label="10秒戻す">
-                                    <span class="flex items-center gap-0.5">
-                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0019 16V8a1 1 0 00-1.6-.8l-5.334 4zM4.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0011 16V8a1 1 0 00-1.6-.8l-5.334 4z"></path></svg>
-                                        10秒
-                                    </span>
-                                </button>
-                                <button id="pipPlayerSkipForward" class="text-gray-300 hover:text-white text-xs px-1.5 py-0.5 rounded hover:bg-gray-700 transition-colors" title="10秒送る" aria-label="10秒送る">
-                                    <span class="flex items-center gap-0.5">
-                                        10秒
-                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.933 12.8a1 1 0 000-1.6L6.6 7.2A1 1 0 005 8v8a1 1 0 001.6.8l5.333-4zM19.933 12.8a1 1 0 000-1.6l-5.333-4A1 1 0 0013 8v8a1 1 0 001.6.8l5.333-4z"></path></svg>
-                                    </span>
-                                </button>
                             </div>
                         </div>
 
