@@ -46,9 +46,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case 'GET_VIDEO_TIME':
       if (captureTabId) {
-        chrome.tabs.sendMessage(captureTabId, { type: 'GET_VIDEO_TIME' })
-          .then(response => sendResponse(response))
-          .catch(() => sendResponse({ currentTime: null }));
+        chrome.scripting.executeScript({
+          target: { tabId: captureTabId },
+          func: () => {
+            const video = document.querySelector('video');
+            return video ? video.currentTime : null;
+          }
+        }).then(results => {
+          sendResponse({ currentTime: results?.[0]?.result ?? null });
+        }).catch(() => sendResponse({ currentTime: null }));
       } else {
         sendResponse({ currentTime: null });
       }
