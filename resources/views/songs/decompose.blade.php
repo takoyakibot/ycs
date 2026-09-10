@@ -177,6 +177,14 @@
                     <div id="videoPlayerContainer" class="flex justify-center">
                         <div id="decomposePlayer"></div>
                     </div>
+                    <div class="flex items-center justify-center gap-2 mt-1">
+                        <button id="decomposeSkipBack" class="px-2 py-1 text-xs bg-gray-200 dark:bg-gray-600 rounded hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors" title="10秒戻す" aria-label="10秒戻す">
+                            ◀◀ 10秒
+                        </button>
+                        <button id="decomposeSkipForward" class="px-2 py-1 text-xs bg-gray-200 dark:bg-gray-600 rounded hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors" title="10秒進む" aria-label="10秒進む">
+                            10秒 ▶▶
+                        </button>
+                    </div>
                 </div>
             </div>
 

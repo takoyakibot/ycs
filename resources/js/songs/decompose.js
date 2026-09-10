@@ -76,6 +76,10 @@ class TimestampDecomposition {
         // 動画プレビュー非表示ボタン
         document.getElementById('videoToggleBtn').addEventListener('click', () => this.toggleVideoPreview());
 
+        // 10秒スキップボタン
+        document.getElementById('decomposeSkipBack').addEventListener('click', () => this.seekRelative(-10));
+        document.getElementById('decomposeSkipForward').addEventListener('click', () => this.seekRelative(10));
+
         // パネル内の入力欄では Enter で確定 / Esc でキャンセル
         ['cleanupTitle', 'cleanupArtist'].forEach((id) => {
             document.getElementById(id).addEventListener('keydown', (e) => {
@@ -337,6 +341,12 @@ class TimestampDecomposition {
         } else {
             this.updateVideoPreview();
         }
+    }
+
+    seekRelative(seconds) {
+        if (!this.player || typeof this.player.getCurrentTime !== 'function') return;
+        const current = this.player.getCurrentTime();
+        this.player.seekTo(Math.max(0, current + seconds), true);
     }
 
     /**
