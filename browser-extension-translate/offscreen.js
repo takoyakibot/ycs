@@ -1,12 +1,22 @@
 let captureStream = null;
 let audioContext = null;
-let recognition = null;
+let mediaRecorder = null;
+let analyser = null;
+let processTimer = null;
+let audioChunks = [];
+let isProcessing = false;
+let isStopping = false;
+let captureStartTime = null;
 let settings = {
   lang: 'ko',
-  mode: 'full',   // 'full' | 'partial'
+  mode: 'full',
   partialN: 3,
+  chunkInterval: 10,
+  context: '',
+  openaiKey: '',
   deeplKey: ''
 };
+const SILENCE_THRESHOLD = 0.01;
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   switch (message.type) {
@@ -24,10 +34,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case 'UPDATE_SETTINGS_TO_OFFSCREEN':
       if (message.settings) Object.assign(settings, message.settings);
-      if (recognition) {
-        recognition.lang = settings.lang === 'en' ? 'en-US' : 'ko';
-        recognition.stop(); // onendで新しいlangで自動再開される
-      }
       sendResponse({ success: true });
       return true;
   }
@@ -47,51 +53,50 @@ async function startRecognition(streamId) {
     return { success: false, error: 'ストリームを取得できませんでした' };
   }
 
-  // AudioContextに接続して音声をアクティブに保つ
   audioContext = new AudioContext();
+  if (audioContext.state === 'suspended') {
+    await audioContext.resume();
+  }
   const source = audioContext.createMediaStreamSource(captureStream);
-  source.connect(audioContext.createAnalyser());
 
-  recognition = new webkitSpeechRecognition();
-  recognition.lang = settings.lang === 'en' ? 'en-US' : 'ko';
-  recognition.continuous = true;
-  recognition.interimResults = true;
+  analyser = audioContext.createAnalyser();
+  analyser.fftSize = 2048;
+  source.connect(analyser);
 
-  recognition.onresult = async (event) => {
-    for (let i = event.resultIndex; i < event.results.length; i++) {
-      if (event.results[i].isFinal) {
-        const text = event.results[i][0].transcript.trim();
-        if (!text) continue;
-        await handleFinalText(text);
-      }
-    }
-  };
+  isStopping = false;
+  audioChunks = [];
+  captureStartTime = Date.now();
 
-  recognition.onerror = (event) => {
-    console.error('SpeechRecognition error:', event.error);
-    if (event.error === 'no-speech' || event.error === 'aborted') {
-      // 自動再開
-      try { recognition.start(); } catch (e) {}
-    }
-  };
+  createRecorder();
+  scheduleProcessing();
 
-  recognition.onend = () => {
-    // continuous modeでも環境によって停止する場合がある — 自動再開
-    if (captureStream) {
-      try { recognition.start(); } catch (e) {}
-    }
-  };
-
-  recognition.start();
   return { success: true };
 }
 
+function createRecorder() {
+  if (!captureStream || !captureStream.active || isStopping) return;
+  audioChunks = [];
+  mediaRecorder = new MediaRecorder(captureStream, { mimeType: 'audio/webm;codecs=opus' });
+  mediaRecorder.ondataavailable = (event) => {
+    if (event.data.size > 0) {
+      audioChunks.push(event.data);
+    }
+  };
+  mediaRecorder.start();
+}
+
 function stopRecognition() {
-  if (recognition) {
-    recognition.onend = null; // 自動再開を防ぐ
-    recognition.abort();
-    recognition = null;
+  isStopping = true;
+
+  if (processTimer) {
+    clearTimeout(processTimer);
+    processTimer = null;
   }
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop();
+  }
+  mediaRecorder = null;
+  audioChunks = [];
   if (captureStream) {
     captureStream.getTracks().forEach(track => track.stop());
     captureStream = null;
@@ -100,22 +105,131 @@ function stopRecognition() {
     audioContext.close();
     audioContext = null;
   }
+  analyser = null;
+  isProcessing = false;
 }
 
-async function handleFinalText(text) {
-  let translated;
+function scheduleProcessing() {
+  const intervalMs = (settings.chunkInterval || 10) * 1000;
+  processTimer = setTimeout(async () => {
+    if (isStopping) return;
+    await processChunk();
+    if (!isStopping) {
+      scheduleProcessing();
+    }
+  }, intervalMs);
+}
 
-  if (settings.mode === 'partial') {
-    translated = await translatePartial(text, settings.partialN);
-  } else {
-    translated = await translateFull(text);
+function isSilent() {
+  if (!analyser) return true;
+  const dataArray = new Float32Array(analyser.fftSize);
+  analyser.getFloatTimeDomainData(dataArray);
+  let sum = 0;
+  for (let i = 0; i < dataArray.length; i++) {
+    sum += dataArray[i] * dataArray[i];
+  }
+  const rms = Math.sqrt(sum / dataArray.length);
+  return rms < SILENCE_THRESHOLD;
+}
+
+async function processChunk() {
+  if (isProcessing || isStopping || !mediaRecorder) return;
+  isProcessing = true;
+
+  try {
+    const silent = isSilent();
+
+    // stop()でondataavailableが発火し、完全なWebMファイルが得られる
+    const recorder = mediaRecorder;
+    mediaRecorder = null;
+
+    await new Promise(resolve => {
+      recorder.onstop = resolve;
+      recorder.stop();
+    });
+
+    if (isStopping) return;
+
+    if (silent) {
+      createRecorder();
+      return;
+    }
+
+    const chunks = audioChunks.splice(0);
+    createRecorder();
+
+    if (chunks.length === 0) return;
+
+    const audioBlob = new Blob(chunks, { type: 'audio/webm;codecs=opus' });
+    if (audioBlob.size < 1000) return;
+
+    const text = await transcribeWithWhisper(audioBlob);
+    if (isStopping || !text || text.trim() === '') return;
+
+    const translated = await translateText(text.trim());
+    if (isStopping) return;
+
+    let videoTime = null;
+    try {
+      const vtResponse = await chrome.runtime.sendMessage({ type: 'GET_VIDEO_TIME' });
+      videoTime = vtResponse?.currentTime;
+    } catch {}
+    const elapsed = videoTime != null
+      ? Math.round(videoTime)
+      : (captureStartTime ? Math.round((Date.now() - captureStartTime) / 1000) : null);
+
+    chrome.runtime.sendMessage({
+      type: 'TRANSLATION_RESULT',
+      original: text.trim(),
+      translated: translated,
+      elapsed
+    }).catch(() => {});
+  } catch (error) {
+    console.error('処理エラー:', error);
+    if (!mediaRecorder && !isStopping) {
+      createRecorder();
+    }
+  } finally {
+    isProcessing = false;
+  }
+}
+
+async function transcribeWithWhisper(audioBlob) {
+  if (!settings.openaiKey) return null;
+
+  const lang = settings.lang === 'en' ? 'en' : 'ko';
+
+  const formData = new FormData();
+  formData.append('file', audioBlob, 'audio.webm');
+  formData.append('model', 'whisper-1');
+  formData.append('language', lang);
+  if (settings.context) {
+    formData.append('prompt', settings.context);
   }
 
-  chrome.runtime.sendMessage({
-    type: 'TRANSLATION_RESULT',
-    original: text,
-    translated: translated
+  const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${settings.openaiKey}`
+    },
+    body: formData
   });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Whisper API error:', response.status, errorText);
+    return null;
+  }
+
+  const data = await response.json();
+  return data.text || null;
+}
+
+async function translateText(text) {
+  if (settings.mode === 'partial') {
+    return await translatePartial(text, settings.partialN);
+  }
+  return await translateFull(text);
 }
 
 async function translateFull(text) {
@@ -151,7 +265,6 @@ async function translatePartial(text, n) {
   const words = text.split(/\s+/).filter(w => w.length > 0);
   if (words.length === 0) return text;
 
-  // N単語ごとに1つの単語を翻訳対象として選ぶ
   const indicesToTranslate = [];
   for (let i = 0; i < words.length; i += n) {
     indicesToTranslate.push(i);
@@ -159,7 +272,6 @@ async function translatePartial(text, n) {
 
   if (indicesToTranslate.length === 0) return text;
 
-  // 翻訳対象の単語をまとめてDeepL APIに送る
   const wordsToTranslate = indicesToTranslate.map(i => words[i]);
   const sourceLang = settings.lang === 'en' ? 'EN' : 'KO';
 
@@ -184,7 +296,6 @@ async function translatePartial(text, n) {
   const data = await response.json();
   const translations = data.translations || [];
 
-  // 翻訳結果を原文に差し込む
   const result = [...words];
   indicesToTranslate.forEach((wordIndex, transIndex) => {
     if (translations[transIndex]?.text) {

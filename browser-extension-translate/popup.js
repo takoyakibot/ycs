@@ -6,9 +6,12 @@ const elements = {
   partialNValue: document.getElementById('partial-n-value'),
   startBtn: document.getElementById('start-btn'),
   status: document.getElementById('status'),
+  openaiKey: document.getElementById('openai-key'),
+  saveOpenaiKey: document.getElementById('save-openai-key'),
+  openaiKeyStatus: document.getElementById('openai-key-status'),
   deeplKey: document.getElementById('deepl-key'),
-  saveKey: document.getElementById('save-key'),
-  keyStatus: document.getElementById('key-status'),
+  saveDeeplKey: document.getElementById('save-deepl-key'),
+  deeplKeyStatus: document.getElementById('deepl-key-status'),
   log: document.getElementById('log')
 };
 
@@ -24,13 +27,24 @@ async function init() {
   updatePartialNLabel();
   updatePartialVisibility();
 
+  let hasOpenaiKey = false;
+  let hasDeeplKey = false;
+
+  if (saved.openaiKey) {
+    elements.openaiKey.placeholder = '設定済み';
+    elements.openaiKeyStatus.textContent = 'APIキー設定済み';
+    elements.openaiKeyStatus.style.color = '#2e7d32';
+    hasOpenaiKey = true;
+  }
+
   if (saved.deeplKey) {
     elements.deeplKey.placeholder = '設定済み';
-    elements.keyStatus.textContent = 'APIキー設定済み';
-    elements.keyStatus.style.color = '#2e7d32';
-    elements.startBtn.disabled = false;
-    elements.status.textContent = '開始ボタンを押してください';
+    elements.deeplKeyStatus.textContent = 'APIキー設定済み';
+    elements.deeplKeyStatus.style.color = '#2e7d32';
+    hasDeeplKey = true;
   }
+
+  updateStartButton(hasOpenaiKey, hasDeeplKey);
 
   const captureStatus = await chrome.runtime.sendMessage({ type: 'GET_CAPTURE_STATUS' });
   if (captureStatus?.isCapturing) {
@@ -50,14 +64,40 @@ async function init() {
     saveSettings();
   });
   elements.startBtn.addEventListener('click', toggleCapture);
-  elements.saveKey.addEventListener('click', saveDeeplKey);
+  elements.saveOpenaiKey.addEventListener('click', saveOpenaiKeyHandler);
+  elements.saveDeeplKey.addEventListener('click', saveDeeplKeyHandler);
+  document.getElementById('clear-log').addEventListener('click', async () => {
+    await chrome.storage.local.remove('translationResults');
+    elements.log.innerHTML = '';
+  });
 
-  // 翻訳結果を受信
+  const savedResults = await chrome.runtime.sendMessage({ type: 'GET_RESULTS' });
+  if (savedResults?.results?.length) {
+    for (const r of savedResults.results) {
+      appendLog(r.original, r.translated, r.elapsed);
+    }
+  }
+
   chrome.runtime.onMessage.addListener((message) => {
     if (message.type === 'TRANSLATION_RESULT') {
-      appendLog(message.original, message.translated);
+      appendLog(message.original, message.translated, message.elapsed);
     }
   });
+}
+
+function updateStartButton(hasOpenaiKey, hasDeeplKey) {
+  if (hasOpenaiKey && hasDeeplKey) {
+    elements.startBtn.disabled = false;
+    if (!isCapturing) {
+      elements.status.textContent = '開始ボタンを押してください';
+    }
+  } else {
+    elements.startBtn.disabled = true;
+    const missing = [];
+    if (!hasOpenaiKey) missing.push('OpenAI');
+    if (!hasDeeplKey) missing.push('DeepL');
+    elements.status.textContent = `${missing.join(' / ')} APIキーを設定してください`;
+  }
 }
 
 function updatePartialVisibility() {
@@ -72,16 +112,41 @@ function getSettings() {
   return {
     lang: elements.lang.value,
     mode: elements.mode.value,
-    partialN: parseInt(elements.partialN.value, 10),
-    deeplKey: '' // storageから取得するためここでは空
+    partialN: parseInt(elements.partialN.value, 10)
   };
 }
 
 async function getFullSettings() {
   const s = getSettings();
-  const result = await chrome.storage.local.get(['translateSettings']);
-  s.deeplKey = result.translateSettings?.deeplKey || '';
+  const result = await chrome.storage.local.get(['translateSettings', 'videoContexts']);
+  const saved = result.translateSettings || {};
+  s.openaiKey = saved.openaiKey || '';
+  s.deeplKey = saved.deeplKey || '';
+  s.chunkInterval = saved.chunkInterval || 10;
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tab?.url) {
+    const contexts = result.videoContexts || {};
+    const key = extractVideoKey(tab.url);
+    if (key && contexts[key]) s.context = contexts[key];
+  }
   return s;
+}
+
+function extractVideoKey(url) {
+  try {
+    const u = new URL(url);
+    if (u.hostname.includes('youtube.com')) {
+      const videoId = u.searchParams.get('v');
+      if (videoId) return `yt:${videoId}`;
+    }
+    if (u.hostname.includes('youtu.be')) {
+      const videoId = u.pathname.slice(1).split('/')[0];
+      if (videoId) return `yt:${videoId}`;
+    }
+    return u.origin + u.pathname;
+  } catch {
+    return null;
+  }
 }
 
 async function saveSettings() {
@@ -95,20 +160,40 @@ async function saveSettings() {
   };
   await chrome.storage.local.set({ translateSettings: updated });
 
-  // キャプチャ中なら設定をoffscreenにも転送
   if (isCapturing) {
     chrome.runtime.sendMessage({
       type: 'UPDATE_SETTINGS',
-      settings: { ...updated, deeplKey: updated.deeplKey || '' }
+      settings: { lang: updated.lang, mode: updated.mode, partialN: updated.partialN }
     });
   }
 }
 
-async function saveDeeplKey() {
+async function saveOpenaiKeyHandler() {
+  const key = elements.openaiKey.value.trim();
+  if (!key) {
+    elements.openaiKeyStatus.textContent = 'キーを入力してください';
+    elements.openaiKeyStatus.style.color = '#c62828';
+    return;
+  }
+
+  const current = await chrome.storage.local.get(['translateSettings']);
+  const saved = current.translateSettings || {};
+  saved.openaiKey = key;
+  await chrome.storage.local.set({ translateSettings: saved });
+
+  elements.openaiKey.value = '';
+  elements.openaiKey.placeholder = '設定済み';
+  elements.openaiKeyStatus.textContent = '保存しました';
+  elements.openaiKeyStatus.style.color = '#2e7d32';
+
+  updateStartButton(true, !!saved.deeplKey);
+}
+
+async function saveDeeplKeyHandler() {
   const key = elements.deeplKey.value.trim();
   if (!key) {
-    elements.keyStatus.textContent = 'キーを入力してください';
-    elements.keyStatus.style.color = '#c62828';
+    elements.deeplKeyStatus.textContent = 'キーを入力してください';
+    elements.deeplKeyStatus.style.color = '#c62828';
     return;
   }
 
@@ -119,10 +204,10 @@ async function saveDeeplKey() {
 
   elements.deeplKey.value = '';
   elements.deeplKey.placeholder = '設定済み';
-  elements.keyStatus.textContent = '保存しました';
-  elements.keyStatus.style.color = '#2e7d32';
-  elements.startBtn.disabled = false;
-  elements.status.textContent = '開始ボタンを押してください';
+  elements.deeplKeyStatus.textContent = '保存しました';
+  elements.deeplKeyStatus.style.color = '#2e7d32';
+
+  updateStartButton(!!saved.openaiKey, true);
 }
 
 async function toggleCapture() {
@@ -137,8 +222,8 @@ async function toggleCapture() {
       }
     } else {
       const fullSettings = await getFullSettings();
-      if (!fullSettings.deeplKey) {
-        elements.status.textContent = 'DeepL APIキーを設定してください';
+      if (!fullSettings.openaiKey || !fullSettings.deeplKey) {
+        elements.status.textContent = 'APIキーを設定してください';
         return;
       }
 
@@ -167,10 +252,18 @@ async function toggleCapture() {
   }
 }
 
-function appendLog(original, translated) {
+function formatElapsed(seconds) {
+  if (seconds == null) return '';
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function appendLog(original, translated, elapsed) {
   const entry = document.createElement('div');
   entry.className = 'log-entry';
-  entry.innerHTML = `<div class="log-original">${escapeHtml(original)}</div><div class="log-translated">${escapeHtml(translated)}</div>`;
+  const ts = elapsed != null ? `<span class="log-time">${formatElapsed(elapsed)}</span> ` : '';
+  entry.innerHTML = `<div class="log-original">${ts}${escapeHtml(original)}</div><div class="log-translated">${escapeHtml(translated)}</div>`;
   elements.log.appendChild(entry);
   elements.log.scrollTop = elements.log.scrollHeight;
 }

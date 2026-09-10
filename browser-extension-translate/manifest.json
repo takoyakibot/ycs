@@ -3,8 +3,8 @@
   "name": "Tab Audio Translator",
   "version": "0.1.0",
   "description": "タブの音声をリアルタイムで文字起こし・翻訳する",
-  "permissions": ["tabCapture", "offscreen", "activeTab", "storage"],
-  "host_permissions": ["https://api-free.deepl.com/*"],
+  "permissions": ["tabCapture", "offscreen", "activeTab", "storage", "sidePanel", "tabs", "scripting"],
+  "host_permissions": ["https://api-free.deepl.com/*", "https://api.openai.com/*"],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
@@ -15,6 +15,9 @@
   },
   "background": {
     "service_worker": "background.js"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
   },
   "icons": {
     "16": "icons/icon16.png",

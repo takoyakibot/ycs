@@ -1,4 +1,5 @@
 let isCapturing = false;
+let captureTabId = null;
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   switch (message.type) {
@@ -15,11 +16,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
 
     case 'TRANSLATION_RESULT':
-      // offscreenからの翻訳結果をそのまま中継（popupが受け取る）
+      saveTranslationResult(message).catch(() => {});
       break;
 
+    case 'GET_RESULTS':
+      chrome.storage.local.get(['translationResults']).then(data => {
+        sendResponse({ results: data.translationResults || [] });
+      });
+      return true;
+
     case 'UPDATE_SETTINGS':
-      // offscreenに設定を転送
       chrome.runtime.sendMessage({
         type: 'UPDATE_SETTINGS_TO_OFFSCREEN',
         settings: message.settings
@@ -28,7 +34,30 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
 
     case 'GET_CAPTURE_STATUS':
-      sendResponse({ isCapturing });
+      hasOffscreenDocument().then(hasDoc => {
+        const capturing = isCapturing && hasDoc;
+        if (isCapturing && !hasDoc) {
+          isCapturing = false;
+          captureTabId = null;
+        }
+        sendResponse({ isCapturing: capturing });
+      });
+      return true;
+
+    case 'GET_VIDEO_TIME':
+      if (captureTabId) {
+        chrome.scripting.executeScript({
+          target: { tabId: captureTabId },
+          func: () => {
+            const video = document.querySelector('video');
+            return video ? video.currentTime : null;
+          }
+        }).then(results => {
+          sendResponse({ currentTime: results?.[0]?.result ?? null });
+        }).catch(() => sendResponse({ currentTime: null }));
+      } else {
+        sendResponse({ currentTime: null });
+      }
       return true;
   }
 });
@@ -68,7 +97,25 @@ async function startCapture(settings) {
 
   await ensureOffscreenDocument();
 
-  const streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id });
+  let streamId;
+  try {
+    streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id });
+  } catch (error) {
+    if (error.message?.includes('active stream')) {
+      try {
+        await stopCapture();
+        await ensureOffscreenDocument();
+        streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id });
+      } catch (retryError) {
+        await closeOffscreenDocument();
+        throw retryError;
+      }
+    } else {
+      await closeOffscreenDocument();
+      throw error;
+    }
+  }
+
   if (!streamId) {
     await closeOffscreenDocument();
     return { success: false, error: 'Stream IDを取得できませんでした' };
@@ -86,6 +133,7 @@ async function startCapture(settings) {
   }
 
   isCapturing = true;
+  captureTabId = tab.id;
   return { success: true };
 }
 
@@ -93,10 +141,29 @@ async function stopCapture() {
   await chrome.runtime.sendMessage({ type: 'STOP_RECOGNITION' }).catch(() => {});
   await closeOffscreenDocument();
   isCapturing = false;
+  captureTabId = null;
   return { success: true };
 }
 
-// インストール・更新時のみクリーンアップ（Service Worker再起動時には実行しない）
+const MAX_RESULTS = 500;
+
+async function saveTranslationResult(message) {
+  const data = await chrome.storage.local.get(['translationResults']);
+  const results = data.translationResults || [];
+  results.push({
+    original: message.original,
+    translated: message.translated,
+    elapsed: message.elapsed ?? null,
+    timestamp: Date.now()
+  });
+  if (results.length > MAX_RESULTS) {
+    results.splice(0, results.length - MAX_RESULTS);
+  }
+  await chrome.storage.local.set({ translationResults: results });
+}
+
+chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
+
 chrome.runtime.onInstalled.addListener(async () => {
   if (await hasOffscreenDocument()) {
     await chrome.offscreen.closeDocument();
