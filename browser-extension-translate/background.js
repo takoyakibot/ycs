@@ -96,10 +96,10 @@ async function stopCapture() {
   return { success: true };
 }
 
-// Service Worker起動時にクリーンアップ
-(async () => {
+// インストール・更新時のみクリーンアップ（Service Worker再起動時には実行しない）
+chrome.runtime.onInstalled.addListener(async () => {
   if (await hasOffscreenDocument()) {
     await chrome.offscreen.closeDocument();
   }
   isCapturing = false;
-})();
+});

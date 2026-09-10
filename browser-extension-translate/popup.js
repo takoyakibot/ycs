@@ -126,39 +126,44 @@ async function saveDeeplKey() {
 }
 
 async function toggleCapture() {
-  if (isCapturing) {
-    const result = await chrome.runtime.sendMessage({ type: 'STOP_CAPTURE' });
-    if (result.success) {
-      isCapturing = false;
-      elements.startBtn.textContent = '開始';
-      elements.startBtn.classList.remove('capturing');
-      elements.status.textContent = '停止しました';
-    }
-  } else {
-    const fullSettings = await getFullSettings();
-    if (!fullSettings.deeplKey) {
-      elements.status.textContent = 'DeepL APIキーを設定してください';
-      return;
-    }
-
-    elements.startBtn.disabled = true;
-    elements.status.textContent = '開始中...';
-
-    const result = await chrome.runtime.sendMessage({
-      type: 'START_CAPTURE',
-      settings: fullSettings
-    });
-
-    elements.startBtn.disabled = false;
-
-    if (result.success) {
-      isCapturing = true;
-      elements.startBtn.textContent = '停止';
-      elements.startBtn.classList.add('capturing');
-      elements.status.textContent = '音声を認識中...';
+  try {
+    if (isCapturing) {
+      const result = await chrome.runtime.sendMessage({ type: 'STOP_CAPTURE' });
+      if (result.success) {
+        isCapturing = false;
+        elements.startBtn.textContent = '開始';
+        elements.startBtn.classList.remove('capturing');
+        elements.status.textContent = '停止しました';
+      }
     } else {
-      elements.status.textContent = `エラー: ${result.error}`;
+      const fullSettings = await getFullSettings();
+      if (!fullSettings.deeplKey) {
+        elements.status.textContent = 'DeepL APIキーを設定してください';
+        return;
+      }
+
+      elements.startBtn.disabled = true;
+      elements.status.textContent = '開始中...';
+
+      const result = await chrome.runtime.sendMessage({
+        type: 'START_CAPTURE',
+        settings: fullSettings
+      });
+
+      elements.startBtn.disabled = false;
+
+      if (result.success) {
+        isCapturing = true;
+        elements.startBtn.textContent = '停止';
+        elements.startBtn.classList.add('capturing');
+        elements.status.textContent = '音声を認識中...';
+      } else {
+        elements.status.textContent = `エラー: ${result.error}`;
+      }
     }
+  } catch (error) {
+    elements.startBtn.disabled = false;
+    elements.status.textContent = `エラー: ${error.message}`;
   }
 }
 

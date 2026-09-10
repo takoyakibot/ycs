@@ -26,6 +26,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (message.settings) Object.assign(settings, message.settings);
       if (recognition) {
         recognition.lang = settings.lang === 'en' ? 'en-US' : 'ko';
+        recognition.stop(); // onendで新しいlangで自動再開される
       }
       sendResponse({ success: true });
       return true;
