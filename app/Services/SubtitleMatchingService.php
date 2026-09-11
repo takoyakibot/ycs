@@ -192,7 +192,10 @@ class SubtitleMatchingService
 
         $results = collect();
 
+        $displayTsItemIds = TsItem::where('is_display', '1')->select('id');
+
         SubtitleFingerprint::whereIn('video_id', $videoIds)
+            ->whereIn('ts_item_id', $displayTsItemIds)
             ->when($excludeTsItemId, fn ($q) => $q->where('ts_item_id', '!=', $excludeTsItemId))
             ->where('duration_sec', $durationSec)
             ->chunkById(500, function ($chunk) use ($targetTrigrams, $threshold, &$results) {
@@ -218,7 +221,10 @@ class SubtitleMatchingService
     {
         $results = collect();
 
+        $displayTsItemIds = TsItem::where('is_display', '1')->select('id');
+
         $query = SubtitleFingerprint::query()
+            ->whereIn('ts_item_id', $displayTsItemIds)
             ->when($excludeTsItemId, fn ($q) => $q->where('ts_item_id', '!=', $excludeTsItemId))
             ->where('duration_sec', $durationSec);
         if (! empty($excludeTsItemIds)) {
