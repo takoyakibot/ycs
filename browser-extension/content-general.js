@@ -409,6 +409,8 @@
     }
   }
 
+  const INNERTUBE_API_KEY = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
+
   function parseJson3(data) {
     const segments = [];
     for (const ev of (data.events || [])) {
@@ -447,7 +449,7 @@
   }
 
   async function getCaptionTracksViaInnerTube(videoId) {
-    const response = await fetch('https://www.youtube.com/youtubei/v1/player?prettyPrint=false', {
+    const response = await fetch(`https://www.youtube.com/youtubei/v1/player?key=${INNERTUBE_API_KEY}&prettyPrint=false`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -455,7 +457,7 @@
         context: {
           client: {
             clientName: 'WEB',
-            clientVersion: '2.20260912.00.00',
+            clientVersion: '2.20250911.01.00',
             hl: document.documentElement.lang || 'ja',
           },
         },

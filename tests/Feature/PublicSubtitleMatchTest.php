@@ -154,6 +154,37 @@ class PublicSubtitleMatchTest extends TestCase
         $response->assertStatus(200);
     }
 
+    public function test_validates_threshold(): void
+    {
+        $response = $this->postJson('/api/public/subtitle-matches', [
+            'subtitle_text' => self::LYRICS_TEXT,
+            'threshold' => 0,
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors('threshold');
+
+        $response = $this->postJson('/api/public/subtitle-matches', [
+            'subtitle_text' => self::LYRICS_TEXT,
+            'threshold' => 1.5,
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors('threshold');
+    }
+
+    public function test_accepts_custom_threshold(): void
+    {
+        $this->createMappedFingerprint();
+
+        $response = $this->postJson('/api/public/subtitle-matches', [
+            'subtitle_text' => self::LYRICS_TEXT,
+            'threshold' => 0.05,
+        ]);
+
+        $response->assertStatus(200);
+    }
+
     public function test_normalizes_text_server_side(): void
     {
         $song = $this->createMappedFingerprint();

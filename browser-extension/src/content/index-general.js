@@ -1,5 +1,5 @@
 import state from './state.js';
-import { isWatchPage, findVideoElement, loadGraphHeightSettings, loadEmbeddedUISettings, getVideoId, updateVideoDuration } from './utils.js';
+import { isWatchPage, findVideoElement, loadGraphHeightSettings, loadEmbeddedUISettings, getVideoId } from './utils.js';
 import { createEmbeddedTriggerButton, showEmbeddedUI, hideEmbeddedUI, hideVolumeGraphPanel } from './ui.js';
 import { createVolumeGraph, insertVolumeGraph, drawVolumeGraph, resizeCanvas } from './volume-graph.js';
 import { loadVolumeData, stopDirectScan, startDirectScan, saveVolumeData } from './audio.js';
