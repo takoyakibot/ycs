@@ -49,9 +49,14 @@ class QueryHelper
             return [];
         }
 
-        $result = preg_split('/\s+|\x{3000}+/u', $trimmed, -1, PREG_SPLIT_NO_EMPTY);
+        // ダブルクォートで囲まれたフレーズをひとかたまりとして扱う
+        // 除外プレフィックス(-"...")にも対応
+        $pattern = '/[-－−]?"[^"]+"|[^\s\x{3000}]+/u';
+        if (preg_match_all($pattern, $trimmed, $matches) === false) {
+            return [];
+        }
 
-        return $result === false ? [] : $result;
+        return $matches[0];
     }
 
     /**
@@ -184,17 +189,27 @@ class QueryHelper
     }
 
     /**
-     * キーワードが除外指定（-プレフィックス）かどうかを判定し、検索語を返す
+     * キーワードが除外指定（-プレフィックス）や完全一致指定（"..."）かどうかを判定し、検索語を返す
      *
-     * @return array{term: string, exclude: bool}
+     * @return array{term: string, exclude: bool, exact: bool}
      */
     public static function parseSearchTerm(string $keyword): array
     {
-        if (preg_match('/^[-－−]/u', $keyword) && mb_strlen($keyword) > 1) {
-            return ['term' => mb_substr($keyword, 1), 'exclude' => true];
+        $term = $keyword;
+        $exclude = false;
+
+        if (preg_match('/^[-－−]/u', $term) && mb_strlen($term) > 1) {
+            $exclude = true;
+            $term = mb_substr($term, 1);
         }
 
-        return ['term' => $keyword, 'exclude' => false];
+        $exact = false;
+        if (preg_match('/^"(.+)"$/u', $term, $matches)) {
+            $exact = true;
+            $term = $matches[1];
+        }
+
+        return ['term' => $term, 'exclude' => $exclude, 'exact' => $exact];
     }
 
     /**
@@ -213,12 +228,12 @@ class QueryHelper
         $keywords = self::splitSearchKeywords($search);
 
         foreach ($keywords as $keyword) {
-            ['term' => $term, 'exclude' => $exclude] = self::parseSearchTerm($keyword);
-            $escaped = self::escapeLikeString($term);
-            if ($exclude) {
-                $query->where($column, 'not like', "%{$escaped}%");
+            ['term' => $term, 'exclude' => $exclude, 'exact' => $exact] = self::parseSearchTerm($keyword);
+            if ($exact) {
+                $query->where($column, $exclude ? '!=' : '=', $term);
             } else {
-                $query->where($column, 'like', "%{$escaped}%");
+                $escaped = self::escapeLikeString($term);
+                $query->where($column, $exclude ? 'not like' : 'like', "%{$escaped}%");
             }
         }
 
@@ -277,16 +292,24 @@ class QueryHelper
         }
 
         foreach ($keywords as $keyword) {
-            ['term' => $term, 'exclude' => $exclude] = self::parseSearchTerm($keyword);
-            $escaped = self::escapeLikeString($term);
-            $query->where(function ($q) use ($escaped, $columns, $exclude) {
+            ['term' => $term, 'exclude' => $exclude, 'exact' => $exact] = self::parseSearchTerm($keyword);
+            $escaped = $exact ? null : self::escapeLikeString($term);
+            $query->where(function ($q) use ($term, $escaped, $columns, $exclude, $exact) {
                 if ($exclude) {
                     foreach ($columns as $column) {
-                        $q->where($column, 'not like', "%{$escaped}%");
+                        if ($exact) {
+                            $q->where($column, '!=', $term);
+                        } else {
+                            $q->where($column, 'not like', "%{$escaped}%");
+                        }
                     }
                 } else {
                     foreach ($columns as $column) {
-                        $q->orWhere($column, 'like', "%{$escaped}%");
+                        if ($exact) {
+                            $q->orWhere($column, '=', $term);
+                        } else {
+                            $q->orWhere($column, 'like', "%{$escaped}%");
+                        }
                     }
                 }
             });

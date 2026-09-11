@@ -140,13 +140,13 @@ class TimestampService
         if ($search) {
             $keywords = QueryHelper::splitSearchKeywords($search);
             foreach ($keywords as $keyword) {
-                ['term' => $term, 'exclude' => $exclude] = QueryHelper::parseSearchTerm($keyword);
+                ['term' => $term, 'exclude' => $exclude, 'exact' => $exact] = QueryHelper::parseSearchTerm($keyword);
                 $normalizedKeyword = TextNormalizer::normalize($term);
-                $escaped = QueryHelper::escapeLikeString($normalizedKeyword);
-                if ($exclude) {
-                    $query->where('ts_items.normalized_text', 'not like', "%{$escaped}%");
+                if ($exact) {
+                    $query->where('ts_items.normalized_text', $exclude ? '!=' : '=', $normalizedKeyword);
                 } else {
-                    $query->where('ts_items.normalized_text', 'like', "%{$escaped}%");
+                    $escaped = QueryHelper::escapeLikeString($normalizedKeyword);
+                    $query->where('ts_items.normalized_text', $exclude ? 'not like' : 'like', "%{$escaped}%");
                 }
             }
         }

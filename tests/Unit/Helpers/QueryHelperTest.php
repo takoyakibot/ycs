@@ -255,11 +255,38 @@ class QueryHelperTest extends TestCase
         $this->assertEquals(['-a', '-b'], QueryHelper::splitSearchKeywords('-a -b'));
     }
 
+    public function test_split_search_keywords_quoted_phrase(): void
+    {
+        $this->assertEquals(['"hello world"'], QueryHelper::splitSearchKeywords('"hello world"'));
+        $this->assertEquals(['"hello world"', 'test'], QueryHelper::splitSearchKeywords('"hello world" test'));
+        $this->assertEquals(['foo', '"hello world"'], QueryHelper::splitSearchKeywords('foo "hello world"'));
+        $this->assertEquals(['"a b"', '"c d"'], QueryHelper::splitSearchKeywords('"a b" "c d"'));
+    }
+
+    public function test_split_search_keywords_quoted_phrase_with_exclude(): void
+    {
+        $this->assertEquals(['-"hello world"'], QueryHelper::splitSearchKeywords('-"hello world"'));
+        $this->assertEquals(['foo', '-"bar baz"'], QueryHelper::splitSearchKeywords('foo -"bar baz"'));
+    }
+
+    public function test_split_search_keywords_unclosed_quote(): void
+    {
+        // 閉じクォートがない場合は通常のトークンとして分割
+        $this->assertEquals(['"hello', 'world'], QueryHelper::splitSearchKeywords('"hello world'));
+    }
+
+    public function test_split_search_keywords_quoted_japanese(): void
+    {
+        $this->assertEquals(['"夜に駆ける"'], QueryHelper::splitSearchKeywords('"夜に駆ける"'));
+        $this->assertEquals(['"夜に駆ける"', 'YOASOBI'], QueryHelper::splitSearchKeywords('"夜に駆ける" YOASOBI'));
+    }
+
     public function test_parse_search_term_inclusion(): void
     {
         $result = QueryHelper::parseSearchTerm('keyword');
         $this->assertEquals('keyword', $result['term']);
         $this->assertFalse($result['exclude']);
+        $this->assertFalse($result['exact']);
     }
 
     public function test_parse_search_term_exclusion(): void
@@ -267,6 +294,7 @@ class QueryHelperTest extends TestCase
         $result = QueryHelper::parseSearchTerm('-keyword');
         $this->assertEquals('keyword', $result['term']);
         $this->assertTrue($result['exclude']);
+        $this->assertFalse($result['exact']);
     }
 
     public function test_parse_search_term_lone_minus_is_not_exclusion(): void
@@ -274,6 +302,7 @@ class QueryHelperTest extends TestCase
         $result = QueryHelper::parseSearchTerm('-');
         $this->assertEquals('-', $result['term']);
         $this->assertFalse($result['exclude']);
+        $this->assertFalse($result['exact']);
     }
 
     public function test_parse_search_term_japanese_exclusion(): void
@@ -281,6 +310,7 @@ class QueryHelperTest extends TestCase
         $result = QueryHelper::parseSearchTerm('-アーティスト');
         $this->assertEquals('アーティスト', $result['term']);
         $this->assertTrue($result['exclude']);
+        $this->assertFalse($result['exact']);
     }
 
     public function test_parse_search_term_fullwidth_minus_exclusion(): void
@@ -289,11 +319,13 @@ class QueryHelperTest extends TestCase
         $result = QueryHelper::parseSearchTerm('－keyword');
         $this->assertEquals('keyword', $result['term']);
         $this->assertTrue($result['exclude']);
+        $this->assertFalse($result['exact']);
 
         // マイナス記号（U+2212）
         $result = QueryHelper::parseSearchTerm('−keyword');
         $this->assertEquals('keyword', $result['term']);
         $this->assertTrue($result['exclude']);
+        $this->assertFalse($result['exact']);
     }
 
     public function test_parse_search_term_lone_fullwidth_minus_is_not_exclusion(): void
@@ -301,6 +333,45 @@ class QueryHelperTest extends TestCase
         $result = QueryHelper::parseSearchTerm('－');
         $this->assertEquals('－', $result['term']);
         $this->assertFalse($result['exclude']);
+        $this->assertFalse($result['exact']);
+    }
+
+    public function test_parse_search_term_exact_match(): void
+    {
+        $result = QueryHelper::parseSearchTerm('"keyword"');
+        $this->assertEquals('keyword', $result['term']);
+        $this->assertFalse($result['exclude']);
+        $this->assertTrue($result['exact']);
+    }
+
+    public function test_parse_search_term_exact_match_with_exclude(): void
+    {
+        $result = QueryHelper::parseSearchTerm('-"keyword"');
+        $this->assertEquals('keyword', $result['term']);
+        $this->assertTrue($result['exclude']);
+        $this->assertTrue($result['exact']);
+    }
+
+    public function test_parse_search_term_exact_match_japanese(): void
+    {
+        $result = QueryHelper::parseSearchTerm('"夜に駆ける"');
+        $this->assertEquals('夜に駆ける', $result['term']);
+        $this->assertFalse($result['exclude']);
+        $this->assertTrue($result['exact']);
+    }
+
+    public function test_parse_search_term_unclosed_quote_is_not_exact(): void
+    {
+        $result = QueryHelper::parseSearchTerm('"keyword');
+        $this->assertEquals('"keyword', $result['term']);
+        $this->assertFalse($result['exact']);
+    }
+
+    public function test_parse_search_term_empty_quotes_is_not_exact(): void
+    {
+        $result = QueryHelper::parseSearchTerm('""');
+        $this->assertEquals('""', $result['term']);
+        $this->assertFalse($result['exact']);
     }
 
     /**
