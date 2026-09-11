@@ -500,10 +500,13 @@ class SongController extends Controller
             $rawKeywords = QueryHelper::splitSearchKeywords($search);
             $exclusions = [];
             $positiveRawTerms = [];
+            $positiveExactTerms = [];
             foreach ($rawKeywords as $kw) {
                 $parsed = QueryHelper::parseSearchTerm($kw);
                 if ($parsed['exclude']) {
                     $exclusions[] = $parsed;
+                } elseif ($parsed['exact']) {
+                    $positiveExactTerms[] = $parsed['term'];
                 } else {
                     $positiveRawTerms[] = $kw;
                 }
@@ -511,26 +514,35 @@ class SongController extends Controller
 
             $positiveSearch = implode(' ', $positiveRawTerms);
 
-            if ($positiveSearch !== '') {
-                $query->where(function ($outer) use ($positiveSearch, $searchMode) {
-                    $outer->where(function ($q) use ($positiveSearch, $searchMode) {
-                        $keywords = $searchMode === self::SEARCH_MODE_EXACT
-                            ? []
-                            : QueryHelper::splitFuzzyKeywords($positiveSearch);
-
-                        if ($searchMode === self::SEARCH_MODE_EXACT || $keywords === []) {
-                            QueryHelper::applyAndSearchAny($q, $positiveSearch, ['title', 'artist']);
-                        } else {
-                            QueryHelper::applyFuzzySearch($q, $positiveSearch, ['normalized_title', 'normalized_artist']);
+            if ($positiveSearch !== '' || $positiveExactTerms !== []) {
+                $query->where(function ($outer) use ($positiveSearch, $positiveExactTerms, $searchMode) {
+                    $outer->where(function ($q) use ($positiveSearch, $positiveExactTerms, $searchMode) {
+                        foreach ($positiveExactTerms as $exactTerm) {
+                            $q->where(function ($sub) use ($exactTerm) {
+                                $sub->where('title', '=', $exactTerm)
+                                    ->orWhere('artist', '=', $exactTerm);
+                            });
                         }
-                    })->orWhereHas('tags', function ($q) use ($positiveSearch) {
-                        $terms = QueryHelper::splitSearchKeywords($positiveSearch);
-                        foreach ($terms as $term) {
-                            $parsed = QueryHelper::parseSearchTerm($term);
-                            if ($parsed['exact']) {
-                                $q->where('value', '=', $parsed['term']);
+
+                        if ($positiveSearch !== '') {
+                            $keywords = $searchMode === self::SEARCH_MODE_EXACT
+                                ? []
+                                : QueryHelper::splitFuzzyKeywords($positiveSearch);
+
+                            if ($searchMode === self::SEARCH_MODE_EXACT || $keywords === []) {
+                                QueryHelper::applyAndSearchAny($q, $positiveSearch, ['title', 'artist']);
                             } else {
-                                $escaped = QueryHelper::escapeLikeString($parsed['term']);
+                                QueryHelper::applyFuzzySearch($q, $positiveSearch, ['normalized_title', 'normalized_artist']);
+                            }
+                        }
+                    })->orWhereHas('tags', function ($q) use ($positiveSearch, $positiveExactTerms) {
+                        foreach ($positiveExactTerms as $exactTerm) {
+                            $q->where('value', '=', $exactTerm);
+                        }
+                        if ($positiveSearch !== '') {
+                            $terms = QueryHelper::splitSearchKeywords($positiveSearch);
+                            foreach ($terms as $term) {
+                                $escaped = QueryHelper::escapeLikeString($term);
                                 $q->where('value', 'like', "%{$escaped}%");
                             }
                         }

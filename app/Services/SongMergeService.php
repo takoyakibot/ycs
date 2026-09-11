@@ -30,10 +30,13 @@ class SongMergeService
         $rawKeywords = QueryHelper::splitSearchKeywords($search);
         $exclusions = [];
         $positiveRawTerms = [];
+        $positiveExactTerms = [];
         foreach ($rawKeywords as $kw) {
             $parsed = QueryHelper::parseSearchTerm($kw);
             if ($parsed['exclude']) {
                 $exclusions[] = $parsed;
+            } elseif ($parsed['exact']) {
+                $positiveExactTerms[] = $parsed['term'];
             } else {
                 $positiveRawTerms[] = $kw;
             }
@@ -42,6 +45,13 @@ class SongMergeService
         $positiveSearch = implode(' ', $positiveRawTerms);
 
         $query = Song::query();
+
+        foreach ($positiveExactTerms as $exactTerm) {
+            $query->where(function ($q) use ($exactTerm) {
+                $q->where('title', '=', $exactTerm)
+                    ->orWhere('artist', '=', $exactTerm);
+            });
+        }
 
         if ($positiveSearch !== '') {
             $keywords = QueryHelper::splitFuzzyKeywords($positiveSearch);
@@ -67,7 +77,7 @@ class SongMergeService
             }
         }
 
-        if ($positiveSearch === '' && $exclusions === []) {
+        if ($positiveSearch === '' && $positiveExactTerms === [] && $exclusions === []) {
             return [];
         }
 
