@@ -19,6 +19,7 @@ let settings = {
 const SILENCE_THRESHOLD = 0.01;
 let chunkSeq = 0;
 let nextSendSeq = 0;
+let sessionId = 0;
 const pendingResults = new Map();
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -112,6 +113,7 @@ function stopRecognition() {
   isProcessing = false;
   chunkSeq = 0;
   nextSendSeq = 0;
+  sessionId++;
   pendingResults.clear();
 }
 
@@ -142,6 +144,7 @@ async function processChunk() {
   if (isProcessing || isStopping || !mediaRecorder) return;
   isProcessing = true;
 
+  let asyncWork = null;
   try {
     const silent = isSilent();
 
@@ -170,6 +173,7 @@ async function processChunk() {
     if (audioBlob.size < 1000) return;
 
     const seq = chunkSeq++;
+    const currentSessionId = sessionId;
     let videoTime = null;
     try {
       const vtResponse = await chrome.runtime.sendMessage({ type: 'GET_VIDEO_TIME' });
@@ -179,35 +183,42 @@ async function processChunk() {
       ? Math.round(videoTime)
       : (captureStartTime ? Math.round((Date.now() - captureStartTime) / 1000) : null);
 
-    isProcessing = false;
-    processChunkAsync(seq, audioBlob, elapsed);
+    asyncWork = { seq, audioBlob, elapsed, sessionId: currentSessionId };
   } catch (error) {
     console.error('処理エラー:', error);
     if (!mediaRecorder && !isStopping) {
       createRecorder();
     }
+  } finally {
     isProcessing = false;
+  }
+
+  if (asyncWork) {
+    processChunkAsync(asyncWork.seq, asyncWork.audioBlob, asyncWork.elapsed, asyncWork.sessionId);
   }
 }
 
-async function processChunkAsync(seq, audioBlob, elapsed) {
+async function processChunkAsync(seq, audioBlob, elapsed, mySessionId) {
   try {
+    if (mySessionId !== sessionId) return;
+
     const text = await transcribeWithWhisper(audioBlob);
-    if (isStopping) { skipSeq(seq); return; }
-    if (!text || text.trim() === '') { skipSeq(seq); return; }
+    if (mySessionId !== sessionId || isStopping) return;
+    if (!text || text.trim() === '') { skipSeq(seq, mySessionId); return; }
 
     const translated = await translateText(text.trim());
-    if (isStopping) { skipSeq(seq); return; }
+    if (mySessionId !== sessionId || isStopping) return;
 
     pendingResults.set(seq, { original: text.trim(), translated, elapsed });
     flushPendingResults();
   } catch (error) {
     console.error('非同期処理エラー:', error);
-    skipSeq(seq);
+    skipSeq(seq, mySessionId);
   }
 }
 
-function skipSeq(seq) {
+function skipSeq(seq, mySessionId) {
+  if (mySessionId !== sessionId) return;
   pendingResults.set(seq, null);
   flushPendingResults();
 }
@@ -273,12 +284,15 @@ async function translateText(text) {
   return await translateFull(text);
 }
 
+const MAX_RETRY_DELAY_SEC = 10;
+
 async function fetchWithRetry(url, options, maxRetries = 2) {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     const response = await fetch(url, options);
     if (response.status === 429 && attempt < maxRetries) {
-      const retryAfter = parseInt(response.headers.get('Retry-After') || '0', 10);
-      await new Promise(r => setTimeout(r, Math.max(retryAfter, 1) * 1000));
+      const raw = parseInt(response.headers.get('Retry-After') || '0', 10);
+      const delaySec = Math.min(Math.max(isNaN(raw) ? 1 : raw, 1), MAX_RETRY_DELAY_SEC);
+      await new Promise(r => setTimeout(r, delaySec * 1000));
       continue;
     }
     return response;
