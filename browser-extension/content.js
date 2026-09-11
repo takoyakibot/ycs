@@ -7107,10 +7107,12 @@
       }
     </style>
     <button class="ycs-btn" id="ycs-trigger-btn" title="タイムスタンプ検出グラフを表示/非表示">YCS</button>
+    ${state.edition !== 'general' ? `
     <button class="ycs-btn" id="ycs-list-btn" title="リストスキャンパネルを開く">☰</button>
     <button class="ycs-btn" id="ycs-chat-btn" title="チャット検索パネルを開く">💬</button>
     <button class="ycs-btn" id="ycs-subtitle-btn" title="字幕取得パネルを開く">📝</button>
     <button class="ycs-btn" id="ycs-highlight-btn" title="ハイライト検出パネルを開く">✨</button>
+    ` : ''}
   `;
 
     document.body.appendChild(buttonContainer);
@@ -7121,25 +7123,27 @@
       toggleEmbeddedUI();
     });
 
-    // リストボタンのイベント
-    buttonContainer.querySelector('#ycs-list-btn').addEventListener('click', () => {
-      toggleListScanPanel();
-    });
+    if (state.edition !== 'general') {
+      // リストボタンのイベント
+      buttonContainer.querySelector('#ycs-list-btn')?.addEventListener('click', () => {
+        toggleListScanPanel();
+      });
 
-    // チャット検索ボタンのイベント
-    buttonContainer.querySelector('#ycs-chat-btn').addEventListener('click', () => {
-      toggleChatSearchPanel();
-    });
+      // チャット検索ボタンのイベント
+      buttonContainer.querySelector('#ycs-chat-btn')?.addEventListener('click', () => {
+        toggleChatSearchPanel();
+      });
 
-    // 字幕取得ボタンのイベント
-    buttonContainer.querySelector('#ycs-subtitle-btn').addEventListener('click', () => {
-      toggleSubtitlePanel();
-    });
+      // 字幕取得ボタンのイベント
+      buttonContainer.querySelector('#ycs-subtitle-btn')?.addEventListener('click', () => {
+        toggleSubtitlePanel();
+      });
 
-    // ハイライト検出ボタンのイベント
-    buttonContainer.querySelector('#ycs-highlight-btn').addEventListener('click', () => {
-      toggleHighlightPanel();
-    });
+      // ハイライト検出ボタンのイベント
+      buttonContainer.querySelector('#ycs-highlight-btn')?.addEventListener('click', () => {
+        toggleHighlightPanel();
+      });
+    }
 
     updateTriggerButtonState();
   }
@@ -7171,28 +7175,30 @@
       }
     }
 
-    const listBtn = state.embeddedTriggerButton.querySelector('#ycs-list-btn');
-    if (listBtn) {
-      if (isListScanPanelVisible()) {
-        listBtn.classList.add('active');
-      } else {
-        listBtn.classList.remove('active');
+    if (state.edition !== 'general') {
+      const listBtn = state.embeddedTriggerButton.querySelector('#ycs-list-btn');
+      if (listBtn) {
+        if (isListScanPanelVisible()) {
+          listBtn.classList.add('active');
+        } else {
+          listBtn.classList.remove('active');
+        }
       }
-    }
 
-    const chatBtn = state.embeddedTriggerButton.querySelector('#ycs-chat-btn');
-    if (chatBtn) {
-      chatBtn.classList.toggle('active', isChatSearchPanelVisible());
-    }
+      const chatBtn = state.embeddedTriggerButton.querySelector('#ycs-chat-btn');
+      if (chatBtn) {
+        chatBtn.classList.toggle('active', isChatSearchPanelVisible());
+      }
 
-    const subtitleBtn = state.embeddedTriggerButton.querySelector('#ycs-subtitle-btn');
-    if (subtitleBtn) {
-      subtitleBtn.classList.toggle('active', isSubtitlePanelVisible());
-    }
+      const subtitleBtn = state.embeddedTriggerButton.querySelector('#ycs-subtitle-btn');
+      if (subtitleBtn) {
+        subtitleBtn.classList.toggle('active', isSubtitlePanelVisible());
+      }
 
-    const highlightBtn = state.embeddedTriggerButton.querySelector('#ycs-highlight-btn');
-    if (highlightBtn) {
-      highlightBtn.classList.toggle('active', isHighlightPanelVisible());
+      const highlightBtn = state.embeddedTriggerButton.querySelector('#ycs-highlight-btn');
+      if (highlightBtn) {
+        highlightBtn.classList.toggle('active', isHighlightPanelVisible());
+      }
     }
   }
 

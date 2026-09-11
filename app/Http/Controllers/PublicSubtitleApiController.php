@@ -24,10 +24,14 @@ class PublicSubtitleApiController extends Controller
         $validated = $request->validate([
             'subtitle_text' => ['required', 'string', 'max:2000'],
             'duration_sec' => ['sometimes', 'integer', 'in:60'],
+            'threshold' => ['sometimes', 'numeric', 'between:0.01,1'],
         ]);
 
         $text = $validated['subtitle_text'];
         $durationSec = $validated['duration_sec'] ?? SubtitleFingerprintService::WINDOW_DURATION_SEC;
+        $threshold = isset($validated['threshold'])
+            ? (float) $validated['threshold']
+            : SubtitleMatchingService::DEFAULT_THRESHOLD;
 
         $normalized = SubtitleFingerprintService::normalizeForFingerprint($text);
         $trigrams = SubtitleFingerprintService::generateTrigrams($normalized);
@@ -44,6 +48,7 @@ class PublicSubtitleApiController extends Controller
             $candidates = $this->matchingService->getCandidateSongsForTrigrams(
                 $trigrams,
                 $durationSec,
+                $threshold,
             );
 
             $filtered = array_map(fn ($c) => [
