@@ -6798,6 +6798,11 @@ function updateTimestampList() {
   listEl.querySelectorAll('.vdg-ts-row').forEach(row => {
     row.addEventListener('click', (e) => {
       if (e.target.classList.contains('vdg-ts-text-input') || e.target.classList.contains('vdg-ts-offset-btn') || e.target.classList.contains('vdg-ts-suggest-btn')) return;
+      // テキスト入力中にドラッグ選択してテキストボックス外でmouseupした場合、
+      // clickイベントが行要素に発火する。入力中のinputが存在する場合はスキップして
+      // DOM再構築によるフォーカス喪失を防ぐ
+      const inputInRow = row.querySelector('.vdg-ts-text-input');
+      if (inputInRow && document.activeElement === inputInRow) return;
       const id = parseInt(row.dataset.markerId);
       selectedMarkerId = id;
       const marker = tsMarkers.find(m => m.id === id);
