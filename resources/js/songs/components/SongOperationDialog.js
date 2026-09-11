@@ -190,8 +190,8 @@ export class SongOperationDialog {
                 searchRow.appendChild(searchBtn);
                 panel.appendChild(searchRow);
 
-                const resultsHeader = document.createElement('div');
-                resultsHeader.className = 'flex items-center gap-2 mb-1 hidden';
+                const resultsHeader = document.createElement('label');
+                resultsHeader.className = 'flex items-center gap-2 mb-1 hidden cursor-pointer';
                 const headerCb = document.createElement('input');
                 headerCb.type = 'checkbox';
                 headerCb.className = 'flex-shrink-0';
@@ -244,6 +244,9 @@ export class SongOperationDialog {
                         const row = document.createElement('div');
                         row.className = 'flex items-center gap-2 p-2 border rounded border-gray-200 dark:border-gray-700 text-sm';
 
+                        const cbLabel = document.createElement('label');
+                        cbLabel.className = 'flex items-center gap-2 flex-1 min-w-0 cursor-pointer';
+
                         const cb = document.createElement('input');
                         cb.type = 'checkbox';
                         cb.checked = selectedIds.includes(s.id);
@@ -259,12 +262,15 @@ export class SongOperationDialog {
                             updateMergeBtn();
                         });
 
-                        const info = document.createElement('div');
+                        const info = document.createElement('span');
                         info.className = 'flex-1 min-w-0 truncate';
                         info.innerHTML = `<span class="font-medium">${escapeHtml(s.title)}</span> <span class="text-gray-500 dark:text-gray-400">/ ${escapeHtml(s.artist)}</span>`;
                         if (s.ts_items_count !== undefined) {
                             info.innerHTML += ` <span class="text-xs text-gray-400">(TS:${escapeHtml(String(s.ts_items_count))})</span>`;
                         }
+
+                        cbLabel.appendChild(cb);
+                        cbLabel.appendChild(info);
 
                         const isTarget = targetId === s.id;
                         const isSelected = selectedIds.includes(s.id);
@@ -285,8 +291,7 @@ export class SongOperationDialog {
                             });
                         }
 
-                        row.appendChild(cb);
-                        row.appendChild(info);
+                        row.appendChild(cbLabel);
                         if (s.distinct_review) {
                             const badge = document.createElement('span');
                             badge.className = 'ml-2 px-1.5 py-0.5 text-xs bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200 rounded flex-shrink-0';
