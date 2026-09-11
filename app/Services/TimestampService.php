@@ -68,6 +68,7 @@ class TimestampService
             ->where('ts_items.is_display', 1);
 
         $this->applyIsNotSongFilter($query);
+        $this->excludeDuplicateTimestamps($query);
 
         // 検索・頭文字インデックス・公開日で絞り込み
         $this->applyFilters($query, $search, $index, $publishedFrom, $publishedTo);
@@ -245,6 +246,7 @@ class TimestampService
             ->where('ts_items.is_display', 1);
 
         $this->applyIsNotSongFilter($query);
+        $this->excludeDuplicateTimestamps($query);
 
         // 検索・公開日で絞り込み（頭文字インデックスはカテゴリ抽出対象のため適用しない）
         $this->applyFilters($query, $search, '', $publishedFrom, $publishedTo);
@@ -315,6 +317,7 @@ class TimestampService
             ->where('ts_items.is_display', 1);
 
         $this->applyIsNotSongFilter($query);
+        $this->excludeDuplicateTimestamps($query);
 
         // 一覧と同じ検索・頭文字インデックス・公開日の条件で絞り込む
         $this->applyFilters($query, $search, $index, $publishedFrom, $publishedTo);
@@ -399,6 +402,7 @@ class TimestampService
             ->whereNotNull('ts_items.normalized_text');
 
         $this->applyIsNotSongFilter($query);
+        $this->excludeDuplicateTimestamps($query);
 
         $nextItem = $query->orderBy('ts_items.ts_num', 'asc')
             ->first(['ts_items.ts_num']);
@@ -446,6 +450,7 @@ class TimestampService
             ->where('ts_items.is_display', 1);
 
         $this->applyIsNotSongFilter($query);
+        $this->excludeDuplicateTimestamps($query);
 
         $item = $query->orderBy('ts_items.ts_num', 'asc')
             ->first();
@@ -511,6 +516,7 @@ class TimestampService
             ->whereNotNull('ts_items.normalized_text')
             ->where('ts_items.is_display', 1);
         $this->applyIsNotSongFilter($countBeforeQuery);
+        $this->excludeDuplicateTimestamps($countBeforeQuery);
         $countBeforeQuery->whereRaw("{$coalesce} < ?", [$sortKey]);
         $this->applyFilters($countBeforeQuery, $search, $index, $publishedFrom, $publishedTo);
         $countBefore = $countBeforeQuery->count();
@@ -529,6 +535,7 @@ class TimestampService
             ->whereNotNull('ts_items.normalized_text')
             ->where('ts_items.is_display', 1);
         $this->applyIsNotSongFilter($countSameKeyQuery);
+        $this->excludeDuplicateTimestamps($countSameKeyQuery);
         $countSameKeyQuery->whereRaw("{$coalesce} = ?", [$sortKey])
             ->where('ts_items.id', '<', $itemId);
         $this->applyFilters($countSameKeyQuery, $search, $index, $publishedFrom, $publishedTo);
@@ -562,6 +569,31 @@ class TimestampService
             $q->whereNotNull('ts_items.song_id')
                 ->orWhereNull('timestamp_song_mappings.id')
                 ->orWhere('timestamp_song_mappings.is_not_song', false);
+        });
+    }
+
+    /**
+     * 同一アーカイブ内の同一タイムスタンプの重複を排除する
+     *
+     * 概要欄(type=1)とコメント(type=2)の両方に同じテキストが存在する場合、
+     * typeが小さい方（概要欄優先）を残し、同typeならidが小さい方を残す。
+     */
+    private function excludeDuplicateTimestamps(Builder $query): void
+    {
+        $query->whereNotExists(function ($sub) {
+            $sub->select(DB::raw(1))
+                ->from('ts_items as t2')
+                ->whereColumn('t2.video_id', 'ts_items.video_id')
+                ->whereColumn('t2.ts_num', 'ts_items.ts_num')
+                ->whereColumn('t2.normalized_text', 'ts_items.normalized_text')
+                ->where('t2.is_display', 1)
+                ->where(function ($q) {
+                    $q->whereColumn('t2.type', '<', 'ts_items.type')
+                        ->orWhere(function ($q2) {
+                            $q2->whereColumn('t2.type', 'ts_items.type')
+                                ->whereColumn('t2.id', '<', 'ts_items.id');
+                        });
+                });
         });
     }
 

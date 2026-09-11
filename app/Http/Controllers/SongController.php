@@ -302,6 +302,21 @@ class SongController extends Controller
             ->where('ts_items.is_display', 1)
             ->whereHas('archive', function ($q) {
                 $q->where('is_display', 1);
+            })
+            ->whereNotExists(function ($sub) {
+                $sub->select(DB::raw(1))
+                    ->from('ts_items as t2')
+                    ->whereColumn('t2.video_id', 'ts_items.video_id')
+                    ->whereColumn('t2.ts_num', 'ts_items.ts_num')
+                    ->whereColumn('t2.normalized_text', 'ts_items.normalized_text')
+                    ->where('t2.is_display', 1)
+                    ->where(function ($q) {
+                        $q->whereColumn('t2.type', '<', 'ts_items.type')
+                            ->orWhere(function ($q2) {
+                                $q2->whereColumn('t2.type', 'ts_items.type')
+                                    ->whereColumn('t2.id', '<', 'ts_items.id');
+                            });
+                    });
             });
 
         // Channel Admin（非Super Admin）の場合は自チャンネルのみ表示
