@@ -43,7 +43,7 @@ export class TimestampNormalization {
             updateSelectionDisplay: () => this.updateSelectionDisplay(),
             displaySongs: (songs, total) => this.displaySongs(songs, total),
             loadSongs: (query) => this.loadSongs(query),
-            loadTimestamps: () => this.loadTimestamps(),
+            loadTimestamps: () => this.loadTimestamps(1, this.currentSearchQuery),
             openEditModal: (song) => this.openEditModal(song),
             deleteSong: (songId) => this.deleteSong(songId),
             setSongFilter: (song) => this.setSongFilter(song),
