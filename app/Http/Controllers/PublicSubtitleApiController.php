@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Services\SubtitleFingerprintService;
 use App\Services\SubtitleMatchingService;
-use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -23,7 +22,7 @@ class PublicSubtitleApiController extends Controller
     public function match(Request $request)
     {
         $validated = $request->validate([
-            'subtitle_text' => ['required', 'string', 'max:10000'],
+            'subtitle_text' => ['required', 'string', 'max:2000'],
             'duration_sec' => ['sometimes', 'integer', 'in:60'],
         ]);
 
@@ -57,10 +56,10 @@ class PublicSubtitleApiController extends Controller
             ], $candidates);
 
             return response()->json([
-                'candidates' => array_values($filtered),
+                'candidates' => $filtered,
                 'trigram_count' => count($trigrams),
             ]);
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             Log::error('公開字幕照合エラー', [
                 'error' => $e->getMessage(),
                 'ip' => $request->ip(),

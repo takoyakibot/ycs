@@ -104,7 +104,10 @@ class SubtitleMatchingService
 
         $results = collect();
 
+        $displayTsItemIds = TsItem::where('is_display', '1')->select('id');
+
         SubtitleFingerprint::where('duration_sec', $durationSec)
+            ->whereIn('ts_item_id', $displayTsItemIds)
             ->chunkById(500, function ($chunk) use ($trigrams, $threshold, &$results) {
                 foreach ($chunk as $other) {
                     $similarity = self::jaccardSimilarity($trigrams, $other->trigrams);

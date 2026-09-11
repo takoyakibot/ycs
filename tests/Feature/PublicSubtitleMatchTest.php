@@ -124,7 +124,7 @@ class PublicSubtitleMatchTest extends TestCase
     public function test_validates_subtitle_text_max_length(): void
     {
         $response = $this->postJson('/api/public/subtitle-matches', [
-            'subtitle_text' => str_repeat('あ', 10001),
+            'subtitle_text' => str_repeat('あ', 2001),
         ]);
 
         $response->assertStatus(422)
@@ -192,6 +192,41 @@ class PublicSubtitleMatchTest extends TestCase
 
         $this->assertDatabaseCount('subtitle_fingerprints', 1);
         $this->assertDatabaseCount('video_subtitles', 0);
+    }
+
+    public function test_excludes_hidden_ts_items(): void
+    {
+        $tsItem = TsItem::factory()->create([
+            'video_id' => 'abcdefghijk',
+            'ts_num' => 120,
+            'text' => '非表示の曲',
+            'is_display' => '0',
+        ]);
+
+        $song = Song::factory()->create(['title' => '非表示の曲', 'artist' => 'アーティスト']);
+        TimestampSongMapping::create([
+            'id' => Str::ulid(),
+            'normalized_text' => $tsItem->normalized_text,
+            'song_id' => $song->id,
+            'is_not_song' => false,
+        ]);
+
+        SubtitleFingerprint::create([
+            'id' => Str::ulid(),
+            'video_id' => 'abcdefghijk',
+            'ts_item_id' => $tsItem->id,
+            'start_sec' => 120,
+            'duration_sec' => SubtitleFingerprintService::WINDOW_DURATION_SEC,
+            'fingerprint_text' => self::LYRICS_TEXT,
+            'trigrams' => SubtitleFingerprintService::generateTrigrams(self::LYRICS_TEXT),
+        ]);
+
+        $response = $this->postJson('/api/public/subtitle-matches', [
+            'subtitle_text' => self::LYRICS_TEXT,
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('candidates', []);
     }
 
     public function test_excludes_not_song_candidates(): void
