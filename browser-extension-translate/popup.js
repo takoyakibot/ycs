@@ -120,8 +120,6 @@ async function getFullSettings() {
   const s = getSettings();
   const result = await chrome.storage.local.get(['translateSettings', 'videoContexts']);
   const saved = result.translateSettings || {};
-  s.openaiKey = saved.openaiKey || '';
-  s.deeplKey = saved.deeplKey || '';
   s.chunkInterval = saved.chunkInterval || 10;
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (tab?.url) {
@@ -222,7 +220,9 @@ async function toggleCapture() {
       }
     } else {
       const fullSettings = await getFullSettings();
-      if (!fullSettings.openaiKey || !fullSettings.deeplKey) {
+      const keyData = await chrome.storage.local.get(['translateSettings']);
+      const savedKeys = keyData.translateSettings || {};
+      if (!savedKeys.openaiKey || !savedKeys.deeplKey) {
         elements.status.textContent = 'APIキーを設定してください';
         return;
       }

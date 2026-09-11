@@ -147,8 +147,14 @@ async function stopCapture() {
 }
 
 const MAX_RESULTS = 500;
+let saveQueue = Promise.resolve();
 
-async function saveTranslationResult(message) {
+function saveTranslationResult(message) {
+  saveQueue = saveQueue.then(() => doSaveTranslationResult(message)).catch(() => {});
+  return saveQueue;
+}
+
+async function doSaveTranslationResult(message) {
   const data = await chrome.storage.local.get(['translationResults']);
   const results = data.translationResults || [];
   results.push({
