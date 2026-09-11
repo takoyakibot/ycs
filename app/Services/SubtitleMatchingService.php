@@ -94,6 +94,34 @@ class SubtitleMatchingService
     }
 
     /**
+     * トライグラム配列から候補楽曲を返す（公開API用。チャンネルコンテキストなし→常に全件検索）
+     */
+    public function getCandidateSongsForTrigrams(array $trigrams, int $durationSec = SubtitleFingerprintService::WINDOW_DURATION_SEC, float $threshold = self::DEFAULT_THRESHOLD): array
+    {
+        if (count($trigrams) < SubtitleFingerprintService::MIN_TRIGRAM_COUNT) {
+            return [];
+        }
+
+        $results = collect();
+
+        SubtitleFingerprint::where('duration_sec', $durationSec)
+            ->chunkById(500, function ($chunk) use ($trigrams, $threshold, &$results) {
+                foreach ($chunk as $other) {
+                    $similarity = self::jaccardSimilarity($trigrams, $other->trigrams);
+                    if ($similarity >= $threshold) {
+                        $results->push([
+                            'fingerprint' => $other,
+                            'similarity' => round($similarity, 4),
+                            'source' => 'all',
+                        ]);
+                    }
+                }
+            });
+
+        return $this->rankCandidates($results->sortByDesc('similarity'), collect());
+    }
+
+    /**
      * トライグラム集合に対する候補検索の共通処理
      *
      * @param  string|null  $excludeTsItemId  照合対象から除外するts_item（自分自身との照合を防ぐ）
