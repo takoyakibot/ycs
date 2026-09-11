@@ -4940,6 +4940,13 @@ function createVolumeGraph() {
         font-weight: 500;
       }
 
+      .vdg-current-time {
+        font-size: 12px;
+        color: #aaa;
+        margin-left: 8px;
+        font-variant-numeric: tabular-nums;
+      }
+
       .vdg-controls {
         display: flex;
         gap: 8px;
@@ -5413,7 +5420,7 @@ function createVolumeGraph() {
 
     </style>
     <div class="vdg-header">
-      <span class="vdg-title">音量ダイナミクス</span>
+      <span class="vdg-title">音量ダイナミクス</span><span class="vdg-current-time" id="vdg-current-time"></span>
       <div class="vdg-controls">
         <span class="vdg-playlist-info" id="vdg-playlist-info"></span>
         <span class="vdg-progress" id="vdg-progress" title="音量分析の完了率">分析 0%</span>
@@ -8068,8 +8075,14 @@ function updateTimeMarker() {
   const marker = volumeGraphContainer.querySelector('#vdg-time-marker');
   if (!marker) return;
 
-  const ratio = videoElement.currentTime / videoDuration;
+  const currentTime = videoElement.currentTime;
+  const ratio = currentTime / videoDuration;
   marker.style.left = `${ratio * 100}%`;
+
+  const timeDisplay = volumeGraphContainer.querySelector('#vdg-current-time');
+  if (timeDisplay) {
+    timeDisplay.textContent = formatTimeDisplay(currentTime);
+  }
 }
 
 /**
