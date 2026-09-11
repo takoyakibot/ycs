@@ -4583,7 +4583,9 @@ function showListScanButton(currentIndex, totalCount) {
     if (countdown) countdown.style.display = 'none';
     startBtn.classList.add('scanning');
     startBtn.textContent = '⏳ スキャン中...';
-    chrome.runtime.sendMessage({ type: 'START_SCAN' });
+    // tabCaptureはポップアップ操作（activeTab権限）が必要なため、
+    // コンテンツスクリプト内のAudioContextで直接スキャンする
+    startDirectScan();
   };
 
   startBtn.addEventListener('click', startScan);
@@ -6246,8 +6248,7 @@ async function startAutoScan() {
     console.log('現在の動画はスキャン済み、次の動画へ移動');
     proceedToNextVideoOrFinish();
   } else {
-    // スキャンを開始（tabCapture方式、常にミュート）
-    chrome.runtime.sendMessage({ type: 'START_SCAN' });
+    startDirectScan();
   }
 }
 
@@ -6470,7 +6471,7 @@ async function startDirectScan() {
   originalPlaybackRate = videoElement.playbackRate;
 
   // ミュート設定を適用（GainNodeで制御）
-  setAudioGain(scanMuted);
+  setAudioGain(true);
 
   // 高速再生に設定
   videoElement.playbackRate = 4;
@@ -6484,7 +6485,7 @@ async function startDirectScan() {
     isGraphVisible = true;
   }
 
-  console.log('スキャン開始（直接音声解析）', { muted: scanMuted });
+  console.log('スキャン開始（直接音声解析）');
 
   // 音量データの収集を開始
   const dataArray = new Float32Array(analyserNode.fftSize);
@@ -6567,6 +6568,7 @@ function stopDirectScan() {
   // スキャン完了時に結果を保存
   if (volumeData.length > 0 && volumeData.some(v => v > 0)) {
     saveVolumeData();
+    sendSpectralDataToServer();
   }
 
   console.log('スキャン停止');
@@ -6574,6 +6576,21 @@ function stopDirectScan() {
   // 自動スキャンモードの場合は次の動画へ
   if (isAutoScanMode && !autoScanStopRequested) {
     proceedToNextVideoOrFinish();
+  }
+
+  // リストスキャンモードの場合は完了判定して次の動画へ
+  if (isListScanMode) {
+    isCurrentVideoScanned().then(async (completed) => {
+      if (completed) {
+        hideListScanButton();
+        proceedToNextListScanVideo();
+      } else {
+        const state = await chrome.storage.local.get(['listScanCurrentIndex', 'listScanVideoIds']);
+        if (state.listScanVideoIds) {
+          showListScanButton(state.listScanCurrentIndex || 0, state.listScanVideoIds.length);
+        }
+      }
+    });
   }
 }
 
@@ -8235,8 +8252,7 @@ function observePageChanges() {
             console.log('この動画はスキャン済み、次へ');
             proceedToNextVideoOrFinish();
           } else {
-            // tabCapture方式でスキャン開始（常にミュート）
-            chrome.runtime.sendMessage({ type: 'START_SCAN' });
+            startDirectScan();
           }
         }, 3000); // 動画の読み込みを待つ
       }
