@@ -120,4 +120,46 @@ class ExtensionTimestampStatusTest extends TestCase
 
         $response->assertStatus(422);
     }
+
+    public function test_does_not_expose_counts_for_other_users_channels(): void
+    {
+        $otherUser = User::factory()->create([
+            'email_verified_at' => now(),
+            'role' => User::ROLE_ADMIN,
+        ]);
+        $otherChannel = Channel::factory()->create(['user_id' => $otherUser->id]);
+
+        Archive::factory()->create([
+            'channel_id' => $otherChannel->channel_id,
+            'video_id' => 'othersvideo',
+            'is_display' => true,
+        ]);
+        TsItem::factory()->count(5)->create([
+            'video_id' => 'othersvideo',
+            'is_display' => '1',
+        ]);
+
+        $response = $this->requestStatus('othersvideo');
+
+        $response->assertStatus(200)
+            ->assertJsonPath('statuses.othersvideo', 0);
+    }
+
+    public function test_excludes_hidden_archives(): void
+    {
+        Archive::factory()->create([
+            'channel_id' => $this->channel->channel_id,
+            'video_id' => 'hiddenarchv',
+            'is_display' => false,
+        ]);
+        TsItem::factory()->count(3)->create([
+            'video_id' => 'hiddenarchv',
+            'is_display' => '1',
+        ]);
+
+        $response = $this->requestStatus('hiddenarchv');
+
+        $response->assertStatus(200)
+            ->assertJsonPath('statuses.hiddenarchv', 0);
+    }
 }

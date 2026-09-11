@@ -206,19 +206,23 @@ class SubtitleApiController extends Controller
     public function timestampStatus(Request $request)
     {
         $validated = $request->validate([
-            'video_ids' => ['required', 'string'],
+            'video_ids' => ['required', 'string', 'max:6000'],
         ]);
 
-        $videoIds = array_filter(
+        $videoIds = array_unique(array_filter(
             array_map('trim', explode(',', $validated['video_ids'])),
             fn ($id) => preg_match('/^[A-Za-z0-9_-]{11}$/', $id)
-        );
+        ));
 
         if (empty($videoIds)) {
             return response()->json(['statuses' => []]);
         }
 
-        $counts = \App\Models\TsItem::whereIn('video_id', $videoIds)
+        $accessibleVideoIds = $this->accessibleDisplayedArchives($request->user())
+            ->whereIn('video_id', $videoIds)
+            ->pluck('video_id');
+
+        $counts = \App\Models\TsItem::whereIn('video_id', $accessibleVideoIds)
             ->where('is_display', '1')
             ->groupBy('video_id')
             ->selectRaw('video_id, count(*) as count')

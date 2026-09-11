@@ -636,6 +636,10 @@ function createListScanPanel() {
         background: #333;
         color: #888;
       }
+      .lsp-ts-badge.unknown {
+        background: #333;
+        color: #ff9800;
+      }
       .lsp-item-status {
         display: flex;
         align-items: center;
@@ -968,8 +972,6 @@ async function renderVideoList() {
   listContainer.innerHTML = currentListScanVideoIds.map((videoId, index) => {
     const status = statuses[index];
     const isCurrent = videoId === currentVideoId;
-    const tsCount = tsStatusMap[videoId] || 0;
-
     const statusIcon = {
       'not_scanned': '○',
       'scanning': '●',
@@ -978,9 +980,15 @@ async function renderVideoList() {
     }[status.status] || '○';
 
     const statusClass = status.status;
-    const tsBadge = tsCount > 0
-      ? `<span class="lsp-ts-badge has-ts" title="タイムスタンプ ${tsCount}件">TS ${tsCount}</span>`
-      : `<span class="lsp-ts-badge no-ts" title="タイムスタンプ未作成">TS 0</span>`;
+    let tsBadge;
+    if (!tsStatusMap) {
+      tsBadge = `<span class="lsp-ts-badge unknown" title="取得失敗">TS ?</span>`;
+    } else {
+      const tsCount = tsStatusMap[videoId] || 0;
+      tsBadge = tsCount > 0
+        ? `<span class="lsp-ts-badge has-ts" title="タイムスタンプ ${tsCount}件">TS ${tsCount}</span>`
+        : `<span class="lsp-ts-badge no-ts" title="タイムスタンプ未作成">TS 0</span>`;
+    }
 
     return `
       <div class="lsp-item ${isCurrent ? 'current' : ''}" data-video-id="${videoId}">
@@ -1039,18 +1047,18 @@ async function getVideoScanStatus(videoId) {
  */
 async function fetchTimestampStatuses(videoIds) {
   if (!ycsApiToken || !ycsServerUrl || videoIds.length === 0) {
-    return {};
+    return null;
   }
   try {
     const response = await fetch(
       `${ycsServerUrl}/api/extension/timestamp-status?video_ids=${videoIds.join(',')}`,
       { headers: { 'Authorization': `Bearer ${ycsApiToken}`, 'Accept': 'application/json' } }
     );
-    if (!response.ok) return {};
+    if (!response.ok) return null;
     const data = await response.json();
-    return data.statuses || {};
+    return data.statuses || null;
   } catch {
-    return {};
+    return null;
   }
 }
 
