@@ -499,17 +499,17 @@ class SongController extends Controller
         if ($search !== '') {
             $rawKeywords = QueryHelper::splitSearchKeywords($search);
             $exclusions = [];
-            $positiveTerms = [];
+            $positiveRawTerms = [];
             foreach ($rawKeywords as $kw) {
                 $parsed = QueryHelper::parseSearchTerm($kw);
                 if ($parsed['exclude']) {
-                    $exclusions[] = $parsed['term'];
+                    $exclusions[] = $parsed;
                 } else {
-                    $positiveTerms[] = $parsed['term'];
+                    $positiveRawTerms[] = $kw;
                 }
             }
 
-            $positiveSearch = implode(' ', $positiveTerms);
+            $positiveSearch = implode(' ', $positiveRawTerms);
 
             if ($positiveSearch !== '') {
                 $query->where(function ($outer) use ($positiveSearch, $searchMode) {
@@ -526,19 +526,31 @@ class SongController extends Controller
                     })->orWhereHas('tags', function ($q) use ($positiveSearch) {
                         $terms = QueryHelper::splitSearchKeywords($positiveSearch);
                         foreach ($terms as $term) {
-                            $escaped = QueryHelper::escapeLikeString($term);
-                            $q->where('value', 'like', "%{$escaped}%");
+                            $parsed = QueryHelper::parseSearchTerm($term);
+                            if ($parsed['exact']) {
+                                $q->where('value', '=', $parsed['term']);
+                            } else {
+                                $escaped = QueryHelper::escapeLikeString($parsed['term']);
+                                $q->where('value', 'like', "%{$escaped}%");
+                            }
                         }
                     });
                 });
             }
 
             foreach ($exclusions as $excl) {
-                $escaped = QueryHelper::escapeLikeString($excl);
-                $query->where(function ($q) use ($escaped) {
-                    $q->where('title', 'not like', "%{$escaped}%")
-                        ->where('artist', 'not like', "%{$escaped}%");
-                });
+                if ($excl['exact']) {
+                    $query->where(function ($q) use ($excl) {
+                        $q->where('title', '!=', $excl['term'])
+                            ->where('artist', '!=', $excl['term']);
+                    });
+                } else {
+                    $escaped = QueryHelper::escapeLikeString($excl['term']);
+                    $query->where(function ($q) use ($escaped) {
+                        $q->where('title', 'not like', "%{$escaped}%")
+                            ->where('artist', 'not like', "%{$escaped}%");
+                    });
+                }
             }
         }
 
