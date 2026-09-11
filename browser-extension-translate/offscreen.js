@@ -17,6 +17,9 @@ let settings = {
   deeplKey: ''
 };
 const SILENCE_THRESHOLD = 0.01;
+let chunkSeq = 0;
+let nextSendSeq = 0;
+const pendingResults = new Map();
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   switch (message.type) {
@@ -107,6 +110,9 @@ function stopRecognition() {
   }
   analyser = null;
   isProcessing = false;
+  chunkSeq = 0;
+  nextSendSeq = 0;
+  pendingResults.clear();
 }
 
 function scheduleProcessing() {
@@ -163,12 +169,7 @@ async function processChunk() {
     const audioBlob = new Blob(chunks, { type: 'audio/webm;codecs=opus' });
     if (audioBlob.size < 1000) return;
 
-    const text = await transcribeWithWhisper(audioBlob);
-    if (isStopping || !text || text.trim() === '') return;
-
-    const translated = await translateText(text.trim());
-    if (isStopping) return;
-
+    const seq = chunkSeq++;
     let videoTime = null;
     try {
       const vtResponse = await chrome.runtime.sendMessage({ type: 'GET_VIDEO_TIME' });
@@ -178,24 +179,64 @@ async function processChunk() {
       ? Math.round(videoTime)
       : (captureStartTime ? Math.round((Date.now() - captureStartTime) / 1000) : null);
 
-    chrome.runtime.sendMessage({
-      type: 'TRANSLATION_RESULT',
-      original: text.trim(),
-      translated: translated,
-      elapsed
-    }).catch(() => {});
+    isProcessing = false;
+    processChunkAsync(seq, audioBlob, elapsed);
   } catch (error) {
     console.error('処理エラー:', error);
     if (!mediaRecorder && !isStopping) {
       createRecorder();
     }
-  } finally {
     isProcessing = false;
   }
 }
 
+async function processChunkAsync(seq, audioBlob, elapsed) {
+  try {
+    const text = await transcribeWithWhisper(audioBlob);
+    if (isStopping) { skipSeq(seq); return; }
+    if (!text || text.trim() === '') { skipSeq(seq); return; }
+
+    const translated = await translateText(text.trim());
+    if (isStopping) { skipSeq(seq); return; }
+
+    pendingResults.set(seq, { original: text.trim(), translated, elapsed });
+    flushPendingResults();
+  } catch (error) {
+    console.error('非同期処理エラー:', error);
+    skipSeq(seq);
+  }
+}
+
+function skipSeq(seq) {
+  pendingResults.set(seq, null);
+  flushPendingResults();
+}
+
+function flushPendingResults() {
+  while (pendingResults.has(nextSendSeq)) {
+    const result = pendingResults.get(nextSendSeq);
+    pendingResults.delete(nextSendSeq);
+    nextSendSeq++;
+    if (result) {
+      chrome.runtime.sendMessage({
+        type: 'TRANSLATION_RESULT',
+        original: result.original,
+        translated: result.translated,
+        elapsed: result.elapsed
+      }).catch(() => {});
+    }
+  }
+}
+
+async function getApiKeys() {
+  const data = await chrome.storage.local.get(['translateSettings']);
+  const saved = data.translateSettings || {};
+  return { openaiKey: saved.openaiKey || '', deeplKey: saved.deeplKey || '' };
+}
+
 async function transcribeWithWhisper(audioBlob) {
-  if (!settings.openaiKey) return null;
+  const { openaiKey } = await getApiKeys();
+  if (!openaiKey) return null;
 
   const lang = settings.lang === 'en' ? 'en' : 'ko';
 
@@ -210,7 +251,7 @@ async function transcribeWithWhisper(audioBlob) {
   const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${settings.openaiKey}`
+      'Authorization': `Bearer ${openaiKey}`
     },
     body: formData
   });
@@ -232,15 +273,28 @@ async function translateText(text) {
   return await translateFull(text);
 }
 
+async function fetchWithRetry(url, options, maxRetries = 2) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const response = await fetch(url, options);
+    if (response.status === 429 && attempt < maxRetries) {
+      const retryAfter = parseInt(response.headers.get('Retry-After') || '0', 10);
+      await new Promise(r => setTimeout(r, Math.max(retryAfter, 1) * 1000));
+      continue;
+    }
+    return response;
+  }
+}
+
 async function translateFull(text) {
-  if (!settings.deeplKey) return '(DeepL APIキー未設定)';
+  const { deeplKey } = await getApiKeys();
+  if (!deeplKey) return '(DeepL APIキー未設定)';
 
   const sourceLang = settings.lang === 'en' ? 'EN' : 'KO';
 
-  const response = await fetch('https://api-free.deepl.com/v2/translate', {
+  const response = await fetchWithRetry('https://api-free.deepl.com/v2/translate', {
     method: 'POST',
     headers: {
-      'Authorization': `DeepL-Auth-Key ${settings.deeplKey}`,
+      'Authorization': `DeepL-Auth-Key ${deeplKey}`,
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
@@ -260,7 +314,8 @@ async function translateFull(text) {
 }
 
 async function translatePartial(text, n) {
-  if (!settings.deeplKey) return '(DeepL APIキー未設定)';
+  const { deeplKey } = await getApiKeys();
+  if (!deeplKey) return '(DeepL APIキー未設定)';
 
   const words = text.split(/\s+/).filter(w => w.length > 0);
   if (words.length === 0) return text;
@@ -275,10 +330,10 @@ async function translatePartial(text, n) {
   const wordsToTranslate = indicesToTranslate.map(i => words[i]);
   const sourceLang = settings.lang === 'en' ? 'EN' : 'KO';
 
-  const response = await fetch('https://api-free.deepl.com/v2/translate', {
+  const response = await fetchWithRetry('https://api-free.deepl.com/v2/translate', {
     method: 'POST',
     headers: {
-      'Authorization': `DeepL-Auth-Key ${settings.deeplKey}`,
+      'Authorization': `DeepL-Auth-Key ${deeplKey}`,
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({

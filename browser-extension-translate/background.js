@@ -17,7 +17,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case 'TRANSLATION_RESULT':
       saveTranslationResult(message).catch(() => {});
-      break;
+      sendResponse({ success: true });
+      return true;
 
     case 'GET_RESULTS':
       chrome.storage.local.get(['translationResults']).then(data => {
