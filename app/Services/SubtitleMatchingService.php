@@ -246,6 +246,14 @@ class SubtitleMatchingService
             ->get()
             ->keyBy('normalized_text');
 
+        // 「楽曲ではない」に分類されたnormalized_textを候補から除外する
+        $notSongTexts = array_flip(
+            \App\Models\TimestampSongMapping::whereIn('normalized_text', $normalizedTexts)
+                ->where('is_not_song', true)
+                ->pluck('normalized_text')
+                ->all()
+        );
+
         // song_id（またはnormalized_text）でグループ化
         $groups = [];
         foreach ($allResults as $match) {
@@ -255,6 +263,10 @@ class SubtitleMatchingService
             }
 
             $normalizedText = $tsItem->normalized_text;
+
+            if (isset($notSongTexts[$normalizedText])) {
+                continue;
+            }
             $mapping = $mappings->get($normalizedText);
             $song = $mapping?->song;
 

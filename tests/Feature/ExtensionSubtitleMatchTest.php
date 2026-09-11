@@ -312,4 +312,40 @@ class ExtensionSubtitleMatchTest extends TestCase
         $response->assertStatus(200)
             ->assertJsonPath('threshold', 0.05);
     }
+
+    public function test_excludes_not_song_candidates(): void
+    {
+        $this->createTargetSubtitle();
+
+        Archive::factory()->create([
+            'channel_id' => $this->channel->channel_id,
+            'video_id' => 'abcdefghijk',
+        ]);
+        $tsItem = TsItem::factory()->create([
+            'video_id' => 'abcdefghijk',
+            'ts_num' => 120,
+            'text' => 'トークパート',
+            'is_display' => '1',
+        ]);
+        TimestampSongMapping::create([
+            'id' => Str::ulid(),
+            'normalized_text' => $tsItem->normalized_text,
+            'song_id' => null,
+            'is_not_song' => true,
+        ]);
+        SubtitleFingerprint::create([
+            'id' => Str::ulid(),
+            'video_id' => 'abcdefghijk',
+            'ts_item_id' => $tsItem->id,
+            'start_sec' => 120,
+            'duration_sec' => SubtitleFingerprintService::WINDOW_DURATION_SEC,
+            'fingerprint_text' => self::LYRICS_TEXT,
+            'trigrams' => SubtitleFingerprintService::generateTrigrams(self::LYRICS_TEXT),
+        ]);
+
+        $response = $this->requestMatch('dQw4w9WgXcQ', 60);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('candidates', []);
+    }
 }
