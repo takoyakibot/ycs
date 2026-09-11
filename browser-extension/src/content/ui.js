@@ -11,17 +11,6 @@ import { closeLyricsPastePopup, closeSongCandidatePopup } from './song-candidate
 import { updateVideoDuration } from './utils.js';
 import { resizeCanvas } from './volume-graph.js';
 
-export async function loadEmbeddedUISettings() {
-  try {
-    const result = await chrome.storage.local.get('showEmbeddedUI');
-    state.embeddedUIVisible = result.showEmbeddedUI !== false; // デフォルトはtrue
-    return state.embeddedUIVisible;
-  } catch (error) {
-    console.error('埋め込みUI設定読み込みエラー:', error);
-    return true;
-  }
-}
-
 export function createEmbeddedTriggerButton() {
   if (state.embeddedTriggerButton) return;
 

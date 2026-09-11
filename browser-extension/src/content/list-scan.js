@@ -14,8 +14,6 @@ import {
   restoreSubtitleScanPanelState
 } from './subtitle-scan.js';
 
-let listScanPanel = null;
-let listScanPanelVisible = false;
 let currentListScanVideoIds = [];
 let listScanButtonContainer = null;
 let listScanAutoClickTimer = null;
@@ -23,13 +21,13 @@ let listScanCountdownInterval = null;
 
 // Panel-internal tab switching
 function switchTab(tabId) {
-  if (!listScanPanel) return;
+  if (!state.listScanPanel) return;
 
-  listScanPanel.querySelectorAll('.lsp-tab').forEach(tab => {
+  state.listScanPanel.querySelectorAll('.lsp-tab').forEach(tab => {
     tab.classList.toggle('active', tab.dataset.tab === tabId);
   });
 
-  listScanPanel.querySelectorAll('.lsp-tab-content').forEach(content => {
+  state.listScanPanel.querySelectorAll('.lsp-tab-content').forEach(content => {
     content.classList.toggle('active', content.id === `tab-${tabId}`);
   });
 
@@ -41,11 +39,11 @@ function switchTab(tabId) {
 }
 
 function createListScanPanel() {
-  if (listScanPanel) return;
+  if (state.listScanPanel) return;
 
-  listScanPanel = document.createElement('div');
-  listScanPanel.id = 'ycs-list-scan-panel';
-  listScanPanel.innerHTML = `
+  state.listScanPanel = document.createElement('div');
+  state.listScanPanel.id = 'ycs-list-scan-panel';
+  state.listScanPanel.innerHTML = `
     <style>
       #ycs-list-scan-panel {
         position: fixed;
@@ -424,31 +422,31 @@ function createListScanPanel() {
     </div>
   `;
 
-  document.body.appendChild(listScanPanel);
+  document.body.appendChild(state.listScanPanel);
 
   // イベントリスナー設定
-  listScanPanel.querySelector('#lsp-close-btn').addEventListener('click', hideListScanPanel);
-  listScanPanel.querySelector('#lsp-load-btn').addEventListener('click', loadVideoIdList);
-  listScanPanel.querySelector('#lsp-fetch-targets-btn').addEventListener('click', fetchListScanTargetsFromServer);
-  listScanPanel.querySelector('#lsp-clear-btn').addEventListener('click', clearVideoIdList);
-  listScanPanel.querySelector('#lsp-start-btn').addEventListener('click', startListScanFromPanel);
-  listScanPanel.querySelector('#lsp-stop-btn').addEventListener('click', stopListScanFromPanel);
-  listScanPanel.querySelector('#lsp-clear-all-btn').addEventListener('click', clearAllScannedVideos);
+  state.listScanPanel.querySelector('#lsp-close-btn').addEventListener('click', hideListScanPanel);
+  state.listScanPanel.querySelector('#lsp-load-btn').addEventListener('click', loadVideoIdList);
+  state.listScanPanel.querySelector('#lsp-fetch-targets-btn').addEventListener('click', fetchListScanTargetsFromServer);
+  state.listScanPanel.querySelector('#lsp-clear-btn').addEventListener('click', clearVideoIdList);
+  state.listScanPanel.querySelector('#lsp-start-btn').addEventListener('click', startListScanFromPanel);
+  state.listScanPanel.querySelector('#lsp-stop-btn').addEventListener('click', stopListScanFromPanel);
+  state.listScanPanel.querySelector('#lsp-clear-all-btn').addEventListener('click', clearAllScannedVideos);
 
   // 字幕一括取得タブ
-  listScanPanel.querySelector('#ssp-load-btn').addEventListener('click', loadSubtitleScanTargets);
-  listScanPanel.querySelector('#ssp-start-btn').addEventListener('click', startSubtitleScan);
-  listScanPanel.querySelector('#ssp-stop-btn').addEventListener('click', stopSubtitleScan);
+  state.listScanPanel.querySelector('#ssp-load-btn').addEventListener('click', loadSubtitleScanTargets);
+  state.listScanPanel.querySelector('#ssp-start-btn').addEventListener('click', startSubtitleScan);
+  state.listScanPanel.querySelector('#ssp-stop-btn').addEventListener('click', stopSubtitleScan);
   restoreSubtitleScanPanelState();
 
   // タブ切り替えイベント
-  listScanPanel.querySelectorAll('.lsp-tab').forEach(tab => {
+  state.listScanPanel.querySelectorAll('.lsp-tab').forEach(tab => {
     tab.addEventListener('click', () => switchTab(tab.dataset.tab));
   });
 }
 
 export function toggleListScanPanel() {
-  if (listScanPanelVisible) {
+  if (state.listScanPanelVisible) {
     hideListScanPanel();
   } else {
     showListScanPanel();
@@ -456,11 +454,11 @@ export function toggleListScanPanel() {
 }
 
 export function showListScanPanel() {
-  if (!listScanPanel) {
+  if (!state.listScanPanel) {
     createListScanPanel();
   }
-  listScanPanel.classList.add('visible');
-  listScanPanelVisible = true;
+  state.listScanPanel.classList.add('visible');
+  state.listScanPanelVisible = true;
   updateTriggerButtonState();
 
   // 既存のリストスキャン状態を復元
@@ -468,19 +466,19 @@ export function showListScanPanel() {
 }
 
 export function hideListScanPanel() {
-  if (listScanPanel) {
-    listScanPanel.classList.remove('visible');
+  if (state.listScanPanel) {
+    state.listScanPanel.classList.remove('visible');
   }
-  listScanPanelVisible = false;
+  state.listScanPanelVisible = false;
   updateTriggerButtonState();
 }
 
 export function isListScanPanelVisible() {
-  return listScanPanelVisible;
+  return state.listScanPanelVisible;
 }
 
 async function loadVideoIdList() {
-  const textarea = listScanPanel.querySelector('#lsp-video-ids');
+  const textarea = state.listScanPanel.querySelector('#lsp-video-ids');
   const text = textarea.value.trim();
 
   if (!text) {
@@ -510,7 +508,7 @@ async function loadVideoIdList() {
 }
 
 async function fetchListScanTargetsFromServer() {
-  const progressInfo = listScanPanel.querySelector('#lsp-progress-info');
+  const progressInfo = state.listScanPanel.querySelector('#lsp-progress-info');
 
   if (!state.ycsApiToken) {
     await loadYcsApiSettings();
@@ -541,7 +539,7 @@ async function fetchListScanTargetsFromServer() {
       return;
     }
 
-    listScanPanel.querySelector('#lsp-video-ids').value = targets.map(t => t.video_id).join('\n');
+    state.listScanPanel.querySelector('#lsp-video-ids').value = targets.map(t => t.video_id).join('\n');
     await loadVideoIdList();
   } catch (error) {
     console.error('[YCS] スキャン対象の読み込みエラー:', error);
@@ -551,18 +549,18 @@ async function fetchListScanTargetsFromServer() {
 
 async function clearVideoIdList() {
   currentListScanVideoIds = [];
-  listScanPanel.querySelector('#lsp-video-ids').value = '';
-  listScanPanel.querySelector('#lsp-video-list').innerHTML = '<div class="lsp-empty">VideoIDを入力して読み込みボタンをクリック</div>';
-  listScanPanel.querySelector('#lsp-progress-info').textContent = '0 / 0';
-  listScanPanel.querySelector('#lsp-start-btn').disabled = true;
+  state.listScanPanel.querySelector('#lsp-video-ids').value = '';
+  state.listScanPanel.querySelector('#lsp-video-list').innerHTML = '<div class="lsp-empty">VideoIDを入力して読み込みボタンをクリック</div>';
+  state.listScanPanel.querySelector('#lsp-progress-info').textContent = '0 / 0';
+  state.listScanPanel.querySelector('#lsp-start-btn').disabled = true;
 
   await chrome.storage.local.remove(['listScanVideoIds', 'listScanCurrentIndex', 'listScanActive']);
 }
 
 async function renderVideoList() {
-  const listContainer = listScanPanel.querySelector('#lsp-video-list');
-  const startBtn = listScanPanel.querySelector('#lsp-start-btn');
-  const progressInfo = listScanPanel.querySelector('#lsp-progress-info');
+  const listContainer = state.listScanPanel.querySelector('#lsp-video-list');
+  const startBtn = state.listScanPanel.querySelector('#lsp-start-btn');
+  const progressInfo = state.listScanPanel.querySelector('#lsp-progress-info');
 
   if (currentListScanVideoIds.length === 0) {
     listContainer.innerHTML = '<div class="lsp-empty">VideoIDを入力して読み込みボタンをクリック</div>';
@@ -681,13 +679,13 @@ export async function restoreListScanState() {
 
     if (result.listScanVideoIds && result.listScanVideoIds.length > 0) {
       currentListScanVideoIds = result.listScanVideoIds;
-      listScanPanel.querySelector('#lsp-video-ids').value = result.listScanVideoIds.join('\n');
+      state.listScanPanel.querySelector('#lsp-video-ids').value = result.listScanVideoIds.join('\n');
       await renderVideoList();
 
       // スキャン中の場合はUIを更新
       if (result.listScanActive) {
-        listScanPanel.querySelector('#lsp-start-btn').style.display = 'none';
-        listScanPanel.querySelector('#lsp-stop-btn').style.display = 'block';
+        state.listScanPanel.querySelector('#lsp-start-btn').style.display = 'none';
+        state.listScanPanel.querySelector('#lsp-stop-btn').style.display = 'block';
       }
     }
   } catch (error) {
@@ -724,8 +722,8 @@ export async function startListScanFromPanel() {
   state.listScanProceeding = false;
 
   // UIを更新
-  listScanPanel.querySelector('#lsp-start-btn').style.display = 'none';
-  listScanPanel.querySelector('#lsp-stop-btn').style.display = 'block';
+  state.listScanPanel.querySelector('#lsp-start-btn').style.display = 'none';
+  state.listScanPanel.querySelector('#lsp-stop-btn').style.display = 'block';
 
   // 対象動画に移動
   const targetVideoId = currentListScanVideoIds[startIndex];
@@ -747,9 +745,9 @@ export async function stopListScanFromPanel() {
   await chrome.storage.local.set({ listScanActive: false });
 
   // UIを更新
-  if (listScanPanel) {
-    listScanPanel.querySelector('#lsp-start-btn').style.display = 'block';
-    listScanPanel.querySelector('#lsp-stop-btn').style.display = 'none';
+  if (state.listScanPanel) {
+    state.listScanPanel.querySelector('#lsp-start-btn').style.display = 'block';
+    state.listScanPanel.querySelector('#lsp-stop-btn').style.display = 'none';
   }
 
   // スキャン中の場合は停止

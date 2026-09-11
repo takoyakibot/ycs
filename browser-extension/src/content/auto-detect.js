@@ -235,56 +235,6 @@ export function fuseSegmentsWithChat(segments, bursts) {
   return { starts: deduped, mergedCount, splitCount, chatActive };
 }
 
-export function computeSpectralFeatures(freqData, sampleRate) {
-  const binCount = freqData.length;
-  const binWidth = sampleRate / (binCount * 2);
-
-  const minDb = -100;
-  const powers = new Float32Array(binCount);
-  for (let i = 0; i < binCount; i++) {
-    const db = Math.max(freqData[i], minDb);
-    powers[i] = Math.pow(10, db / 10);
-  }
-
-  let totalEnergy = 0;
-  for (let i = 0; i < binCount; i++) {
-    totalEnergy += powers[i];
-  }
-  if (totalEnergy === 0) return null;
-
-  // 歌声帯域 (80Hz - 1100Hz) のエネルギー比率
-  const voiceLowBin = Math.ceil(80 / binWidth);
-  const voiceHighBin = Math.min(Math.floor(1100 / binWidth), binCount - 1);
-  let voiceEnergy = 0;
-  for (let i = voiceLowBin; i <= voiceHighBin; i++) {
-    voiceEnergy += powers[i];
-  }
-  const voiceBandRatio = voiceEnergy / totalEnergy;
-
-  // Spectral flatness（幾何平均 / 算術平均）
-  let logSum = 0;
-  let linearSum = 0;
-  let count = 0;
-  for (let i = voiceLowBin; i <= voiceHighBin; i++) {
-    if (powers[i] > 0) {
-      logSum += Math.log(powers[i]);
-      linearSum += powers[i];
-      count++;
-    }
-  }
-  let flatness = 1;
-  if (count > 0 && linearSum > 0) {
-    const geometricMean = Math.exp(logSum / count);
-    const arithmeticMean = linearSum / count;
-    flatness = geometricMean / arithmeticMean;
-  }
-
-  return {
-    flatness: Math.round(flatness * 1000) / 1000,
-    voiceBandRatio: Math.round(voiceBandRatio * 1000) / 1000,
-  };
-}
-
 export async function autoDetectSongStarts() {
   if (isAutoDetectRunning) return;
 

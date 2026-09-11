@@ -1,7 +1,7 @@
 import state from './state.js';
 import {
   HIGHLIGHT_DB_NAME, HIGHLIGHT_DB_VERSION, HIGHLIGHT_STORE_NAME,
-  HIGHLIGHT_MAX_AGE_DAYS, SAMPLING_INTERVAL_SEC,
+  HIGHLIGHT_MAX_AGE_DAYS,
   CHAT_STORE_NAME
 } from './config.js';
 import { getVideoId, escapeHtml, formatSubtitleTime } from './utils.js';

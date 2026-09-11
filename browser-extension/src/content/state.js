@@ -36,6 +36,8 @@ const state = {
   // List scan
   isListScanMode: false,
   listScanProceeding: false,
+  listScanPanel: null,
+  listScanPanelVisible: false,
 
   // Detected timestamps
   detectedTimestamps: [],
