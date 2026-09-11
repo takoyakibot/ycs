@@ -201,6 +201,38 @@ class SubtitleApiController extends Controller
     }
 
     /**
+     * 動画のタイムスタンプ作成状況を返す（リストスキャン用）
+     */
+    public function timestampStatus(Request $request)
+    {
+        $validated = $request->validate([
+            'video_ids' => ['required', 'string'],
+        ]);
+
+        $videoIds = array_filter(
+            array_map('trim', explode(',', $validated['video_ids'])),
+            fn ($id) => preg_match('/^[A-Za-z0-9_-]{11}$/', $id)
+        );
+
+        if (empty($videoIds)) {
+            return response()->json(['statuses' => []]);
+        }
+
+        $counts = \App\Models\TsItem::whereIn('video_id', $videoIds)
+            ->where('is_display', '1')
+            ->groupBy('video_id')
+            ->selectRaw('video_id, count(*) as count')
+            ->pluck('count', 'video_id');
+
+        $statuses = [];
+        foreach ($videoIds as $id) {
+            $statuses[$id] = $counts->get($id, 0);
+        }
+
+        return response()->json(['statuses' => $statuses]);
+    }
+
+    /**
      * アクセス可能なチャンネルの表示中アーカイブのベースクエリ
      * （一般管理者は自分のチャンネル、スーパー管理者は全チャンネル）
      */

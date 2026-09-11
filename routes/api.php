@@ -43,4 +43,7 @@ Route::middleware(['auth:sanctum', 'admin'])->group(function () {
 
     Route::post('extension/spectral-data', [SpectralApiController::class, 'store'])
         ->middleware('throttle:30,1');
+
+    Route::get('extension/timestamp-status', [SubtitleApiController::class, 'timestampStatus'])
+        ->middleware('throttle:30,1');
 });

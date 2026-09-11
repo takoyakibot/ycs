@@ -622,6 +622,20 @@ function createListScanPanel() {
         overflow: hidden;
         text-overflow: ellipsis;
       }
+      .lsp-ts-badge {
+        font-size: 9px;
+        padding: 1px 4px;
+        border-radius: 3px;
+        white-space: nowrap;
+      }
+      .lsp-ts-badge.has-ts {
+        background: #1b5e20;
+        color: #a5d6a7;
+      }
+      .lsp-ts-badge.no-ts {
+        background: #333;
+        color: #888;
+      }
       .lsp-item-status {
         display: flex;
         align-items: center;
@@ -937,10 +951,11 @@ async function renderVideoList() {
     return;
   }
 
-  // 各動画のスキャン状況を取得
-  const statuses = await Promise.all(
-    currentListScanVideoIds.map(id => getVideoScanStatus(id))
-  );
+  // 各動画のスキャン状況とタイムスタンプ作成状況を並行取得
+  const [statuses, tsStatusMap] = await Promise.all([
+    Promise.all(currentListScanVideoIds.map(id => getVideoScanStatus(id))),
+    fetchTimestampStatuses(currentListScanVideoIds),
+  ]);
 
   // 完了数をカウント（この表示は「完了した動画数/全体数」であり、選択中の位置ではない）
   const completedCount = statuses.filter(s => s.status === 'completed').length;
@@ -953,6 +968,7 @@ async function renderVideoList() {
   listContainer.innerHTML = currentListScanVideoIds.map((videoId, index) => {
     const status = statuses[index];
     const isCurrent = videoId === currentVideoId;
+    const tsCount = tsStatusMap[videoId] || 0;
 
     const statusIcon = {
       'not_scanned': '○',
@@ -962,11 +978,15 @@ async function renderVideoList() {
     }[status.status] || '○';
 
     const statusClass = status.status;
+    const tsBadge = tsCount > 0
+      ? `<span class="lsp-ts-badge has-ts" title="タイムスタンプ ${tsCount}件">TS ${tsCount}</span>`
+      : `<span class="lsp-ts-badge no-ts" title="タイムスタンプ未作成">TS 0</span>`;
 
     return `
       <div class="lsp-item ${isCurrent ? 'current' : ''}" data-video-id="${videoId}">
         <span class="lsp-item-index">${index + 1}.</span>
         <span class="lsp-item-id">${videoId}</span>
+        ${tsBadge}
         <div class="lsp-item-status">
           <span class="lsp-status-icon ${statusClass}">${statusIcon}</span>
           <div class="lsp-progress-bar">
@@ -1012,6 +1032,26 @@ async function getVideoScanStatus(videoId) {
   }
 
   return { status: 'not_scanned', progress: 0 };
+}
+
+/**
+ * タイムスタンプ作成状況をサーバーから取得
+ */
+async function fetchTimestampStatuses(videoIds) {
+  if (!ycsApiToken || !ycsServerUrl || videoIds.length === 0) {
+    return {};
+  }
+  try {
+    const response = await fetch(
+      `${ycsServerUrl}/api/extension/timestamp-status?video_ids=${videoIds.join(',')}`,
+      { headers: { 'Authorization': `Bearer ${ycsApiToken}`, 'Accept': 'application/json' } }
+    );
+    if (!response.ok) return {};
+    const data = await response.json();
+    return data.statuses || {};
+  } catch {
+    return {};
+  }
 }
 
 /**
