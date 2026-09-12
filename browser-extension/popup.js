@@ -16,6 +16,8 @@ const STORAGE_KEY_YCS_API_TOKEN = 'ycsApiToken';
 const STORAGE_KEY_GRAPH_BASE_HEIGHT = 'graphBaseHeight';
 const STORAGE_KEY_GRAPH_HEIGHT_STEP = 'graphHeightStep';
 
+const IS_GENERAL_EDITION = chrome.runtime.getManifest().name.includes('一般版');
+
 // 字幕データ等の送信先。ローカル開発時は設定で上書きする
 const DEFAULT_YCS_SERVER_URL = 'https://ycs.alpacasandbag.jp';
 
@@ -60,6 +62,12 @@ let isScanning = false;
  * 初期化
  */
 async function init() {
+  if (IS_GENERAL_EDITION) {
+    document.querySelectorAll('[data-admin-only]').forEach(el => el.remove());
+    const title = document.getElementById('popup-title');
+    if (title) title.textContent = chrome.runtime.getManifest().name;
+  }
+
   // 現在のタブを取得
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   const isYouTube = tab?.url?.includes('youtube.com/watch');
@@ -92,17 +100,20 @@ async function init() {
   const hasApiKey = !!result[STORAGE_KEY_CLAUDE_API_KEY];
 
   elements.showEmbeddedUI.checked = showUI;
-  elements.hideGoogleAI.checked = hideGoogleAI;
-  elements.chatDelayEnabled.checked = chatDelayEnabled;
-  elements.chatDelaySeconds.value = chatDelaySeconds;
-  elements.chatDelayValue.textContent = chatDelaySeconds + '秒';
-  elements.chatDelayOptions.style.display = chatDelayEnabled ? 'block' : 'none';
-  elements.toxicityCheckEnabled.checked = toxicityCheckEnabled;
-  elements.apiKeySection.style.display = toxicityCheckEnabled ? 'block' : 'none';
-  if (hasApiKey) {
-    elements.claudeApiKey.placeholder = '設定済み';
-    elements.apiKeyStatus.textContent = 'APIキー設定済み';
-    elements.apiKeyStatus.style.color = '#2e7d32';
+
+  if (!IS_GENERAL_EDITION) {
+    elements.hideGoogleAI.checked = hideGoogleAI;
+    elements.chatDelayEnabled.checked = chatDelayEnabled;
+    elements.chatDelaySeconds.value = chatDelaySeconds;
+    elements.chatDelayValue.textContent = chatDelaySeconds + '秒';
+    elements.chatDelayOptions.style.display = chatDelayEnabled ? 'block' : 'none';
+    elements.toxicityCheckEnabled.checked = toxicityCheckEnabled;
+    elements.apiKeySection.style.display = toxicityCheckEnabled ? 'block' : 'none';
+    if (hasApiKey) {
+      elements.claudeApiKey.placeholder = '設定済み';
+      elements.apiKeyStatus.textContent = 'APIキー設定済み';
+      elements.apiKeyStatus.style.color = '#2e7d32';
+    }
   }
 
   // 音量グラフの高さ設定を読み込み
@@ -112,40 +123,45 @@ async function init() {
     result[STORAGE_KEY_GRAPH_HEIGHT_STEP], DEFAULT_GRAPH_HEIGHT_STEP, GRAPH_HEIGHT_STEP_RANGE);
   updateGraphHeightStatus();
 
-  // YCS API設定を読み込み
-  // 実際の送信先と表示を一致させるため、末尾スラッシュを除去して表示する
-  elements.ycsServerUrl.value = (result[STORAGE_KEY_YCS_SERVER_URL] || DEFAULT_YCS_SERVER_URL).replace(/\/+$/, '');
-  if (result[STORAGE_KEY_YCS_API_TOKEN]) {
-    elements.ycsApiToken.placeholder = '設定済み';
-    elements.ycsSettingsStatus.textContent = 'APIトークン設定済み';
-    elements.ycsSettingsStatus.style.color = '#2e7d32';
+  if (!IS_GENERAL_EDITION) {
+    // YCS API設定を読み込み
+    elements.ycsServerUrl.value = (result[STORAGE_KEY_YCS_SERVER_URL] || DEFAULT_YCS_SERVER_URL).replace(/\/+$/, '');
+    if (result[STORAGE_KEY_YCS_API_TOKEN]) {
+      elements.ycsApiToken.placeholder = '設定済み';
+      elements.ycsSettingsStatus.textContent = 'APIトークン設定済み';
+      elements.ycsSettingsStatus.style.color = '#2e7d32';
+    }
   }
 
   // イベントリスナーを設定
   elements.showEmbeddedUI.addEventListener('change', toggleEmbeddedUI);
-  elements.hideGoogleAI.addEventListener('change', toggleHideGoogleAI);
-  elements.chatDelayEnabled.addEventListener('change', toggleChatDelay);
-  elements.chatDelaySeconds.addEventListener('input', changeChatDelaySeconds);
-  elements.toxicityCheckEnabled.addEventListener('change', toggleToxicityCheck);
-  elements.saveApiKey.addEventListener('click', saveClaudeApiKey);
   elements.graphBaseHeight.addEventListener('change', saveGraphHeightSettings);
   elements.graphHeightStep.addEventListener('change', saveGraphHeightSettings);
-  elements.saveYcsSettings.addEventListener('click', saveYcsSettings);
   elements.helpLink.addEventListener('click', showHelp);
   elements.clearAllBtn.addEventListener('click', clearAllScannedData);
+
+  if (!IS_GENERAL_EDITION) {
+    elements.hideGoogleAI.addEventListener('change', toggleHideGoogleAI);
+    elements.chatDelayEnabled.addEventListener('change', toggleChatDelay);
+    elements.chatDelaySeconds.addEventListener('input', changeChatDelaySeconds);
+    elements.toxicityCheckEnabled.addEventListener('change', toggleToxicityCheck);
+    elements.saveApiKey.addEventListener('click', saveClaudeApiKey);
+    elements.saveYcsSettings.addEventListener('click', saveYcsSettings);
+  }
 
   // YouTube埋め込みUIの初期状態をコンテンツスクリプトに通知
   if (isYouTube) {
     notifyYouTubeContentScript(showUI);
-    // スキャンセクションを表示
-    elements.scanSection.style.display = 'block';
-    elements.scanBtn.addEventListener('click', toggleScan);
-    // スキャン状態を確認
-    await updateScanButtonState(tab.id);
+    if (!IS_GENERAL_EDITION) {
+      // tabCaptureスキャンセクションを表示
+      elements.scanSection.style.display = 'block';
+      elements.scanBtn.addEventListener('click', toggleScan);
+      await updateScanButtonState(tab.id);
+    }
   }
 
   // Googleの場合は設定変更を通知
-  if (isGoogle) {
+  if (!IS_GENERAL_EDITION && isGoogle) {
     notifyGoogleContentScript(hideGoogleAI);
   }
 
@@ -471,14 +487,24 @@ async function clearAllScannedData() {
  */
 function showHelp(e) {
   e.preventDefault();
-  showInfo(`
-    <strong>使い方:</strong><br>
-    ・スキャン開始: YouTube動画ページでこのボタンをクリック<br>
-    ・YouTube画面にUI: チェックでYouTube動画画面に音量検出UIを表示<br>
-    ・AI概要を非表示: チェックでGoogle検索のAI概要を非表示<br>
-    ・チャット遅延送信: ライブチャットの送信を一定秒数保留し、その間にキャンセル可能<br>
-    ・スキャン済み一覧: スキャン済みの動画を確認・開く・削除
-  `);
+  if (IS_GENERAL_EDITION) {
+    showInfo(`
+      <strong>使い方:</strong><br>
+      ・YouTube画面にUI: チェックでYouTube動画画面に音量検出UIを表示<br>
+      ・スキャン: YouTube動画画面のYCSボタンからダイレクトスキャンを開始<br>
+      ・楽曲推測: タイムスタンプマーカーをクリックして楽曲候補を表示<br>
+      ・スキャン済み一覧: スキャン済みの動画を確認・開く・削除
+    `);
+  } else {
+    showInfo(`
+      <strong>使い方:</strong><br>
+      ・スキャン開始: YouTube動画ページでこのボタンをクリック<br>
+      ・YouTube画面にUI: チェックでYouTube動画画面に音量検出UIを表示<br>
+      ・AI概要を非表示: チェックでGoogle検索のAI概要を非表示<br>
+      ・チャット遅延送信: ライブチャットの送信を一定秒数保留し、その間にキャンセル可能<br>
+      ・スキャン済み一覧: スキャン済みの動画を確認・開く・削除
+    `);
+  }
 }
 
 /**

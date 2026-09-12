@@ -6,6 +6,8 @@
  * 音量ダイナミクスグラフ用のデータを蓄積する
  */
 
+const IS_GENERAL_EDITION = chrome.runtime.getManifest().name.includes('一般版');
+
 // 状態管理
 let isCapturing = false;
 let timestamps = [];
@@ -75,43 +77,46 @@ const YCS_SERVER_URL_MIGRATION_KEY = 'ycsServerUrlMigratedToProd';
 
 // Service Worker起動時にクリーンアップ
 // tabCaptureの「つかみっぱなし」を防ぐため、既存のOffscreen Documentを閉じる
-(async () => {
-  try {
-    const contexts = await chrome.runtime.getContexts({
-      contextTypes: ['OFFSCREEN_DOCUMENT'],
-      documentUrls: [chrome.runtime.getURL('offscreen.html')]
-    });
-    if (contexts.length > 0) {
-      console.log('起動時: 既存のOffscreen Documentを閉じます');
-      await chrome.offscreen.closeDocument();
+if (!IS_GENERAL_EDITION) {
+  (async () => {
+    try {
+      const contexts = await chrome.runtime.getContexts({
+        contextTypes: ['OFFSCREEN_DOCUMENT'],
+        documentUrls: [chrome.runtime.getURL('offscreen.html')]
+      });
+      if (contexts.length > 0) {
+        console.log('起動時: 既存のOffscreen Documentを閉じます');
+        await chrome.offscreen.closeDocument();
+      }
+      isCapturing = false;
+      isScanning = false;
+    } catch (error) {
+      console.log('起動時クリーンアップ（エラーは無視）:', error.message);
     }
-    isCapturing = false;
-    isScanning = false;
-  } catch (error) {
-    console.log('起動時クリーンアップ（エラーは無視）:', error.message);
-  }
-})();
+  })();
+}
 
-// メッセージリスナー
 // 各スキャン: 実行タブが閉じられたら状態を落とす（タブID残留で他タブが遷移するのを防ぐ）
-chrome.tabs.onRemoved.addListener(async (tabId) => {
-  try {
-    const result = await chrome.storage.local.get([
-      'subtitleScanActive', 'subtitleScanTabId',
-      'listScanActive', 'listScanTabId',
-    ]);
-    const updates = {};
-    if (result.subtitleScanActive && result.subtitleScanTabId === tabId) {
-      updates.subtitleScanActive = false;
-    }
-    if (result.listScanActive && result.listScanTabId === tabId) {
-      updates.listScanActive = false;
-    }
-    if (Object.keys(updates).length > 0) {
-      await chrome.storage.local.set(updates);
-    }
-  } catch (e) { /* サービスワーカー停止間際などは無視 */ }
-});
+if (!IS_GENERAL_EDITION) {
+  chrome.tabs.onRemoved.addListener(async (tabId) => {
+    try {
+      const result = await chrome.storage.local.get([
+        'subtitleScanActive', 'subtitleScanTabId',
+        'listScanActive', 'listScanTabId',
+      ]);
+      const updates = {};
+      if (result.subtitleScanActive && result.subtitleScanTabId === tabId) {
+        updates.subtitleScanActive = false;
+      }
+      if (result.listScanActive && result.listScanTabId === tabId) {
+        updates.listScanActive = false;
+      }
+      if (Object.keys(updates).length > 0) {
+        await chrome.storage.local.set(updates);
+      }
+    } catch (e) { /* サービスワーカー停止間際などは無視 */ }
+  });
+}
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   switch (message.type) {
@@ -138,10 +143,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ success: true });
       return true;
 
+    case 'UPDATE_CONFIG':
+      Object.assign(CONFIG, message.config);
+      chrome.storage.local.set({ config: CONFIG });
+      if (!IS_GENERAL_EDITION) {
+        chrome.runtime.sendMessage({
+          type: 'UPDATE_CONFIG',
+          config: CONFIG
+        }).catch(() => {});
+      }
+      sendResponse({ success: true, config: CONFIG });
+      return true;
+
     case 'UPDATE_VIDEO_TIME':
-      // キャプチャ対象（スキャン中）のタブからの再生位置のみoffscreenへ転送する。
-      // 再生中の全タブがこのメッセージを送ってくるため、無条件に転送すると
-      // 別タブの再生位置にスキャン中の音声が書き込まれてグラフが汚染される（#618）
+      if (IS_GENERAL_EDITION) return false;
       if (!isCapturing || sender.tab?.id !== currentTabId) {
         return false;
       }
@@ -151,26 +166,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }).catch(() => {});
       return false;
 
-    case 'UPDATE_CONFIG':
-      Object.assign(CONFIG, message.config);
-      // ストレージに保存
-      chrome.storage.local.set({ config: CONFIG });
-      // Offscreen Documentにも転送
-      chrome.runtime.sendMessage({
-        type: 'UPDATE_CONFIG',
-        config: CONFIG
-      }).catch(() => {});
-      sendResponse({ success: true, config: CONFIG });
-      return true;
-
     case 'TIMESTAMP_DETECTED_FROM_OFFSCREEN':
-      // Offscreen Documentからのタイムスタンプ検出通知
+      if (IS_GENERAL_EDITION) return false;
       timestamps.push(message.timestamp);
       notifyContentScript(message.timestamp);
       return false;
 
     case 'VOLUME_DATA_FROM_OFFSCREEN':
-      // Offscreen Documentからの音量データ
+      if (IS_GENERAL_EDITION) return false;
       console.log('音量データ受信(raw)', { index: message.index, volume: message.volume });
       if (message.index >= 0 && message.index < currentGraphResolution) {
         const oldValue = volumeGraphData[message.index] || 0;
@@ -189,14 +192,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       return false;
 
-    // 音量グラフ関連
     case 'START_SCAN':
+      if (IS_GENERAL_EDITION) {
+        sendResponse({ success: false, error: 'NOT_AVAILABLE_IN_GENERAL_EDITION' });
+        return true;
+      }
       console.log('START_SCAN受信', { isScanning });
       if (isScanning) {
         stopScan();
         sendResponse({ success: true, isScanning: false });
       } else {
-        // 非同期で開始し、結果を返す
         startScan(message.muted).then(result => {
           sendResponse({ success: result.success, isScanning, error: result.error });
         });
@@ -204,6 +209,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
 
     case 'STOP_SCAN':
+      if (IS_GENERAL_EDITION) {
+        sendResponse({ success: true });
+        return true;
+      }
       stopScan();
       sendResponse({ success: true });
       return true;
@@ -228,6 +237,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return false;
 
     case 'CHECK_TOXICITY':
+      if (IS_GENERAL_EDITION) {
+        sendResponse({ toxic: false, reason: '', skipped: true });
+        return true;
+      }
       checkToxicity(message.text, message.recentMessages)
         .then(result => sendResponse(result))
         .catch(error => sendResponse({ error: error.message }));
