@@ -2,6 +2,7 @@
   "manifest_version": 3,
   "name": "歌枠タイムスタンプ検出（一般版）",
   "version": "0.1.0",
+  "x_edition": "general",
   "description": "YouTube動画の音量変化を検出し、楽曲開始のタイムスタンプ候補を生成します",
   "permissions": [
     "activeTab",

@@ -16,7 +16,7 @@ const STORAGE_KEY_YCS_API_TOKEN = 'ycsApiToken';
 const STORAGE_KEY_GRAPH_BASE_HEIGHT = 'graphBaseHeight';
 const STORAGE_KEY_GRAPH_HEIGHT_STEP = 'graphHeightStep';
 
-const IS_GENERAL_EDITION = chrome.runtime.getManifest().name.includes('一般版');
+const IS_GENERAL_EDITION = chrome.runtime.getManifest().x_edition === 'general';
 
 // 字幕データ等の送信先。ローカル開発時は設定で上書きする
 const DEFAULT_YCS_SERVER_URL = 'https://ycs.alpacasandbag.jp';

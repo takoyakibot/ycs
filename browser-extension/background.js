@@ -6,7 +6,7 @@
  * 音量ダイナミクスグラフ用のデータを蓄積する
  */
 
-const IS_GENERAL_EDITION = chrome.runtime.getManifest().name.includes('一般版');
+const IS_GENERAL_EDITION = chrome.runtime.getManifest().x_edition === 'general';
 
 // 状態管理
 let isCapturing = false;
