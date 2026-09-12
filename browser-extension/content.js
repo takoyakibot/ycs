@@ -5045,16 +5045,18 @@
       });
     }
 
-    // スキャンボタン（tabCapture方式、常にミュート）
     if (scanBtn) {
       scanBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        console.log('スキャンボタンがクリックされました');
-        try {
-          const response = await chrome.runtime.sendMessage({ type: 'START_SCAN' });
-          console.log('START_SCAN応答:', response);
-        } catch (error) {
-          console.error('START_SCANエラー:', error);
+        if (state.edition === 'general') {
+          startDirectScan();
+        } else {
+          try {
+            const response = await chrome.runtime.sendMessage({ type: 'START_SCAN' });
+            console.log('START_SCAN応答:', response);
+          } catch (error) {
+            console.error('START_SCANエラー:', error);
+          }
         }
       });
     }
@@ -5073,7 +5075,6 @@
       });
     }
 
-    // やり直しボタン: 保存データを破棄して最初からスキャンし直す
     const rescanBtn = state.volumeGraphContainer.querySelector('#vdg-rescan-btn');
     if (rescanBtn) {
       rescanBtn.addEventListener('click', async (e) => {
@@ -5083,10 +5084,14 @@
 
         await discardVolumeDataAndReset();
 
-        try {
-          await chrome.runtime.sendMessage({ type: 'START_SCAN' });
-        } catch (error) {
-          console.error('START_SCANエラー:', error);
+        if (state.edition === 'general') {
+          startDirectScan();
+        } else {
+          try {
+            await chrome.runtime.sendMessage({ type: 'START_SCAN' });
+          } catch (error) {
+            console.error('START_SCANエラー:', error);
+          }
         }
       });
     }
