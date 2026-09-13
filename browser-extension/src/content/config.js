@@ -46,6 +46,20 @@ export const CHAT_SIGNAL_CONFIG = {
 
 export const CLAP_PATTERN = /8{3,}|８{3,}|👏|拍手|ぱちぱち|パチパチ|clap/i;
 
+export const EMOJI_ONLY_RE = /^[\p{Extended_Pictographic}\p{Emoji_Presentation}\p{So}\s‍️︎]+$/u;
+
+export const CHAT_ONLY_CONFIG = {
+  BUCKET_SEC: 10,
+  MIN_CHATS: 50,
+  SMOOTH_WINDOW_BUCKETS: 5,
+  EMOJI_RATIO_ENTER: 0.4,
+  EMOJI_RATIO_EXIT: 0.15,
+  EXIT_TOLERANCE_BUCKETS: 3,
+  MIN_SEGMENT_SEC: 45,
+  MERGE_GAP_SEC: 90,
+  MIN_BUCKET_MESSAGES: 2,
+};
+
 export const CHAT_DB_NAME = 'YCSChatDB';
 export const CHAT_DB_VERSION = 1;
 export const CHAT_STORE_NAME = 'chats';
