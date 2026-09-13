@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ChatReplayApiController;
 use App\Http\Controllers\HighlightDetectionApiController;
 use App\Http\Controllers\PublicSubtitleApiController;
 use App\Http\Controllers\SpectralApiController;
@@ -47,6 +48,9 @@ Route::middleware(['auth:sanctum', 'admin'])->group(function () {
         ->middleware('throttle:30,1');
 
     Route::post('extension/spectral-data', [SpectralApiController::class, 'store'])
+        ->middleware('throttle:30,1');
+
+    Route::post('extension/chat-replay-data', [ChatReplayApiController::class, 'store'])
         ->middleware('throttle:30,1');
 
     Route::get('extension/timestamp-status', [SubtitleApiController::class, 'timestampStatus'])

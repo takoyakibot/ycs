@@ -164,7 +164,7 @@ class SubtitleApiTest extends TestCase
         $response->assertStatus(422);
     }
 
-    public function test_store_subtitles_returns_404_for_unknown_video(): void
+    public function test_store_subtitles_accepts_video_not_in_archives(): void
     {
         $response = $this->actingAs($this->superAdmin)
             ->postJson('/api/manage/archives/subtitles/store', [
@@ -174,10 +174,11 @@ class SubtitleApiTest extends TestCase
                 'subtitles' => [['start' => 0, 'duration' => 1, 'text' => 'test']],
             ]);
 
-        $response->assertStatus(404);
+        $response->assertStatus(200);
+        $this->assertDatabaseHas('video_subtitles', ['video_id' => 'xxxxxxxxxxx']);
     }
 
-    public function test_store_subtitles_denied_for_other_user(): void
+    public function test_store_subtitles_denied_for_other_users_archived_video(): void
     {
         $otherUser = User::factory()->create([
             'email_verified_at' => now(),
