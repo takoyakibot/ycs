@@ -118,6 +118,26 @@
 
   const CLAP_PATTERN = /8{3,}|８{3,}|👏|拍手|ぱちぱち|パチパチ|clap/i;
 
+  const EMOJI_ONLY_RE = /^[\p{Extended_Pictographic}\p{Emoji_Presentation}\p{So}\s‍️︎]+$/u;
+
+  const EMOJI_SHORTCODE_RE = /:[a-zA-Z0-9_]+:/g;
+
+  const CHAT_ONLY_CONFIG = {
+    BUCKET_SEC: 10,
+    MIN_CHATS: 50,
+    SMOOTH_WINDOW_BUCKETS: 5,
+    EMOJI_RATIO_ENTER: 0.4,
+    EMOJI_RATIO_EXIT: 0.15,
+    EXIT_TOLERANCE_BUCKETS: 3,
+    MIN_SEGMENT_SEC: 45,
+    MERGE_GAP_SEC: 90,
+    MIN_WINDOW_MESSAGES: 10,
+    FIRST_SONG_MIN_OFFSET_SEC: 120,
+    NEAR_SEGMENT_TOLERANCE_SEC: 30,
+    TAIL_GUARD_SEC: 60,
+    REACTION_DELAY_SEC: 10,
+  };
+
   const CHAT_DB_NAME = 'YCSChatDB';
   const CHAT_DB_VERSION = 1;
   const CHAT_STORE_NAME = 'chats';
@@ -3543,6 +3563,168 @@
     return bursts;
   }
 
+  function isEmojiOnlyMessage(text) {
+    if (!text || typeof text !== 'string') return false;
+    const trimmed = text.trim();
+    if (trimmed.length === 0) return false;
+    if (EMOJI_ONLY_RE.test(trimmed)) return true;
+    // YouTube絵文字ピッカー・メンバー限定絵文字は :shortcode: 形式で保存される
+    const withoutShortcodes = trimmed.replace(EMOJI_SHORTCODE_RE, '').trim();
+    return withoutShortcodes.length === 0 || EMOJI_ONLY_RE.test(withoutShortcodes);
+  }
+
+  function buildChatBuckets(chats, videoDurationSec, bucketSec) {
+    const delaySec = CHAT_SIGNAL_CONFIG.CHAT_DELAY_SEC;
+    const numBuckets = Math.ceil(videoDurationSec / bucketSec);
+    const buckets = Array.from({ length: numBuckets }, () => ({ total: 0, emojiOnly: 0 }));
+
+    for (const c of chats) {
+      if (typeof c.message !== 'string') continue;
+      const timeSec = (Number(c.timestamp) || 0) / 1000 - delaySec;
+      if (timeSec < 0 || timeSec >= videoDurationSec) continue;
+      const idx = Math.min(numBuckets - 1, Math.floor(timeSec / bucketSec));
+      buckets[idx].total++;
+      if (isEmojiOnlyMessage(c.message)) buckets[idx].emojiOnly++;
+    }
+    return buckets;
+  }
+
+  function detectEmojiSingingSegments(buckets, bucketSec) {
+    const cfg = CHAT_ONLY_CONFIG;
+    const half = Math.floor(cfg.SMOOTH_WINDOW_BUCKETS / 2);
+
+    const emojiRatios = buckets.map((b, i) => {
+      let totalMsg = 0;
+      let emojiMsg = 0;
+      for (let j = Math.max(0, i - half); j <= Math.min(buckets.length - 1, i + half); j++) {
+        totalMsg += buckets[j].total;
+        emojiMsg += buckets[j].emojiOnly;
+      }
+      if (totalMsg < cfg.MIN_WINDOW_MESSAGES) return 0;
+      return emojiMsg / totalMsg;
+    });
+
+    const minBuckets = Math.max(1, Math.ceil(cfg.MIN_SEGMENT_SEC / bucketSec));
+    const segments = [];
+    let inSegment = false;
+    let segStart = 0;
+    let segLastAbove = 0;
+    let belowCount = 0;
+
+    const flush = () => {
+      if (segLastAbove - segStart + 1 >= minBuckets) {
+        segments.push({
+          start: segStart * bucketSec,
+          end: (segLastAbove + 1) * bucketSec,
+        });
+      }
+    };
+
+    for (let i = 0; i < emojiRatios.length; i++) {
+      if (!inSegment) {
+        if (emojiRatios[i] >= cfg.EMOJI_RATIO_ENTER) {
+          inSegment = true;
+          segStart = i;
+          segLastAbove = i;
+          belowCount = 0;
+        }
+      } else if (emojiRatios[i] < cfg.EMOJI_RATIO_EXIT) {
+        belowCount++;
+        if (belowCount >= cfg.EXIT_TOLERANCE_BUCKETS) {
+          flush();
+          inSegment = false;
+        }
+      } else {
+        belowCount = 0;
+        segLastAbove = i;
+      }
+    }
+    if (inSegment) flush();
+
+    const merged = [];
+    for (const seg of segments) {
+      const adjusted = {
+        start: Math.max(0, seg.start - cfg.REACTION_DELAY_SEC),
+        end: seg.end,
+      };
+      const prev = merged[merged.length - 1];
+      if (prev && adjusted.start - prev.end <= cfg.MERGE_GAP_SEC) {
+        prev.end = adjusted.end;
+      } else {
+        merged.push(adjusted);
+      }
+    }
+    return merged;
+  }
+
+  function chatOnlyDetectSongStarts(chats, videoDurationSec) {
+    const cfg = CHAT_ONLY_CONFIG;
+    const clapCfg = CHAT_SIGNAL_CONFIG;
+
+    if (!chats || chats.length < cfg.MIN_CHATS) {
+      return { starts: [], method: 'insufficient' };
+    }
+
+    const buckets = buildChatBuckets(chats, videoDurationSec, cfg.BUCKET_SEC);
+    const emojiSegments = detectEmojiSingingSegments(buckets, cfg.BUCKET_SEC);
+    const bursts = detectClapBursts(chats, videoDurationSec);
+    const chatActive = bursts.length >= clapCfg.MIN_BURSTS_TO_TRUST;
+
+    if (emojiSegments.length === 0 && bursts.length === 0) {
+      return { starts: [], method: 'no_signal' };
+    }
+
+    const starts = [];
+
+    const tolerance = cfg.NEAR_SEGMENT_TOLERANCE_SEC;
+    const tailGuard = cfg.TAIL_GUARD_SEC;
+
+    if (emojiSegments.length > 0) {
+      for (const seg of emojiSegments) {
+        starts.push(seg.start);
+      }
+
+      if (chatActive) {
+        for (const burst of bursts) {
+          const inSegment = emojiSegments.some(s => burst >= s.start && burst <= s.end + tolerance);
+          if (inSegment) {
+            const nextStart = burst + clapCfg.SPLIT_START_OFFSET_SEC;
+            if (nextStart < videoDurationSec - tailGuard) {
+              const alreadyCovered = emojiSegments.some(
+                s => nextStart >= s.start - tolerance && nextStart <= s.start + tolerance
+              );
+              if (!alreadyCovered) starts.push(nextStart);
+            }
+          }
+        }
+      }
+    } else if (chatActive) {
+      for (let i = 0; i < bursts.length; i++) {
+        if (i === 0 && bursts[0] > cfg.FIRST_SONG_MIN_OFFSET_SEC) {
+          starts.push(0);
+        }
+        const nextStart = bursts[i] + clapCfg.SPLIT_START_OFFSET_SEC;
+        if (nextStart < videoDurationSec - tailGuard) {
+          starts.push(nextStart);
+        }
+      }
+    }
+
+    starts.sort((a, b) => a - b);
+    const deduped = [];
+    for (const t of starts) {
+      if (deduped.length === 0 || t - deduped[deduped.length - 1] > clapCfg.DEDUPE_SEC) {
+        deduped.push(Math.floor(t));
+      }
+    }
+
+    const method = emojiSegments.length > 0
+      ? (chatActive ? 'emoji+clap' : 'emoji')
+      : 'clap';
+
+    return { starts: deduped, method };
+  }
+
   function fuseSegmentsWithChat(segments, bursts) {
     const cfg = CHAT_SIGNAL_CONFIG;
     const chatActive = bursts.length >= cfg.MIN_BURSTS_TO_TRUST;
@@ -3591,91 +3773,116 @@
     return { starts: deduped, mergedCount, splitCount, chatActive };
   }
 
+  async function fetchChats(videoId) {
+    let chats = [];
+    let chatUnavailable = false;
+    if (videoId) {
+      try {
+        await initChatDB();
+        chats = await loadChatDataForVideo(videoId);
+      } catch (e) {
+        console.warn('[YCS 自動検出] チャットDB読込失敗:', e);
+      }
+      if (chats.length === 0) {
+        try {
+          showTsEditorNotice('チャットを取得しています…');
+          const continuation = await getChatContinuation();
+          if (continuation) {
+            const fetched = await fetchAllChatReplays(continuation, (count) => {
+              showTsEditorNotice(`チャットを取得中... (${count}件)`);
+            });
+            if (fetched.length > 0) {
+              await saveChatsToDB(videoId, fetched);
+              chats = fetched;
+            } else {
+              chatUnavailable = true;
+            }
+          } else {
+            chatUnavailable = true;
+          }
+        } catch (e) {
+          console.warn('[YCS 自動検出] チャット取得失敗:', e);
+          chatUnavailable = true;
+        }
+      }
+    }
+    return { chats, chatUnavailable };
+  }
+
+  function addDetectedMarkers(starts, sourceNote) {
+    const newTimes = starts.filter(
+      t => !state.tsMarkers.some(m => Math.abs(m.time - t) <= AUTO_DETECT_SKIP_NEAR_MARKER_SEC)
+    );
+    const skippedCount = starts.length - newTimes.length;
+    if (newTimes.length === 0) {
+      showTsEditorNotice(`候補${starts.length}件はすべて既存マーカー付近のためスキップしました`, true);
+      return;
+    }
+
+    pushMarkerHistory();
+    for (const time of newTimes) {
+      state.tsMarkers.push({ id: state.nextMarkerId++, time, text: '' });
+    }
+    state.tsMarkers.sort((a, b) => a.time - b.time);
+    updateTimestampList();
+    drawVolumeGraph();
+    saveMarkersToStorage();
+
+    const skippedNote = skippedCount > 0 ? `、既存マーカー付近の${skippedCount}件はスキップ` : '';
+    showTsEditorNotice(`${newTimes.length}件の候補マーカーを追加しました（${sourceNote}${skippedNote}）`);
+  }
+
   async function autoDetectSongStarts() {
     if (isAutoDetectRunning) return;
+    if (!state.videoDuration) {
+      showTsEditorNotice('動画の長さを取得できません', true);
+      return;
+    }
 
-    // 数値以外の要素が混ざっていた場合の防御
     const numericData = state.volumeData.map(v => {
       if (typeof v === 'number' && Number.isFinite(v)) return v;
       return Number.isFinite(v?.value) ? v.value : 0;
     });
-
-    if (!state.videoDuration || numericData.length === 0 || !numericData.some(v => v > 0)) {
-      showTsEditorNotice('音量データがありません。先にスキャンを実行してください', true);
-      return;
-    }
+    const hasVolumeData = numericData.length > 0 && numericData.some(v => v > 0);
 
     isAutoDetectRunning = true;
     try {
-      const intervalSec = state.videoDuration / numericData.length;
-      const segments = detectSongSegments(numericData, intervalSec);
-      if (segments.length === 0) {
-        showTsEditorNotice('楽曲らしい区間が見つかりませんでした', true);
-        return;
-      }
-
-      let chats = [];
-      let chatUnavailable = false;
       const videoId = getVideoId();
-      if (videoId) {
-        try {
-          await initChatDB();
-          chats = await loadChatDataForVideo(videoId);
-        } catch (e) {
-          console.warn('[YCS 自動検出] チャットDB読込失敗:', e);
-        }
-        if (chats.length === 0) {
-          try {
-            showTsEditorNotice('チャットを取得しています…');
-            const continuation = await getChatContinuation();
-            if (continuation) {
-              const fetched = await fetchAllChatReplays(continuation, (count) => {
-                showTsEditorNotice(`チャットを取得中... (${count}件)`);
-              });
-              if (fetched.length > 0) {
-                await saveChatsToDB(videoId, fetched);
-                chats = fetched;
-              } else {
-                chatUnavailable = true;
-              }
-            } else {
-              chatUnavailable = true;
-            }
-          } catch (e) {
-            console.warn('[YCS 自動検出] チャット取得失敗（音量のみで判定します）:', e);
-            chatUnavailable = true;
-          }
-        }
-      }
-      // チャット取得中に別の動画へ遷移していた場合は破棄する
+      const { chats, chatUnavailable } = await fetchChats(videoId);
       if (videoId && getVideoId() !== videoId) return;
 
-      const bursts = detectClapBursts(chats, state.videoDuration);
-      const fused = fuseSegmentsWithChat(segments, bursts);
+      if (hasVolumeData) {
+        const intervalSec = state.videoDuration / numericData.length;
+        const segments = detectSongSegments(numericData, intervalSec);
+        if (segments.length === 0) {
+          showTsEditorNotice('楽曲らしい区間が見つかりませんでした', true);
+          return;
+        }
 
-      const newTimes = fused.starts.filter(
-        t => !state.tsMarkers.some(m => Math.abs(m.time - t) <= AUTO_DETECT_SKIP_NEAR_MARKER_SEC)
-      );
-      const skippedCount = fused.starts.length - newTimes.length;
-      if (newTimes.length === 0) {
-        showTsEditorNotice(`候補${fused.starts.length}件はすべて既存マーカー付近のためスキップしました`, true);
-        return;
+        const bursts = detectClapBursts(chats, state.videoDuration);
+        const fused = fuseSegmentsWithChat(segments, bursts);
+
+        const sourceNote = fused.chatActive
+          ? '音量+拍手チャット'
+          : (chats.length > 0 ? '音量のみ（拍手が少ない配信）' : (chatUnavailable ? '音量のみ（チャットなし）' : '音量のみ'));
+        addDetectedMarkers(fused.starts, sourceNote);
+      } else {
+        const result = chatOnlyDetectSongStarts(chats, state.videoDuration);
+        if (result.starts.length === 0) {
+          const reason = result.method === 'insufficient'
+            ? 'チャットデータが不足しています'
+            : 'チャットから楽曲区間を検出できませんでした';
+          showTsEditorNotice(`音量データなし。${reason}`, true);
+          return;
+        }
+
+        const methodLabels = {
+          'emoji+clap': '絵文字+拍手チャット（⚠ 精度低）',
+          'emoji': '絵文字チャット（⚠ 精度低）',
+          'clap': '拍手チャット（⚠ 精度低）',
+        };
+        addDetectedMarkers(result.starts, methodLabels[result.method] || 'チャットのみ');
       }
-
-      pushMarkerHistory();
-      for (const time of newTimes) {
-        state.tsMarkers.push({ id: state.nextMarkerId++, time, text: '' });
-      }
-      state.tsMarkers.sort((a, b) => a.time - b.time);
-      updateTimestampList();
-      drawVolumeGraph();
-      saveMarkersToStorage();
-
-      const sourceNote = fused.chatActive
-        ? '音量+拍手チャット'
-        : (chats.length > 0 ? '音量のみ（拍手が少ない配信）' : (chatUnavailable ? '音量のみ（チャットなし）' : '音量のみ'));
-      const skippedNote = skippedCount > 0 ? `、既存マーカー付近の${skippedCount}件はスキップ` : '';
-      showTsEditorNotice(`${newTimes.length}件の候補マーカーを追加しました（${sourceNote}${skippedNote}）`);
     } finally {
       isAutoDetectRunning = false;
     }
