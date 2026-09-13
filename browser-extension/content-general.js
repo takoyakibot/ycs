@@ -3731,19 +3731,18 @@
     }
 
     if (bursts.length > 0) {
-      ctx.strokeStyle = 'rgba(0, 188, 212, 0.6)';
-      ctx.lineWidth = 1.5;
-      ctx.setLineDash([4, 3]);
+      const triH = Math.min(6, bandHeight * 0.7);
+      ctx.fillStyle = 'rgba(0, 188, 212, 0.8)';
 
       for (const burstTime of bursts) {
         const x = (burstTime / state.videoDuration) * width;
         ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, height);
-        ctx.stroke();
+        ctx.moveTo(x, bandTop);
+        ctx.lineTo(x - 3, bandTop - triH);
+        ctx.lineTo(x + 3, bandTop - triH);
+        ctx.closePath();
+        ctx.fill();
       }
-
-      ctx.setLineDash([]);
     }
   }
 
