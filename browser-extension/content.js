@@ -120,6 +120,8 @@
 
   const EMOJI_ONLY_RE = /^[\p{Extended_Pictographic}\p{Emoji_Presentation}\p{So}\s‍️︎]+$/u;
 
+  const EMOJI_SHORTCODE_RE = /:[a-zA-Z0-9_]+:/g;
+
   const CHAT_ONLY_CONFIG = {
     BUCKET_SEC: 10,
     MIN_CHATS: 50,
@@ -129,7 +131,11 @@
     EXIT_TOLERANCE_BUCKETS: 3,
     MIN_SEGMENT_SEC: 45,
     MERGE_GAP_SEC: 90,
-    MIN_BUCKET_MESSAGES: 2,
+    MIN_WINDOW_MESSAGES: 10,
+    FIRST_SONG_MIN_OFFSET_SEC: 120,
+    NEAR_SEGMENT_TOLERANCE_SEC: 30,
+    TAIL_GUARD_SEC: 60,
+    REACTION_DELAY_SEC: 10,
   };
 
   const CHAT_DB_NAME = 'YCSChatDB';
@@ -3560,7 +3566,11 @@
   function isEmojiOnlyMessage(text) {
     if (!text || typeof text !== 'string') return false;
     const trimmed = text.trim();
-    return trimmed.length > 0 && EMOJI_ONLY_RE.test(trimmed);
+    if (trimmed.length === 0) return false;
+    if (EMOJI_ONLY_RE.test(trimmed)) return true;
+    // YouTube絵文字ピッカー・メンバー限定絵文字は :shortcode: 形式で保存される
+    const withoutShortcodes = trimmed.replace(EMOJI_SHORTCODE_RE, '').trim();
+    return withoutShortcodes.length === 0 || EMOJI_ONLY_RE.test(withoutShortcodes);
   }
 
   function buildChatBuckets(chats, videoDurationSec, bucketSec) {
@@ -3590,7 +3600,7 @@
         totalMsg += buckets[j].total;
         emojiMsg += buckets[j].emojiOnly;
       }
-      if (totalMsg < cfg.MIN_BUCKET_MESSAGES) return 0;
+      if (totalMsg < cfg.MIN_WINDOW_MESSAGES) return 0;
       return emojiMsg / totalMsg;
     });
 
@@ -3633,11 +3643,15 @@
 
     const merged = [];
     for (const seg of segments) {
+      const adjusted = {
+        start: Math.max(0, seg.start - cfg.REACTION_DELAY_SEC),
+        end: seg.end,
+      };
       const prev = merged[merged.length - 1];
-      if (prev && seg.start - prev.end <= cfg.MERGE_GAP_SEC) {
-        prev.end = seg.end;
+      if (prev && adjusted.start - prev.end <= cfg.MERGE_GAP_SEC) {
+        prev.end = adjusted.end;
       } else {
-        merged.push({ ...seg });
+        merged.push(adjusted);
       }
     }
     return merged;
@@ -3662,6 +3676,9 @@
 
     const starts = [];
 
+    const tolerance = cfg.NEAR_SEGMENT_TOLERANCE_SEC;
+    const tailGuard = cfg.TAIL_GUARD_SEC;
+
     if (emojiSegments.length > 0) {
       for (const seg of emojiSegments) {
         starts.push(seg.start);
@@ -3669,12 +3686,12 @@
 
       if (chatActive) {
         for (const burst of bursts) {
-          const inSegment = emojiSegments.some(s => burst >= s.start && burst <= s.end + 30);
+          const inSegment = emojiSegments.some(s => burst >= s.start && burst <= s.end + tolerance);
           if (inSegment) {
             const nextStart = burst + clapCfg.SPLIT_START_OFFSET_SEC;
-            if (nextStart < videoDurationSec - 60) {
+            if (nextStart < videoDurationSec - tailGuard) {
               const alreadyCovered = emojiSegments.some(
-                s => nextStart >= s.start - 30 && nextStart <= s.start + 30
+                s => nextStart >= s.start - tolerance && nextStart <= s.start + tolerance
               );
               if (!alreadyCovered) starts.push(nextStart);
             }
@@ -3683,11 +3700,11 @@
       }
     } else if (chatActive) {
       for (let i = 0; i < bursts.length; i++) {
-        if (i === 0 && bursts[0] > 120) {
+        if (i === 0 && bursts[0] > cfg.FIRST_SONG_MIN_OFFSET_SEC) {
           starts.push(0);
         }
         const nextStart = bursts[i] + clapCfg.SPLIT_START_OFFSET_SEC;
-        if (nextStart < videoDurationSec - 60) {
+        if (nextStart < videoDurationSec - tailGuard) {
           starts.push(nextStart);
         }
       }
