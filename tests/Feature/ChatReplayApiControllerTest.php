@@ -165,4 +165,31 @@ class ChatReplayApiControllerTest extends TestCase
 
         $response->assertStatus(422);
     }
+
+    public function test_accepts_superchat_with_empty_message(): void
+    {
+        $payload = $this->validPayload();
+        $payload['chat_data'] = [
+            ['message' => '', 'timestamp' => 10000, 'type' => 'superchat'],
+            ['message' => null, 'timestamp' => 20000, 'type' => 'superchat'],
+            ['message' => 'テスト', 'timestamp' => 30000, 'type' => 'normal'],
+        ];
+
+        $response = $this->postChatReplayData($payload);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('message_count', 3);
+    }
+
+    public function test_rejects_message_exceeding_max_length(): void
+    {
+        $payload = $this->validPayload();
+        $payload['chat_data'] = [
+            ['message' => str_repeat('あ', 501), 'timestamp' => 10000, 'type' => 'normal'],
+        ];
+
+        $response = $this->postChatReplayData($payload);
+
+        $response->assertStatus(422);
+    }
 }

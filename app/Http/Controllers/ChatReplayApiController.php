@@ -19,7 +19,7 @@ class ChatReplayApiController extends Controller
             'video_id' => ['required', 'string', 'size:11', 'regex:/^[A-Za-z0-9_-]{11}$/'],
             'duration' => ['required', 'numeric', 'min:0'],
             'chat_data' => ['required', 'array', 'min:1', 'max:50000'],
-            'chat_data.*.message' => ['required', 'string'],
+            'chat_data.*.message' => ['nullable', 'string', 'max:500'],
             'chat_data.*.timestamp' => ['required', 'integer', 'min:0'],
             'chat_data.*.type' => ['required', 'string', 'in:normal,superchat'],
         ]);

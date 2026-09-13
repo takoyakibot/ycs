@@ -58,8 +58,10 @@ export async function sendChatReplayDataToServer(videoId, chats, duration) {
   if (!state.ycsApiToken) return;
 
   try {
-    const chatData = chats.map(c => ({
-      message: c.message,
+    const MAX_CHAT_ITEMS = 50000;
+    const source = chats.length > MAX_CHAT_ITEMS ? chats.slice(0, MAX_CHAT_ITEMS) : chats;
+    const chatData = source.map(c => ({
+      message: c.message || '',
       timestamp: c.timestamp,
       type: c.type || 'normal',
     }));
