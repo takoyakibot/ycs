@@ -1446,6 +1446,7 @@
   let isAutoDetectRunning = false;
   let tsEditorNoticeTimer = null;
   let chatHeatmapLoading = false;
+  let chatHeatmapEpoch = 0;
 
   function formatTimestamp$1(seconds) {
     const h = Math.floor(seconds / 3600);
@@ -1955,21 +1956,22 @@
     const videoId = getVideoId();
     if (!videoId) return;
 
+    const myEpoch = chatHeatmapEpoch;
     chatHeatmapLoading = true;
     try {
       await initChatDB();
+      if (chatHeatmapEpoch !== myEpoch) return;
+
       const chats = await loadChatDataForVideo(videoId);
-      if (chats.length === 0) {
-        chatHeatmapLoading = false;
-        return;
+      if (chatHeatmapEpoch !== myEpoch) return;
+
+      if (chats.length > 0) {
+        const bucketSec = CHAT_ONLY_CONFIG.BUCKET_SEC;
+        state.chatHeatmapBuckets = buildChatBuckets(chats, state.videoDuration, bucketSec);
+        state.chatClapBursts = detectClapBursts(chats, state.videoDuration);
+        drawVolumeGraph();
       }
-
-      const bucketSec = CHAT_ONLY_CONFIG.BUCKET_SEC;
-      state.chatHeatmapBuckets = buildChatBuckets(chats, state.videoDuration, bucketSec);
-      state.chatClapBursts = detectClapBursts(chats, state.videoDuration);
       state.chatHeatmapLoaded = true;
-
-      drawVolumeGraph();
     } catch (e) {
       console.warn('[YCS] チャットヒートマップ読み込み失敗:', e);
     } finally {
@@ -1978,6 +1980,8 @@
   }
 
   function resetChatHeatmap() {
+    chatHeatmapEpoch++;
+    chatHeatmapLoading = false;
     state.chatHeatmapBuckets = [];
     state.chatClapBursts = [];
     state.chatHeatmapLoaded = false;
