@@ -178,6 +178,24 @@ class SubtitleApiTest extends TestCase
         $this->assertDatabaseHas('video_subtitles', ['video_id' => 'xxxxxxxxxxx']);
     }
 
+    public function test_store_subtitles_denied_for_other_users_archived_video(): void
+    {
+        $otherUser = User::factory()->create([
+            'email_verified_at' => now(),
+            'role' => User::ROLE_ADMIN,
+        ]);
+
+        $response = $this->actingAs($otherUser)
+            ->postJson('/api/manage/archives/subtitles/store', [
+                'video_id' => 'dQw4w9WgXcQ',
+                'language_code' => 'ja',
+                'kind' => '',
+                'subtitles' => [['start' => 0, 'duration' => 1, 'text' => 'test']],
+            ]);
+
+        $response->assertStatus(403);
+    }
+
     public function test_store_subtitles_generates_fingerprints(): void
     {
         // ts_itemを作成

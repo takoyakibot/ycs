@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\Archive;
+use App\Models\Channel;
 use App\Models\ChatReplayData;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -66,6 +68,25 @@ class ChatReplayApiControllerTest extends TestCase
         $response->assertStatus(200)
             ->assertJsonPath('video_id', 'dQw4w9WgXcQ')
             ->assertJsonPath('is_new', true);
+    }
+
+    public function test_denied_for_other_users_channel_when_archived(): void
+    {
+        $channel = Channel::factory()->create(['user_id' => $this->user->id]);
+        Archive::factory()->create([
+            'channel_id' => $channel->channel_id,
+            'video_id' => 'dQw4w9WgXcQ',
+        ]);
+
+        $otherUser = User::factory()->create([
+            'email_verified_at' => now(),
+            'role' => User::ROLE_ADMIN,
+        ]);
+        $token = $otherUser->createToken('extension')->plainTextToken;
+
+        $response = $this->postChatReplayData($this->validPayload(), $token);
+
+        $response->assertStatus(403);
     }
 
     public function test_update_or_create_overwrites_existing(): void

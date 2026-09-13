@@ -42,6 +42,14 @@ class SubtitleApiController extends Controller
         $kind = $request->input('kind') ?? '';
         $subtitles = $request->input('subtitles');
 
+        $archive = Archive::where('video_id', $videoId)->first();
+        if ($archive) {
+            $channel = $archive->channel;
+            if (! $channel || ! $this->canAccessChannel($channel)) {
+                return response()->json(['message' => 'このチャンネルへのアクセス権限がありません'], 403);
+            }
+        }
+
         try {
             $subtitle = VideoSubtitle::updateOrCreate(
                 [
@@ -57,7 +65,6 @@ class SubtitleApiController extends Controller
 
             $isNew = $subtitle->wasRecentlyCreated;
 
-            $archive = Archive::where('video_id', $videoId)->first();
             if ($archive && $archive->subtitles_unavailable_at !== null) {
                 $archive->update(['subtitles_unavailable_at' => null]);
             }
@@ -263,6 +270,14 @@ class SubtitleApiController extends Controller
             'sec' => ['required', 'integer', 'min:0', 'max:86400'],
             'threshold' => ['sometimes', 'numeric', 'min:0.01', 'max:1.0'],
         ]);
+
+        $archive = Archive::where('video_id', $validated['video_id'])->first();
+        if ($archive) {
+            $channel = $archive->channel;
+            if (! $channel || ! $this->canAccessChannel($channel)) {
+                return response()->json(['message' => 'このチャンネルへのアクセス権限がありません'], 403);
+            }
+        }
 
         try {
             $threshold = isset($validated['threshold'])
