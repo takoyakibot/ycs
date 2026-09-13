@@ -14,6 +14,7 @@ import { initChatDB, loadChatDataForVideo, getChatContinuation, fetchAllChatRepl
 import { pushMarkerHistory, updateTimestampList } from './timestamp-editor.js';
 import { drawVolumeGraph } from './volume-graph.js';
 import { saveMarkersToStorage } from './timestamp-io.js';
+import { sendChatReplayDataToServer } from './api.js';
 
 let isAutoDetectRunning = false;
 let tsEditorNoticeTimer = null;
@@ -407,6 +408,9 @@ async function fetchChats(videoId) {
     try {
       await initChatDB();
       chats = await loadChatDataForVideo(videoId);
+      if (chats.length > 0) {
+        sendChatReplayDataToServer(videoId, chats, state.videoDuration);
+      }
     } catch (e) {
       console.warn('[YCS 自動検出] チャットDB読込失敗:', e);
     }
@@ -421,6 +425,7 @@ async function fetchChats(videoId) {
           if (fetched.length > 0) {
             await saveChatsToDB(videoId, fetched);
             chats = fetched;
+            sendChatReplayDataToServer(videoId, fetched, state.videoDuration);
           } else {
             chatUnavailable = true;
           }

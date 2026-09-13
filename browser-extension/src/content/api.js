@@ -45,6 +45,50 @@ export async function sendSubtitlesToServer(videoId, lang, subtitles) {
   }
 }
 
+const chatReplaySentCache = new Set();
+
+export async function sendChatReplayDataToServer(videoId, chats, duration) {
+  if (!videoId || !chats || chats.length === 0) return;
+
+  if (chatReplaySentCache.has(videoId)) return;
+
+  if (!state.ycsApiToken) {
+    await loadYcsApiSettings();
+  }
+  if (!state.ycsApiToken) return;
+
+  try {
+    const chatData = chats.map(c => ({
+      message: c.message,
+      timestamp: c.timestamp,
+      type: c.type || 'normal',
+    }));
+
+    const response = await fetch(`${state.ycsServerUrl}/api/extension/chat-replay-data`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${state.ycsApiToken}`,
+      },
+      body: JSON.stringify({
+        video_id: videoId,
+        duration: duration,
+        chat_data: chatData,
+      }),
+    });
+
+    if (response.ok) {
+      chatReplaySentCache.add(videoId);
+      console.log(`[YCS] チャットリプレイデータをサーバーに送信しました: ${videoId} (${chatData.length}件)`);
+    } else {
+      console.warn(`[YCS] チャットリプレイデータ送信エラー: ${response.status}`);
+    }
+  } catch (error) {
+    console.warn('[YCS] チャットリプレイデータ送信エラー:', error.message);
+  }
+}
+
 export async function postSubtitlesToServer(videoId, languageCode, kind, subtitles) {
   if (!videoId || !subtitles || subtitles.length === 0) return;
 
