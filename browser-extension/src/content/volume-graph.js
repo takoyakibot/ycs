@@ -1281,12 +1281,15 @@ export function drawVolumeGraph() {
   state.volumeCtx.clearRect(0, 0, width, height);
 
   if (state.volumeData.length === 0) {
-    state.volumeCtx.fillStyle = '#333';
+    state.volumeCtx.fillStyle = '#1a1a1a';
     state.volumeCtx.fillRect(0, 0, width, height);
-    state.volumeCtx.fillStyle = '#666';
-    state.volumeCtx.font = '11px sans-serif';
-    state.volumeCtx.textAlign = 'center';
-    state.volumeCtx.fillText('再生またはスキャンで音量データを収集', width / 2, height / 2 + 4);
+    if (state.tsMarkers.length === 0) {
+      state.volumeCtx.fillStyle = '#666';
+      state.volumeCtx.font = '11px sans-serif';
+      state.volumeCtx.textAlign = 'center';
+      state.volumeCtx.fillText('再生またはスキャンで音量データを収集', width / 2, height / 2 + 4);
+    }
+    drawTimestampMarkers(width, height);
     return;
   }
 
