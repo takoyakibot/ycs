@@ -13,14 +13,19 @@ import { autoDetectSongStarts } from './auto-detect.js';
 import { copyTimestamps, importTimestamps, saveMarkersToStorage, loadMarkersFromStorage } from './timestamp-io.js';
 import { closeLyricsPastePopup, closeSongCandidatePopup, isLyricsPastePopupOpen } from './song-candidates.js';
 
+function graphElementId() {
+  return state.edition === 'general' ? 'volume-dynamics-graph-general' : 'volume-dynamics-graph';
+}
+
 export function createVolumeGraph() {
   if (state.volumeGraphContainer) return;
 
   state.volumeGraphContainer = document.createElement('div');
-  state.volumeGraphContainer.id = 'volume-dynamics-graph';
+  state.volumeGraphContainer.id = graphElementId();
+  state.volumeGraphContainer.classList.add('volume-dynamics-graph');
   state.volumeGraphContainer.innerHTML = `
     <style>
-      #volume-dynamics-graph {
+      .volume-dynamics-graph {
         position: relative !important;
         width: 100% !important;
         min-height: 60px !important;
@@ -37,7 +42,7 @@ export function createVolumeGraph() {
         box-sizing: border-box !important;
       }
 
-      #volume-dynamics-graph.visible {
+      .volume-dynamics-graph.visible {
         display: flex !important;
       }
 
@@ -187,7 +192,7 @@ export function createVolumeGraph() {
         z-index: 20;
       }
 
-      #volume-dynamics-graph:hover .vdg-hover-time {
+      .volume-dynamics-graph:hover .vdg-hover-time {
         opacity: 1;
       }
 
@@ -602,7 +607,7 @@ export function insertVolumeGraph() {
   const insertGraph = () => {
     // #below（動画の下のコンテンツセクション）の先頭に挿入
     const belowContainer = document.querySelector('ytd-watch-flexy #below');
-    if (belowContainer && !document.getElementById('volume-dynamics-graph')) {
+    if (belowContainer && !document.getElementById(graphElementId())) {
       belowContainer.insertBefore(state.volumeGraphContainer, belowContainer.firstChild);
       resizeCanvas();
       return true;
