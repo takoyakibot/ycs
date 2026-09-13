@@ -240,25 +240,12 @@ class ExtensionSubtitleMatchTest extends TestCase
         $response->assertStatus(401);
     }
 
-    public function test_denied_for_other_users_channel(): void
-    {
-        $otherUser = User::factory()->create([
-            'email_verified_at' => now(),
-            'role' => User::ROLE_ADMIN,
-        ]);
-        $token = $otherUser->createToken('extension')->plainTextToken;
-
-        $response = $this->withHeader('Authorization', 'Bearer '.$token)
-            ->getJson('/api/extension/subtitle-matches?video_id=dQw4w9WgXcQ&sec=60');
-
-        $response->assertStatus(403);
-    }
-
-    public function test_returns_404_for_unknown_video(): void
+    public function test_accepts_video_not_in_archives(): void
     {
         $response = $this->requestMatch('xxxxxxxxxxx', 60);
 
-        $response->assertStatus(404);
+        $response->assertStatus(200)
+            ->assertJsonPath('has_subtitles', false);
     }
 
     public function test_validates_params(): void

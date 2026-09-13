@@ -42,17 +42,6 @@ class SubtitleApiController extends Controller
         $kind = $request->input('kind') ?? '';
         $subtitles = $request->input('subtitles');
 
-        // アーカイブの存在確認とアクセス権チェック
-        $archive = Archive::where('video_id', $videoId)->first();
-        if (! $archive) {
-            return response()->json(['message' => '指定された動画はアーカイブに登録されていません'], 404);
-        }
-
-        $channel = $archive->channel;
-        if (! $channel || ! $this->canAccessChannel($channel)) {
-            return response()->json(['message' => 'このチャンネルへのアクセス権限がありません'], 403);
-        }
-
         try {
             $subtitle = VideoSubtitle::updateOrCreate(
                 [
@@ -68,8 +57,8 @@ class SubtitleApiController extends Controller
 
             $isNew = $subtitle->wasRecentlyCreated;
 
-            // 「字幕なし」と記録されていた動画に字幕が保存できたのでフラグを解除する（#603）
-            if ($archive->subtitles_unavailable_at !== null) {
+            $archive = Archive::where('video_id', $videoId)->first();
+            if ($archive && $archive->subtitles_unavailable_at !== null) {
                 $archive->update(['subtitles_unavailable_at' => null]);
             }
 
@@ -274,17 +263,6 @@ class SubtitleApiController extends Controller
             'sec' => ['required', 'integer', 'min:0', 'max:86400'],
             'threshold' => ['sometimes', 'numeric', 'min:0.01', 'max:1.0'],
         ]);
-
-        // アーカイブの存在確認とアクセス権チェック
-        $archive = Archive::where('video_id', $validated['video_id'])->first();
-        if (! $archive) {
-            return response()->json(['message' => '指定された動画はアーカイブに登録されていません'], 404);
-        }
-
-        $channel = $archive->channel;
-        if (! $channel || ! $this->canAccessChannel($channel)) {
-            return response()->json(['message' => 'このチャンネルへのアクセス権限がありません'], 403);
-        }
 
         try {
             $threshold = isset($validated['threshold'])
