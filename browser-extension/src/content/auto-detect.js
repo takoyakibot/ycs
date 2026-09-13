@@ -18,6 +18,7 @@ import { sendChatReplayDataToServer } from './api.js';
 
 let isAutoDetectRunning = false;
 let tsEditorNoticeTimer = null;
+let chatHeatmapLoading = false;
 
 export function formatTimestamp(seconds) {
   const h = Math.floor(seconds / 3600);
@@ -518,6 +519,41 @@ export async function autoDetectSongStarts() {
   } finally {
     isAutoDetectRunning = false;
   }
+}
+
+export async function loadChatForHeatmap() {
+  if (chatHeatmapLoading || state.chatHeatmapLoaded) return;
+  if (!state.videoDuration) return;
+
+  const videoId = getVideoId();
+  if (!videoId) return;
+
+  chatHeatmapLoading = true;
+  try {
+    await initChatDB();
+    const chats = await loadChatDataForVideo(videoId);
+    if (chats.length === 0) {
+      chatHeatmapLoading = false;
+      return;
+    }
+
+    const bucketSec = CHAT_ONLY_CONFIG.BUCKET_SEC;
+    state.chatHeatmapBuckets = buildChatBuckets(chats, state.videoDuration, bucketSec);
+    state.chatClapBursts = detectClapBursts(chats, state.videoDuration);
+    state.chatHeatmapLoaded = true;
+
+    drawVolumeGraph();
+  } catch (e) {
+    console.warn('[YCS] チャットヒートマップ読み込み失敗:', e);
+  } finally {
+    chatHeatmapLoading = false;
+  }
+}
+
+export function resetChatHeatmap() {
+  state.chatHeatmapBuckets = [];
+  state.chatClapBursts = [];
+  state.chatHeatmapLoaded = false;
 }
 
 export function showTsEditorNotice(text, isWarning = false) {

@@ -60,6 +60,11 @@
     embeddedUIVisible: true,
     embeddedTriggerButton: null,
 
+    // Chat heatmap
+    chatHeatmapBuckets: [],
+    chatClapBursts: [],
+    chatHeatmapLoaded: false,
+
     // Subtitle
     currentSubtitles: [],
     currentCaptionTracks: [],
@@ -426,6 +431,52 @@
       state.ycsServerUrl = (result.ycsServerUrl || DEFAULT_YCS_SERVER_URL).replace(/\/+$/, '');
     } catch (error) {
       console.warn('[YCS] API設定読み込みエラー:', error);
+    }
+  }
+
+  const chatReplaySentCache = new Set();
+
+  async function sendChatReplayDataToServer(videoId, chats, duration) {
+    if (!videoId || !chats || chats.length === 0) return;
+
+    if (chatReplaySentCache.has(videoId)) return;
+
+    if (!state.ycsApiToken) {
+      await loadYcsApiSettings();
+    }
+    if (!state.ycsApiToken) return;
+
+    try {
+      const MAX_CHAT_ITEMS = 50000;
+      const source = chats.length > MAX_CHAT_ITEMS ? chats.slice(0, MAX_CHAT_ITEMS) : chats;
+      const chatData = source.map(c => ({
+        message: c.message || '',
+        timestamp: c.timestamp,
+        type: c.type || 'normal',
+      }));
+
+      const response = await fetch(`${state.ycsServerUrl}/api/extension/chat-replay-data`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${state.ycsApiToken}`,
+        },
+        body: JSON.stringify({
+          video_id: videoId,
+          duration: duration,
+          chat_data: chatData,
+        }),
+      });
+
+      if (response.ok) {
+        chatReplaySentCache.add(videoId);
+        console.log(`[YCS] チャットリプレイデータをサーバーに送信しました: ${videoId} (${chatData.length}件)`);
+      } else {
+        console.warn(`[YCS] チャットリプレイデータ送信エラー: ${response.status}`);
+      }
+    } catch (error) {
+      console.warn('[YCS] チャットリプレイデータ送信エラー:', error.message);
     }
   }
 
@@ -1394,6 +1445,7 @@
 
   let isAutoDetectRunning = false;
   let tsEditorNoticeTimer = null;
+  let chatHeatmapLoading = false;
 
   function formatTimestamp$1(seconds) {
     const h = Math.floor(seconds / 3600);
@@ -1784,6 +1836,9 @@
       try {
         await initChatDB();
         chats = await loadChatDataForVideo(videoId);
+        if (chats.length > 0) {
+          sendChatReplayDataToServer(videoId, chats, state.videoDuration);
+        }
       } catch (e) {
         console.warn('[YCS 自動検出] チャットDB読込失敗:', e);
       }
@@ -1798,6 +1853,7 @@
             if (fetched.length > 0) {
               await saveChatsToDB(videoId, fetched);
               chats = fetched;
+              sendChatReplayDataToServer(videoId, fetched, state.videoDuration);
             } else {
               chatUnavailable = true;
             }
@@ -1890,6 +1946,41 @@
     } finally {
       isAutoDetectRunning = false;
     }
+  }
+
+  async function loadChatForHeatmap() {
+    if (chatHeatmapLoading || state.chatHeatmapLoaded) return;
+    if (!state.videoDuration) return;
+
+    const videoId = getVideoId();
+    if (!videoId) return;
+
+    chatHeatmapLoading = true;
+    try {
+      await initChatDB();
+      const chats = await loadChatDataForVideo(videoId);
+      if (chats.length === 0) {
+        chatHeatmapLoading = false;
+        return;
+      }
+
+      const bucketSec = CHAT_ONLY_CONFIG.BUCKET_SEC;
+      state.chatHeatmapBuckets = buildChatBuckets(chats, state.videoDuration, bucketSec);
+      state.chatClapBursts = detectClapBursts(chats, state.videoDuration);
+      state.chatHeatmapLoaded = true;
+
+      drawVolumeGraph();
+    } catch (e) {
+      console.warn('[YCS] チャットヒートマップ読み込み失敗:', e);
+    } finally {
+      chatHeatmapLoading = false;
+    }
+  }
+
+  function resetChatHeatmap() {
+    state.chatHeatmapBuckets = [];
+    state.chatClapBursts = [];
+    state.chatHeatmapLoaded = false;
   }
 
   function showTsEditorNotice(text, isWarning = false) {
@@ -3608,8 +3699,54 @@
     state.volumeCtx.globalAlpha = 1;
   }
 
+  function drawChatOverlay(width, height) {
+    if (!state.volumeCtx || !state.videoDuration) return;
+
+    const buckets = state.chatHeatmapBuckets;
+    const bursts = state.chatClapBursts;
+    if (buckets.length === 0 && bursts.length === 0) return;
+
+    const ctx = state.volumeCtx;
+    const bandHeight = Math.max(4, Math.round(height * 0.15));
+    const bandTop = height - bandHeight;
+
+    if (buckets.length > 0) {
+      const bucketWidth = width / buckets.length;
+
+      for (let i = 0; i < buckets.length; i++) {
+        const b = buckets[i];
+        if (b.total === 0) continue;
+
+        const emojiRatio = b.emojiOnly / b.total;
+        if (emojiRatio < 0.05) continue;
+
+        const alpha = Math.min(0.7, emojiRatio * 0.9);
+        ctx.fillStyle = `rgba(255, 152, 0, ${alpha})`;
+        ctx.fillRect(i * bucketWidth, bandTop, Math.ceil(bucketWidth) + 0.5, bandHeight);
+      }
+    }
+
+    if (bursts.length > 0) {
+      ctx.strokeStyle = 'rgba(0, 188, 212, 0.6)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 3]);
+
+      for (const burstTime of bursts) {
+        const x = (burstTime / state.videoDuration) * width;
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, height);
+        ctx.stroke();
+      }
+
+      ctx.setLineDash([]);
+    }
+  }
+
   function drawVolumeGraph() {
     if (!state.volumeCtx || !state.volumeCanvas) return;
+
+    if (!state.chatHeatmapLoaded) loadChatForHeatmap();
 
     const width = state.volumeCanvas.width / window.devicePixelRatio;
     const height = state.volumeCanvas.height / window.devicePixelRatio;
@@ -3619,12 +3756,13 @@
     if (state.volumeData.length === 0) {
       state.volumeCtx.fillStyle = '#1a1a1a';
       state.volumeCtx.fillRect(0, 0, width, height);
-      if (state.tsMarkers.length === 0) {
+      if (state.tsMarkers.length === 0 && state.chatHeatmapBuckets.length === 0) {
         state.volumeCtx.fillStyle = '#666';
         state.volumeCtx.font = '11px sans-serif';
         state.volumeCtx.textAlign = 'center';
         state.volumeCtx.fillText('再生またはスキャンで音量データを収集', width / 2, height / 2 + 4);
       }
+      drawChatOverlay(width, height);
       drawTimestampMarkers(width, height);
       return;
     }
@@ -3660,6 +3798,7 @@
     state.volumeCtx.fill();
 
     drawSingingOverlay(height, barWidth, maxVolume);
+    drawChatOverlay(width, height);
 
     // 中心線
     state.volumeCtx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
@@ -4177,6 +4316,7 @@
         state.gainNode = null;
         state.audioInitialized = false;
 
+        resetChatHeatmap();
         initWatchPageUI();
         loadVolumeData();
         resetTimestampEditorForVideoChange();
@@ -4190,6 +4330,7 @@
         state.zoomIndex = 0;
         state.currentSubtitles = [];
         state.currentCaptionTracks = [];
+        resetChatHeatmap();
 
         if (state.mediaElementSource) {
           state.mediaElementSource.disconnect();
