@@ -272,6 +272,119 @@
     return promise;
   }
 
+  function resetChatContinuationOffset(token) {
+    try {
+      const base64 = token.replace(/-/g, '+').replace(/_/g, '/');
+      const pad = (4 - base64.length % 4) % 4;
+      const raw = atob(base64 + '='.repeat(pad));
+      const bytes = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+
+      function readVarint(buf, pos) {
+        let val = 0, shift = 0;
+        while (pos < buf.length) {
+          const b = buf[pos++];
+          val |= (b & 0x7f) << shift;
+          if ((b & 0x80) === 0) break;
+          shift += 7;
+        }
+        return [val, pos];
+      }
+
+      function writeVarint(val) {
+        const out = [];
+        do {
+          let b = val & 0x7f;
+          val >>>= 7;
+          if (val > 0) b |= 0x80;
+          out.push(b);
+        } while (val > 0);
+        return out;
+      }
+
+      // protobufをフィールドツリーにパース
+      function parseProto(buf, start, end) {
+        const fields = [];
+        let pos = start;
+        while (pos < end) {
+          const [tag, nextPos] = readVarint(buf, pos);
+          if (nextPos > end) break;
+          const fieldNum = tag >>> 3;
+          const wireType = tag & 0x7;
+          if (wireType === 0) {
+            const [val, afterVarint] = readVarint(buf, nextPos);
+            fields.push({ fieldNum, wireType, value: val });
+            pos = afterVarint;
+          } else if (wireType === 2) {
+            const [len, dataStart] = readVarint(buf, nextPos);
+            const data = buf.slice(dataStart, dataStart + len);
+            fields.push({ fieldNum, wireType, data });
+            pos = dataStart + len;
+          } else if (wireType === 5) {
+            const data = buf.slice(nextPos, nextPos + 4);
+            fields.push({ fieldNum, wireType, data });
+            pos = nextPos + 4;
+          } else if (wireType === 1) {
+            const data = buf.slice(nextPos, nextPos + 8);
+            fields.push({ fieldNum, wireType, data });
+            pos = nextPos + 8;
+          } else {
+            break;
+          }
+        }
+        return fields;
+      }
+
+      // フィールドツリーをバイナリにシリアライズ
+      function serializeProto(fields) {
+        const out = [];
+        for (const f of fields) {
+          const tag = (f.fieldNum << 3) | f.wireType;
+          out.push(...writeVarint(tag));
+          if (f.wireType === 0) {
+            out.push(...writeVarint(f.value));
+          } else if (f.wireType === 2) {
+            out.push(...writeVarint(f.data.length));
+            out.push(...f.data);
+          } else if (f.wireType === 1 || f.wireType === 5) {
+            out.push(...f.data);
+          }
+        }
+        return new Uint8Array(out);
+      }
+
+      // 再帰的にオフセット（大きなvarint値）を0にリセット
+      function zeroOffsets(fields) {
+        for (const f of fields) {
+          if (f.wireType === 0 && f.value >= 1000000) {
+            f.value = 0;
+          } else if (f.wireType === 2) {
+            try {
+              const sub = parseProto(f.data, 0, f.data.length);
+              if (sub.length > 0) {
+                zeroOffsets(sub);
+                f.data = serializeProto(sub);
+              }
+            } catch (e) {
+              // バイナリ/文字列フィールドはパース失敗するので無視
+            }
+          }
+        }
+      }
+
+      const fields = parseProto(bytes, 0, bytes.length);
+      zeroOffsets(fields);
+      const result = serializeProto(fields);
+
+      let binary = '';
+      for (let i = 0; i < result.length; i++) binary += String.fromCharCode(result[i]);
+      return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    } catch (e) {
+      console.warn('[YCS] continuationオフセットリセット失敗、元のトークンを使用:', e);
+      return token;
+    }
+  }
+
   window.addEventListener('message', function (event) {
     if (event.source !== window) return;
 
@@ -297,6 +410,10 @@
                 }
               }
             }
+          }
+          // オフセットを先頭にリセット
+          if (continuation) {
+            continuation = resetChatContinuationOffset(continuation);
           }
         }
       } catch (e) {
