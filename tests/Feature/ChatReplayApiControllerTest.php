@@ -2,8 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Models\Archive;
-use App\Models\Channel;
 use App\Models\ChatReplayData;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -15,10 +13,6 @@ class ChatReplayApiControllerTest extends TestCase
 
     protected User $user;
 
-    protected Channel $channel;
-
-    protected Archive $archive;
-
     protected function setUp(): void
     {
         parent::setUp();
@@ -26,13 +20,6 @@ class ChatReplayApiControllerTest extends TestCase
         $this->user = User::factory()->create([
             'email_verified_at' => now(),
             'role' => User::ROLE_ADMIN,
-        ]);
-
-        $this->channel = Channel::factory()->create(['user_id' => $this->user->id]);
-
-        $this->archive = Archive::factory()->create([
-            'channel_id' => $this->channel->channel_id,
-            'video_id' => 'dQw4w9WgXcQ',
         ]);
     }
 
@@ -72,6 +59,15 @@ class ChatReplayApiControllerTest extends TestCase
         ]);
     }
 
+    public function test_stores_data_for_video_not_in_archives(): void
+    {
+        $response = $this->postChatReplayData($this->validPayload());
+
+        $response->assertStatus(200)
+            ->assertJsonPath('video_id', 'dQw4w9WgXcQ')
+            ->assertJsonPath('is_new', true);
+    }
+
     public function test_update_or_create_overwrites_existing(): void
     {
         $this->postChatReplayData($this->validPayload());
@@ -100,29 +96,6 @@ class ChatReplayApiControllerTest extends TestCase
         $response = $this->postJson('/api/extension/chat-replay-data', $this->validPayload());
 
         $response->assertStatus(401);
-    }
-
-    public function test_denied_for_other_users_channel(): void
-    {
-        $otherUser = User::factory()->create([
-            'email_verified_at' => now(),
-            'role' => User::ROLE_ADMIN,
-        ]);
-        $token = $otherUser->createToken('extension')->plainTextToken;
-
-        $response = $this->postChatReplayData($this->validPayload(), $token);
-
-        $response->assertStatus(403);
-    }
-
-    public function test_returns_404_for_unknown_video(): void
-    {
-        $payload = $this->validPayload();
-        $payload['video_id'] = 'xxxxxxxxxxx';
-
-        $response = $this->postChatReplayData($payload);
-
-        $response->assertStatus(404);
     }
 
     public function test_validates_required_fields(): void
