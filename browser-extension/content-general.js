@@ -3738,7 +3738,9 @@
     const ctx = state.volumeCtx;
     const bucketWidth = width / buckets.length;
     const barW = Math.ceil(bucketWidth) + 0.5;
-    const clapMaxH = height * 0.3;
+    // マーカー三角（高さ10px）の下から描画開始
+    const topOffset = 12;
+    const clapMaxH = (height - topOffset) * 0.3;
 
     let maxClap = 0;
     for (const b of buckets) {
@@ -3752,7 +3754,7 @@
 
       const barH = Math.max(2, (b.clap / maxClap) * clapMaxH);
       ctx.fillStyle = 'rgba(0, 188, 212, 0.3)';
-      ctx.fillRect(i * bucketWidth, 0, barW, barH);
+      ctx.fillRect(i * bucketWidth, topOffset, barW, barH);
     }
   }
 
