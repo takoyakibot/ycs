@@ -1280,8 +1280,7 @@ export function drawChatOverlay(width, height) {
   if (buckets.length === 0 && bursts.length === 0) return;
 
   const ctx = state.volumeCtx;
-  const bandHeight = Math.max(4, Math.round(height * 0.15));
-  const bandTop = height - bandHeight;
+  const maxBarHeight = height * 0.4;
 
   if (buckets.length > 0) {
     const bucketWidth = width / buckets.length;
@@ -1293,22 +1292,21 @@ export function drawChatOverlay(width, height) {
       const emojiRatio = b.emojiOnly / b.total;
       if (emojiRatio < 0.05) continue;
 
-      const alpha = Math.min(0.7, emojiRatio * 0.9);
-      ctx.fillStyle = `rgba(255, 152, 0, ${alpha})`;
-      ctx.fillRect(i * bucketWidth, bandTop, Math.ceil(bucketWidth) + 0.5, bandHeight);
+      const barH = Math.max(2, emojiRatio * maxBarHeight);
+      ctx.fillStyle = 'rgba(255, 152, 0, 0.25)';
+      ctx.fillRect(i * bucketWidth, height - barH, Math.ceil(bucketWidth) + 0.5, barH);
     }
   }
 
   if (bursts.length > 0) {
-    const triH = Math.min(6, bandHeight * 0.7);
-    ctx.fillStyle = 'rgba(0, 188, 212, 0.8)';
+    ctx.fillStyle = 'rgba(0, 188, 212, 0.6)';
 
     for (const burstTime of bursts) {
       const x = (burstTime / state.videoDuration) * width;
       ctx.beginPath();
-      ctx.moveTo(x, bandTop);
-      ctx.lineTo(x - 3, bandTop - triH);
-      ctx.lineTo(x + 3, bandTop - triH);
+      ctx.moveTo(x, height);
+      ctx.lineTo(x - 3, height - 6);
+      ctx.lineTo(x + 3, height - 6);
       ctx.closePath();
       ctx.fill();
     }
@@ -1342,6 +1340,8 @@ export function drawVolumeGraph() {
   state.volumeCtx.fillStyle = '#1a1a1a';
   state.volumeCtx.fillRect(0, 0, width, height);
 
+  drawChatOverlay(width, height);
+
   let maxVolume = 1;
   if (state.isRelativeVolumeMode) {
     maxVolume = Math.max(...state.volumeData.filter(v => v > 0)) || 1;
@@ -1370,7 +1370,6 @@ export function drawVolumeGraph() {
   state.volumeCtx.fill();
 
   drawSingingOverlay(height, barWidth, maxVolume);
-  drawChatOverlay(width, height);
 
   // 中心線
   state.volumeCtx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
