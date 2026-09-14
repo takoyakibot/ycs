@@ -7,6 +7,7 @@ import { updatePlaylistUI, proceedToNextVideoOrFinish } from './playlist.js';
 import { resetTimestampEditorForVideoChange } from './timestamp-io.js';
 import { isCurrentVideoScanned } from './utils.js';
 import { handleMessage, handleStorageChange } from './handlers.js';
+import { resetChatHeatmap } from './auto-detect.js';
 
 state.edition = 'general';
 
@@ -68,6 +69,7 @@ function observePageChanges() {
       state.gainNode = null;
       state.audioInitialized = false;
 
+      resetChatHeatmap();
       initWatchPageUI();
       loadVolumeData();
       resetTimestampEditorForVideoChange();
@@ -81,6 +83,7 @@ function observePageChanges() {
       state.zoomIndex = 0;
       state.currentSubtitles = [];
       state.currentCaptionTracks = [];
+      resetChatHeatmap();
 
       if (state.mediaElementSource) {
         state.mediaElementSource.disconnect();

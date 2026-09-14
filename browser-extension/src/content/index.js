@@ -10,6 +10,7 @@ import { resetTimestampEditorForVideoChange } from './timestamp-io.js';
 import { isCurrentVideoScanned } from './utils.js';
 import { hideHighlightPanel, isHighlightPanelVisible } from './highlight.js';
 import { handleMessage, handleStorageChange } from './handlers.js';
+import { resetChatHeatmap } from './auto-detect.js';
 
 function initWatchPageUI() {
   findVideoElement();
@@ -73,6 +74,7 @@ function observePageChanges() {
       state.gainNode = null;
       state.audioInitialized = false;
 
+      resetChatHeatmap();
       initWatchPageUI();
       loadVolumeData();
       resetTimestampEditorForVideoChange();
@@ -87,6 +89,7 @@ function observePageChanges() {
       state.currentSubtitles = [];
       state.currentCaptionTracks = [];
       state.pageBridgeReady = null;
+      resetChatHeatmap();
       if (isHighlightPanelVisible()) hideHighlightPanel();
 
       if (state.mediaElementSource) {

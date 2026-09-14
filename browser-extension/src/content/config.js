@@ -44,7 +44,7 @@ export const CHAT_SIGNAL_CONFIG = {
   DEDUPE_SEC: 30,
 };
 
-export const CLAP_PATTERN = /8{3,}|８{3,}|👏|拍手|ぱちぱち|パチパチ|clap/i;
+export const CLAP_PATTERN = /8{3,}|８{3,}|👏|:_?washhands:|拍手|ぱちぱち|パチパチ|clap/i;
 
 export const EMOJI_ONLY_RE = /^[\p{Extended_Pictographic}\p{Emoji_Presentation}\p{So}\s‍️︎]+$/u;
 
