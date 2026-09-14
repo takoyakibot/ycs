@@ -59,7 +59,6 @@ const state = {
 
   // Chat heatmap
   chatHeatmapBuckets: [],
-  chatClapBursts: [],
   chatHeatmapLoaded: false,
 
   // Subtitle

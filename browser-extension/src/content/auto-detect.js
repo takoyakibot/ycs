@@ -206,7 +206,7 @@ export function isEmojiOnlyMessage(text) {
 export function buildChatBuckets(chats, videoDurationSec, bucketSec) {
   const delaySec = CHAT_SIGNAL_CONFIG.CHAT_DELAY_SEC;
   const numBuckets = Math.ceil(videoDurationSec / bucketSec);
-  const buckets = Array.from({ length: numBuckets }, () => ({ total: 0, emojiOnly: 0 }));
+  const buckets = Array.from({ length: numBuckets }, () => ({ total: 0, emojiOnly: 0, clap: 0 }));
 
   for (const c of chats) {
     if (typeof c.message !== 'string') continue;
@@ -215,6 +215,7 @@ export function buildChatBuckets(chats, videoDurationSec, bucketSec) {
     const idx = Math.min(numBuckets - 1, Math.floor(timeSec / bucketSec));
     buckets[idx].total++;
     if (isEmojiOnlyMessage(c.message)) buckets[idx].emojiOnly++;
+    if (CLAP_PATTERN.test(c.message)) buckets[idx].clap++;
   }
   return buckets;
 }
@@ -542,7 +543,6 @@ export async function loadChatForHeatmap() {
     if (chats.length > 0) {
       const bucketSec = CHAT_ONLY_CONFIG.BUCKET_SEC;
       state.chatHeatmapBuckets = buildChatBuckets(chats, state.videoDuration, bucketSec);
-      state.chatClapBursts = detectClapBursts(chats, state.videoDuration);
       drawVolumeGraph();
     }
     state.chatHeatmapLoaded = true;
@@ -557,7 +557,6 @@ export function resetChatHeatmap() {
   chatHeatmapEpoch++;
   chatHeatmapLoading = false;
   state.chatHeatmapBuckets = [];
-  state.chatClapBursts = [];
   state.chatHeatmapLoaded = false;
 }
 

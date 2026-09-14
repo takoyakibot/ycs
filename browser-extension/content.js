@@ -62,7 +62,6 @@
 
     // Chat heatmap
     chatHeatmapBuckets: [],
-    chatClapBursts: [],
     chatHeatmapLoaded: false,
 
     // Subtitle
@@ -3629,7 +3628,7 @@
   function buildChatBuckets(chats, videoDurationSec, bucketSec) {
     const delaySec = CHAT_SIGNAL_CONFIG.CHAT_DELAY_SEC;
     const numBuckets = Math.ceil(videoDurationSec / bucketSec);
-    const buckets = Array.from({ length: numBuckets }, () => ({ total: 0, emojiOnly: 0 }));
+    const buckets = Array.from({ length: numBuckets }, () => ({ total: 0, emojiOnly: 0, clap: 0 }));
 
     for (const c of chats) {
       if (typeof c.message !== 'string') continue;
@@ -3638,6 +3637,7 @@
       const idx = Math.min(numBuckets - 1, Math.floor(timeSec / bucketSec));
       buckets[idx].total++;
       if (isEmojiOnlyMessage(c.message)) buckets[idx].emojiOnly++;
+      if (CLAP_PATTERN.test(c.message)) buckets[idx].clap++;
     }
     return buckets;
   }
@@ -3965,7 +3965,6 @@
       if (chats.length > 0) {
         const bucketSec = CHAT_ONLY_CONFIG.BUCKET_SEC;
         state.chatHeatmapBuckets = buildChatBuckets(chats, state.videoDuration, bucketSec);
-        state.chatClapBursts = detectClapBursts(chats, state.videoDuration);
         drawVolumeGraph();
       }
       state.chatHeatmapLoaded = true;
@@ -3980,7 +3979,6 @@
     chatHeatmapEpoch++;
     chatHeatmapLoading = false;
     state.chatHeatmapBuckets = [];
-    state.chatClapBursts = [];
     state.chatHeatmapLoaded = false;
   }
 
@@ -5704,39 +5702,38 @@
     if (!state.volumeCtx || !state.videoDuration) return;
 
     const buckets = state.chatHeatmapBuckets;
-    const bursts = state.chatClapBursts;
-    if (buckets.length === 0 && bursts.length === 0) return;
+    if (buckets.length === 0) return;
 
     const ctx = state.volumeCtx;
-    const maxBarHeight = height * 0.4;
+    const bucketWidth = width / buckets.length;
+    const barW = Math.ceil(bucketWidth) + 0.5;
+    const emojiMaxH = height * 0.4;
+    const clapMaxH = height * 0.3;
 
-    if (buckets.length > 0) {
-      const bucketWidth = width / buckets.length;
-
-      for (let i = 0; i < buckets.length; i++) {
-        const b = buckets[i];
-        if (b.total === 0) continue;
-
-        const emojiRatio = b.emojiOnly / b.total;
-        if (emojiRatio < 0.05) continue;
-
-        const barH = Math.max(2, emojiRatio * maxBarHeight);
-        ctx.fillStyle = 'rgba(255, 152, 0, 0.25)';
-        ctx.fillRect(i * bucketWidth, height - barH, Math.ceil(bucketWidth) + 0.5, barH);
-      }
+    let maxClap = 0;
+    for (const b of buckets) {
+      if (b.clap > maxClap) maxClap = b.clap;
     }
 
-    if (bursts.length > 0) {
-      ctx.fillStyle = 'rgba(0, 188, 212, 0.6)';
+    for (let i = 0; i < buckets.length; i++) {
+      const b = buckets[i];
+      const x = i * bucketWidth;
 
-      for (const burstTime of bursts) {
-        const x = (burstTime / state.videoDuration) * width;
-        ctx.beginPath();
-        ctx.moveTo(x, height);
-        ctx.lineTo(x - 3, height - 6);
-        ctx.lineTo(x + 3, height - 6);
-        ctx.closePath();
-        ctx.fill();
+      // 絵文字バー（下から上）
+      if (b.total > 0) {
+        const emojiRatio = b.emojiOnly / b.total;
+        if (emojiRatio >= 0.05) {
+          const barH = Math.max(2, emojiRatio * emojiMaxH);
+          ctx.fillStyle = 'rgba(255, 152, 0, 0.25)';
+          ctx.fillRect(x, height - barH, barW, barH);
+        }
+      }
+
+      // 拍手バー（上から下）
+      if (b.clap > 0 && maxClap > 0) {
+        const barH = Math.max(2, (b.clap / maxClap) * clapMaxH);
+        ctx.fillStyle = 'rgba(0, 188, 212, 0.3)';
+        ctx.fillRect(x, 0, barW, barH);
       }
     }
   }
