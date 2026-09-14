@@ -428,6 +428,7 @@ async function fetchChats(videoId) {
             await saveChatsToDB(videoId, fetched);
             chats = fetched;
             sendChatReplayDataToServer(videoId, fetched, state.videoDuration);
+            resetChatHeatmap();
           } else {
             chatUnavailable = true;
           }
