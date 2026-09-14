@@ -1272,7 +1272,7 @@ export function drawSingingOverlay(height, barWidth, maxVolume) {
   state.volumeCtx.globalAlpha = 1;
 }
 
-export function drawChatOverlay(width, height) {
+export function drawChatEmojiOverlay(width, height) {
   if (!state.volumeCtx || !state.videoDuration) return;
 
   const buckets = state.chatHeatmapBuckets;
@@ -1282,33 +1282,43 @@ export function drawChatOverlay(width, height) {
   const bucketWidth = width / buckets.length;
   const barW = Math.ceil(bucketWidth) + 0.5;
   const emojiMaxH = height * 0.4;
+
+  for (let i = 0; i < buckets.length; i++) {
+    const b = buckets[i];
+    if (b.total === 0) continue;
+    const emojiRatio = b.emojiOnly / b.total;
+    if (emojiRatio < 0.05) continue;
+
+    const barH = Math.max(2, emojiRatio * emojiMaxH);
+    ctx.fillStyle = 'rgba(255, 152, 0, 0.25)';
+    ctx.fillRect(i * bucketWidth, height - barH, barW, barH);
+  }
+}
+
+export function drawChatClapOverlay(width, height) {
+  if (!state.volumeCtx || !state.videoDuration) return;
+
+  const buckets = state.chatHeatmapBuckets;
+  if (buckets.length === 0) return;
+
+  const ctx = state.volumeCtx;
+  const bucketWidth = width / buckets.length;
+  const barW = Math.ceil(bucketWidth) + 0.5;
   const clapMaxH = height * 0.3;
 
   let maxClap = 0;
   for (const b of buckets) {
     if (b.clap > maxClap) maxClap = b.clap;
   }
+  if (maxClap === 0) return;
 
   for (let i = 0; i < buckets.length; i++) {
     const b = buckets[i];
-    const x = i * bucketWidth;
+    if (b.clap === 0) continue;
 
-    // 絵文字バー（下から上）
-    if (b.total > 0) {
-      const emojiRatio = b.emojiOnly / b.total;
-      if (emojiRatio >= 0.05) {
-        const barH = Math.max(2, emojiRatio * emojiMaxH);
-        ctx.fillStyle = 'rgba(255, 152, 0, 0.25)';
-        ctx.fillRect(x, height - barH, barW, barH);
-      }
-    }
-
-    // 拍手バー（上から下）
-    if (b.clap > 0 && maxClap > 0) {
-      const barH = Math.max(2, (b.clap / maxClap) * clapMaxH);
-      ctx.fillStyle = 'rgba(0, 188, 212, 0.3)';
-      ctx.fillRect(x, 0, barW, barH);
-    }
+    const barH = Math.max(2, (b.clap / maxClap) * clapMaxH);
+    ctx.fillStyle = 'rgba(0, 188, 212, 0.3)';
+    ctx.fillRect(i * bucketWidth, 0, barW, barH);
   }
 }
 
@@ -1331,7 +1341,8 @@ export function drawVolumeGraph() {
       state.volumeCtx.textAlign = 'center';
       state.volumeCtx.fillText('再生またはスキャンで音量データを収集', width / 2, height / 2 + 4);
     }
-    drawChatOverlay(width, height);
+    drawChatEmojiOverlay(width, height);
+    drawChatClapOverlay(width, height);
     drawTimestampMarkers(width, height);
     return;
   }
@@ -1339,7 +1350,7 @@ export function drawVolumeGraph() {
   state.volumeCtx.fillStyle = '#1a1a1a';
   state.volumeCtx.fillRect(0, 0, width, height);
 
-  drawChatOverlay(width, height);
+  drawChatEmojiOverlay(width, height);
 
   let maxVolume = 1;
   if (state.isRelativeVolumeMode) {
@@ -1377,6 +1388,8 @@ export function drawVolumeGraph() {
   state.volumeCtx.moveTo(0, height / 2);
   state.volumeCtx.lineTo(width, height / 2);
   state.volumeCtx.stroke();
+
+  drawChatClapOverlay(width, height);
 
   drawTimestampMarkers(width, height);
 }

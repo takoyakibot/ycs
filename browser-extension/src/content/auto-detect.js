@@ -214,8 +214,12 @@ export function buildChatBuckets(chats, videoDurationSec, bucketSec) {
     if (timeSec < 0 || timeSec >= videoDurationSec) continue;
     const idx = Math.min(numBuckets - 1, Math.floor(timeSec / bucketSec));
     buckets[idx].total++;
-    if (isEmojiOnlyMessage(c.message)) buckets[idx].emojiOnly++;
-    if (CLAP_PATTERN.test(c.message)) buckets[idx].clap++;
+    const isClap = CLAP_PATTERN.test(c.message);
+    if (isClap) {
+      buckets[idx].clap++;
+    } else if (isEmojiOnlyMessage(c.message)) {
+      buckets[idx].emojiOnly++;
+    }
   }
   return buckets;
 }
