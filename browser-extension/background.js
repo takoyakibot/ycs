@@ -127,9 +127,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case 'GET_STATUS':
       sendResponse({
-        isScanning,
+        isScanning: isScanning && sender.tab?.id === currentTabId,
         timestamps,
-        volumeGraphData,
+        volumeGraphData: sender.tab?.id === currentTabId ? volumeGraphData : [],
         config: CONFIG
       });
       return true;
@@ -218,7 +218,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
 
     case 'GET_VOLUME_DATA':
-      sendResponse({ data: volumeGraphData, duration: videoDuration });
+      if (sender.tab?.id !== currentTabId) {
+        sendResponse({ data: [], duration: 0 });
+      } else {
+        sendResponse({ data: volumeGraphData, duration: videoDuration });
+      }
       return true;
 
     case 'CLEAR_VOLUME_DATA':

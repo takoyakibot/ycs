@@ -149,6 +149,7 @@ export async function startDirectScan() {
   state.isScanning = true;
   const resolution = calcGraphResolution(state.videoDuration);
   state.volumeData = new Array(resolution).fill(0);
+  state.volumeDataVideoId = getVideoId();
   state.spectralData = new Array(resolution).fill(null);
 
   state.originalPlaybackRate = state.videoElement.playbackRate;
@@ -396,6 +397,7 @@ export function loadVolumeData() {
       }
 
       state.volumeData = saved.data;
+      state.volumeDataVideoId = videoId;
       state.spectralData = saved.spectral || new Array(saved.data.length).fill(null);
       if (saved.duration) {
         state.videoDuration = saved.duration;
@@ -489,6 +491,7 @@ export async function discardVolumeDataAndReset() {
   }
 
   state.volumeData = [];
+  state.volumeDataVideoId = null;
   state.spectralData = [];
   state.detectedTimestamps = [];
   drawVolumeGraph();

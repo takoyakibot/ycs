@@ -481,10 +481,14 @@ export async function autoDetectSongStarts() {
     return;
   }
 
-  const numericData = state.volumeData.map(v => {
-    if (typeof v === 'number' && Number.isFinite(v)) return v;
-    return Number.isFinite(v?.value) ? v.value : 0;
-  });
+  const currentVideoId = getVideoId();
+  const volumeDataMatchesVideo = state.volumeDataVideoId === currentVideoId;
+  const numericData = volumeDataMatchesVideo
+    ? state.volumeData.map(v => {
+        if (typeof v === 'number' && Number.isFinite(v)) return v;
+        return Number.isFinite(v?.value) ? v.value : 0;
+      })
+    : [];
   const hasVolumeData = numericData.length > 0 && numericData.some(v => v > 0);
 
   isAutoDetectRunning = true;

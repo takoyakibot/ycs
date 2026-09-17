@@ -10,6 +10,7 @@ const state = {
   volumeCanvas: null,
   volumeCtx: null,
   volumeData: [],
+  volumeDataVideoId: null,
   spectralData: [],
   isGraphVisible: false,
   zoomIndex: 0,
