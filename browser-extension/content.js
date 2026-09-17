@@ -998,9 +998,9 @@
         text: String(s.text ?? ''),
       })).filter(s => s.text.length > 0);
 
-      const volumesPayload = (state.volumeData || []).map(v => {
+      const volumeSource = state.volumeDataVideoId === videoId ? (state.volumeData || []) : [];
+      const volumesPayload = volumeSource.map(v => {
         if (typeof v === 'number') return v;
-        // 万一オブジェクトで保存されていた場合のフォールバック
         return Number.isFinite(v?.value) ? v.value : 0;
       });
 
