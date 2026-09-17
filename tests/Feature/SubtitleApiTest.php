@@ -164,6 +164,39 @@ class SubtitleApiTest extends TestCase
         $response->assertStatus(422);
     }
 
+    public function test_store_subtitles_accepts_nullable_text(): void
+    {
+        $response = $this->actingAs($this->superAdmin)
+            ->postJson('/api/manage/archives/subtitles/store', [
+                'video_id' => 'dQw4w9WgXcQ',
+                'language_code' => 'ja',
+                'kind' => 'asr',
+                'subtitles' => [
+                    ['start' => 0, 'duration' => 2.5, 'text' => null],
+                    ['start' => 2.5, 'duration' => 3, 'text' => ''],
+                    ['start' => 5.5, 'duration' => 2, 'text' => 'テスト'],
+                ],
+            ]);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('segment_count', 3);
+    }
+
+    public function test_store_subtitles_accepts_long_duration_stream(): void
+    {
+        $response = $this->actingAs($this->superAdmin)
+            ->postJson('/api/manage/archives/subtitles/store', [
+                'video_id' => 'dQw4w9WgXcQ',
+                'language_code' => 'ja',
+                'kind' => 'asr',
+                'subtitles' => [
+                    ['start' => 100000, 'duration' => 120, 'text' => '超長時間配信の字幕'],
+                ],
+            ]);
+
+        $response->assertStatus(200);
+    }
+
     public function test_store_subtitles_accepts_video_not_in_archives(): void
     {
         $response = $this->actingAs($this->superAdmin)
