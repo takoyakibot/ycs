@@ -88,6 +88,7 @@ export function handleMessage(message, sender, sendResponse) {
         break;
       }
       state.volumeData = message.data;
+      state.volumeDataVideoId = getVideoId();
       if (message.spectral) state.spectralData = message.spectral;
       updateProgress(message.progress || 0);
       drawVolumeGraph();
@@ -233,6 +234,7 @@ export function handleStorageChange(changes, areaName) {
       if (state.isScanning) return;
       console.log(`音量データが削除されたためグラフをリセットします: ${videoId}`);
       state.volumeData = [];
+      state.volumeDataVideoId = null;
       state.spectralData = [];
       state.detectedTimestamps = [];
       drawVolumeGraph();
@@ -247,6 +249,7 @@ export function handleStorageChange(changes, areaName) {
       console.log(`他タブからの音量データを受信: ${videoId}`);
 
       state.volumeData = newData.data;
+      state.volumeDataVideoId = videoId;
       state.spectralData = newData.spectral || new Array(newData.data.length).fill(null);
       if (newData.duration) {
         state.videoDuration = newData.duration;

@@ -13,6 +13,7 @@
     volumeCanvas: null,
     volumeCtx: null,
     volumeData: [],
+    volumeDataVideoId: null,
     spectralData: [],
     isGraphVisible: false,
     zoomIndex: 0,
@@ -3925,10 +3926,14 @@
       return;
     }
 
-    const numericData = state.volumeData.map(v => {
-      if (typeof v === 'number' && Number.isFinite(v)) return v;
-      return Number.isFinite(v?.value) ? v.value : 0;
-    });
+    const currentVideoId = getVideoId();
+    const volumeDataMatchesVideo = state.volumeDataVideoId === currentVideoId;
+    const numericData = volumeDataMatchesVideo
+      ? state.volumeData.map(v => {
+          if (typeof v === 'number' && Number.isFinite(v)) return v;
+          return Number.isFinite(v?.value) ? v.value : 0;
+        })
+      : [];
     const hasVolumeData = numericData.length > 0 && numericData.some(v => v > 0);
 
     isAutoDetectRunning = true;
@@ -6015,6 +6020,7 @@
     state.isScanning = true;
     const resolution = calcGraphResolution(state.videoDuration);
     state.volumeData = new Array(resolution).fill(0);
+    state.volumeDataVideoId = getVideoId();
     state.spectralData = new Array(resolution).fill(null);
 
     state.originalPlaybackRate = state.videoElement.playbackRate;
@@ -6262,6 +6268,7 @@
         }
 
         state.volumeData = saved.data;
+        state.volumeDataVideoId = videoId;
         state.spectralData = saved.spectral || new Array(saved.data.length).fill(null);
         if (saved.duration) {
           state.videoDuration = saved.duration;
@@ -6355,6 +6362,7 @@
     }
 
     state.volumeData = [];
+    state.volumeDataVideoId = null;
     state.spectralData = [];
     state.detectedTimestamps = [];
     drawVolumeGraph();
@@ -7710,6 +7718,7 @@
           break;
         }
         state.volumeData = message.data;
+        state.volumeDataVideoId = getVideoId();
         if (message.spectral) state.spectralData = message.spectral;
         updateProgress(message.progress || 0);
         drawVolumeGraph();
@@ -7855,6 +7864,7 @@
         if (state.isScanning) return;
         console.log(`音量データが削除されたためグラフをリセットします: ${videoId}`);
         state.volumeData = [];
+        state.volumeDataVideoId = null;
         state.spectralData = [];
         state.detectedTimestamps = [];
         drawVolumeGraph();
@@ -7869,6 +7879,7 @@
         console.log(`他タブからの音量データを受信: ${videoId}`);
 
         state.volumeData = newData.data;
+        state.volumeDataVideoId = videoId;
         state.spectralData = newData.spectral || new Array(newData.data.length).fill(null);
         if (newData.duration) {
           state.videoDuration = newData.duration;
@@ -7936,6 +7947,7 @@
         lastVideoId = currentVideoId;
 
         state.volumeData = [];
+        state.volumeDataVideoId = null;
         state.spectralData = [];
         state.videoDuration = 0;
         state.backgroundScanVideoId = null;
@@ -7960,6 +7972,7 @@
       } else if (nowWatchPage && currentVideoId !== lastVideoId) {
         lastVideoId = currentVideoId;
         state.volumeData = [];
+        state.volumeDataVideoId = null;
         state.spectralData = [];
         state.videoDuration = 0;
         state.backgroundScanVideoId = null;

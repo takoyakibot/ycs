@@ -54,6 +54,7 @@ function observePageChanges() {
       lastVideoId = currentVideoId;
 
       state.volumeData = [];
+      state.volumeDataVideoId = null;
       state.spectralData = [];
       state.videoDuration = 0;
       state.backgroundScanVideoId = null;
@@ -76,6 +77,7 @@ function observePageChanges() {
     } else if (nowWatchPage && currentVideoId !== lastVideoId) {
       lastVideoId = currentVideoId;
       state.volumeData = [];
+      state.volumeDataVideoId = null;
       state.spectralData = [];
       state.videoDuration = 0;
       state.backgroundScanVideoId = null;
