@@ -9,7 +9,7 @@ import {
   deselectMarker, blurMarkerTextInput, updateTimestampListSelection,
   scrollSelectedRowIntoView,
 } from './timestamp-editor.js';
-import { autoDetectSongStarts } from './auto-detect.js';
+import { autoDetectSongStarts, loadChatForHeatmap } from './auto-detect.js';
 import { copyTimestamps, importTimestamps, saveMarkersToStorage, loadMarkersFromStorage } from './timestamp-io.js';
 import { closeLyricsPastePopup, closeSongCandidatePopup, isLyricsPastePopupOpen } from './song-candidates.js';
 
@@ -1272,8 +1272,62 @@ export function drawSingingOverlay(height, barWidth, maxVolume) {
   state.volumeCtx.globalAlpha = 1;
 }
 
+export function drawChatEmojiOverlay(width, height) {
+  if (!state.volumeCtx || !state.videoDuration) return;
+
+  const buckets = state.chatHeatmapBuckets;
+  if (buckets.length === 0) return;
+
+  const ctx = state.volumeCtx;
+  const bucketWidth = width / buckets.length;
+  const barW = Math.ceil(bucketWidth) + 0.5;
+  const emojiMaxH = height * 0.4;
+
+  for (let i = 0; i < buckets.length; i++) {
+    const b = buckets[i];
+    if (b.total === 0) continue;
+    const emojiRatio = b.emojiOnly / b.total;
+    if (emojiRatio < 0.05) continue;
+
+    const barH = Math.max(2, emojiRatio * emojiMaxH);
+    ctx.fillStyle = 'rgba(255, 152, 0, 0.25)';
+    ctx.fillRect(i * bucketWidth, height - barH, barW, barH);
+  }
+}
+
+export function drawChatClapOverlay(width, height) {
+  if (!state.volumeCtx || !state.videoDuration) return;
+
+  const buckets = state.chatHeatmapBuckets;
+  if (buckets.length === 0) return;
+
+  const ctx = state.volumeCtx;
+  const bucketWidth = width / buckets.length;
+  const barW = Math.ceil(bucketWidth) + 0.5;
+  // マーカー三角（高さ10px）の下から描画開始
+  const topOffset = 12;
+  const clapMaxH = (height - topOffset) * 0.3;
+
+  let maxClap = 0;
+  for (const b of buckets) {
+    if (b.clap > maxClap) maxClap = b.clap;
+  }
+  if (maxClap === 0) return;
+
+  for (let i = 0; i < buckets.length; i++) {
+    const b = buckets[i];
+    if (b.clap === 0) continue;
+
+    const barH = Math.max(2, (b.clap / maxClap) * clapMaxH);
+    ctx.fillStyle = 'rgba(0, 188, 212, 0.3)';
+    ctx.fillRect(i * bucketWidth, topOffset, barW, barH);
+  }
+}
+
 export function drawVolumeGraph() {
   if (!state.volumeCtx || !state.volumeCanvas) return;
+
+  if (!state.chatHeatmapLoaded) loadChatForHeatmap();
 
   const width = state.volumeCanvas.width / window.devicePixelRatio;
   const height = state.volumeCanvas.height / window.devicePixelRatio;
@@ -1283,18 +1337,22 @@ export function drawVolumeGraph() {
   if (state.volumeData.length === 0) {
     state.volumeCtx.fillStyle = '#1a1a1a';
     state.volumeCtx.fillRect(0, 0, width, height);
-    if (state.tsMarkers.length === 0) {
+    if (state.tsMarkers.length === 0 && state.chatHeatmapBuckets.length === 0) {
       state.volumeCtx.fillStyle = '#666';
       state.volumeCtx.font = '11px sans-serif';
       state.volumeCtx.textAlign = 'center';
       state.volumeCtx.fillText('再生またはスキャンで音量データを収集', width / 2, height / 2 + 4);
     }
+    drawChatEmojiOverlay(width, height);
+    drawChatClapOverlay(width, height);
     drawTimestampMarkers(width, height);
     return;
   }
 
   state.volumeCtx.fillStyle = '#1a1a1a';
   state.volumeCtx.fillRect(0, 0, width, height);
+
+  drawChatEmojiOverlay(width, height);
 
   let maxVolume = 1;
   if (state.isRelativeVolumeMode) {
@@ -1332,6 +1390,8 @@ export function drawVolumeGraph() {
   state.volumeCtx.moveTo(0, height / 2);
   state.volumeCtx.lineTo(width, height / 2);
   state.volumeCtx.stroke();
+
+  drawChatClapOverlay(width, height);
 
   drawTimestampMarkers(width, height);
 }

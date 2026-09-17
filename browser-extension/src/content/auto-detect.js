@@ -18,6 +18,8 @@ import { sendChatReplayDataToServer } from './api.js';
 
 let isAutoDetectRunning = false;
 let tsEditorNoticeTimer = null;
+let chatHeatmapLoading = false;
+let chatHeatmapEpoch = 0;
 
 export function formatTimestamp(seconds) {
   const h = Math.floor(seconds / 3600);
@@ -204,7 +206,7 @@ export function isEmojiOnlyMessage(text) {
 export function buildChatBuckets(chats, videoDurationSec, bucketSec) {
   const delaySec = CHAT_SIGNAL_CONFIG.CHAT_DELAY_SEC;
   const numBuckets = Math.ceil(videoDurationSec / bucketSec);
-  const buckets = Array.from({ length: numBuckets }, () => ({ total: 0, emojiOnly: 0 }));
+  const buckets = Array.from({ length: numBuckets }, () => ({ total: 0, emojiOnly: 0, clap: 0 }));
 
   for (const c of chats) {
     if (typeof c.message !== 'string') continue;
@@ -212,7 +214,12 @@ export function buildChatBuckets(chats, videoDurationSec, bucketSec) {
     if (timeSec < 0 || timeSec >= videoDurationSec) continue;
     const idx = Math.min(numBuckets - 1, Math.floor(timeSec / bucketSec));
     buckets[idx].total++;
-    if (isEmojiOnlyMessage(c.message)) buckets[idx].emojiOnly++;
+    const isClap = CLAP_PATTERN.test(c.message);
+    if (isClap) {
+      buckets[idx].clap++;
+    } else if (isEmojiOnlyMessage(c.message)) {
+      buckets[idx].emojiOnly++;
+    }
   }
   return buckets;
 }
@@ -426,6 +433,7 @@ async function fetchChats(videoId) {
             await saveChatsToDB(videoId, fetched);
             chats = fetched;
             sendChatReplayDataToServer(videoId, fetched, state.videoDuration);
+            resetChatHeatmap();
           } else {
             chatUnavailable = true;
           }
@@ -518,6 +526,42 @@ export async function autoDetectSongStarts() {
   } finally {
     isAutoDetectRunning = false;
   }
+}
+
+export async function loadChatForHeatmap() {
+  if (chatHeatmapLoading || state.chatHeatmapLoaded) return;
+  if (!state.videoDuration) return;
+
+  const videoId = getVideoId();
+  if (!videoId) return;
+
+  const myEpoch = chatHeatmapEpoch;
+  chatHeatmapLoading = true;
+  try {
+    await initChatDB();
+    if (chatHeatmapEpoch !== myEpoch) return;
+
+    const chats = await loadChatDataForVideo(videoId);
+    if (chatHeatmapEpoch !== myEpoch) return;
+
+    if (chats.length > 0) {
+      const bucketSec = CHAT_ONLY_CONFIG.BUCKET_SEC;
+      state.chatHeatmapBuckets = buildChatBuckets(chats, state.videoDuration, bucketSec);
+      drawVolumeGraph();
+    }
+    state.chatHeatmapLoaded = true;
+  } catch (e) {
+    console.warn('[YCS] チャットヒートマップ読み込み失敗:', e);
+  } finally {
+    chatHeatmapLoading = false;
+  }
+}
+
+export function resetChatHeatmap() {
+  chatHeatmapEpoch++;
+  chatHeatmapLoading = false;
+  state.chatHeatmapBuckets = [];
+  state.chatHeatmapLoaded = false;
 }
 
 export function showTsEditorNotice(text, isWarning = false) {

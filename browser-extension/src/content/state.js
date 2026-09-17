@@ -57,6 +57,10 @@ const state = {
   embeddedUIVisible: true,
   embeddedTriggerButton: null,
 
+  // Chat heatmap
+  chatHeatmapBuckets: [],
+  chatHeatmapLoaded: false,
+
   // Subtitle
   currentSubtitles: [],
   currentCaptionTracks: [],
