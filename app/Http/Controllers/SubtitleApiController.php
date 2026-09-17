@@ -31,10 +31,10 @@ class SubtitleApiController extends Controller
             'video_id' => ['required', 'string', 'size:11', 'regex:/^[A-Za-z0-9_-]{11}$/'],
             'language_code' => ['required', 'string', 'regex:/^[a-zA-Z]{2,3}(-[a-zA-Z0-9]+)*$/', 'max:20'],
             'kind' => ['present', 'nullable', 'string', Rule::in(['asr', ''])],
-            'subtitles' => ['required', 'array', 'min:1', 'max:10000'],
-            'subtitles.*.start' => ['required', 'numeric', 'min:0', 'max:86400'],
-            'subtitles.*.duration' => ['required', 'numeric', 'min:0', 'max:60'],
-            'subtitles.*.text' => ['required', 'string', 'max:500'],
+            'subtitles' => ['required', 'array', 'min:1', 'max:50000'],
+            'subtitles.*.start' => ['required', 'numeric', 'min:0', 'max:604800'],
+            'subtitles.*.duration' => ['required', 'numeric', 'min:0', 'max:600'],
+            'subtitles.*.text' => ['nullable', 'string', 'max:1000'],
         ]);
 
         $videoId = $request->input('video_id');

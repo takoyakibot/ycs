@@ -135,7 +135,12 @@ export async function postSubtitlesToServer(videoId, languageCode, kind, subtitl
     });
 
     if (!response.ok) {
-      console.warn(`[YCS] 字幕データ送信失敗: ${response.status}`);
+      let detail = '';
+      try {
+        const body = await response.json();
+        detail = JSON.stringify(body.errors || body.message || body);
+      } catch {}
+      console.warn(`[YCS] 字幕データ送信失敗: ${response.status}`, detail);
       throw new Error(`字幕データの送信に失敗しました (${response.status})`);
     }
 
