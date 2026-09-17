@@ -89,27 +89,54 @@ class ChatReplayApiControllerTest extends TestCase
         $response->assertStatus(403);
     }
 
-    public function test_update_or_create_overwrites_existing(): void
+    public function test_update_overwrites_when_message_count_increases(): void
     {
-        $this->postChatReplayData($this->validPayload());
+        $initial = $this->validPayload();
+        $initial['chat_data'] = [
+            ['message' => '初回', 'timestamp' => 5000, 'type' => 'normal'],
+        ];
+        $this->postChatReplayData($initial);
 
         $updated = $this->validPayload();
         $updated['duration'] = 7200.0;
         $updated['chat_data'] = [
-            ['message' => '更新テスト', 'timestamp' => 5000, 'type' => 'normal'],
+            ['message' => '更新1', 'timestamp' => 5000, 'type' => 'normal'],
+            ['message' => '更新2', 'timestamp' => 10000, 'type' => 'normal'],
+            ['message' => '更新3', 'timestamp' => 15000, 'type' => 'normal'],
         ];
 
         $response = $this->postChatReplayData($updated);
 
         $response->assertStatus(200)
             ->assertJsonPath('is_new', false)
-            ->assertJsonPath('message_count', 1);
+            ->assertJsonPath('message_count', 3);
 
         $this->assertDatabaseCount('chat_replay_data', 1);
 
         $record = ChatReplayData::where('video_id', 'dQw4w9WgXcQ')->first();
         $this->assertEquals(7200.0, $record->duration);
-        $this->assertCount(1, $record->chat_data);
+        $this->assertCount(3, $record->chat_data);
+    }
+
+    public function test_skips_update_when_message_count_decreases(): void
+    {
+        $this->postChatReplayData($this->validPayload());
+
+        $fewer = $this->validPayload();
+        $fewer['duration'] = 7200.0;
+        $fewer['chat_data'] = [
+            ['message' => '少ないデータ', 'timestamp' => 5000, 'type' => 'normal'],
+        ];
+
+        $response = $this->postChatReplayData($fewer);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('skipped', true)
+            ->assertJsonPath('message_count', 3);
+
+        $record = ChatReplayData::where('video_id', 'dQw4w9WgXcQ')->first();
+        $this->assertEquals(3600.0, $record->duration);
+        $this->assertCount(3, $record->chat_data);
     }
 
     public function test_requires_auth(): void

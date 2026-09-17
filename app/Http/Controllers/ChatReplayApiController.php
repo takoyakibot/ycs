@@ -38,6 +38,22 @@ class ChatReplayApiController extends Controller
             $chatData = $request->input('chat_data');
             $messageCount = count($chatData);
 
+            $existing = ChatReplayData::where('video_id', $videoId)->first();
+            if ($existing && $existing->message_count > $messageCount) {
+                Log::info('チャットリプレイデータ: 既存データの方が多いためスキップ', [
+                    'video_id' => $videoId,
+                    'existing_count' => $existing->message_count,
+                    'new_count' => $messageCount,
+                ]);
+
+                return response()->json([
+                    'id' => $existing->id,
+                    'video_id' => $videoId,
+                    'message_count' => $existing->message_count,
+                    'skipped' => true,
+                ]);
+            }
+
             $chatReplayData = ChatReplayData::updateOrCreate(
                 ['video_id' => $videoId],
                 [

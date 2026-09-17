@@ -488,12 +488,17 @@
     }
   }
 
-  const chatReplaySentCache = new Set();
+  const chatReplaySentCache = new Map();
 
-  async function sendChatReplayDataToServer(videoId, chats, duration) {
+  async function sendChatReplayDataToServer(videoId, chats, duration, { force = false } = {}) {
     if (!videoId || !chats || chats.length === 0) return;
 
-    if (chatReplaySentCache.has(videoId)) return;
+    if (getVideoId() !== videoId) return;
+
+    if (!force) {
+      const cached = chatReplaySentCache.get(videoId);
+      if (cached && cached >= chats.length) return;
+    }
 
     if (!state.ycsApiToken) {
       await loadYcsApiSettings();
@@ -524,7 +529,7 @@
       });
 
       if (response.ok) {
-        chatReplaySentCache.add(videoId);
+        chatReplaySentCache.set(videoId, chatData.length);
         console.log(`[YCS] チャットリプレイデータをサーバーに送信しました: ${videoId} (${chatData.length}件)`);
       } else {
         console.warn(`[YCS] チャットリプレイデータ送信エラー: ${response.status}`);
@@ -1718,8 +1723,20 @@
       // チャットを取得
       const chats = await fetchAllChatReplays(continuation);
 
+      if (getVideoId() !== videoId) {
+        if (statusEl) {
+          statusEl.textContent = '動画が変更されたため取得を中断しました';
+          statusEl.classList.remove('loading');
+        }
+        return;
+      }
+
       // IndexedDBに保存
       await saveChatsToDB(videoId, chats);
+
+      if (chats.length > 0 && state.videoDuration) {
+        sendChatReplayDataToServer(videoId, chats, state.videoDuration, { force: true });
+      }
 
       if (statusEl) {
         statusEl.textContent = `${chats.length}件のチャットを取得しました`;
@@ -3845,16 +3862,18 @@
       }
       if (chats.length === 0) {
         try {
+          if (getVideoId() !== videoId) return { chats: [], chatUnavailable: true };
           showTsEditorNotice('チャットを取得しています…');
           const continuation = await getChatContinuation();
           if (continuation) {
             const fetched = await fetchAllChatReplays(continuation, (count) => {
               showTsEditorNotice(`チャットを取得中... (${count}件)`);
             });
+            if (getVideoId() !== videoId) return { chats: [], chatUnavailable: true };
             if (fetched.length > 0) {
               await saveChatsToDB(videoId, fetched);
               chats = fetched;
-              sendChatReplayDataToServer(videoId, fetched, state.videoDuration);
+              sendChatReplayDataToServer(videoId, fetched, state.videoDuration, { force: true });
               resetChatHeatmap();
             } else {
               chatUnavailable = true;

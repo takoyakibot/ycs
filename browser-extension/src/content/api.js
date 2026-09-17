@@ -45,12 +45,17 @@ export async function sendSubtitlesToServer(videoId, lang, subtitles) {
   }
 }
 
-const chatReplaySentCache = new Set();
+const chatReplaySentCache = new Map();
 
-export async function sendChatReplayDataToServer(videoId, chats, duration) {
+export async function sendChatReplayDataToServer(videoId, chats, duration, { force = false } = {}) {
   if (!videoId || !chats || chats.length === 0) return;
 
-  if (chatReplaySentCache.has(videoId)) return;
+  if (getVideoId() !== videoId) return;
+
+  if (!force) {
+    const cached = chatReplaySentCache.get(videoId);
+    if (cached && cached >= chats.length) return;
+  }
 
   if (!state.ycsApiToken) {
     await loadYcsApiSettings();
@@ -81,7 +86,7 @@ export async function sendChatReplayDataToServer(videoId, chats, duration) {
     });
 
     if (response.ok) {
-      chatReplaySentCache.add(videoId);
+      chatReplaySentCache.set(videoId, chatData.length);
       console.log(`[YCS] チャットリプレイデータをサーバーに送信しました: ${videoId} (${chatData.length}件)`);
     } else {
       console.warn(`[YCS] チャットリプレイデータ送信エラー: ${response.status}`);

@@ -5,6 +5,7 @@ import { updateTriggerButtonState } from './ui.js';
 import { hideSubtitlePanel, isSubtitlePanelVisible } from './subtitle-panel.js';
 import { hideHighlightPanel, isHighlightPanelVisible } from './highlight.js';
 import { ensurePageBridge } from './subtitle-panel.js';
+import { sendChatReplayDataToServer } from './api.js';
 
 let chatSearchPanel = null;
 let chatSearchPanelVisible = false;
@@ -387,8 +388,20 @@ async function fetchChatData() {
     // チャットを取得
     const chats = await fetchAllChatReplays(continuation);
 
+    if (getVideoId() !== videoId) {
+      if (statusEl) {
+        statusEl.textContent = '動画が変更されたため取得を中断しました';
+        statusEl.classList.remove('loading');
+      }
+      return;
+    }
+
     // IndexedDBに保存
     await saveChatsToDB(videoId, chats);
+
+    if (chats.length > 0 && state.videoDuration) {
+      sendChatReplayDataToServer(videoId, chats, state.videoDuration, { force: true });
+    }
 
     if (statusEl) {
       statusEl.textContent = `${chats.length}件のチャットを取得しました`;
