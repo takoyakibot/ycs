@@ -423,16 +423,18 @@ async function fetchChats(videoId) {
     }
     if (chats.length === 0) {
       try {
+        if (getVideoId() !== videoId) return { chats: [], chatUnavailable: true };
         showTsEditorNotice('チャットを取得しています…');
         const continuation = await getChatContinuation();
         if (continuation) {
           const fetched = await fetchAllChatReplays(continuation, (count) => {
             showTsEditorNotice(`チャットを取得中... (${count}件)`);
           });
+          if (getVideoId() !== videoId) return { chats: [], chatUnavailable: true };
           if (fetched.length > 0) {
             await saveChatsToDB(videoId, fetched);
             chats = fetched;
-            sendChatReplayDataToServer(videoId, fetched, state.videoDuration);
+            sendChatReplayDataToServer(videoId, fetched, state.videoDuration, { force: true });
             resetChatHeatmap();
           } else {
             chatUnavailable = true;
