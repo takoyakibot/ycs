@@ -55,4 +55,7 @@ Route::middleware(['auth:sanctum', 'admin'])->group(function () {
 
     Route::get('extension/timestamp-status', [SubtitleApiController::class, 'timestampStatus'])
         ->middleware('throttle:30,1');
+
+    Route::get('extension/song-suggest', [SubtitleApiController::class, 'songSuggest'])
+        ->middleware('throttle:60,1');
 });
