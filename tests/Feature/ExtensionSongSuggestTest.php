@@ -9,7 +9,6 @@ use App\Models\TimestampSongMapping;
 use App\Models\TsItem;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class ExtensionSongSuggestTest extends TestCase
