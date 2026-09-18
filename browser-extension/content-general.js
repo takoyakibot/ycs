@@ -139,6 +139,7 @@
     NEAR_SEGMENT_TOLERANCE_SEC: 30,
     TAIL_GUARD_SEC: 60,
     REACTION_DELAY_SEC: 10,
+    MAX_RISE_SEARCH_SEC: 300,
   };
 
   const DEFAULT_YCS_SERVER_URL = 'https://ycs.alpacasandbag.jp';
@@ -1861,6 +1862,32 @@
     return merged;
   }
 
+  function findNextEmojiRise(buckets, bucketSec, afterSec) {
+    const cfg = CHAT_ONLY_CONFIG;
+    const half = Math.floor(cfg.SMOOTH_WINDOW_BUCKETS / 2);
+    const startIdx = Math.floor(afterSec / bucketSec) + 1;
+    const maxIdx = Math.min(buckets.length, Math.ceil((afterSec + cfg.MAX_RISE_SEARCH_SEC) / bucketSec));
+
+    let foundDip = false;
+    for (let i = startIdx; i < maxIdx; i++) {
+      let totalMsg = 0;
+      let emojiMsg = 0;
+      for (let j = Math.max(0, i - half); j <= Math.min(buckets.length - 1, i + half); j++) {
+        totalMsg += buckets[j].total;
+        emojiMsg += buckets[j].emojiOnly;
+      }
+      const ratio = totalMsg >= cfg.MIN_WINDOW_MESSAGES ? emojiMsg / totalMsg : 0;
+
+      if (!foundDip && ratio < cfg.EMOJI_RATIO_EXIT) {
+        foundDip = true;
+      }
+      if (foundDip && ratio >= cfg.EMOJI_RATIO_ENTER) {
+        return Math.max(0, i * bucketSec - cfg.REACTION_DELAY_SEC);
+      }
+    }
+    return null;
+  }
+
   function chatOnlyDetectSongStarts(chats, videoDurationSec) {
     const cfg = CHAT_ONLY_CONFIG;
     const clapCfg = CHAT_SIGNAL_CONFIG;
@@ -1892,7 +1919,8 @@
         for (const burst of bursts) {
           const inSegment = emojiSegments.some(s => burst >= s.start && burst <= s.end + tolerance);
           if (inSegment) {
-            const nextStart = burst + clapCfg.SPLIT_START_OFFSET_SEC;
+            const riseTime = findNextEmojiRise(buckets, cfg.BUCKET_SEC, burst);
+            const nextStart = riseTime !== null ? riseTime : burst + clapCfg.SPLIT_START_OFFSET_SEC;
             if (nextStart < videoDurationSec - tailGuard) {
               const alreadyCovered = emojiSegments.some(
                 s => nextStart >= s.start - tolerance && nextStart <= s.start + tolerance
@@ -1907,7 +1935,8 @@
         if (i === 0 && bursts[0] > cfg.FIRST_SONG_MIN_OFFSET_SEC) {
           starts.push(0);
         }
-        const nextStart = bursts[i] + clapCfg.SPLIT_START_OFFSET_SEC;
+        const riseTime = findNextEmojiRise(buckets, cfg.BUCKET_SEC, bursts[i]);
+        const nextStart = riseTime !== null ? riseTime : bursts[i] + clapCfg.SPLIT_START_OFFSET_SEC;
         if (nextStart < videoDurationSec - tailGuard) {
           starts.push(nextStart);
         }
@@ -1929,7 +1958,7 @@
     return { starts: deduped, method };
   }
 
-  function fuseSegmentsWithChat(segments, bursts) {
+  function fuseSegmentsWithChat(segments, bursts, chatBuckets, bucketSec) {
     const cfg = CHAT_SIGNAL_CONFIG;
     const chatActive = bursts.length >= cfg.MIN_BURSTS_TO_TRUST;
 
@@ -1961,7 +1990,14 @@
       if (chatActive) {
         for (const b of bursts) {
           if (b >= seg.start + cfg.SPLIT_MIN_HEAD_SEC && b <= seg.end - cfg.SPLIT_MIN_TAIL_SEC) {
-            starts.push(Math.floor(b + cfg.SPLIT_START_OFFSET_SEC));
+            let splitStart;
+            if (chatBuckets && chatBuckets.length > 0 && bucketSec) {
+              const riseTime = findNextEmojiRise(chatBuckets, bucketSec, b);
+              splitStart = riseTime !== null ? Math.floor(riseTime) : Math.floor(b + cfg.SPLIT_START_OFFSET_SEC);
+            } else {
+              splitStart = Math.floor(b + cfg.SPLIT_START_OFFSET_SEC);
+            }
+            starts.push(splitStart);
             splitCount++;
           }
         }
@@ -2075,7 +2111,8 @@
         }
 
         const bursts = detectClapBursts(chats, state.videoDuration);
-        const fused = fuseSegmentsWithChat(segments, bursts);
+        const chatBuckets = chats.length > 0 ? buildChatBuckets(chats, state.videoDuration, CHAT_ONLY_CONFIG.BUCKET_SEC) : [];
+        const fused = fuseSegmentsWithChat(segments, bursts, chatBuckets, CHAT_ONLY_CONFIG.BUCKET_SEC);
 
         const sourceNote = fused.chatActive
           ? '音量+拍手チャット'
