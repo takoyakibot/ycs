@@ -165,7 +165,7 @@ export async function showSongCandidates(marker, threshold = null) {
 
     // 字幕が未送信なら取得→送信してから再問い合わせ
     if (result.has_subtitles === false) {
-      openSongCandidatePopup(input, [{ type: 'message', label: '字幕を取得しています…' }]);
+      open([{ type: 'message', label: '字幕を取得しています…' }]);
       await ensureSubtitlesOnServer(videoId);
       if (isStale()) return;
       result = await fetchSongCandidates(videoId, sec, threshold);
