@@ -6,14 +6,12 @@ use App\Helpers\QueryHelper;
 use App\Http\Controllers\Concerns\ManageAccessControl;
 use App\Models\Archive;
 use App\Models\Song;
-use App\Models\TimestampSongMapping;
 use App\Models\TsItem;
 use App\Models\VideoSubtitle;
 use App\Services\SubtitleFingerprintService;
 use App\Services\SubtitleMatchingService;
 use Exception;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 
@@ -360,7 +358,7 @@ class SubtitleApiController extends Controller
 
             $tsItems = $tsQuery
                 ->groupBy('ts_items.text', 'songs.title', 'songs.artist')
-                ->limit($remaining + count($results))
+                ->limit($limit * 3)
                 ->get();
 
             foreach ($tsItems as $item) {

@@ -15,6 +15,7 @@ let songCandidatePopupCleanup = null;
 let songCandidateRequestSeq = 0;
 let suggestDebounceTimer = null;
 let suggestAbortController = null;
+let suggestInsertGuard = false;
 
 export function isLyricsPastePopupOpen() {
   return !!lyricsPastePopup;
@@ -169,7 +170,9 @@ function openSongCandidatePopup(input, items) {
       closeSongCandidatePopup();
       input.focus({ preventScroll: true });
       input.select();
+      suggestInsertGuard = true;
       document.execCommand('insertText', false, value);
+      suggestInsertGuard = false;
     }
   });
 
@@ -342,8 +345,11 @@ export function cancelSongSuggest() {
 }
 
 export function onSongInputForSuggest(input) {
+  if (suggestInsertGuard) return;
+
   cancelSongSuggest();
-  closeSongCandidatePopup();
+
+  if (songCandidatePopup) return;
 
   const query = input.value.trim();
   if (query.length < 2) return;
@@ -352,6 +358,7 @@ export function onSongInputForSuggest(input) {
 
   suggestDebounceTimer = setTimeout(() => {
     suggestDebounceTimer = null;
+    if (songCandidatePopup) return;
     fetchAndShowSuggestions(input, query);
   }, 300);
 }
@@ -423,7 +430,9 @@ function openSongSuggestPopup(input, suggestions) {
     closeSongCandidatePopup();
     input.focus({ preventScroll: true });
     input.select();
+    suggestInsertGuard = true;
     document.execCommand('insertText', false, selected.text);
+    suggestInsertGuard = false;
   });
 
   const onKeydown = (e) => {

@@ -580,6 +580,7 @@
   let songCandidateRequestSeq = 0;
   let suggestDebounceTimer = null;
   let suggestAbortController = null;
+  let suggestInsertGuard = false;
 
   function isLyricsPastePopupOpen() {
     return !!lyricsPastePopup;
@@ -734,7 +735,9 @@
         closeSongCandidatePopup();
         input.focus({ preventScroll: true });
         input.select();
+        suggestInsertGuard = true;
         document.execCommand('insertText', false, value);
+        suggestInsertGuard = false;
       }
     });
 
@@ -903,8 +906,11 @@
   }
 
   function onSongInputForSuggest(input) {
+    if (suggestInsertGuard) return;
+
     cancelSongSuggest();
-    closeSongCandidatePopup();
+
+    if (songCandidatePopup) return;
 
     const query = input.value.trim();
     if (query.length < 2) return;
@@ -913,6 +919,7 @@
 
     suggestDebounceTimer = setTimeout(() => {
       suggestDebounceTimer = null;
+      if (songCandidatePopup) return;
       fetchAndShowSuggestions(input, query);
     }, 300);
   }
@@ -984,7 +991,9 @@
       closeSongCandidatePopup();
       input.focus({ preventScroll: true });
       input.select();
+      suggestInsertGuard = true;
       document.execCommand('insertText', false, selected.text);
+      suggestInsertGuard = false;
     });
 
     const onKeydown = (e) => {
