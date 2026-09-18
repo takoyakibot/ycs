@@ -141,6 +141,7 @@
     NEAR_SEGMENT_TOLERANCE_SEC: 30,
     TAIL_GUARD_SEC: 60,
     REACTION_DELAY_SEC: 10,
+    MAX_RISE_SEARCH_SEC: 300,
   };
 
   const CHAT_DB_NAME = 'YCSChatDB';
@@ -3741,9 +3742,10 @@
     const cfg = CHAT_ONLY_CONFIG;
     const half = Math.floor(cfg.SMOOTH_WINDOW_BUCKETS / 2);
     const startIdx = Math.floor(afterSec / bucketSec) + 1;
+    const maxIdx = Math.min(buckets.length, Math.ceil((afterSec + cfg.MAX_RISE_SEARCH_SEC) / bucketSec));
 
     let foundDip = false;
-    for (let i = startIdx; i < buckets.length; i++) {
+    for (let i = startIdx; i < maxIdx; i++) {
       let totalMsg = 0;
       let emojiMsg = 0;
       for (let j = Math.max(0, i - half); j <= Math.min(buckets.length - 1, i + half); j++) {
@@ -3752,7 +3754,7 @@
       }
       const ratio = totalMsg >= cfg.MIN_WINDOW_MESSAGES ? emojiMsg / totalMsg : 0;
 
-      if (!foundDip && ratio < cfg.EMOJI_RATIO_ENTER) {
+      if (!foundDip && ratio < cfg.EMOJI_RATIO_EXIT) {
         foundDip = true;
       }
       if (foundDip && ratio >= cfg.EMOJI_RATIO_ENTER) {
