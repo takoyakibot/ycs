@@ -578,6 +578,8 @@
   let songCandidatePopup = null;
   let songCandidatePopupCleanup = null;
   let songCandidateRequestSeq = 0;
+  let suggestDebounceTimer = null;
+  let suggestAbortController = null;
 
   function isLyricsPastePopupOpen() {
     return !!lyricsPastePopup;
@@ -888,6 +890,129 @@
   }
 
   async function ensureSubtitlesOnServer() {}
+
+  function cancelSongSuggest() {
+    if (suggestDebounceTimer) {
+      clearTimeout(suggestDebounceTimer);
+      suggestDebounceTimer = null;
+    }
+    if (suggestAbortController) {
+      suggestAbortController.abort();
+      suggestAbortController = null;
+    }
+  }
+
+  function onSongInputForSuggest(input) {
+    cancelSongSuggest();
+    closeSongCandidatePopup();
+
+    const query = input.value.trim();
+    if (query.length < 2) return;
+
+    if (!state.ycsApiToken) return;
+
+    suggestDebounceTimer = setTimeout(() => {
+      suggestDebounceTimer = null;
+      fetchAndShowSuggestions(input, query);
+    }, 300);
+  }
+
+  async function fetchAndShowSuggestions(input, query) {
+    suggestAbortController = new AbortController();
+    const seq = songCandidateRequestSeq;
+
+    try {
+      const url = `${state.ycsServerUrl}/api/extension/song-suggest?q=${encodeURIComponent(query)}`;
+      const response = await fetch(url, {
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${state.ycsApiToken}`,
+        },
+        signal: suggestAbortController.signal,
+      });
+
+      if (seq !== songCandidateRequestSeq) return;
+      if (!response.ok) return;
+
+      const data = await response.json();
+      if (seq !== songCandidateRequestSeq) return;
+      if (!document.activeElement || document.activeElement !== input) return;
+
+      const suggestions = data.suggestions || [];
+      if (suggestions.length === 0) return;
+
+      openSongSuggestPopup(input, suggestions);
+    } catch (e) {
+      if (e.name !== 'AbortError') {
+        console.warn('[YCS] サジェスト取得エラー:', e.message);
+      }
+    } finally {
+      suggestAbortController = null;
+    }
+  }
+
+  function openSongSuggestPopup(input, suggestions) {
+    closeSongCandidatePopup();
+    closeLyricsPastePopup();
+    if (!state.volumeGraphContainer) return;
+
+    const popup = document.createElement('div');
+    popup.className = 'vdg-paste-popup';
+    popup.innerHTML = `
+    <div class="vdg-paste-popup-title">サジェスト</div>
+    ${suggestions.map((s, i) => `
+      <div class="vdg-paste-popup-item" data-index="${i}">${escapeHtml(s.text)}</div>
+    `).join('')}
+  `;
+
+    const listEl = state.volumeGraphContainer.querySelector('#vdg-ts-list');
+    const reposition = () => {
+      const containerRect = state.volumeGraphContainer.getBoundingClientRect();
+      const inputRect = input.getBoundingClientRect();
+      const maxLeft = containerRect.width - popup.offsetWidth - 4;
+      popup.style.left = `${Math.max(0, Math.min(inputRect.left - containerRect.left, maxLeft))}px`;
+      popup.style.top = `${inputRect.bottom - containerRect.top + 2}px`;
+    };
+
+    popup.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const el = e.target.closest('.vdg-paste-popup-item');
+      if (!el || el.dataset.index === undefined) return;
+      const selected = suggestions[parseInt(el.dataset.index)];
+      if (!selected) return;
+      closeSongCandidatePopup();
+      input.focus({ preventScroll: true });
+      input.select();
+      document.execCommand('insertText', false, selected.text);
+    });
+
+    const onKeydown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      closeSongCandidatePopup();
+    };
+
+    const onOutsideMousedown = (e) => {
+      if (popup.contains(e.target) || e.target === input) return;
+      closeSongCandidatePopup();
+    };
+
+    input.addEventListener('keydown', onKeydown, true);
+    document.addEventListener('mousedown', onOutsideMousedown, true);
+    listEl?.addEventListener('scroll', reposition);
+    songCandidatePopupCleanup = () => {
+      input.removeEventListener('keydown', onKeydown, true);
+      document.removeEventListener('mousedown', onOutsideMousedown, true);
+      listEl?.removeEventListener('scroll', reposition);
+    };
+
+    songCandidatePopup = popup;
+    state.volumeGraphContainer.appendChild(popup);
+    reposition();
+  }
 
   function computeSpectralFeatures(freqData, sampleRate) {
     const binCount = freqData.length;
@@ -2259,6 +2384,7 @@
           marker.text = e.target.value;
           saveMarkersToStorage();
         }
+        onSongInputForSuggest(input);
       });
       input.addEventListener('mousedown', (e) => {
         if (e.button !== 0) return;
@@ -2367,6 +2493,7 @@
   function blurMarkerTextInput() {
     // キーボード操作で入力を抜ける場合はポップアップのmousedown経由の後始末が働かないため、
     // ここで明示的に閉じる（開いたまま残るとリスナーが生き続け、後続のクリックで誤挿入される）
+    cancelSongSuggest();
     closeLyricsPastePopup();
     closeSongCandidatePopup();
     const active = document.activeElement;

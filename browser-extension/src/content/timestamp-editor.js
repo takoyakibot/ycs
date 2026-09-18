@@ -6,6 +6,7 @@ import { saveMarkersToStorage } from './timestamp-io.js';
 import {
   closeLyricsPastePopup, closeSongCandidatePopup,
   showSongCandidates, buildLyricsSplitCandidates, showLyricsPastePopup,
+  onSongInputForSuggest, cancelSongSuggest,
 } from './song-candidates.js';
 
 function formatTimestamp(seconds) {
@@ -104,6 +105,7 @@ export function updateTimestampList() {
         marker.text = e.target.value;
         saveMarkersToStorage();
       }
+      onSongInputForSuggest(input);
     });
     input.addEventListener('mousedown', (e) => {
       if (e.button !== 0) return;
@@ -212,6 +214,7 @@ export function updateUndoRedoButtons() {
 export function blurMarkerTextInput() {
   // キーボード操作で入力を抜ける場合はポップアップのmousedown経由の後始末が働かないため、
   // ここで明示的に閉じる（開いたまま残るとリスナーが生き続け、後続のクリックで誤挿入される）
+  cancelSongSuggest();
   closeLyricsPastePopup();
   closeSongCandidatePopup();
   const active = document.activeElement;

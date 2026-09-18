@@ -2,13 +2,18 @@
 
 namespace App\Http\Controllers;
 
+use App\Helpers\QueryHelper;
 use App\Http\Controllers\Concerns\ManageAccessControl;
 use App\Models\Archive;
+use App\Models\Song;
+use App\Models\TimestampSongMapping;
+use App\Models\TsItem;
 use App\Models\VideoSubtitle;
 use App\Services\SubtitleFingerprintService;
 use App\Services\SubtitleMatchingService;
 use Exception;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 
@@ -304,6 +309,87 @@ class SubtitleApiController extends Controller
 
             return response()->json(['message' => '楽曲マッチングに失敗しました'], 500);
         }
+    }
+
+    /**
+     * 曲名サジェスト（Chrome拡張のタイムスタンプエディタ用）
+     *
+     * songsテーブルとts_itemsテーブルの両方から検索し、
+     * songsを優先しつつts_itemsで補完する
+     */
+    public function songSuggest(Request $request)
+    {
+        $validated = $request->validate([
+            'q' => ['required', 'string', 'min:2', 'max:100'],
+        ]);
+
+        $query = $validated['q'];
+        $limit = 10;
+        $results = [];
+
+        // 1. songsテーブルから検索（title / artist）
+        $songQuery = Song::query();
+        QueryHelper::applyFuzzySearch($songQuery, $query, ['normalized_title', 'normalized_artist']);
+        $songs = $songQuery->limit($limit)->get(['title', 'artist']);
+
+        foreach ($songs as $song) {
+            $display = $song->artist ? "{$song->title} / {$song->artist}" : $song->title;
+            $results[] = [
+                'text' => $display,
+                'source' => 'song',
+            ];
+        }
+
+        // 2. ts_itemsテーブルから補完（マスタにない表記を拾う）
+        $remaining = $limit - count($results);
+        if ($remaining > 0) {
+            $songTexts = array_map(fn ($r) => $r['text'], $results);
+
+            $tsQuery = TsItem::query()
+                ->select('ts_items.text', 'songs.title as song_title', 'songs.artist as song_artist')
+                ->leftJoin('timestamp_song_mappings', 'ts_items.normalized_text', '=', 'timestamp_song_mappings.normalized_text')
+                ->leftJoin('songs', 'timestamp_song_mappings.song_id', '=', 'songs.id')
+                ->where('ts_items.is_display', '1')
+                ->where(function ($q) {
+                    $q->whereNull('timestamp_song_mappings.is_not_song')
+                        ->orWhere('timestamp_song_mappings.is_not_song', false);
+                });
+
+            $escaped = QueryHelper::escapeLikeString($query);
+            $tsQuery->where('ts_items.text', 'like', "%{$escaped}%");
+
+            $tsItems = $tsQuery
+                ->groupBy('ts_items.text', 'songs.title', 'songs.artist')
+                ->limit($remaining + count($results))
+                ->get();
+
+            foreach ($tsItems as $item) {
+                if (count($results) >= $limit) {
+                    break;
+                }
+                $display = $item->text;
+                // songsのヒットと重複しないか確認
+                if (in_array($display, $songTexts, true)) {
+                    continue;
+                }
+                // マッピング先のsongの「曲名 / アーティスト」とも重複チェック
+                if ($item->song_title) {
+                    $songDisplay = $item->song_artist
+                        ? "{$item->song_title} / {$item->song_artist}"
+                        : $item->song_title;
+                    if (in_array($songDisplay, $songTexts, true)) {
+                        continue;
+                    }
+                }
+                $results[] = [
+                    'text' => $display,
+                    'source' => 'ts_item',
+                ];
+                $songTexts[] = $display;
+            }
+        }
+
+        return response()->json(['suggestions' => $results]);
     }
 
     /**
