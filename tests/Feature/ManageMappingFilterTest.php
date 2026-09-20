@@ -102,6 +102,42 @@ class ManageMappingFilterTest extends TestCase
         $this->assertContains($mapped->video_id, $videoIds);
     }
 
+    public function test_pending_mapping_treated_as_unmapped(): void
+    {
+        $archive = Archive::factory()->create([
+            'channel_id' => $this->channel->channel_id,
+            'is_display' => '1',
+        ]);
+
+        $tsItem = TsItem::factory()->create([
+            'video_id' => $archive->video_id,
+            'is_display' => '1',
+        ]);
+
+        // song_id=null の保留マッピング（pendingステータス相当）
+        TimestampSongMapping::factory()->create([
+            'normalized_text' => $tsItem->normalized_text,
+            'song_id' => null,
+            'is_not_song' => false,
+        ]);
+
+        $cryptHandle = Crypt::encryptString($this->channel->handle);
+
+        // 未紐付フィルタにヒットすべき（保留マッピングは未紐付扱い）
+        $response = $this->actingAs($this->user)
+            ->getJson("/api/manage/channels/{$cryptHandle}?visible=2&mapping=1");
+        $response->assertOk();
+        $videoIds = collect($response->json('data'))->pluck('video_id')->toArray();
+        $this->assertContains($archive->video_id, $videoIds);
+
+        // 全て紐付済フィルタにはヒットしないべき
+        $response = $this->actingAs($this->user)
+            ->getJson("/api/manage/channels/{$cryptHandle}?visible=2&mapping=2");
+        $response->assertOk();
+        $videoIds = collect($response->json('data'))->pluck('video_id')->toArray();
+        $this->assertNotContains($archive->video_id, $videoIds);
+    }
+
     public function test_cross_channel_view_returns_archives_from_all_channels(): void
     {
         $channel2 = Channel::factory()->create(['user_id' => $this->user->id]);

@@ -136,9 +136,7 @@ document.addEventListener('DOMContentLoaded', function () {
     let isProcessing = false;
 
     // アーカイブ登録処理（横断ビューでは登録ボタンなし）
-    if (!registerButton) {
-        // 横断ビュー: 登録フォームがないのでスキップ
-    } else
+    if (registerButton) {
     registerButton.addEventListener('click', function () {
         if (isProcessing) { return; }
         isProcessing = true;
@@ -179,6 +177,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 toggleButtonDisabled(registerButton, isProcessing);
             });
     });
+    }
 
     // アーカイブ編集ボタン類イベント追加
     // 親要素全体のクリックイベントを拾い、それがボタンなど処理が必要なものかどうかを判定する

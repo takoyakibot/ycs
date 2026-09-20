@@ -1,7 +1,6 @@
 <div x-data="searchComponent({
         channelId: '{{ $channelId ?? '' }}',
-        manageFlg: '{{ $manageFlg ?? '' }}',
-        crossChannel: '{{ $crossChannel ?? '' }}'
+        manageFlg: '{{ $manageFlg ?? '' }}'
     })" class="search-component">
     <!-- 検索フォーム -->
     <form @submit.prevent="search" class="flex items-stretch sm:items-center gap-2 max-w-7lg">
@@ -42,7 +41,7 @@
     /**
      * search-resultsという名前のイベントを発火し、検索窓の内容を連携する
      */
-    function searchComponent({ channelId, manageFlg, crossChannel }) {
+    function searchComponent({ channelId, manageFlg }) {
         return {
             query: '', // 検索クエリ
             visibleFlg: manageFlg ? '2' : '', // 表示非表示

@@ -81,25 +81,17 @@ class GetArchiveService
 
         // マッピング状態
         if ($mappingFlg === '1') {
-            // 未紐付TSあり: 表示中のts_itemsにマッピングがないものがある
+            // 未紐付TSあり: 表示中のts_itemsに解決済みマッピングがないものがある
             $archives->whereHas('tsItems', function ($q) {
-                $q->where('is_display', '1')
-                    ->whereNotExists(function ($sub) {
-                        $sub->select(DB::raw(1))
-                            ->from('timestamp_song_mappings')
-                            ->whereColumn('timestamp_song_mappings.normalized_text', 'ts_items.normalized_text');
-                    });
+                $q->where('is_display', '1');
+                $this->whereNoResolvedMapping($q);
             });
         } elseif ($mappingFlg === '2') {
-            // 全て紐付済: 表示中のts_itemsが全て紐付済み（未紐付が0件）
+            // 全て紐付済: 表示中のts_itemsが全て解決済み（未解決が0件）
             $archives->whereHas('tsItemsDisplay')
                 ->whereDoesntHave('tsItems', function ($q) {
-                    $q->where('is_display', '1')
-                        ->whereNotExists(function ($sub) {
-                            $sub->select(DB::raw(1))
-                                ->from('timestamp_song_mappings')
-                                ->whereColumn('timestamp_song_mappings.normalized_text', 'ts_items.normalized_text');
-                        });
+                    $q->where('is_display', '1');
+                    $this->whereNoResolvedMapping($q);
                 });
         }
 
@@ -114,6 +106,19 @@ class GetArchiveService
      *
      * @param  mixed  $query
      */
+    private function whereNoResolvedMapping($query): void
+    {
+        $query->whereNotExists(function ($sub) {
+            $sub->select(DB::raw(1))
+                ->from('timestamp_song_mappings')
+                ->whereColumn('timestamp_song_mappings.normalized_text', 'ts_items.normalized_text')
+                ->where(function ($q) {
+                    $q->whereNotNull('timestamp_song_mappings.song_id')
+                        ->orWhere('timestamp_song_mappings.is_not_song', true);
+                });
+        });
+    }
+
     private function setQueryWhereParams($query, string $params, string $column)
     {
         if (trim($params) === '') {

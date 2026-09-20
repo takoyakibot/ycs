@@ -30,7 +30,6 @@
                 button-text="検索"
                 manage-flg="なんか書いとけ"
                 alpine-parent="archiveListComponent"
-                cross-channel="1"
             />
             <div id="archives" class="flex flex-col items-center w-[100%] gap-2"></div>
         </div>
