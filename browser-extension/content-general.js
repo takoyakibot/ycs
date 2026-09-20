@@ -2992,6 +2992,7 @@
         const segments = detectSongSegments(numericData, intervalSec);
         if (segments.length === 0) {
           showTsEditorNotice('楽曲らしい区間が見つかりませんでした', true);
+          drawVolumeGraph();
           return;
         }
 
@@ -3010,6 +3011,7 @@
             ? 'チャットデータが不足しています'
             : 'チャットから楽曲区間を検出できませんでした';
           showTsEditorNotice(`音量データなし。${reason}`, true);
+          drawVolumeGraph();
           return;
         }
 
@@ -4825,8 +4827,10 @@
       const b = buckets[i];
       if (b.clap === 0) continue;
 
-      const barH = Math.max(2, (b.clap / maxClap) * clapMaxH);
-      ctx.fillStyle = 'rgba(0, 188, 212, 0.3)';
+      const ratio = b.clap / maxClap;
+      const barH = Math.max(2, ratio * clapMaxH);
+      const alpha = 0.15 + ratio * 0.55;
+      ctx.fillStyle = `rgba(0, 188, 212, ${alpha.toFixed(2)})`;
       ctx.fillRect(i * bucketWidth, topOffset, barW, barH);
     }
   }
