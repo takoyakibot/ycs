@@ -27,6 +27,7 @@ const state = {
   isScanning: false,
   backgroundScanVideoId: null,
   scanInterval: null,
+  scanVisibilityHandler: null,
   originalPlaybackRate: 1,
   audioInitialized: false,
 
