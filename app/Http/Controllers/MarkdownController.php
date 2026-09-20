@@ -16,6 +16,13 @@ class MarkdownController extends Controller
         return view('legal.markdown', ['terms' => $terms, 'privacyPolicy' => $privacyPolicy]);
     }
 
+    public function extensionPrivacy()
+    {
+        $privacyPolicy = $this->markdownToHtml('lang/ja/extensionPrivacyPolicy.md');
+
+        return view('legal.extension-privacy', ['privacyPolicy' => $privacyPolicy]);
+    }
+
     private function markdownToHtml($path)
     {
         $filePath = resource_path($path);
