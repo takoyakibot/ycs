@@ -29,6 +29,13 @@
                 </div>
             </form>
 
+            <!-- 横断ビューリンク -->
+            <div class="p-2 flex justify-center">
+                <a href="{{ route('manage.showAll') }}" class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-500 text-white rounded-lg font-medium text-sm hover:bg-indigo-600 transition-colors">
+                    全アーカイブ横断管理
+                </a>
+            </div>
+
             <!-- チャンネル一覧 -->
             <div class="p-2">
                 <h3 class="text-lg text-gray-800 font-bold mb-2">登録チャンネル</h3>

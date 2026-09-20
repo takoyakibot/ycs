@@ -33,6 +33,17 @@ class ManageController extends Controller
         return view('manage.index', compact('api_key_flg'));
     }
 
+    public function showAll()
+    {
+        $user = Auth::user();
+        $api_key_flg = $user->api_key ? '1' : '';
+        if (! $api_key_flg && ! $user->isSuperAdmin()) {
+            return redirect()->route('manage.index');
+        }
+
+        return view('manage.show-all');
+    }
+
     public function show($id)
     {
         // APIキー未登録の場合はチャンネル管理に戻す（スーパー管理者は除く）

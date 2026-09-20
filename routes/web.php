@@ -48,6 +48,7 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::redirect('/manage', '/channels/manage', 301);
 
     Route::get('/channels/manage', [ManageController::class, 'index'])->name('manage.index');
+    Route::get('/channels/manage/all', [ManageController::class, 'showAll'])->name('manage.showAll');
     Route::get('/channels/manage/{id}', [ManageController::class, 'show'])->name('manage.show');
     Route::get('/channels/manage/{id}/settings', [ManageController::class, 'settings'])->name('manage.settings');
 
@@ -74,6 +75,7 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::get('api/manage/channels', [ManageChannelApiController::class, 'fetchChannel'])->name('manage.fetchChannel');
     Route::post('api/manage/channels', [ManageChannelApiController::class, 'addChannel'])->name('manage.addChannel')
         ->middleware('throttle:10,1'); // 1分間に10回まで（YouTube API呼び出し）
+    Route::get('api/manage/archives/all', [ManageArchiveApiController::class, 'fetchArchivesAll'])->name('manage.fetchArchivesAll');
     Route::get('api/manage/channels/{id}', [ManageArchiveApiController::class, 'fetchArchives'])->name('manage.fetchArchives');
     Route::post('api/manage/archives', [ManageArchiveApiController::class, 'addArchives'])->name('manage.addArchives')
         ->middleware('throttle:10,1'); // 1分間に10回まで（YouTube API呼び出し）

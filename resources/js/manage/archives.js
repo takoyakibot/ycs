@@ -9,9 +9,13 @@ document.addEventListener('DOMContentLoaded', function () {
     const resultsContainer = document.getElementById('archives');
     const errorMessage = document.getElementById('errorMessage');
     const handle = document.getElementById('handle');
+    const isCrossChannel = !handle;
 
     // 初期状態の表示フラグは「しぼりこみなし」になっているので、デフォルトで設定されるようにする
     function firstUrl(params = 'visible=2') {
+        if (isCrossChannel) {
+            return `/api/manage/archives/all?page=1` + (params ? `&${params}` : '');
+        }
         return `/api/manage/channels/${handle.value}?page=1` + (params ? `&${params}` : '');
     };
 
@@ -57,6 +61,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                             class="h-auto rounded-md object-cover filter ${archive.is_display ? 'grayscale-0' : 'grayscale'}" />
                                     </a>
                                     <div>
+                                        ${archive.channel ? `<p class="text-xs text-gray-500">${escapeHTML(archive.channel.title || '')}</p>` : ''}
                                         <h4 class="archive-title font-semibold ${archive.is_display ? 'text-gray-800' : 'text-gray-500'}">
                                             ${escapeHTML(archive.title || '')}
                                         </h4>
@@ -130,7 +135,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
     let isProcessing = false;
 
-    // アーカイブ登録処理
+    // アーカイブ登録処理（横断ビューでは登録ボタンなし）
+    if (registerButton) {
     registerButton.addEventListener('click', function () {
         if (isProcessing) { return; }
         isProcessing = true;
@@ -171,6 +177,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 toggleButtonDisabled(registerButton, isProcessing);
             });
     });
+    }
 
     // アーカイブ編集ボタン類イベント追加
     // 親要素全体のクリックイベントを拾い、それがボタンなど処理が必要なものかどうかを判定する

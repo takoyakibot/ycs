@@ -10,7 +10,7 @@
                 x-model="query"
                 placeholder="{{ $placeholder ?? '検索ワードを入力' }}"
                 class="border p-2 rounded w-full" />
-            <div class="flex flex-row gap-2">
+            <div class="flex flex-row gap-2 flex-wrap">
                 <select x-model="visibleFlg" class="border p-2 pr-8 rounded {{ $manageFlg ? '' : 'hidden' }}">
                     <option value="">表示のみ</option>
                     <option value="1">非表示のみ</option>
@@ -20,6 +20,11 @@
                     <option value="">タイムスタンプ</option>
                     <option value="1">有のみ</option>
                     <option value="2">無のみ</option>
+                </select>
+                <select x-model="mappingFlg" class="border p-2 pr-8 rounded {{ $manageFlg ? '' : 'hidden' }}">
+                    <option value="">マッピング</option>
+                    <option value="1">未紐付あり</option>
+                    <option value="2">全て紐付済</option>
                 </select>
             </div>
         </div>
@@ -41,6 +46,7 @@
             query: '', // 検索クエリ
             visibleFlg: manageFlg ? '2' : '', // 表示非表示
             tsFlg: '', // タイムスタンプ有無
+            mappingFlg: '', // マッピング状態
             results: [], // 検索結果
             loading: false, // ローディング状態
             async search() {
@@ -51,6 +57,7 @@
                     params.append('search', this.query);
                     params.append('visible', this.visibleFlg);
                     params.append('ts', this.tsFlg);
+                    params.append('mapping', this.mappingFlg);
 
                     this.$dispatch('search-results', params.toString());
 
