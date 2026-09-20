@@ -2638,8 +2638,23 @@
   let subtitlePrepareFlow = null;
   let suggestDebounceTimer = null;
   let suggestAbortController = null;
+  let popupSelectedIndex = -1;
   // ポップアップからのinsertText直後にinputイベントでサジェストが再発火するのを防ぐ
   let suggestInsertGuard = false;
+
+  function getSelectableItems(popup) {
+    return popup.querySelectorAll('.vdg-paste-popup-item:not(.message)');
+  }
+
+  function updatePopupSelection(popup, index) {
+    const items = getSelectableItems(popup);
+    items.forEach(el => el.classList.remove('selected'));
+    popupSelectedIndex = index;
+    if (index >= 0 && index < items.length) {
+      items[index].classList.add('selected');
+      items[index].scrollIntoView({ block: 'nearest' });
+    }
+  }
 
   function isLyricsPastePopupOpen() {
     return !!lyricsPastePopup;
@@ -2715,9 +2730,23 @@
       }
     });
 
-    // Esc: 元のテキストのまま挿入 / その他のキー: 閉じるだけ
+    popupSelectedIndex = -1;
     const onKeydown = (e) => {
-      if (e.key === 'Escape') {
+      const items = getSelectableItems(popup);
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        e.stopPropagation();
+        updatePopupSelection(popup, popupSelectedIndex < items.length - 1 ? popupSelectedIndex + 1 : 0);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        e.stopPropagation();
+        updatePopupSelection(popup, popupSelectedIndex > 0 ? popupSelectedIndex - 1 : items.length - 1);
+      } else if (e.key === 'Enter' && popupSelectedIndex >= 0 && popupSelectedIndex < items.length) {
+        e.preventDefault();
+        e.stopPropagation();
+        const idx = parseInt(items[popupSelectedIndex].dataset.index);
+        insertAndClose(values[idx]);
+      } else if (e.key === 'Escape') {
         e.preventDefault();
         e.stopPropagation();
         insertAndClose(rawText);
@@ -2725,7 +2754,6 @@
         closeLyricsPastePopup();
       }
     };
-    // 外側クリック: 元のテキストのまま挿入（入力欄内のクリックはカーソル移動なので閉じない）
     const onOutsideMousedown = (e) => {
       if (popup.contains(e.target) || e.target === input) return;
       insertAndClose(rawText);
@@ -2963,12 +2991,44 @@
       }
     });
 
+    popupSelectedIndex = -1;
     const onKeydown = (e) => {
-      if (e.key === 'Escape') {
+      const selectables = getSelectableItems(popup);
+      if (e.key === 'ArrowDown') {
         e.preventDefault();
         e.stopPropagation();
+        updatePopupSelection(popup, popupSelectedIndex < selectables.length - 1 ? popupSelectedIndex + 1 : 0);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        e.stopPropagation();
+        updatePopupSelection(popup, popupSelectedIndex > 0 ? popupSelectedIndex - 1 : selectables.length - 1);
+      } else if (e.key === 'Enter' && popupSelectedIndex >= 0 && popupSelectedIndex < selectables.length) {
+        e.preventDefault();
+        e.stopPropagation();
+        const el = selectables[popupSelectedIndex];
+        if (el.dataset.actionIndex !== undefined) {
+          const selected = items[parseInt(el.dataset.actionIndex)];
+          if (selected?.action) {
+            closeSongCandidatePopup();
+            selected.action();
+          }
+        } else if (el.dataset.index !== undefined) {
+          const selected = items[parseInt(el.dataset.index)];
+          const value = selected?.insertValue ?? selected?.label ?? '';
+          closeSongCandidatePopup();
+          input.focus({ preventScroll: true });
+          input.select();
+          suggestInsertGuard = true;
+          document.execCommand('insertText', false, value);
+          suggestInsertGuard = false;
+        }
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        closeSongCandidatePopup();
+      } else {
+        closeSongCandidatePopup();
       }
-      closeSongCandidatePopup();
     };
 
     const onOutsideMousedown = (e) => {
@@ -2987,7 +3047,6 @@
 
     songCandidatePopup = popup;
     state.volumeGraphContainer.appendChild(popup);
-    // offsetWidthを使うためDOM追加後に配置
     reposition();
   }
 
@@ -3095,12 +3154,37 @@
       suggestInsertGuard = false;
     });
 
+    popupSelectedIndex = -1;
     const onKeydown = (e) => {
-      if (e.key === 'Escape') {
+      const selectables = getSelectableItems(popup);
+      if (e.key === 'ArrowDown') {
         e.preventDefault();
         e.stopPropagation();
+        updatePopupSelection(popup, popupSelectedIndex < selectables.length - 1 ? popupSelectedIndex + 1 : 0);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        e.stopPropagation();
+        updatePopupSelection(popup, popupSelectedIndex > 0 ? popupSelectedIndex - 1 : selectables.length - 1);
+      } else if (e.key === 'Enter' && popupSelectedIndex >= 0 && popupSelectedIndex < selectables.length) {
+        e.preventDefault();
+        e.stopPropagation();
+        const idx = parseInt(selectables[popupSelectedIndex].dataset.index);
+        const selected = suggestions[idx];
+        if (selected) {
+          closeSongCandidatePopup();
+          input.focus({ preventScroll: true });
+          input.select();
+          suggestInsertGuard = true;
+          document.execCommand('insertText', false, selected.text);
+          suggestInsertGuard = false;
+        }
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        closeSongCandidatePopup();
+      } else {
+        closeSongCandidatePopup();
       }
-      closeSongCandidatePopup();
     };
 
     const onOutsideMousedown = (e) => {
@@ -5103,7 +5187,8 @@
         text-overflow: ellipsis;
       }
 
-      .vdg-paste-popup-item:hover {
+      .vdg-paste-popup-item:hover,
+      .vdg-paste-popup-item.selected {
         background: #444;
       }
 
