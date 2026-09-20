@@ -110,7 +110,7 @@ export function showLyricsPastePopup(input, candidates, rawText) {
       e.preventDefault();
       e.stopPropagation();
       updatePopupSelection(popup, popupSelectedIndex > 0 ? popupSelectedIndex - 1 : items.length - 1);
-    } else if (e.key === 'Enter' && popupSelectedIndex >= 0) {
+    } else if (e.key === 'Enter' && popupSelectedIndex >= 0 && popupSelectedIndex < items.length) {
       e.preventDefault();
       e.stopPropagation();
       const idx = parseInt(items[popupSelectedIndex].dataset.index);
