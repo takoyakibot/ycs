@@ -4,7 +4,7 @@ import { getVideoId, escapeHtml, formatTimestampMsec } from './utils.js';
 import { updateTriggerButtonState } from './ui.js';
 import { hideSubtitlePanel, isSubtitlePanelVisible } from './subtitle-panel.js';
 import { hideHighlightPanel, isHighlightPanelVisible } from './highlight.js';
-import { ensurePageBridge } from './subtitle-panel.js';
+import { ensurePageBridge } from './page-bridge-loader.js';
 import { sendChatReplayDataToServer } from './api.js';
 
 let chatSearchPanel = null;
