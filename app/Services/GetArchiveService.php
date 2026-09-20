@@ -5,11 +5,12 @@ namespace App\Services;
 use App\Models\Archive;
 use App\Models\Channel;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class GetArchiveService
 {
-    public function getArchivesForManage(string $id, string $params, string $visibleFlg, string $tsFlg)
+    public function getArchivesForManage(string $id, string $params, string $visibleFlg, string $tsFlg, string $mappingFlg = '')
     {
         $handle = Crypt::decryptString($id);
         $channel = Channel::where('handle', $handle)->firstOrFail();
@@ -17,7 +18,16 @@ class GetArchiveService
 
         $archives = $this->setQueryWhereParams($archives, $params, 'title');
 
-        return $this->getArchiveCommon($archives, $channel->channel_id, $visibleFlg, $tsFlg);
+        return $this->getArchiveCommon($archives, $channel->channel_id, $visibleFlg, $tsFlg, $mappingFlg);
+    }
+
+    public function getArchivesForManageAll(string $params, string $visibleFlg, string $tsFlg, string $mappingFlg, array $channelIds)
+    {
+        $archives = Archive::with(['tsItems', 'channel'])->whereIn('channel_id', $channelIds);
+
+        $archives = $this->setQueryWhereParams($archives, $params, 'title');
+
+        return $this->getArchiveCommon($archives, null, $visibleFlg, $tsFlg, $mappingFlg);
     }
 
     public function getArchives(string $handle, string $params, string $visibleFlg, string $tsFlg)
@@ -45,9 +55,11 @@ class GetArchiveService
      *
      * @param  mixed  $archives
      */
-    private function getArchiveCommon($archives, string $channelId, string $visibleFlg, string $tsFlg)
+    private function getArchiveCommon($archives, ?string $channelId, string $visibleFlg, string $tsFlg, string $mappingFlg = '')
     {
-        $archives->where('channel_id', $channelId);
+        if ($channelId !== null) {
+            $archives->where('channel_id', $channelId);
+        }
 
         // 表示非表示
         if ($visibleFlg === '1') {
@@ -65,6 +77,30 @@ class GetArchiveService
         } elseif ($tsFlg === '2') {
             // 無のみ
             $archives->whereDoesntHave('tsItemsDisplay');
+        }
+
+        // マッピング状態
+        if ($mappingFlg === '1') {
+            // 未紐付TSあり: 表示中のts_itemsにマッピングがないものがある
+            $archives->whereHas('tsItems', function ($q) {
+                $q->where('is_display', '1')
+                    ->whereNotExists(function ($sub) {
+                        $sub->select(DB::raw(1))
+                            ->from('timestamp_song_mappings')
+                            ->whereColumn('timestamp_song_mappings.normalized_text', 'ts_items.normalized_text');
+                    });
+            });
+        } elseif ($mappingFlg === '2') {
+            // 全て紐付済: 表示中のts_itemsが全て紐付済み（未紐付が0件）
+            $archives->whereHas('tsItemsDisplay')
+                ->whereDoesntHave('tsItems', function ($q) {
+                    $q->where('is_display', '1')
+                        ->whereNotExists(function ($sub) {
+                            $sub->select(DB::raw(1))
+                                ->from('timestamp_song_mappings')
+                                ->whereColumn('timestamp_song_mappings.normalized_text', 'ts_items.normalized_text');
+                        });
+                });
         }
 
         $archives->orderBy('published_at', 'desc');

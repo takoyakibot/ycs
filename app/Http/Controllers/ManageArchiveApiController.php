@@ -56,7 +56,8 @@ class ManageArchiveApiController extends Controller
             $id,
             (string) $request->query('search', ''),
             (string) $request->query('visible', ''),
-            (string) $request->query('ts', '')
+            (string) $request->query('ts', ''),
+            (string) $request->query('mapping', '')
         )
             ->appends($request->query());
 
@@ -67,6 +68,40 @@ class ManageArchiveApiController extends Controller
         $this->appendSubtitleStatus($archives);
 
         // 重複コメントタイムスタンプの件数を付加
+        $this->appendDuplicateCommentStatus($archives);
+
+        return response()->json($archives);
+    }
+
+    public function fetchArchivesAll(Request $request)
+    {
+        $user = Auth::user();
+        if (! $user->isSuperAdmin()) {
+            $channelIds = Channel::where('user_id', $user->id)->pluck('channel_id')->toArray();
+        } else {
+            $channelIds = Channel::pluck('channel_id')->toArray();
+        }
+
+        if (empty($channelIds)) {
+            return response()->json([
+                'data' => [],
+                'current_page' => 1,
+                'last_page' => 1,
+                'total' => 0,
+            ]);
+        }
+
+        $archives = $this->getArchiveService->getArchivesForManageAll(
+            (string) $request->query('search', ''),
+            (string) $request->query('visible', ''),
+            (string) $request->query('ts', ''),
+            (string) $request->query('mapping', ''),
+            $channelIds
+        )
+            ->appends($request->query());
+
+        $this->appendMappingStatus($archives);
+        $this->appendSubtitleStatus($archives);
         $this->appendDuplicateCommentStatus($archives);
 
         return response()->json($archives);
