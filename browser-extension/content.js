@@ -6220,7 +6220,7 @@
     const freqArray = new Float32Array(state.analyserNode.frequencyBinCount);
 
     // タブ非表示時にスキャンを一時停止する
-    state.scanVisibilityHandler = () => {
+    state.scanVisibilityHandler = async () => {
       if (!state.isScanning) return;
       if (document.hidden) {
         if (state.scanInterval) {
@@ -6235,7 +6235,10 @@
       } else {
         hideScanPausedMessage();
         if (state.videoElement && state.isScanning) {
-          state.videoElement.play();
+          if (state.audioContext && state.audioContext.state === 'suspended') {
+            await state.audioContext.resume();
+          }
+          state.videoElement.play().catch(() => {});
           startScanInterval();
         }
         console.log('タブ表示: スキャンを再開');
