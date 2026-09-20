@@ -1350,6 +1350,22 @@
   // 起動時に古いデータをクリーンアップ
   setTimeout(cleanupOldHighlightData, 6000);
 
+  function ensurePageBridge() {
+    if (state.pageBridgeReady) return state.pageBridgeReady;
+    state.pageBridgeReady = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = chrome.runtime.getURL('page-bridge.js');
+      script.onload = () => { script.remove(); resolve(); };
+      script.onerror = () => {
+        script.remove();
+        state.pageBridgeReady = null;
+        reject(new Error('page-bridge.jsのロードに失敗しました'));
+      };
+      document.documentElement.appendChild(script);
+    });
+    return state.pageBridgeReady;
+  }
+
   let chatSearchPanel = null;
   let chatSearchPanelVisible = false;
   let chatSearchDB = null;
@@ -2390,23 +2406,6 @@
       if (videoId) fetchSubtitleContent(videoId);
     });
     subtitlePanel.querySelector('#stp-search-input').addEventListener('input', filterSubtitleResults);
-  }
-
-  function ensurePageBridge() {
-    if (state.pageBridgeReady) return state.pageBridgeReady;
-    state.pageBridgeReady = new Promise((resolve, reject) => {
-      const script = document.createElement('script');
-      script.src = chrome.runtime.getURL('page-bridge.js');
-      script.onload = () => { script.remove(); resolve(); };
-      script.onerror = () => {
-        script.remove();
-        // 失敗時はキャッシュをクリアして次回呼び出しで再試行可能にする
-        state.pageBridgeReady = null;
-        reject(new Error('page-bridge.jsのロードに失敗しました'));
-      };
-      document.documentElement.appendChild(script);
-    });
-    return state.pageBridgeReady;
   }
 
   async function getCaptionTracksFromPage() {

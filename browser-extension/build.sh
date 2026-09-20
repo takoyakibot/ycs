@@ -34,7 +34,7 @@ rm -rf dist/general
 mkdir -p dist/general
 cp content-general.js dist/general/content.js
 cp manifest.general.json dist/general/manifest.json
-for f in background.js popup.html popup.js; do
+for f in background.js popup.html popup.js page-bridge.js; do
   cp "$f" "dist/general/$f"
 done
 cp -r icons dist/general/

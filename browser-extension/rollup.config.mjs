@@ -15,7 +15,6 @@ function editionStubs(stubs) {
 
 const generalStubs = {
   'list-scan.js': 'stubs/list-scan.js',
-  'chat-search.js': 'stubs/chat-search.js',
   'highlight.js': 'stubs/highlight.js',
   'subtitle-panel.js': 'stubs/subtitle-panel.js',
   'song-candidates.js': 'song-candidates-general.js',

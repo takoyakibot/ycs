@@ -4,6 +4,7 @@ import { loadYcsApiSettings, sendSubtitlesToServer, isExtensionContextValid, mis
 import { updateTriggerButtonState } from './ui.js';
 import { hideChatSearchPanel, isChatSearchPanelVisible } from './chat-search.js';
 import { hideHighlightPanel, isHighlightPanelVisible } from './highlight.js';
+import { ensurePageBridge } from './page-bridge-loader.js';
 
 let subtitlePanel = null;
 let subtitlePanelVisible = false;
@@ -261,22 +262,7 @@ function createSubtitlePanel() {
   subtitlePanel.querySelector('#stp-search-input').addEventListener('input', filterSubtitleResults);
 }
 
-export function ensurePageBridge() {
-  if (state.pageBridgeReady) return state.pageBridgeReady;
-  state.pageBridgeReady = new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = chrome.runtime.getURL('page-bridge.js');
-    script.onload = () => { script.remove(); resolve(); };
-    script.onerror = () => {
-      script.remove();
-      // 失敗時はキャッシュをクリアして次回呼び出しで再試行可能にする
-      state.pageBridgeReady = null;
-      reject(new Error('page-bridge.jsのロードに失敗しました'));
-    };
-    document.documentElement.appendChild(script);
-  });
-  return state.pageBridgeReady;
-}
+export { ensurePageBridge } from './page-bridge-loader.js';
 
 export async function getCaptionTracksFromPage() {
   await ensurePageBridge();
