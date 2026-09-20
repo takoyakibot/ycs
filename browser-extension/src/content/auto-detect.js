@@ -537,6 +537,7 @@ export async function autoDetectSongStarts() {
       const segments = detectSongSegments(numericData, intervalSec);
       if (segments.length === 0) {
         showTsEditorNotice('楽曲らしい区間が見つかりませんでした', true);
+        drawVolumeGraph();
         return;
       }
 
@@ -555,6 +556,7 @@ export async function autoDetectSongStarts() {
           ? 'チャットデータが不足しています'
           : 'チャットから楽曲区間を検出できませんでした';
         showTsEditorNotice(`音量データなし。${reason}`, true);
+        drawVolumeGraph();
         return;
       }
 
