@@ -30,6 +30,7 @@
     isScanning: false,
     backgroundScanVideoId: null,
     scanInterval: null,
+    scanVisibilityHandler: null,
     originalPlaybackRate: 1,
     audioInitialized: false,
 
@@ -1185,46 +1186,76 @@
     const dataArray = new Float32Array(state.analyserNode.fftSize);
     const freqArray = new Float32Array(state.analyserNode.frequencyBinCount);
 
-    state.scanInterval = setInterval(() => {
-      if (!state.isScanning || !state.analyserNode) {
-        stopDirectScan();
-        return;
-      }
-
-      state.analyserNode.getFloatTimeDomainData(dataArray);
-
-      // RMS（二乗平均平方根）で音量を計算
-      let sum = 0;
-      for (let i = 0; i < dataArray.length; i++) {
-        sum += dataArray[i] * dataArray[i];
-      }
-      const rms = Math.sqrt(sum / dataArray.length);
-      const normalizedVolume = Math.min(1, rms * 5);
-
-      // 周波数スペクトルを取得してスペクトル特徴量を計算
-      state.analyserNode.getFloatFrequencyData(freqArray);
-      const spectralFeatures = computeSpectralFeatures(freqArray, state.audioContext.sampleRate);
-
-      const currentResolution = state.volumeData.length;
-      const index = Math.floor((state.videoElement.currentTime / state.videoDuration) * currentResolution);
-
-      if (index >= 0 && index < currentResolution) {
-        if (normalizedVolume > state.volumeData[index]) {
-          state.volumeData[index] = normalizedVolume;
-          if (spectralFeatures) state.spectralData[index] = spectralFeatures;
-        } else if (!state.spectralData[index] && spectralFeatures) {
-          state.spectralData[index] = spectralFeatures;
+    // タブ非表示時にスキャンを一時停止する
+    state.scanVisibilityHandler = async () => {
+      if (!state.isScanning) return;
+      if (document.hidden) {
+        if (state.scanInterval) {
+          clearInterval(state.scanInterval);
+          state.scanInterval = null;
         }
+        if (state.videoElement) {
+          state.videoElement.pause();
+        }
+        console.log('タブ非表示: スキャンを一時停止');
+        showScanPausedMessage();
+      } else {
+        hideScanPausedMessage();
+        if (state.videoElement && state.isScanning) {
+          if (state.audioContext && state.audioContext.state === 'suspended') {
+            await state.audioContext.resume();
+          }
+          state.videoElement.play().catch(() => {});
+          startScanInterval();
+        }
+        console.log('タブ表示: スキャンを再開');
       }
+    };
+    document.addEventListener('visibilitychange', state.scanVisibilityHandler);
 
-      const progress = (state.volumeData.filter(v => v > 0).length / currentResolution) * 100;
-      updateProgress(progress);
-      drawVolumeGraph();
+    function startScanInterval() {
+      if (state.scanInterval) clearInterval(state.scanInterval);
+      state.scanInterval = setInterval(() => {
+        if (!state.isScanning || !state.analyserNode) {
+          stopDirectScan();
+          return;
+        }
 
-      if (state.videoElement.currentTime >= state.videoDuration - 1) {
-        stopDirectScan();
-      }
-    }, 50);
+        state.analyserNode.getFloatTimeDomainData(dataArray);
+
+        let sum = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+          sum += dataArray[i] * dataArray[i];
+        }
+        const rms = Math.sqrt(sum / dataArray.length);
+        const normalizedVolume = Math.min(1, rms * 5);
+
+        state.analyserNode.getFloatFrequencyData(freqArray);
+        const spectralFeatures = computeSpectralFeatures(freqArray, state.audioContext.sampleRate);
+
+        const currentResolution = state.volumeData.length;
+        const index = Math.floor((state.videoElement.currentTime / state.videoDuration) * currentResolution);
+
+        if (index >= 0 && index < currentResolution) {
+          if (normalizedVolume > state.volumeData[index]) {
+            state.volumeData[index] = normalizedVolume;
+            if (spectralFeatures) state.spectralData[index] = spectralFeatures;
+          } else if (!state.spectralData[index] && spectralFeatures) {
+            state.spectralData[index] = spectralFeatures;
+          }
+        }
+
+        const progress = (state.volumeData.filter(v => v > 0).length / currentResolution) * 100;
+        updateProgress(progress);
+        drawVolumeGraph();
+
+        if (state.videoElement.currentTime >= state.videoDuration - 1) {
+          stopDirectScan();
+        }
+      }, 50);
+    }
+
+    startScanInterval();
 
     return true;
   }
@@ -1233,6 +1264,12 @@
     if (!state.isScanning) return;
 
     state.isScanning = false;
+
+    if (state.scanVisibilityHandler) {
+      document.removeEventListener('visibilitychange', state.scanVisibilityHandler);
+      state.scanVisibilityHandler = null;
+    }
+    hideScanPausedMessage();
 
     if (state.scanInterval) {
       clearInterval(state.scanInterval);
@@ -1480,6 +1517,49 @@
     if (errorMsg) {
       errorMsg.remove();
     }
+  }
+
+  function showScanPausedMessage() {
+    if (!state.volumeGraphContainer) return;
+    if (state.volumeGraphContainer.querySelector('.vdg-scan-paused')) return;
+
+    const message = document.createElement('div');
+    message.className = 'vdg-scan-paused';
+    message.innerHTML = `
+    <div style="
+      background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+      border: 1px solid #64b5f6;
+      border-radius: 8px;
+      padding: 10px 16px;
+      margin: 8px 0;
+      font-size: 13px;
+      color: #1565c0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    ">
+      <span style="font-size: 18px;">⏸️</span>
+      <div>
+        <div style="font-weight: 600;">スキャン一時停止中</div>
+        <div style="font-size: 12px; color: #1976d2;">
+          タブを表示すると自動的に再開します
+        </div>
+      </div>
+    </div>
+  `;
+
+    const graphContainer = state.volumeGraphContainer.querySelector('.vdg-canvas-container');
+    if (graphContainer) {
+      graphContainer.parentNode.insertBefore(message, graphContainer);
+    } else {
+      state.volumeGraphContainer.appendChild(message);
+    }
+  }
+
+  function hideScanPausedMessage() {
+    if (!state.volumeGraphContainer) return;
+    const msg = state.volumeGraphContainer.querySelector('.vdg-scan-paused');
+    if (msg) msg.remove();
   }
 
   async function discardVolumeDataAndReset() {
