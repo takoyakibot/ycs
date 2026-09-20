@@ -144,6 +144,9 @@ class AuthorizationTest extends TestCase
 
         $response = $this->get('/terms');
         $response->assertStatus(200);
+
+        $response = $this->get('/extension/privacy');
+        $response->assertStatus(200);
     }
 
     /**

@@ -218,6 +218,7 @@ Route::get('api/channels/{id}/timestamps/download', [ChannelController::class, '
     ->middleware('throttle:10,1'); // 1分間に10回まで
 
 Route::get('/terms', [MarkdownController::class, 'show'])->name('markdown.show');
+Route::get('/extension/privacy', [MarkdownController::class, 'extensionPrivacy'])->name('extension.privacy');
 
 // お問い合わせフォーム（ゲスト可、レートリミット適用）
 Route::get('/contact', [ContactController::class, 'show'])->name('contact.show');
