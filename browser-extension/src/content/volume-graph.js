@@ -466,7 +466,8 @@ export function createVolumeGraph() {
         text-overflow: ellipsis;
       }
 
-      .vdg-paste-popup-item:hover {
+      .vdg-paste-popup-item:hover,
+      .vdg-paste-popup-item.selected {
         background: #444;
       }
 
