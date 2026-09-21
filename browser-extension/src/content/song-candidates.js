@@ -1,178 +1,39 @@
 import state from './state.js';
 import { reportSubtitlesUnavailable } from './subtitle-scan.js';
-import { getVideoId, escapeHtml } from './utils.js';
+import { getVideoId } from './utils.js';
 import { loadYcsApiSettings, postSubtitlesToServer, missingTokenMessage } from './api.js';
 import { getCaptionTracksFromPage, fetchTimedText, } from './subtitle-panel.js';
+import {
+  closeSongCandidatePopup,
+  openSongCandidatePopup,
+  getSongCandidateRequestSeq,
+  registerShowSongCandidates,
+} from './song-candidates-shared.js';
 
-let lyricsPastePopup = null;
-let lyricsPastePopupCleanup = null;
-let songCandidatePopup = null;
-let songCandidatePopupCleanup = null;
-let songCandidateRequestSeq = 0;
-// 字幕準備フロー（取得→送信）の実行中Promise（動画ID単位の相乗り用）
+export {
+  isLyricsPastePopupOpen,
+  buildLyricsSplitCandidates,
+  closeLyricsPastePopup,
+  showLyricsPastePopup,
+  closeSongCandidatePopup,
+  openSongCandidatePopup,
+  cancelSongSuggest,
+  onSongInputForSuggest,
+  retryWithLowerThreshold,
+} from './song-candidates-shared.js';
+
 let subtitlePrepareFlow = null;
-let suggestDebounceTimer = null;
-let suggestAbortController = null;
-let popupSelectedIndex = -1;
-// ポップアップからのinsertText直後にinputイベントでサジェストが再発火するのを防ぐ
-let suggestInsertGuard = false;
-
-function getSelectableItems(popup) {
-  return popup.querySelectorAll('.vdg-paste-popup-item:not(.message)');
-}
-
-function updatePopupSelection(popup, index) {
-  const items = getSelectableItems(popup);
-  items.forEach(el => el.classList.remove('selected'));
-  popupSelectedIndex = index;
-  if (index >= 0 && index < items.length) {
-    items[index].classList.add('selected');
-    items[index].scrollIntoView({ block: 'nearest' });
-  }
-}
-
-export function isLyricsPastePopupOpen() {
-  return !!lyricsPastePopup;
-}
-
-export function buildLyricsSplitCandidates(text) {
-  const tokens = text.trim().split(/\s+/);
-  // 単独の「歌詞」トークンより前の部分を「アーティスト名+曲名」とみなす
-  // （「歌詞検索」のような複合語は区切りとして扱わない）
-  const idx = tokens.indexOf('歌詞');
-  if (idx < 2) return null;
-  const parts = tokens.slice(0, idx);
-  const candidates = [];
-  for (let k = parts.length - 1; k >= 1; k--) {
-    const artist = parts.slice(0, k).join(' ');
-    const title = parts.slice(k).join(' ');
-    candidates.push(`${title} / ${artist}`);
-  }
-  return candidates;
-}
-
-export function closeLyricsPastePopup() {
-  if (lyricsPastePopupCleanup) {
-    lyricsPastePopupCleanup();
-    lyricsPastePopupCleanup = null;
-  }
-  if (lyricsPastePopup) {
-    lyricsPastePopup.remove();
-    lyricsPastePopup = null;
-  }
-}
-
-export function showLyricsPastePopup(input, candidates, rawText) {
-  closeLyricsPastePopup();
-  closeSongCandidatePopup();
-  if (!state.volumeGraphContainer) return;
-
-  // 候補値は属性に埋め込まずインデックスで参照する（escapeHtmlは引用符をエスケープしないため）
-  const values = [...candidates, rawText];
-  const popup = document.createElement('div');
-  popup.className = 'vdg-paste-popup';
-  popup.innerHTML = `
-    <div class="vdg-paste-popup-title">変換候補（クリックで挿入）</div>
-    ${candidates.map((c, i) => `<div class="vdg-paste-popup-item" data-index="${i}">${escapeHtml(c)}</div>`).join('')}
-    <div class="vdg-paste-popup-item raw" data-index="${candidates.length}">そのまま貼り付け</div>
-  `;
-
-  // 入力欄の直下に配置（グラフコンテナ基準の絶対配置）
-  // 一覧のスクロールに追従し、コンテナ右端からはみ出さないようにクランプする
-  const listEl = state.volumeGraphContainer.querySelector('#vdg-ts-list');
-  const reposition = () => {
-    const containerRect = state.volumeGraphContainer.getBoundingClientRect();
-    const inputRect = input.getBoundingClientRect();
-    const maxLeft = containerRect.width - popup.offsetWidth - 4;
-    popup.style.left = `${Math.max(0, Math.min(inputRect.left - containerRect.left, maxLeft))}px`;
-    popup.style.top = `${inputRect.bottom - containerRect.top + 2}px`;
-  };
-
-  // execCommandならネイティブのinputイベント発火とUndo履歴が維持される
-  const insertAndClose = (value) => {
-    closeLyricsPastePopup();
-    input.focus({ preventScroll: true });
-    document.execCommand('insertText', false, value);
-  };
-
-  // mousedownで処理して入力欄のフォーカスを維持する
-  popup.addEventListener('mousedown', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const item = e.target.closest('.vdg-paste-popup-item');
-    if (item) {
-      insertAndClose(values[parseInt(item.dataset.index)]);
-    }
-  });
-
-  popupSelectedIndex = -1;
-  const onKeydown = (e) => {
-    const items = getSelectableItems(popup);
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      e.stopPropagation();
-      updatePopupSelection(popup, popupSelectedIndex < items.length - 1 ? popupSelectedIndex + 1 : 0);
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      e.stopPropagation();
-      updatePopupSelection(popup, popupSelectedIndex > 0 ? popupSelectedIndex - 1 : items.length - 1);
-    } else if (e.key === 'Enter' && popupSelectedIndex >= 0 && popupSelectedIndex < items.length) {
-      e.preventDefault();
-      e.stopPropagation();
-      const idx = parseInt(items[popupSelectedIndex].dataset.index);
-      insertAndClose(values[idx]);
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      e.stopPropagation();
-      insertAndClose(rawText);
-    } else {
-      closeLyricsPastePopup();
-    }
-  };
-  const onOutsideMousedown = (e) => {
-    if (popup.contains(e.target) || e.target === input) return;
-    insertAndClose(rawText);
-  };
-
-  input.addEventListener('keydown', onKeydown, true);
-  document.addEventListener('mousedown', onOutsideMousedown, true);
-  listEl?.addEventListener('scroll', reposition);
-  lyricsPastePopupCleanup = () => {
-    input.removeEventListener('keydown', onKeydown, true);
-    document.removeEventListener('mousedown', onOutsideMousedown, true);
-    listEl?.removeEventListener('scroll', reposition);
-  };
-
-  lyricsPastePopup = popup;
-  state.volumeGraphContainer.appendChild(popup);
-  // offsetWidthを使うためDOM追加後に配置
-  reposition();
-}
-
-export function closeSongCandidatePopup() {
-  songCandidateRequestSeq++;
-  if (songCandidatePopupCleanup) {
-    songCandidatePopupCleanup();
-    songCandidatePopupCleanup = null;
-  }
-  if (songCandidatePopup) {
-    songCandidatePopup.remove();
-    songCandidatePopup = null;
-  }
-}
 
 export async function showSongCandidates(marker, threshold = null) {
   const input = state.volumeGraphContainer?.querySelector(`.vdg-ts-text-input[data-marker-id="${marker.id}"]`);
   if (!input) return;
 
-  // openSongCandidatePopupは開き直しのたびに内部で世代を進めるため、
-  // 自分で開いた直後の世代を控えて「外部から閉じられた/開き直された」を検出する
   let seq;
   const open = (items) => {
     openSongCandidatePopup(input, items);
-    seq = songCandidateRequestSeq;
+    seq = getSongCandidateRequestSeq();
   };
-  const isStale = () => seq !== songCandidateRequestSeq;
+  const isStale = () => seq !== getSongCandidateRequestSeq();
 
   open([{ type: 'message', label: '候補を検索しています…' }]);
 
@@ -195,7 +56,6 @@ export async function showSongCandidates(marker, threshold = null) {
     let result = await fetchSongCandidates(videoId, sec, threshold);
     if (isStale()) return;
 
-    // 字幕が未送信なら取得→送信してから再問い合わせ
     if (result.has_subtitles === false) {
       open([{ type: 'message', label: '字幕を取得しています…' }]);
       await ensureSubtitlesOnServer(videoId);
@@ -218,7 +78,7 @@ export async function showSongCandidates(marker, threshold = null) {
         openSongCandidatePopup(input, [{
           type: 'action',
           label: `候補が見つかりませんでした（閾値を下げて再検索）`,
-          action: () => retryWithLowerThreshold(marker, lowerThreshold),
+          action: () => showSongCandidates(marker, lowerThreshold),
         }]);
       } else {
         openSongCandidatePopup(input, [{ type: 'message', label: '候補が見つかりませんでした' }]);
@@ -227,25 +87,22 @@ export async function showSongCandidates(marker, threshold = null) {
     }
 
     const items = candidates.map(c => {
-      // マスタ未登録の候補は元の表記（text）を優先する
       const title = c.song_title || c.text || c.normalized_text || '';
       return {
         type: 'candidate',
         label: title,
         artist: c.song_artist || '',
-        // 挿入値はタイムスタンプの表記慣習（「曲名 / アーティスト」）に合わせる
         insertValue: c.song_artist ? `${title} / ${c.song_artist}` : title,
         similarity: c.similarity,
       };
     });
 
-    // 候補が少ない場合、閾値を下げて追加検索できるボタンを付与
     if (candidates.length < 3 && currentThreshold > 0.05) {
       const lowerThreshold = Math.max(0.05, Math.round((currentThreshold - 0.05) * 100) / 100);
       items.push({
         type: 'action',
         label: '閾値を下げてもっと検索',
-        action: () => retryWithLowerThreshold(marker, lowerThreshold),
+        action: () => showSongCandidates(marker, lowerThreshold),
       });
     }
 
@@ -256,9 +113,7 @@ export async function showSongCandidates(marker, threshold = null) {
   }
 }
 
-export function retryWithLowerThreshold(marker, threshold) {
-  showSongCandidates(marker, threshold);
-}
+registerShowSongCandidates(showSongCandidates);
 
 export async function fetchSongCandidates(videoId, sec, threshold = null) {
   let url = `${state.ycsServerUrl}/api/extension/subtitle-matches?video_id=${encodeURIComponent(videoId)}&sec=${sec}`;
@@ -288,7 +143,6 @@ export function ensureSubtitlesOnServer(videoId) {
   const promise = (async () => {
     const tracks = await getCaptionTracksFromPage();
     if (!tracks || tracks.length === 0) {
-      // 候補ボタン経由でも「字幕なし」を記録し、字幕スキャン対象から除外する
       reportSubtitlesUnavailable(videoId);
       throw new Error('この動画には字幕がありません');
     }
@@ -311,272 +165,4 @@ export function ensureSubtitlesOnServer(videoId) {
 export function pickPreferredCaptionTrack(tracks) {
   const ja = tracks.filter(t => (t.languageCode || '').startsWith('ja'));
   return ja.find(t => t.kind !== 'asr') || ja[0] || tracks[0];
-}
-
-export function openSongCandidatePopup(input, items) {
-  closeSongCandidatePopup();
-  closeLyricsPastePopup();
-  if (!state.volumeGraphContainer) return;
-
-  const popup = document.createElement('div');
-  popup.className = 'vdg-paste-popup';
-  popup.innerHTML = `
-    <div class="vdg-paste-popup-title">曲名候補（クリックで挿入）</div>
-    ${items.map((item, i) => item.type === 'candidate' ? `
-      <div class="vdg-paste-popup-item" data-index="${i}">${escapeHtml(item.label)}${item.artist ? `<span class="artist">${escapeHtml(item.artist)}</span>` : ''}<span class="similarity">${Math.round((item.similarity || 0) * 100)}%</span></div>
-    ` : item.type === 'action' ? `
-      <div class="vdg-paste-popup-item action" data-action-index="${i}">${escapeHtml(item.label)}</div>
-    ` : `
-      <div class="vdg-paste-popup-item message">${escapeHtml(item.label)}</div>
-    `).join('')}
-  `;
-
-  const listEl = state.volumeGraphContainer.querySelector('#vdg-ts-list');
-  const reposition = () => {
-    const containerRect = state.volumeGraphContainer.getBoundingClientRect();
-    const inputRect = input.getBoundingClientRect();
-    const maxLeft = containerRect.width - popup.offsetWidth - 4;
-    popup.style.left = `${Math.max(0, Math.min(inputRect.left - containerRect.left, maxLeft))}px`;
-    popup.style.top = `${inputRect.bottom - containerRect.top + 2}px`;
-  };
-
-  // 候補クリック: 入力欄の内容を候補で置き換える
-  popup.addEventListener('mousedown', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const el = e.target.closest('.vdg-paste-popup-item');
-    if (!el) return;
-    if (el.dataset.actionIndex !== undefined) {
-      const selected = items[parseInt(el.dataset.actionIndex)];
-      if (selected?.action) {
-        closeSongCandidatePopup();
-        selected.action();
-      }
-      return;
-    }
-    if (el.dataset.index !== undefined) {
-      const selected = items[parseInt(el.dataset.index)];
-      const value = selected?.insertValue ?? selected?.label ?? '';
-      closeSongCandidatePopup();
-      input.focus({ preventScroll: true });
-      input.select();
-      suggestInsertGuard = true;
-      document.execCommand('insertText', false, value);
-      suggestInsertGuard = false;
-    }
-  });
-
-  popupSelectedIndex = -1;
-  const onKeydown = (e) => {
-    const selectables = getSelectableItems(popup);
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      e.stopPropagation();
-      updatePopupSelection(popup, popupSelectedIndex < selectables.length - 1 ? popupSelectedIndex + 1 : 0);
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      e.stopPropagation();
-      updatePopupSelection(popup, popupSelectedIndex > 0 ? popupSelectedIndex - 1 : selectables.length - 1);
-    } else if (e.key === 'Enter' && popupSelectedIndex >= 0 && popupSelectedIndex < selectables.length) {
-      e.preventDefault();
-      e.stopPropagation();
-      const el = selectables[popupSelectedIndex];
-      if (el.dataset.actionIndex !== undefined) {
-        const selected = items[parseInt(el.dataset.actionIndex)];
-        if (selected?.action) {
-          closeSongCandidatePopup();
-          selected.action();
-        }
-      } else if (el.dataset.index !== undefined) {
-        const selected = items[parseInt(el.dataset.index)];
-        const value = selected?.insertValue ?? selected?.label ?? '';
-        closeSongCandidatePopup();
-        input.focus({ preventScroll: true });
-        input.select();
-        suggestInsertGuard = true;
-        document.execCommand('insertText', false, value);
-        suggestInsertGuard = false;
-      }
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      e.stopPropagation();
-      closeSongCandidatePopup();
-    } else {
-      closeSongCandidatePopup();
-    }
-  };
-
-  const onOutsideMousedown = (e) => {
-    if (popup.contains(e.target) || e.target === input) return;
-    closeSongCandidatePopup();
-  };
-
-  input.addEventListener('keydown', onKeydown, true);
-  document.addEventListener('mousedown', onOutsideMousedown, true);
-  listEl?.addEventListener('scroll', reposition);
-  songCandidatePopupCleanup = () => {
-    input.removeEventListener('keydown', onKeydown, true);
-    document.removeEventListener('mousedown', onOutsideMousedown, true);
-    listEl?.removeEventListener('scroll', reposition);
-  };
-
-  songCandidatePopup = popup;
-  state.volumeGraphContainer.appendChild(popup);
-  reposition();
-}
-
-export function cancelSongSuggest() {
-  if (suggestDebounceTimer) {
-    clearTimeout(suggestDebounceTimer);
-    suggestDebounceTimer = null;
-  }
-  if (suggestAbortController) {
-    suggestAbortController.abort();
-    suggestAbortController = null;
-  }
-}
-
-export function onSongInputForSuggest(input) {
-  if (suggestInsertGuard) return;
-
-  cancelSongSuggest();
-
-  // 候補ポップアップ（字幕マッチング等）が表示中なら閉じずにサジェストもスキップ
-  if (songCandidatePopup) return;
-
-  const query = input.value.trim();
-  if (query.length < 2) return;
-
-  if (!state.ycsApiToken) return;
-
-  suggestDebounceTimer = setTimeout(() => {
-    suggestDebounceTimer = null;
-    // デバウンス後にポップアップが開かれていたら中断
-    if (songCandidatePopup) return;
-    fetchAndShowSuggestions(input, query);
-  }, 300);
-}
-
-async function fetchAndShowSuggestions(input, query) {
-  suggestAbortController = new AbortController();
-  const seq = songCandidateRequestSeq;
-
-  try {
-    const url = `${state.ycsServerUrl}/api/extension/song-suggest?q=${encodeURIComponent(query)}`;
-    const response = await fetch(url, {
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': `Bearer ${state.ycsApiToken}`,
-      },
-      signal: suggestAbortController.signal,
-    });
-
-    if (seq !== songCandidateRequestSeq) return;
-    if (!response.ok) return;
-
-    const data = await response.json();
-    if (seq !== songCandidateRequestSeq) return;
-    if (!document.activeElement || document.activeElement !== input) return;
-
-    const suggestions = data.suggestions || [];
-    if (suggestions.length === 0) return;
-
-    openSongSuggestPopup(input, suggestions);
-  } catch (e) {
-    if (e.name !== 'AbortError') {
-      console.warn('[YCS] サジェスト取得エラー:', e.message);
-    }
-  } finally {
-    suggestAbortController = null;
-  }
-}
-
-function openSongSuggestPopup(input, suggestions) {
-  closeSongCandidatePopup();
-  closeLyricsPastePopup();
-  if (!state.volumeGraphContainer) return;
-
-  const popup = document.createElement('div');
-  popup.className = 'vdg-paste-popup';
-  popup.innerHTML = `
-    <div class="vdg-paste-popup-title">サジェスト</div>
-    ${suggestions.map((s, i) => `
-      <div class="vdg-paste-popup-item" data-index="${i}">${escapeHtml(s.text)}${s.ts_count ? `<span class="similarity">${s.ts_count}件</span>` : ''}</div>
-    `).join('')}
-  `;
-
-  const listEl = state.volumeGraphContainer.querySelector('#vdg-ts-list');
-  const reposition = () => {
-    const containerRect = state.volumeGraphContainer.getBoundingClientRect();
-    const inputRect = input.getBoundingClientRect();
-    const maxLeft = containerRect.width - popup.offsetWidth - 4;
-    popup.style.left = `${Math.max(0, Math.min(inputRect.left - containerRect.left, maxLeft))}px`;
-    popup.style.top = `${inputRect.bottom - containerRect.top + 2}px`;
-  };
-
-  popup.addEventListener('mousedown', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const el = e.target.closest('.vdg-paste-popup-item');
-    if (!el || el.dataset.index === undefined) return;
-    const selected = suggestions[parseInt(el.dataset.index)];
-    if (!selected) return;
-    closeSongCandidatePopup();
-    input.focus({ preventScroll: true });
-    input.select();
-    suggestInsertGuard = true;
-    document.execCommand('insertText', false, selected.text);
-    suggestInsertGuard = false;
-  });
-
-  popupSelectedIndex = -1;
-  const onKeydown = (e) => {
-    const selectables = getSelectableItems(popup);
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      e.stopPropagation();
-      updatePopupSelection(popup, popupSelectedIndex < selectables.length - 1 ? popupSelectedIndex + 1 : 0);
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      e.stopPropagation();
-      updatePopupSelection(popup, popupSelectedIndex > 0 ? popupSelectedIndex - 1 : selectables.length - 1);
-    } else if (e.key === 'Enter' && popupSelectedIndex >= 0 && popupSelectedIndex < selectables.length) {
-      e.preventDefault();
-      e.stopPropagation();
-      const idx = parseInt(selectables[popupSelectedIndex].dataset.index);
-      const selected = suggestions[idx];
-      if (selected) {
-        closeSongCandidatePopup();
-        input.focus({ preventScroll: true });
-        input.select();
-        suggestInsertGuard = true;
-        document.execCommand('insertText', false, selected.text);
-        suggestInsertGuard = false;
-      }
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      e.stopPropagation();
-      closeSongCandidatePopup();
-    } else {
-      closeSongCandidatePopup();
-    }
-  };
-
-  const onOutsideMousedown = (e) => {
-    if (popup.contains(e.target) || e.target === input) return;
-    closeSongCandidatePopup();
-  };
-
-  input.addEventListener('keydown', onKeydown, true);
-  document.addEventListener('mousedown', onOutsideMousedown, true);
-  listEl?.addEventListener('scroll', reposition);
-  songCandidatePopupCleanup = () => {
-    input.removeEventListener('keydown', onKeydown, true);
-    document.removeEventListener('mousedown', onOutsideMousedown, true);
-    listEl?.removeEventListener('scroll', reposition);
-  };
-
-  songCandidatePopup = popup;
-  state.volumeGraphContainer.appendChild(popup);
-  reposition();
 }
