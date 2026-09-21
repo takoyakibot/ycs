@@ -9,17 +9,10 @@ let songCandidateRequestSeq = 0;
 let suggestDebounceTimer = null;
 let suggestAbortController = null;
 let popupSelectedIndex = -1;
+// ポップアップからのinsertText直後にinputイベントでサジェストが再発火するのを防ぐ
 let suggestInsertGuard = false;
-let registeredShowSongCandidates = null;
 
-export function setSuggestInsertGuard(v) { suggestInsertGuard = v; }
-export function getSuggestInsertGuard() { return suggestInsertGuard; }
-export function getSongCandidatePopup() { return songCandidatePopup; }
 export function getSongCandidateRequestSeq() { return songCandidateRequestSeq; }
-
-export function registerShowSongCandidates(fn) {
-  registeredShowSongCandidates = fn;
-}
 
 function getSelectableItems(popup) {
   return popup.querySelectorAll('.vdg-paste-popup-item:not(.message)');
@@ -41,6 +34,8 @@ export function isLyricsPastePopupOpen() {
 
 export function buildLyricsSplitCandidates(text) {
   const tokens = text.trim().split(/\s+/);
+  // 単独の「歌詞」トークンより前の部分を「アーティスト名+曲名」とみなす
+  // （「歌詞検索」のような複合語は区切りとして扱わない）
   const idx = tokens.indexOf('歌詞');
   if (idx < 2) return null;
   const parts = tokens.slice(0, idx);
@@ -69,6 +64,7 @@ export function showLyricsPastePopup(input, candidates, rawText) {
   closeSongCandidatePopup();
   if (!state.volumeGraphContainer) return;
 
+  // 候補値は属性に埋め込まずインデックスで参照する（escapeHtmlは引用符をエスケープしないため）
   const values = [...candidates, rawText];
   const popup = document.createElement('div');
   popup.className = 'vdg-paste-popup';
@@ -78,6 +74,8 @@ export function showLyricsPastePopup(input, candidates, rawText) {
     <div class="vdg-paste-popup-item raw" data-index="${candidates.length}">そのまま貼り付け</div>
   `;
 
+  // 入力欄の直下に配置（グラフコンテナ基準の絶対配置）
+  // 一覧のスクロールに追従し、コンテナ右端からはみ出さないようにクランプする
   const listEl = state.volumeGraphContainer.querySelector('#vdg-ts-list');
   const reposition = () => {
     const containerRect = state.volumeGraphContainer.getBoundingClientRect();
@@ -87,6 +85,7 @@ export function showLyricsPastePopup(input, candidates, rawText) {
     popup.style.top = `${inputRect.bottom - containerRect.top + 2}px`;
   };
 
+  // execCommandならネイティブのinputイベント発火とUndo履歴が維持される
   const insertAndClose = (value) => {
     closeLyricsPastePopup();
     input.focus({ preventScroll: true });
@@ -184,6 +183,7 @@ export function openSongCandidatePopup(input, items) {
     popup.style.top = `${inputRect.bottom - containerRect.top + 2}px`;
   };
 
+  // 候補クリック: 入力欄の内容を候補で置き換える
   popup.addEventListener('mousedown', (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -422,8 +422,3 @@ function openSongSuggestPopup(input, suggestions) {
   reposition();
 }
 
-export function retryWithLowerThreshold(marker, threshold) {
-  if (registeredShowSongCandidates) {
-    registeredShowSongCandidates(marker, threshold);
-  }
-}

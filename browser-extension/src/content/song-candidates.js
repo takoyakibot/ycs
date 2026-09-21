@@ -7,7 +7,6 @@ import {
   closeSongCandidatePopup,
   openSongCandidatePopup,
   getSongCandidateRequestSeq,
-  registerShowSongCandidates,
 } from './song-candidates-shared.js';
 
 export {
@@ -19,7 +18,6 @@ export {
   openSongCandidatePopup,
   cancelSongSuggest,
   onSongInputForSuggest,
-  retryWithLowerThreshold,
 } from './song-candidates-shared.js';
 
 let subtitlePrepareFlow = null;
@@ -28,6 +26,8 @@ export async function showSongCandidates(marker, threshold = null) {
   const input = state.volumeGraphContainer?.querySelector(`.vdg-ts-text-input[data-marker-id="${marker.id}"]`);
   if (!input) return;
 
+  // openSongCandidatePopupは開き直しのたびに内部で世代を進めるため、
+  // 自分で開いた直後の世代を控えて「外部から閉じられた/開き直された」を検出する
   let seq;
   const open = (items) => {
     openSongCandidatePopup(input, items);
@@ -87,11 +87,13 @@ export async function showSongCandidates(marker, threshold = null) {
     }
 
     const items = candidates.map(c => {
+      // マスタ未登録の候補は元の表記（text）を優先する
       const title = c.song_title || c.text || c.normalized_text || '';
       return {
         type: 'candidate',
         label: title,
         artist: c.song_artist || '',
+        // 挿入値はタイムスタンプの表記慣習（「曲名 / アーティスト」）に合わせる
         insertValue: c.song_artist ? `${title} / ${c.song_artist}` : title,
         similarity: c.similarity,
       };
@@ -112,8 +114,6 @@ export async function showSongCandidates(marker, threshold = null) {
     if (!isStale()) openSongCandidatePopup(input, [{ type: 'message', label: 'エラー: ' + error.message }]);
   }
 }
-
-registerShowSongCandidates(showSongCandidates);
 
 export async function fetchSongCandidates(videoId, sec, threshold = null) {
   let url = `${state.ycsServerUrl}/api/extension/subtitle-matches?video_id=${encodeURIComponent(videoId)}&sec=${sec}`;
@@ -143,6 +143,7 @@ export function ensureSubtitlesOnServer(videoId) {
   const promise = (async () => {
     const tracks = await getCaptionTracksFromPage();
     if (!tracks || tracks.length === 0) {
+      // 候補ボタン経由でも「字幕なし」を記録し、字幕スキャン対象から除外する
       reportSubtitlesUnavailable(videoId);
       throw new Error('この動画には字幕がありません');
     }

@@ -2637,7 +2637,9 @@
   let suggestDebounceTimer = null;
   let suggestAbortController = null;
   let popupSelectedIndex = -1;
+  // ポップアップからのinsertText直後にinputイベントでサジェストが再発火するのを防ぐ
   let suggestInsertGuard = false;
+
   function getSongCandidateRequestSeq() { return songCandidateRequestSeq; }
 
   function getSelectableItems(popup) {
@@ -2660,6 +2662,8 @@
 
   function buildLyricsSplitCandidates(text) {
     const tokens = text.trim().split(/\s+/);
+    // 単独の「歌詞」トークンより前の部分を「アーティスト名+曲名」とみなす
+    // （「歌詞検索」のような複合語は区切りとして扱わない）
     const idx = tokens.indexOf('歌詞');
     if (idx < 2) return null;
     const parts = tokens.slice(0, idx);
@@ -2688,6 +2692,7 @@
     closeSongCandidatePopup();
     if (!state.volumeGraphContainer) return;
 
+    // 候補値は属性に埋め込まずインデックスで参照する（escapeHtmlは引用符をエスケープしないため）
     const values = [...candidates, rawText];
     const popup = document.createElement('div');
     popup.className = 'vdg-paste-popup';
@@ -2697,6 +2702,8 @@
     <div class="vdg-paste-popup-item raw" data-index="${candidates.length}">そのまま貼り付け</div>
   `;
 
+    // 入力欄の直下に配置（グラフコンテナ基準の絶対配置）
+    // 一覧のスクロールに追従し、コンテナ右端からはみ出さないようにクランプする
     const listEl = state.volumeGraphContainer.querySelector('#vdg-ts-list');
     const reposition = () => {
       const containerRect = state.volumeGraphContainer.getBoundingClientRect();
@@ -2706,6 +2713,7 @@
       popup.style.top = `${inputRect.bottom - containerRect.top + 2}px`;
     };
 
+    // execCommandならネイティブのinputイベント発火とUndo履歴が維持される
     const insertAndClose = (value) => {
       closeLyricsPastePopup();
       input.focus({ preventScroll: true });
@@ -2803,6 +2811,7 @@
       popup.style.top = `${inputRect.bottom - containerRect.top + 2}px`;
     };
 
+    // 候補クリック: 入力欄の内容を候補で置き換える
     popup.addEventListener('mousedown', (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -3047,6 +3056,8 @@
     const input = state.volumeGraphContainer?.querySelector(`.vdg-ts-text-input[data-marker-id="${marker.id}"]`);
     if (!input) return;
 
+    // openSongCandidatePopupは開き直しのたびに内部で世代を進めるため、
+    // 自分で開いた直後の世代を控えて「外部から閉じられた/開き直された」を検出する
     let seq;
     const open = (items) => {
       openSongCandidatePopup(input, items);
@@ -3106,11 +3117,13 @@
       }
 
       const items = candidates.map(c => {
+        // マスタ未登録の候補は元の表記（text）を優先する
         const title = c.song_title || c.text || c.normalized_text || '';
         return {
           type: 'candidate',
           label: title,
           artist: c.song_artist || '',
+          // 挿入値はタイムスタンプの表記慣習（「曲名 / アーティスト」）に合わせる
           insertValue: c.song_artist ? `${title} / ${c.song_artist}` : title,
           similarity: c.similarity,
         };
@@ -3160,6 +3173,7 @@
     const promise = (async () => {
       const tracks = await getCaptionTracksFromPage();
       if (!tracks || tracks.length === 0) {
+        // 候補ボタン経由でも「字幕なし」を記録し、字幕スキャン対象から除外する
         reportSubtitlesUnavailable(videoId);
         throw new Error('この動画には字幕がありません');
       }

@@ -5,7 +5,6 @@ import {
   closeSongCandidatePopup,
   openSongCandidatePopup,
   getSongCandidateRequestSeq,
-  registerShowSongCandidates,
 } from './song-candidates-shared.js';
 import {
   getCaptionTracksViaInnerTube,
@@ -23,7 +22,6 @@ export {
   openSongCandidatePopup,
   cancelSongSuggest,
   onSongInputForSuggest,
-  retryWithLowerThreshold,
 } from './song-candidates-shared.js';
 
 let subtitleCache = null;
@@ -145,8 +143,6 @@ export async function showSongCandidates(marker, threshold = null) {
     if (!isStale()) openSongCandidatePopup(input, [{ type: 'message', label: 'エラー: ' + error.message }]);
   }
 }
-
-registerShowSongCandidates(showSongCandidates);
 
 export async function ensureSubtitlesOnServer() {}
 
