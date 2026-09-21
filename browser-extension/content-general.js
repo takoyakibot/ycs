@@ -1323,6 +1323,10 @@
     return !!lyricsPastePopup;
   }
 
+  function isSongCandidatePopupOpen() {
+    return !!songCandidatePopup;
+  }
+
   function buildLyricsSplitCandidates(text) {
     const tokens = text.trim().split(/\s+/);
     // 単独の「歌詞」トークンより前の部分を「アーティスト名+曲名」とみなす
@@ -4723,10 +4727,11 @@
         return;
       }
 
+      // ポップアップが開いている間は、ポップアップ側のキー処理を優先する
+      if (isTextInput && (isLyricsPastePopupOpen() || isSongCandidatePopupOpen())) return;
+
       // 曲名入力中のEnter/Escは入力状態を終了して選択状態に戻す
       if (isTextInput && (e.key === 'Enter' || e.key === 'Escape')) {
-        // ペースト変換ポップアップが開いている間は、ポップアップ側のキー処理を優先する
-        if (isLyricsPastePopupOpen()) return;
         e.preventDefault();
         e.stopImmediatePropagation();
         blurMarkerTextInput();
@@ -4737,8 +4742,6 @@
       if (isTextInput && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
         e.preventDefault();
         e.stopImmediatePropagation();
-        closeLyricsPastePopup();
-        closeSongCandidatePopup();
         const pos = e.key === 'ArrowUp' ? 0 : e.target.value.length;
         e.target.setSelectionRange(pos, pos);
         return;

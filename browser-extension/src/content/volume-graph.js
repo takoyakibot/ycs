@@ -11,7 +11,7 @@ import {
 } from './timestamp-editor.js';
 import { autoDetectSongStarts, loadChatForHeatmap } from './auto-detect.js';
 import { copyTimestamps, importTimestamps, saveMarkersToStorage, loadMarkersFromStorage } from './timestamp-io.js';
-import { closeLyricsPastePopup, closeSongCandidatePopup, isLyricsPastePopupOpen } from './song-candidates.js';
+import { closeLyricsPastePopup, closeSongCandidatePopup, isLyricsPastePopupOpen, isSongCandidatePopupOpen } from './song-candidates.js';
 
 function graphElementId() {
   return state.edition === 'general' ? 'volume-dynamics-graph-general' : 'volume-dynamics-graph';
@@ -1121,10 +1121,11 @@ export function setupVolumeGraphEvents() {
       return;
     }
 
+    // ポップアップが開いている間は、ポップアップ側のキー処理を優先する
+    if (isTextInput && (isLyricsPastePopupOpen() || isSongCandidatePopupOpen())) return;
+
     // 曲名入力中のEnter/Escは入力状態を終了して選択状態に戻す
     if (isTextInput && (e.key === 'Enter' || e.key === 'Escape')) {
-      // ペースト変換ポップアップが開いている間は、ポップアップ側のキー処理を優先する
-      if (isLyricsPastePopupOpen()) return;
       e.preventDefault();
       e.stopImmediatePropagation();
       blurMarkerTextInput();
@@ -1135,8 +1136,6 @@ export function setupVolumeGraphEvents() {
     if (isTextInput && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
       e.preventDefault();
       e.stopImmediatePropagation();
-      closeLyricsPastePopup();
-      closeSongCandidatePopup();
       const pos = e.key === 'ArrowUp' ? 0 : e.target.value.length;
       e.target.setSelectionRange(pos, pos);
       return;
