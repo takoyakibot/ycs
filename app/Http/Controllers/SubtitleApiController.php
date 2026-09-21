@@ -334,14 +334,16 @@ class SubtitleApiController extends Controller
             $songIds = $songs->pluck('id')->all();
             $tsCounts = TsItem::query()
                 ->join('timestamp_song_mappings', 'ts_items.normalized_text', '=', 'timestamp_song_mappings.normalized_text')
+                ->join('archives', 'ts_items.video_id', '=', 'archives.video_id')
                 ->whereIn('timestamp_song_mappings.song_id', $songIds)
                 ->where('ts_items.is_display', '1')
+                ->where('archives.is_display', '1')
                 ->where(function ($q) {
                     $q->whereNull('timestamp_song_mappings.is_not_song')
                         ->orWhere('timestamp_song_mappings.is_not_song', false);
                 })
                 ->groupBy('timestamp_song_mappings.song_id')
-                ->pluck(\DB::raw('COUNT(*)'), 'timestamp_song_mappings.song_id');
+                ->pluck(\DB::raw('COUNT(*) as count'), 'timestamp_song_mappings.song_id');
         }
 
         foreach ($songs as $song) {
@@ -364,9 +366,11 @@ class SubtitleApiController extends Controller
 
             $tsQuery = TsItem::query()
                 ->select('ts_items.text', 'songs.title as song_title', 'songs.artist as song_artist', \DB::raw('COUNT(*) as ts_count'))
+                ->join('archives', 'ts_items.video_id', '=', 'archives.video_id')
                 ->leftJoin('timestamp_song_mappings', 'ts_items.normalized_text', '=', 'timestamp_song_mappings.normalized_text')
                 ->leftJoin('songs', 'timestamp_song_mappings.song_id', '=', 'songs.id')
                 ->where('ts_items.is_display', '1')
+                ->where('archives.is_display', '1')
                 ->where(function ($q) {
                     $q->whereNull('timestamp_song_mappings.is_not_song')
                         ->orWhere('timestamp_song_mappings.is_not_song', false);
@@ -402,7 +406,7 @@ class SubtitleApiController extends Controller
                     'text' => $display,
                     'source' => 'ts_item',
                 ];
-                if ($item->ts_count > 1) {
+                if ($item->ts_count > 0) {
                     $entry['ts_count'] = (int) $item->ts_count;
                 }
                 $results[] = $entry;
