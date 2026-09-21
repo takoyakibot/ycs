@@ -11,6 +11,7 @@ import {
 
 export {
   isLyricsPastePopupOpen,
+  isSongCandidatePopupOpen,
   buildLyricsSplitCandidates,
   closeLyricsPastePopup,
   showLyricsPastePopup,

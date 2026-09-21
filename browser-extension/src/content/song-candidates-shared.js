@@ -32,6 +32,10 @@ export function isLyricsPastePopupOpen() {
   return !!lyricsPastePopup;
 }
 
+export function isSongCandidatePopupOpen() {
+  return !!songCandidatePopup;
+}
+
 export function buildLyricsSplitCandidates(text) {
   const tokens = text.trim().split(/\s+/);
   // 単独の「歌詞」トークンより前の部分を「アーティスト名+曲名」とみなす
