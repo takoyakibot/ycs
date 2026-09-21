@@ -1837,7 +1837,7 @@
     popup.innerHTML = `
     <div class="vdg-paste-popup-title">サジェスト</div>
     ${suggestions.map((s, i) => `
-      <div class="vdg-paste-popup-item" data-index="${i}">${escapeHtml(s.text)}</div>
+      <div class="vdg-paste-popup-item" data-index="${i}">${escapeHtml(s.text)}${s.ts_count ? `<span class="similarity">${s.ts_count}件</span>` : ''}</div>
     `).join('')}
   `;
 
@@ -4880,14 +4880,20 @@
     const barW = Math.ceil(bucketWidth) + 0.5;
     const emojiMaxH = height * 0.4;
 
+    let maxEmoji = 0;
+    for (const b of buckets) {
+      if (b.emojiOnly > maxEmoji) maxEmoji = b.emojiOnly;
+    }
+    if (maxEmoji === 0) return;
+
     for (let i = 0; i < buckets.length; i++) {
       const b = buckets[i];
-      if (b.total === 0) continue;
-      const emojiRatio = b.emojiOnly / b.total;
-      if (emojiRatio < 0.05) continue;
+      if (b.emojiOnly === 0) continue;
 
-      const barH = Math.max(2, emojiRatio * emojiMaxH);
-      ctx.fillStyle = 'rgba(255, 152, 0, 0.25)';
+      const ratio = b.emojiOnly / maxEmoji;
+      const barH = Math.max(2, ratio * emojiMaxH);
+      const alpha = 0.1 + ratio * 0.4;
+      ctx.fillStyle = `rgba(255, 152, 0, ${alpha.toFixed(2)})`;
       ctx.fillRect(i * bucketWidth, height - barH, barW, barH);
     }
   }
