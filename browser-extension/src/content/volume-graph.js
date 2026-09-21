@@ -1092,7 +1092,6 @@ export function setupVolumeGraphEvents() {
   // キーボード操作
   // YouTube本体のショートカットと二重に発火すると打ち消し合うため、
   // キャプチャフェーズで先に処理してstopImmediatePropagationで止める
-  let lastArrowTime = 0;
   document.addEventListener('keydown', (e) => {
     const isTextInput = e.target.classList.contains('vdg-ts-text-input');
     if (isTextInput && !['Delete', 'ArrowUp', 'ArrowDown', 'Enter', 'Escape'].includes(e.key)) return;
@@ -1145,8 +1144,6 @@ export function setupVolumeGraphEvents() {
 
     if (state.selectedMarkerId === null) return;
 
-    const now = Date.now();
-
     if ((e.key === 'Delete' || e.key === 'Backspace') && !isTextInput) {
       e.preventDefault();
       e.stopImmediatePropagation();
@@ -1172,10 +1169,7 @@ export function setupVolumeGraphEvents() {
       e.preventDefault();
       e.stopImmediatePropagation();
       const direction = e.key === 'ArrowLeft' ? -1 : 1;
-      // 200ms以内の連続押下で5秒移動
-      const delta = (now - lastArrowTime < 200) ? 5 : 1;
-      lastArrowTime = now;
-      moveSelectedMarker(direction * delta);
+      moveSelectedMarker(direction);
     } else if (e.key === 'Enter' && !isTextInput) {
       // 選択中マーカーの曲名入力欄にフォーカス
       e.preventDefault();
