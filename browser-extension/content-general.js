@@ -1837,7 +1837,7 @@
     popup.innerHTML = `
     <div class="vdg-paste-popup-title">サジェスト</div>
     ${suggestions.map((s, i) => `
-      <div class="vdg-paste-popup-item" data-index="${i}">${escapeHtml(s.text)}</div>
+      <div class="vdg-paste-popup-item" data-index="${i}">${escapeHtml(s.text)}${s.ts_count ? `<span class="similarity">${s.ts_count}件</span>` : ''}</div>
     `).join('')}
   `;
 
