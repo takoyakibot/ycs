@@ -2629,6 +2629,79 @@
     }
   }
 
+  const INNERTUBE_API_KEY = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
+
+  function parseJson3(data) {
+    const segments = [];
+    for (const ev of (data.events || [])) {
+      if (!ev.segs) continue;
+      const t = ev.segs.map(s => s.utf8 || '').join('');
+      if (!t.trim()) continue;
+      segments.push({
+        start: (ev.tStartMs || 0) / 1000,
+        duration: (ev.dDurationMs || 0) / 1000,
+        text: t,
+      });
+    }
+    return segments;
+  }
+
+  function parseXml(text) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(text, 'text/xml');
+    const textEls = doc.querySelectorAll('text');
+    const segments = [];
+    for (const el of textEls) {
+      const content = el.textContent || '';
+      if (!content.trim()) continue;
+      segments.push({
+        start: parseFloat(el.getAttribute('start') || '0'),
+        duration: parseFloat(el.getAttribute('dur') || '0'),
+        text: content,
+      });
+    }
+    return segments;
+  }
+
+  async function getCaptionTracksViaInnerTube(videoId) {
+    const response = await fetch(`https://www.youtube.com/youtubei/v1/player?key=${INNERTUBE_API_KEY}&prettyPrint=false`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        context: {
+          client: {
+            clientName: 'WEB',
+            clientVersion: '2.20250911.01.00',
+            hl: document.documentElement.lang || 'ja',
+          },
+        },
+        videoId: videoId,
+      }),
+    });
+    if (!response.ok) throw new Error(`InnerTube API error: ${response.status}`);
+    const data = await response.json();
+    const captionTracks = data.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
+    return captionTracks.map(track => ({
+      languageCode: track.languageCode || '',
+      name: track.name?.simpleText || '',
+      kind: track.kind || '',
+      baseUrl: track.baseUrl || '',
+    }));
+  }
+
+  async function fetchTimedTextDirect(baseUrl) {
+    const url = new URL(baseUrl);
+    url.searchParams.set('fmt', 'json3');
+    const response = await fetch(url.toString());
+    if (!response.ok) throw new Error(`timedtext fetch error: ${response.status}`);
+    const text = await response.text();
+    if (text.trim().startsWith('{')) {
+      return parseJson3(JSON.parse(text));
+    }
+    return parseXml(text);
+  }
+
   let lyricsPastePopup = null;
   let lyricsPastePopupCleanup = null;
   let songCandidatePopup = null;
@@ -3175,14 +3248,26 @@
     }
 
     const promise = (async () => {
-      const tracks = await getCaptionTracksFromPage();
+      // page bridge経由で取得を試み、失敗時はInnerTube APIにフォールバック
+      let tracks;
+      let useDirectFetch = false;
+      try {
+        tracks = await getCaptionTracksFromPage();
+      } catch (e) {
+        console.warn('[YCS] page bridge経由の字幕トラック取得に失敗、InnerTube APIで再試行:', e.message);
+      }
       if (!tracks || tracks.length === 0) {
-        // 候補ボタン経由でも「字幕なし」を記録し、字幕スキャン対象から除外する
+        tracks = await getCaptionTracksViaInnerTube(videoId);
+        useDirectFetch = true;
+      }
+      if (!tracks || tracks.length === 0) {
         reportSubtitlesUnavailable(videoId);
         throw new Error('この動画には字幕がありません');
       }
       const track = pickPreferredCaptionTrack(tracks);
-      const segments = await fetchTimedText(videoId, track.languageCode);
+      const segments = useDirectFetch
+        ? await fetchTimedTextDirect(track.baseUrl)
+        : await fetchTimedText(videoId, track.languageCode);
       if (!segments || segments.length === 0) {
         throw new Error('字幕を取得できませんでした');
       }
@@ -3389,14 +3474,26 @@
 
   async function processSubtitleScanVideo(videoId) {
     try {
-      const tracks = await getCaptionTracksFromPage();
+      let tracks;
+      let useDirectFetch = false;
+      try {
+        tracks = await getCaptionTracksFromPage();
+      } catch (e) {
+        console.warn('[YCS] 字幕スキャン: page bridge経由の取得に失敗、InnerTube APIで再試行:', e.message);
+      }
+      if (!tracks || tracks.length === 0) {
+        tracks = await getCaptionTracksViaInnerTube(videoId);
+        useDirectFetch = true;
+      }
       if (!tracks || tracks.length === 0) {
         console.log('[YCS] 字幕スキャン: 字幕がないためスキップ', videoId);
         await reportSubtitlesUnavailable(videoId);
         await recordSubtitleScanResult('skipped');
       } else {
         const track = pickPreferredCaptionTrack(tracks);
-        const segments = await fetchTimedText(videoId, track.languageCode);
+        const segments = useDirectFetch
+          ? await fetchTimedTextDirect(track.baseUrl)
+          : await fetchTimedText(videoId, track.languageCode);
         if (!segments || segments.length === 0) {
           await recordSubtitleScanResult('skipped');
         } else {

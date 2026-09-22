@@ -3,6 +3,7 @@ import { pickPreferredCaptionTrack } from './song-candidates.js';
 import { getVideoId, escapeHtml } from './utils.js';
 import { loadYcsApiSettings, missingTokenMessage, postSubtitlesToServer } from './api.js';
 import { getCaptionTracksFromPage, fetchTimedText } from './subtitle-panel.js';
+import { getCaptionTracksViaInnerTube, fetchTimedTextDirect } from './caption-fetch.js';
 
 let subtitleScanTargets = [];
 
@@ -191,14 +192,26 @@ export async function reportSubtitlesUnavailable(videoId) {
 
 export async function processSubtitleScanVideo(videoId) {
   try {
-    const tracks = await getCaptionTracksFromPage();
+    let tracks;
+    let useDirectFetch = false;
+    try {
+      tracks = await getCaptionTracksFromPage();
+    } catch (e) {
+      console.warn('[YCS] 字幕スキャン: page bridge経由の取得に失敗、InnerTube APIで再試行:', e.message);
+    }
+    if (!tracks || tracks.length === 0) {
+      tracks = await getCaptionTracksViaInnerTube(videoId);
+      useDirectFetch = true;
+    }
     if (!tracks || tracks.length === 0) {
       console.log('[YCS] 字幕スキャン: 字幕がないためスキップ', videoId);
       await reportSubtitlesUnavailable(videoId);
       await recordSubtitleScanResult('skipped');
     } else {
       const track = pickPreferredCaptionTrack(tracks);
-      const segments = await fetchTimedText(videoId, track.languageCode);
+      const segments = useDirectFetch
+        ? await fetchTimedTextDirect(track.baseUrl)
+        : await fetchTimedText(videoId, track.languageCode);
       if (!segments || segments.length === 0) {
         await recordSubtitleScanResult('skipped');
       } else {

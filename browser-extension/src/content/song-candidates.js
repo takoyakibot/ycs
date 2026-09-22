@@ -3,6 +3,7 @@ import { reportSubtitlesUnavailable } from './subtitle-scan.js';
 import { getVideoId } from './utils.js';
 import { loadYcsApiSettings, postSubtitlesToServer, missingTokenMessage } from './api.js';
 import { getCaptionTracksFromPage, fetchTimedText, } from './subtitle-panel.js';
+import { getCaptionTracksViaInnerTube, fetchTimedTextDirect } from './caption-fetch.js';
 import {
   closeSongCandidatePopup,
   openSongCandidatePopup,
@@ -142,14 +143,26 @@ export function ensureSubtitlesOnServer(videoId) {
   }
 
   const promise = (async () => {
-    const tracks = await getCaptionTracksFromPage();
+    // page bridge経由で取得を試み、失敗時はInnerTube APIにフォールバック
+    let tracks;
+    let useDirectFetch = false;
+    try {
+      tracks = await getCaptionTracksFromPage();
+    } catch (e) {
+      console.warn('[YCS] page bridge経由の字幕トラック取得に失敗、InnerTube APIで再試行:', e.message);
+    }
     if (!tracks || tracks.length === 0) {
-      // 候補ボタン経由でも「字幕なし」を記録し、字幕スキャン対象から除外する
+      tracks = await getCaptionTracksViaInnerTube(videoId);
+      useDirectFetch = true;
+    }
+    if (!tracks || tracks.length === 0) {
       reportSubtitlesUnavailable(videoId);
       throw new Error('この動画には字幕がありません');
     }
     const track = pickPreferredCaptionTrack(tracks);
-    const segments = await fetchTimedText(videoId, track.languageCode);
+    const segments = useDirectFetch
+      ? await fetchTimedTextDirect(track.baseUrl)
+      : await fetchTimedText(videoId, track.languageCode);
     if (!segments || segments.length === 0) {
       throw new Error('字幕を取得できませんでした');
     }
