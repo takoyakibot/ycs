@@ -3254,6 +3254,8 @@
       try {
         tracks = await getCaptionTracksFromPage();
       } catch (e) {
+        // playabilityStatus異常（非公開・削除済み・年齢制限）はフォールバックせず即座にエラー
+        if (e.message.includes('動画を取得できません')) throw e;
         console.warn('[YCS] page bridge経由の字幕トラック取得に失敗、InnerTube APIで再試行:', e.message);
       }
       if (!tracks || tracks.length === 0) {
@@ -3265,6 +3267,9 @@
         throw new Error('この動画には字幕がありません');
       }
       const track = pickPreferredCaptionTrack(tracks);
+      if (useDirectFetch && !track.baseUrl) {
+        throw new Error('字幕トラックのURLを取得できませんでした');
+      }
       const segments = useDirectFetch
         ? await fetchTimedTextDirect(track.baseUrl)
         : await fetchTimedText(videoId, track.languageCode);
@@ -3479,6 +3484,7 @@
       try {
         tracks = await getCaptionTracksFromPage();
       } catch (e) {
+        if (e.message.includes('動画を取得できません')) throw e;
         console.warn('[YCS] 字幕スキャン: page bridge経由の取得に失敗、InnerTube APIで再試行:', e.message);
       }
       if (!tracks || tracks.length === 0) {
@@ -3491,6 +3497,7 @@
         await recordSubtitleScanResult('skipped');
       } else {
         const track = pickPreferredCaptionTrack(tracks);
+        if (useDirectFetch && !track.baseUrl) throw new Error('字幕トラックのURLを取得できませんでした');
         const segments = useDirectFetch
           ? await fetchTimedTextDirect(track.baseUrl)
           : await fetchTimedText(videoId, track.languageCode);

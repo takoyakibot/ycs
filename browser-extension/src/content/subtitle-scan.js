@@ -197,6 +197,7 @@ export async function processSubtitleScanVideo(videoId) {
     try {
       tracks = await getCaptionTracksFromPage();
     } catch (e) {
+      if (e.message.includes('動画を取得できません')) throw e;
       console.warn('[YCS] 字幕スキャン: page bridge経由の取得に失敗、InnerTube APIで再試行:', e.message);
     }
     if (!tracks || tracks.length === 0) {
@@ -209,6 +210,7 @@ export async function processSubtitleScanVideo(videoId) {
       await recordSubtitleScanResult('skipped');
     } else {
       const track = pickPreferredCaptionTrack(tracks);
+      if (useDirectFetch && !track.baseUrl) throw new Error('字幕トラックのURLを取得できませんでした');
       const segments = useDirectFetch
         ? await fetchTimedTextDirect(track.baseUrl)
         : await fetchTimedText(videoId, track.languageCode);
