@@ -26,6 +26,8 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 // 公開API（認証不要・IPスロットル）
 Route::post('public/subtitle-matches', [PublicSubtitleApiController::class, 'match'])
     ->middleware(['throttle:10,1', 'throttle:public-api-daily']);
+Route::get('public/song-suggest', [SubtitleApiController::class, 'songSuggest'])
+    ->middleware(['throttle:30,1', 'throttle:public-api-daily']);
 
 // Chrome拡張用API（Sanctumトークン認証）
 Route::middleware(['auth:sanctum', 'admin'])->group(function () {

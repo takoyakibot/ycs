@@ -1,5 +1,7 @@
 import state from './state.js';
 import { escapeHtml } from './utils.js';
+import { loadYcsApiSettings } from './api.js';
+import { DEFAULT_YCS_SERVER_URL } from './config.js';
 
 let lyricsPastePopup = null;
 let lyricsPastePopupCleanup = null;
@@ -293,11 +295,12 @@ export function onSongInputForSuggest(input) {
   const query = input.value.trim();
   if (query.length < 2) return;
 
-  if (!state.ycsApiToken) return;
-
-  suggestDebounceTimer = setTimeout(() => {
+  suggestDebounceTimer = setTimeout(async () => {
     suggestDebounceTimer = null;
     if (songCandidatePopup) return;
+    if (!state.ycsServerUrl) {
+      await loadYcsApiSettings();
+    }
     fetchAndShowSuggestions(input, query);
   }, 300);
 }
@@ -307,12 +310,14 @@ async function fetchAndShowSuggestions(input, query) {
   const seq = songCandidateRequestSeq;
 
   try {
-    const url = `${state.ycsServerUrl}/api/extension/song-suggest?q=${encodeURIComponent(query)}`;
+    const serverUrl = state.ycsServerUrl || DEFAULT_YCS_SERVER_URL;
+    const url = `${serverUrl}/api/public/song-suggest?q=${encodeURIComponent(query)}`;
+    const headers = { 'Accept': 'application/json' };
+    if (state.ycsApiToken) {
+      headers['Authorization'] = `Bearer ${state.ycsApiToken}`;
+    }
     const response = await fetch(url, {
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': `Bearer ${state.ycsApiToken}`,
-      },
+      headers,
       signal: suggestAbortController.signal,
     });
 
