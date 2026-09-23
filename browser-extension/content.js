@@ -448,6 +448,170 @@
     return `${m}:${s.toString().padStart(2, '0')}`;
   }
 
+  function ensurePageBridge() {
+    if (state.pageBridgeReady) return state.pageBridgeReady;
+    state.pageBridgeReady = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = chrome.runtime.getURL('page-bridge.js');
+      script.onload = () => { script.remove(); resolve(); };
+      script.onerror = () => {
+        script.remove();
+        state.pageBridgeReady = null;
+        reject(new Error('page-bridge.jsのロードに失敗しました'));
+      };
+      document.documentElement.appendChild(script);
+    });
+    return state.pageBridgeReady;
+  }
+
+  async function getCaptionTracksFromPage$1() {
+    await ensurePageBridge();
+
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        window.removeEventListener('message', handler);
+        reject(new Error('字幕データの取得がタイムアウトしました'));
+      }, 5000);
+
+      function handler(event) {
+        if (event.source !== window || event.data?.type !== 'YCS_CAPTION_TRACKS_RESPONSE') return;
+        window.removeEventListener('message', handler);
+        clearTimeout(timeout);
+
+        if (event.data.playabilityStatus !== 'OK') {
+          reject(new Error('動画を取得できません。動画が非公開・削除済み、または年齢制限がある可能性があります'));
+          return;
+        }
+        resolve(event.data.tracks);
+      }
+
+      window.addEventListener('message', handler);
+      window.postMessage({ type: 'YCS_GET_CAPTION_TRACKS' }, '*');
+    });
+  }
+
+  function fetchTimedText$1(videoId, lang) {
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        window.removeEventListener('message', handler);
+        reject(new Error('字幕の取得がタイムアウトしました'));
+      }, 15000);
+
+      function handler(event) {
+        if (event.source !== window || event.data?.type !== 'YCS_TIMEDTEXT_RESPONSE') return;
+        window.removeEventListener('message', handler);
+        clearTimeout(timeout);
+        if (event.data.error) {
+          reject(new Error(event.data.error));
+        } else {
+          resolve(event.data.segments);
+        }
+      }
+
+      window.addEventListener('message', handler);
+      window.postMessage({ type: 'YCS_FETCH_TIMEDTEXT', videoId, lang }, '*');
+    });
+  }
+
+  const INNERTUBE_API_KEY = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
+
+  function parseJson3(data) {
+    const segments = [];
+    for (const ev of (data.events || [])) {
+      if (!ev.segs) continue;
+      const t = ev.segs.map(s => s.utf8 || '').join('');
+      if (!t.trim()) continue;
+      segments.push({
+        start: (ev.tStartMs || 0) / 1000,
+        duration: (ev.dDurationMs || 0) / 1000,
+        text: t,
+      });
+    }
+    return segments;
+  }
+
+  function parseXml(text) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(text, 'text/xml');
+    const textEls = doc.querySelectorAll('text');
+    const segments = [];
+    for (const el of textEls) {
+      const content = el.textContent || '';
+      if (!content.trim()) continue;
+      segments.push({
+        start: parseFloat(el.getAttribute('start') || '0'),
+        duration: parseFloat(el.getAttribute('dur') || '0'),
+        text: content,
+      });
+    }
+    return segments;
+  }
+
+  function pickPreferredCaptionTrack(tracks) {
+    const ja = tracks.filter(t => (t.languageCode || '').startsWith('ja'));
+    return ja.find(t => t.kind !== 'asr') || ja[0] || tracks[0];
+  }
+
+  async function getCaptionTracksViaInnerTube(videoId) {
+    const response = await fetch(`https://www.youtube.com/youtubei/v1/player?key=${INNERTUBE_API_KEY}&prettyPrint=false`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        context: {
+          client: {
+            clientName: 'WEB',
+            clientVersion: '2.20250911.01.00',
+            hl: document.documentElement.lang || 'ja',
+          },
+        },
+        videoId: videoId,
+      }),
+    });
+    if (!response.ok) throw new Error(`InnerTube API error: ${response.status}`);
+    const data = await response.json();
+    const captionTracks = data.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
+    return captionTracks.map(track => ({
+      languageCode: track.languageCode || '',
+      name: track.name?.simpleText || '',
+      kind: track.kind || '',
+      baseUrl: track.baseUrl || '',
+    }));
+  }
+
+  async function fetchTimedTextDirect(baseUrl) {
+    const url = new URL(baseUrl);
+    url.searchParams.set('fmt', 'json3');
+    const response = await fetch(url.toString());
+    if (!response.ok) throw new Error(`timedtext fetch error: ${response.status}`);
+    const text = await response.text();
+    if (text.trim().startsWith('{')) {
+      return parseJson3(JSON.parse(text));
+    }
+    return parseXml(text);
+  }
+
+  async function getCaptionTracks(videoId) {
+    let tracks;
+    try {
+      tracks = await getCaptionTracksFromPage$1();
+      if (tracks && tracks.length > 0) return { tracks, direct: false };
+    } catch (e) {
+      if (e.message.includes('動画を取得できません')) throw e;
+      console.warn('[YCS] page bridge経由の字幕トラック取得に失敗:', e.message);
+    }
+    tracks = await getCaptionTracksViaInnerTube(videoId);
+    return { tracks: tracks || [], direct: true };
+  }
+
+  async function fetchSubtitleSegments(track, videoId, direct) {
+    if (direct) {
+      if (!track.baseUrl) throw new Error('字幕トラックのURLを取得できませんでした');
+      return fetchTimedTextDirect(track.baseUrl);
+    }
+    return fetchTimedText$1(videoId, track.languageCode);
+  }
+
   const subtitleSentCache = new Set();
   const subtitleSendInFlight = new Map();
 
@@ -601,6 +765,483 @@
     } finally {
       subtitleSendInFlight.delete(cacheKey);
     }
+  }
+
+  let subtitleScanTargets = [];
+
+  function getOwnTabId() {
+    return new Promise(resolve => {
+      try {
+        chrome.runtime.sendMessage({ type: 'GET_TAB_ID' }, res => {
+          resolve(res?.tabId ?? null);
+        });
+      } catch (e) {
+        resolve(null);
+      }
+    });
+  }
+
+  function setSubtitleScanStatus(text) {
+    const el = state.listScanPanel?.querySelector('#ssp-status');
+    if (el) el.textContent = text;
+  }
+
+  async function loadSubtitleScanTargets() {
+    if (!state.ycsApiToken) {
+      await loadYcsApiSettings();
+    }
+    if (!state.ycsApiToken) {
+      setSubtitleScanStatus(missingTokenMessage());
+      return;
+    }
+
+    setSubtitleScanStatus('対象を読み込んでいます…');
+
+    try {
+      const response = await fetch(`${state.ycsServerUrl}/api/extension/subtitle-targets`, {
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${state.ycsApiToken}`,
+        },
+      });
+      if (!response.ok) {
+        throw new Error(`一覧の取得に失敗しました (${response.status})`);
+      }
+
+      const data = await response.json();
+      subtitleScanTargets = data.targets || [];
+
+      const listEl = state.listScanPanel?.querySelector('#ssp-video-list');
+      if (listEl) {
+        listEl.innerHTML = subtitleScanTargets.length === 0
+          ? '<div class="lsp-empty">字幕未取得のアーカイブはありません</div>'
+          : subtitleScanTargets.map((t, i) => `
+            <div class="lsp-item">
+              <span class="lsp-item-index">${i + 1}.</span>
+              <span class="lsp-item-id" title="${escapeHtml(t.video_id)}">${escapeHtml(t.title || t.video_id)}</span>
+            </div>
+          `).join('');
+      }
+      setSubtitleScanStatus(`対象: ${subtitleScanTargets.length}件`);
+
+      const startBtn = state.listScanPanel?.querySelector('#ssp-start-btn');
+      if (startBtn) startBtn.disabled = subtitleScanTargets.length === 0;
+    } catch (error) {
+      console.error('[YCS] 字幕取得対象の読み込みエラー:', error);
+      setSubtitleScanStatus('エラー: ' + error.message);
+    }
+  }
+
+  async function startSubtitleScan() {
+    if (subtitleScanTargets.length === 0) return;
+
+    // 音量リストスキャンと同時に走ると遷移を取り合うため開始を拒否する
+    const { listScanActive } = await chrome.storage.local.get(['listScanActive']);
+    if (listScanActive) {
+      setSubtitleScanStatus('音量のリストスキャン実行中は開始できません。先に停止してください');
+      return;
+    }
+
+    const tabId = await getOwnTabId();
+    const videoIds = subtitleScanTargets.map(t => t.video_id);
+
+    await chrome.storage.local.set({
+      subtitleScanVideoIds: videoIds,
+      subtitleScanIndex: 0,
+      subtitleScanActive: true,
+      subtitleScanTabId: tabId,
+      subtitleScanResults: { sent: 0, skipped: 0, failed: 0 },
+    });
+
+    updateSubtitleScanButtons(true);
+
+    const firstVideoId = videoIds[0];
+    if (getVideoId() === firstVideoId) {
+      checkAndStartSubtitleScan();
+    } else {
+      window.location.href = `https://www.youtube.com/watch?v=${firstVideoId}`;
+    }
+  }
+
+  async function stopSubtitleScan() {
+    await chrome.storage.local.set({ subtitleScanActive: false });
+    updateSubtitleScanButtons(false);
+    setSubtitleScanStatus('停止しました');
+  }
+
+  function updateSubtitleScanButtons(running) {
+    if (!state.listScanPanel) return;
+    state.listScanPanel.querySelector('#ssp-start-btn').style.display = running ? 'none' : 'block';
+    state.listScanPanel.querySelector('#ssp-stop-btn').style.display = running ? 'block' : 'none';
+  }
+
+  async function restoreSubtitleScanPanelState() {
+    try {
+      const result = await chrome.storage.local.get([
+        'subtitleScanActive', 'subtitleScanVideoIds', 'subtitleScanIndex',
+      ]);
+      if (result.subtitleScanActive && result.subtitleScanVideoIds) {
+        updateSubtitleScanButtons(true);
+        setSubtitleScanStatus(`字幕取得中… ${(result.subtitleScanIndex || 0) + 1}/${result.subtitleScanVideoIds.length}`);
+      }
+    } catch (e) { /* 復元失敗は無視 */ }
+  }
+
+  async function checkAndStartSubtitleScan() {
+    try {
+      const result = await chrome.storage.local.get([
+        'subtitleScanVideoIds', 'subtitleScanIndex', 'subtitleScanActive', 'subtitleScanTabId',
+      ]);
+
+      if (!result.subtitleScanActive || !result.subtitleScanVideoIds) return;
+
+      const tabId = await getOwnTabId();
+      if (result.subtitleScanTabId != null && tabId !== result.subtitleScanTabId) return;
+
+      const videoIds = result.subtitleScanVideoIds;
+      const index = result.subtitleScanIndex || 0;
+      const videoId = getVideoId();
+      if (videoId !== videoIds[index]) return;
+
+      console.log(`[YCS] 字幕スキャン: ${index + 1}/${videoIds.length} を処理します`);
+      setSubtitleScanStatus(`字幕取得中… ${index + 1}/${videoIds.length}`);
+      updateSubtitleScanButtons(true);
+
+      waitForPlayerAndProcessSubtitle(videoId);
+    } catch (error) {
+      console.error('[YCS] 字幕スキャンチェックエラー:', error);
+    }
+  }
+
+  function waitForPlayerAndProcessSubtitle(videoId) {
+    let attempt = 0;
+    const check = () => {
+      if (state.videoElement && state.videoElement.readyState >= 2) {
+        processSubtitleScanVideo(videoId);
+      } else if (attempt >= 30) {
+        console.warn('[YCS] 字幕スキャン: プレイヤーが準備できないためスキップします', videoId);
+        recordSubtitleScanResult('skipped').then(proceedToNextSubtitleScanVideo);
+      } else {
+        attempt++;
+        setTimeout(check, 1000);
+      }
+    };
+    // ページ読み込み直後の切り替わりを待つ
+    setTimeout(check, 1500);
+  }
+
+  async function reportSubtitlesUnavailable(videoId) {
+    try {
+      if (!state.ycsApiToken) {
+        await loadYcsApiSettings();
+      }
+      if (!state.ycsApiToken) return;
+
+      await fetch(`${state.ycsServerUrl}/api/extension/subtitles/unavailable`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${state.ycsApiToken}`,
+        },
+        body: JSON.stringify({ video_id: videoId }),
+      });
+      console.log('[YCS] 字幕なしを記録しました:', videoId);
+    } catch (error) {
+      console.warn('[YCS] 字幕なし報告エラー:', error.message);
+    }
+  }
+
+  async function processSubtitleScanVideo(videoId) {
+    try {
+      const { tracks, direct } = await getCaptionTracks(videoId);
+      if (!tracks || tracks.length === 0) {
+        console.log('[YCS] 字幕スキャン: 字幕がないためスキップ', videoId);
+        await reportSubtitlesUnavailable(videoId);
+        await recordSubtitleScanResult('skipped');
+      } else {
+        const track = pickPreferredCaptionTrack(tracks);
+        const segments = await fetchSubtitleSegments(track, videoId, direct);
+        if (!segments || segments.length === 0) {
+          await recordSubtitleScanResult('skipped');
+        } else {
+          await postSubtitlesToServer(videoId, track.languageCode, track.kind === 'asr' ? 'asr' : '', segments);
+          await recordSubtitleScanResult('sent');
+        }
+      }
+    } catch (error) {
+      console.warn('[YCS] 字幕スキャン: 取得・送信に失敗', videoId, error.message);
+      await recordSubtitleScanResult('failed');
+    }
+
+    await proceedToNextSubtitleScanVideo();
+  }
+
+  async function recordSubtitleScanResult(kind) {
+    const result = await chrome.storage.local.get(['subtitleScanResults']);
+    const counts = result.subtitleScanResults || { sent: 0, skipped: 0, failed: 0 };
+    counts[kind] = (counts[kind] || 0) + 1;
+    await chrome.storage.local.set({ subtitleScanResults: counts });
+  }
+
+  async function proceedToNextSubtitleScanVideo() {
+    const result = await chrome.storage.local.get([
+      'subtitleScanVideoIds', 'subtitleScanIndex', 'subtitleScanActive', 'subtitleScanTabId', 'subtitleScanResults',
+    ]);
+
+    if (!result.subtitleScanActive) return;
+
+    const tabId = await getOwnTabId();
+    if (result.subtitleScanTabId != null && tabId !== result.subtitleScanTabId) return;
+
+    const videoIds = result.subtitleScanVideoIds || [];
+    const nextIndex = (result.subtitleScanIndex || 0) + 1;
+
+    if (nextIndex >= videoIds.length) {
+      const counts = result.subtitleScanResults || {};
+      const summary = `字幕一括取得が完了しました（送信 ${counts.sent || 0}件 / スキップ ${counts.skipped || 0}件 / 失敗 ${counts.failed || 0}件）`;
+      console.log('[YCS] ' + summary);
+      await chrome.storage.local.set({ subtitleScanActive: false });
+      updateSubtitleScanButtons(false);
+      setSubtitleScanStatus(summary);
+      return;
+    }
+
+    await chrome.storage.local.set({ subtitleScanIndex: nextIndex });
+
+    // 連続アクセスを避けるため少し待ってから遷移する
+    setTimeout(async () => {
+      const { subtitleScanActive } = await chrome.storage.local.get(['subtitleScanActive']);
+      if (!subtitleScanActive) return;
+      window.location.href = `https://www.youtube.com/watch?v=${videoIds[nextIndex]}`;
+    }, 2000);
+  }
+
+  async function loadScannedVideosList() {
+    try {
+      const allData = await chrome.storage.local.get(null);
+      const videos = [];
+
+      for (const key in allData) {
+        if (key.startsWith('volumeData_')) {
+          const videoId = key.replace('volumeData_', '');
+          const data = allData[key];
+
+          if (!data || !data.data) continue;
+
+          const filledCount = data.data.filter(v => v > 0).length;
+          const progress = Math.round((filledCount / data.data.length) * 100);
+
+          videos.push({
+            videoId,
+            savedAt: data.savedAt || null,
+            duration: data.duration || 0,
+            progress: progress >= 95 ? 100 : progress
+          });
+        }
+      }
+
+      videos.sort((a, b) => {
+        if (!a.savedAt) return 1;
+        if (!b.savedAt) return -1;
+        return new Date(b.savedAt) - new Date(a.savedAt);
+      });
+
+      renderScannedVideosList(videos);
+    } catch (error) {
+      console.error('スキャン済み動画一覧取得エラー:', error);
+    }
+  }
+
+  function renderScannedVideosList(videos) {
+    if (!state.listScanPanel) return;
+
+    const listContainer = state.listScanPanel.querySelector('#lsp-scanned-video-list');
+    const countEl = state.listScanPanel.querySelector('#lsp-scanned-count');
+    const clearAllBtn = state.listScanPanel.querySelector('#lsp-clear-all-btn');
+
+    countEl.textContent = `${videos.length} 件のスキャン済み動画`;
+
+    if (videos.length === 0) {
+      listContainer.innerHTML = '<div class="lsp-empty">スキャン済みの動画がありません</div>';
+      clearAllBtn.disabled = true;
+      return;
+    }
+
+    clearAllBtn.disabled = false;
+
+    const html = videos.map(video => {
+      const dateStr = video.savedAt
+        ? new Date(video.savedAt).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })
+        : '-';
+
+      return `
+      <div class="lsp-scanned-item" data-video-id="${video.videoId}">
+        <span class="lsp-item-id">${video.videoId}</span>
+        <span class="lsp-item-date">${dateStr}</span>
+        <span class="lsp-item-status">${video.progress}%</span>
+        <div class="lsp-item-actions">
+          <button class="lsp-open-btn" data-action="open" data-video-id="${video.videoId}">開く</button>
+          <button class="lsp-delete-btn" data-action="delete" data-video-id="${video.videoId}">×</button>
+        </div>
+      </div>
+    `;
+    }).join('');
+
+    listContainer.innerHTML = html;
+
+    listContainer.querySelectorAll('[data-action="open"]').forEach(btn => {
+      btn.addEventListener('click', () => openYouTubeVideo(btn.dataset.videoId));
+    });
+
+    listContainer.querySelectorAll('[data-action="delete"]').forEach(btn => {
+      btn.addEventListener('click', () => deleteScannedVideo(btn.dataset.videoId));
+    });
+  }
+
+  function openYouTubeVideo(videoId) {
+    window.open(`https://www.youtube.com/watch?v=${videoId}`, '_blank');
+  }
+
+  async function deleteScannedVideo(videoId) {
+    const key = `volumeData_${videoId}`;
+    await chrome.storage.local.remove(key);
+    loadScannedVideosList();
+  }
+
+  async function clearAllScannedVideos() {
+    if (!confirm('全てのスキャン済みデータを削除しますか？')) {
+      return;
+    }
+
+    try {
+      const allData = await chrome.storage.local.get(null);
+      const keysToRemove = [];
+
+      for (const key in allData) {
+        if (key.startsWith('volumeData_')) {
+          keysToRemove.push(key);
+        }
+      }
+
+      if (keysToRemove.length > 0) {
+        await chrome.storage.local.remove(keysToRemove);
+      }
+
+      loadScannedVideosList();
+    } catch (error) {
+      console.error('全データ削除エラー:', error);
+    }
+  }
+
+  var subtitleScan = /*#__PURE__*/Object.freeze({
+    __proto__: null,
+    checkAndStartSubtitleScan: checkAndStartSubtitleScan,
+    clearAllScannedVideos: clearAllScannedVideos,
+    deleteScannedVideo: deleteScannedVideo,
+    getOwnTabId: getOwnTabId,
+    loadScannedVideosList: loadScannedVideosList,
+    loadSubtitleScanTargets: loadSubtitleScanTargets,
+    openYouTubeVideo: openYouTubeVideo,
+    proceedToNextSubtitleScanVideo: proceedToNextSubtitleScanVideo,
+    processSubtitleScanVideo: processSubtitleScanVideo,
+    recordSubtitleScanResult: recordSubtitleScanResult,
+    renderScannedVideosList: renderScannedVideosList,
+    reportSubtitlesUnavailable: reportSubtitlesUnavailable,
+    restoreSubtitleScanPanelState: restoreSubtitleScanPanelState,
+    setSubtitleScanStatus: setSubtitleScanStatus,
+    startSubtitleScan: startSubtitleScan,
+    stopSubtitleScan: stopSubtitleScan,
+    updateSubtitleScanButtons: updateSubtitleScanButtons,
+    waitForPlayerAndProcessSubtitle: waitForPlayerAndProcessSubtitle
+  });
+
+  function updatePlaylistUI() {
+    if (!state.volumeGraphContainer) return;
+
+    const autoScanBtn = state.volumeGraphContainer.querySelector('#vdg-auto-scan-btn');
+    const playlistInfo = state.volumeGraphContainer.querySelector('#vdg-playlist-info');
+
+    if (!isInPlaylist()) {
+      if (autoScanBtn) autoScanBtn.classList.add('hidden');
+      if (playlistInfo) playlistInfo.textContent = '';
+      return;
+    }
+
+    if (autoScanBtn) autoScanBtn.classList.remove('hidden');
+
+    const info = getPlaylistInfo();
+    if (info && playlistInfo) {
+      playlistInfo.textContent = `${info.currentIndex + 1}/${info.total}`;
+    }
+  }
+
+  async function startAutoScan() {
+    if (!isInPlaylist()) {
+      console.log('自動スキャン: 再生リスト外では使用できません');
+      return;
+    }
+
+    state.isAutoScanMode = true;
+    state.autoScanStopRequested = false;
+
+    const autoScanBtn = state.volumeGraphContainer?.querySelector('#vdg-auto-scan-btn');
+    if (autoScanBtn) {
+      autoScanBtn.classList.add('auto-scanning');
+      autoScanBtn.textContent = '停止';
+    }
+
+    console.log('自動スキャン開始');
+
+    const alreadyScanned = await isCurrentVideoScanned();
+    if (alreadyScanned) {
+      console.log('現在の動画はスキャン済み、次の動画へ移動');
+      proceedToNextVideoOrFinish();
+    } else {
+      startDirectScan();
+    }
+  }
+
+  function stopAutoScan() {
+    state.isAutoScanMode = false;
+    state.autoScanStopRequested = true;
+
+    const autoScanBtn = state.volumeGraphContainer?.querySelector('#vdg-auto-scan-btn');
+    if (autoScanBtn) {
+      autoScanBtn.classList.remove('auto-scanning');
+      autoScanBtn.textContent = '自動';
+    }
+
+    stopDirectScan();
+    chrome.runtime.sendMessage({ type: 'STOP_SCAN' });
+
+    console.log('自動スキャン停止');
+  }
+
+  function proceedToNextVideoOrFinish() {
+    if (!state.isAutoScanMode || state.autoScanStopRequested) {
+      return;
+    }
+
+    const info = getPlaylistInfo();
+    if (!info) {
+      stopAutoScan();
+      return;
+    }
+
+    if (info.currentIndex >= info.total - 1) {
+      console.log('自動スキャン完了: 再生リストの最後に到達');
+      stopAutoScan();
+      return;
+    }
+
+    console.log(`次の動画へ移動 (${info.currentIndex + 1}/${info.total})`);
+
+    setTimeout(() => {
+      if (state.isAutoScanMode && !state.autoScanStopRequested) {
+        goToNextVideo();
+      }
+    }, 1500);
   }
 
   let highlightPanel = null;
@@ -1350,20 +1991,430 @@
   // 起動時に古いデータをクリーンアップ
   setTimeout(cleanupOldHighlightData, 6000);
 
-  function ensurePageBridge() {
-    if (state.pageBridgeReady) return state.pageBridgeReady;
-    state.pageBridgeReady = new Promise((resolve, reject) => {
-      const script = document.createElement('script');
-      script.src = chrome.runtime.getURL('page-bridge.js');
-      script.onload = () => { script.remove(); resolve(); };
-      script.onerror = () => {
-        script.remove();
-        state.pageBridgeReady = null;
-        reject(new Error('page-bridge.jsのロードに失敗しました'));
-      };
-      document.documentElement.appendChild(script);
+  let subtitlePanel = null;
+  let subtitlePanelVisible = false;
+
+  function toggleSubtitlePanel() {
+    if (subtitlePanelVisible) {
+      hideSubtitlePanel();
+    } else {
+      showSubtitlePanel();
+    }
+  }
+
+  async function showSubtitlePanel() {
+    // 同一位置の他パネルと排他
+    if (isChatSearchPanelVisible()) {
+      hideChatSearchPanel();
+    }
+    if (isHighlightPanelVisible()) {
+      hideHighlightPanel();
+    }
+
+    if (!subtitlePanel) {
+      createSubtitlePanel();
+    }
+    subtitlePanel.classList.add('visible');
+    subtitlePanelVisible = true;
+    updateTriggerButtonState();
+
+    // 字幕トラックを自動取得
+    const videoId = getVideoId();
+    if (videoId) {
+      await fetchSubtitleTracks(videoId);
+    }
+  }
+
+  function hideSubtitlePanel() {
+    if (subtitlePanel) {
+      subtitlePanel.classList.remove('visible');
+    }
+    subtitlePanelVisible = false;
+    updateTriggerButtonState();
+  }
+
+  function isSubtitlePanelVisible() {
+    return subtitlePanelVisible;
+  }
+
+  function createSubtitlePanel() {
+    if (subtitlePanel) return;
+
+    subtitlePanel = document.createElement('div');
+    subtitlePanel.id = 'ycs-subtitle-panel';
+    subtitlePanel.innerHTML = `
+    <style>
+      #ycs-subtitle-panel {
+        position: fixed;
+        bottom: 140px;
+        right: 70px;
+        z-index: 9997;
+        width: 400px;
+        max-height: 550px;
+        background: rgba(20, 20, 20, 0.95);
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+        font-family: 'Segoe UI', 'Hiragino Sans', sans-serif;
+        font-size: 13px;
+        color: #fff;
+        display: none;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      #ycs-subtitle-panel.visible {
+        display: flex !important;
+      }
+      .stp-header {
+        padding: 12px 16px;
+        background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .stp-header-title {
+        font-weight: 600;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .stp-close-btn {
+        background: rgba(255,255,255,0.2);
+        border: none;
+        color: white;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        cursor: pointer;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .stp-close-btn:hover {
+        background: rgba(255,255,255,0.3);
+      }
+      .stp-content {
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        overflow-y: auto;
+        max-height: 460px;
+      }
+      .stp-controls {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .stp-lang-select {
+        flex: 1;
+        background: #333;
+        border: 1px solid #444;
+        border-radius: 6px;
+        color: #fff;
+        padding: 6px 10px;
+        font-size: 12px;
+      }
+      .stp-btn {
+        padding: 6px 14px;
+        border: none;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .stp-btn-primary {
+        background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
+        color: white;
+      }
+      .stp-btn-primary:hover {
+        filter: brightness(1.1);
+      }
+      .stp-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .stp-search-row {
+        display: flex;
+        gap: 8px;
+      }
+      .stp-search-input {
+        flex: 1;
+        background: #333;
+        border: 1px solid #444;
+        border-radius: 6px;
+        color: #fff;
+        padding: 6px 10px;
+        font-size: 12px;
+      }
+      .stp-search-input::placeholder {
+        color: #888;
+      }
+      .stp-status {
+        font-size: 12px;
+        color: #888;
+        text-align: center;
+        padding: 4px;
+      }
+      .stp-status.loading {
+        color: #a78bfa;
+      }
+      .stp-results {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        max-height: 340px;
+        overflow-y: auto;
+      }
+      .stp-result-item {
+        display: flex;
+        gap: 8px;
+        padding: 6px 8px;
+        background: #2a2a2a;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background 0.2s;
+        align-items: flex-start;
+      }
+      .stp-result-item:hover {
+        background: #3a3a3a;
+      }
+      .stp-result-time {
+        color: #a78bfa;
+        font-family: monospace;
+        font-size: 11px;
+        flex-shrink: 0;
+        width: 58px;
+        text-align: right;
+      }
+      .stp-result-text {
+        flex: 1;
+        font-size: 12px;
+        color: #ddd;
+        line-height: 1.4;
+      }
+      .stp-empty {
+        text-align: center;
+        color: #888;
+        padding: 20px;
+        font-size: 12px;
+      }
+      .stp-load-more {
+        text-align: center;
+        color: #aaa;
+        padding: 8px;
+        font-size: 12px;
+        cursor: pointer;
+        border-top: 1px solid #444;
+        margin-top: 4px;
+      }
+      .stp-load-more:hover {
+        color: #fff;
+        background: #444;
+      }
+    </style>
+    <div class="stp-header">
+      <span class="stp-header-title">📝 字幕取得</span>
+      <button class="stp-close-btn" id="stp-close-btn">×</button>
+    </div>
+    <div class="stp-content">
+      <div class="stp-controls">
+        <select class="stp-lang-select" id="stp-lang-select">
+          <option value="">字幕トラックを読み込み中...</option>
+        </select>
+        <button class="stp-btn stp-btn-primary" id="stp-fetch-btn" disabled>取得</button>
+      </div>
+      <div class="stp-search-row">
+        <input type="text" class="stp-search-input" id="stp-search-input" placeholder="字幕内を検索...">
+      </div>
+      <div class="stp-status" id="stp-status">字幕トラックを読み込み中...</div>
+      <div class="stp-results" id="stp-results">
+        <div class="stp-empty">字幕がここに表示されます</div>
+      </div>
+    </div>
+  `;
+
+    document.body.appendChild(subtitlePanel);
+
+    // イベントリスナー設定
+    subtitlePanel.querySelector('#stp-close-btn').addEventListener('click', hideSubtitlePanel);
+    subtitlePanel.querySelector('#stp-fetch-btn').addEventListener('click', () => {
+      const videoId = getVideoId();
+      if (videoId) fetchSubtitleContent(videoId);
     });
-    return state.pageBridgeReady;
+    subtitlePanel.querySelector('#stp-search-input').addEventListener('input', filterSubtitleResults);
+  }
+
+  async function fetchSubtitleTracks(videoId) {
+    const statusEl = subtitlePanel?.querySelector('#stp-status');
+    const selectEl = subtitlePanel?.querySelector('#stp-lang-select');
+    const fetchBtn = subtitlePanel?.querySelector('#stp-fetch-btn');
+
+    if (statusEl) {
+      statusEl.textContent = '字幕トラックを読み込み中...';
+      statusEl.classList.add('loading');
+    }
+
+    try {
+      // ページコンテキストのytInitialPlayerResponseから字幕トラックデータを取得
+      const captionTracks = await getCaptionTracksFromPage();
+      state.currentCaptionTracks = captionTracks;
+
+      if (selectEl) {
+        if (captionTracks.length === 0) {
+          selectEl.innerHTML = '<option value="">字幕がありません</option>';
+          if (fetchBtn) fetchBtn.disabled = true;
+          if (statusEl) {
+            statusEl.textContent = 'この動画には字幕がありません';
+            statusEl.classList.remove('loading');
+          }
+          return;
+        }
+
+        selectEl.innerHTML = '';
+        let jaOption = null;
+        captionTracks.forEach(track => {
+          const option = document.createElement('option');
+          option.value = track.languageCode || '';
+          option.dataset.lang = track.languageCode || '';
+          option.textContent = (track.name || track.languageCode || '') + (track.kind === 'asr' ? ' (自動生成)' : '');
+          selectEl.appendChild(option);
+          if (track.languageCode === 'ja' && !jaOption) jaOption = option;
+        });
+
+        // 日本語を優先選択
+        if (jaOption) jaOption.selected = true;
+
+        if (fetchBtn) fetchBtn.disabled = false;
+      }
+
+      if (statusEl) {
+        statusEl.textContent = `${captionTracks.length}件の字幕トラックが見つかりました`;
+        statusEl.classList.remove('loading');
+      }
+
+      // トラックが見つかったら自動で字幕を取得
+      await fetchSubtitleContent(videoId);
+    } catch (error) {
+      console.error('字幕トラック取得エラー:', error);
+      if (statusEl) {
+        statusEl.textContent = 'エラー: ' + error.message;
+        statusEl.classList.remove('loading');
+      }
+      if (selectEl) {
+        selectEl.innerHTML = '<option value="">取得エラー</option>';
+      }
+      if (fetchBtn) fetchBtn.disabled = true;
+    }
+  }
+
+  async function fetchSubtitleContent(videoId) {
+    const statusEl = subtitlePanel?.querySelector('#stp-status');
+    const fetchBtn = subtitlePanel?.querySelector('#stp-fetch-btn');
+    const selectEl = subtitlePanel?.querySelector('#stp-lang-select');
+
+    if (!videoId) return;
+
+    if (fetchBtn) fetchBtn.disabled = true;
+    if (statusEl) {
+      statusEl.textContent = '字幕を取得中...';
+      statusEl.classList.add('loading');
+    }
+
+    try {
+      const selectedLang = selectEl?.value || 'ja';
+
+      // InnerTube player APIで最新のbaseUrlを取得してtimedtextをfetch
+      state.currentSubtitles = await fetchTimedText(videoId, selectedLang);
+
+      if (statusEl) {
+        statusEl.textContent = `${state.currentSubtitles.length}件の字幕を取得しました`;
+        statusEl.classList.remove('loading');
+      }
+
+      renderSubtitleResults(state.currentSubtitles);
+
+      // サーバーに自動送信
+      sendSubtitlesToServer(videoId, selectedLang, state.currentSubtitles);
+    } catch (error) {
+      console.error('字幕取得エラー:', error);
+      if (statusEl) {
+        statusEl.textContent = 'エラー: ' + error.message;
+        statusEl.classList.remove('loading');
+      }
+    } finally {
+      if (fetchBtn) fetchBtn.disabled = false;
+    }
+  }
+
+  function filterSubtitleResults() {
+    const query = subtitlePanel?.querySelector('#stp-search-input')?.value?.trim().toLowerCase() || '';
+    if (!query) {
+      renderSubtitleResults(state.currentSubtitles);
+      return;
+    }
+    const filtered = state.currentSubtitles.filter(sub => sub.text.toLowerCase().includes(query));
+    renderSubtitleResults(filtered);
+  }
+
+  function renderSubtitleResults(subtitles) {
+    const resultsEl = subtitlePanel?.querySelector('#stp-results');
+    if (!resultsEl) return;
+
+    if (subtitles.length === 0) {
+      resultsEl.innerHTML = '<div class="stp-empty">字幕がありません</div>';
+      return;
+    }
+
+    const CHUNK_SIZE = 500;
+    resultsEl.innerHTML = '';
+    resultsEl._subtitles = subtitles;
+    resultsEl._rendered = 0;
+
+    appendSubtitleChunk(resultsEl, CHUNK_SIZE);
+  }
+
+  function appendSubtitleChunk(resultsEl, chunkSize) {
+    const subtitles = resultsEl._subtitles;
+    const start = resultsEl._rendered;
+    const end = Math.min(start + chunkSize, subtitles.length);
+
+    const fragment = document.createDocumentFragment();
+    for (let i = start; i < end; i++) {
+      const sub = subtitles[i];
+      const sec = Math.floor(sub.start);
+      const item = document.createElement('div');
+      item.className = 'stp-result-item';
+      item.dataset.time = sec;
+      item.innerHTML = `<span class="stp-result-time">${formatSubtitleTime(sec)}</span><span class="stp-result-text">${escapeHtml(sub.text)}</span>`;
+      item.addEventListener('click', () => {
+        if (state.videoElement && !isNaN(sec)) {
+          state.videoElement.currentTime = sec;
+        }
+      });
+      fragment.appendChild(item);
+    }
+    resultsEl._rendered = end;
+
+    // 既存の「もっと表示」ボタンがあれば削除
+    const oldBtn = resultsEl.querySelector('.stp-load-more');
+    if (oldBtn) oldBtn.remove();
+
+    resultsEl.appendChild(fragment);
+
+    // まだ残りがあれば「もっと表示」ボタンを追加
+    if (end < subtitles.length) {
+      const remaining = subtitles.length - end;
+      const btn = document.createElement('div');
+      btn.className = 'stp-load-more';
+      btn.textContent = `もっと表示（残り ${remaining} 件）`;
+      btn.addEventListener('click', () => {
+        appendSubtitleChunk(resultsEl, chunkSize);
+      });
+      resultsEl.appendChild(btn);
+    }
   }
 
   let chatSearchPanel = null;
@@ -2152,1533 +3203,6 @@
   // 起動時に古いデータをクリーンアップ
   setTimeout(cleanupOldChatData, 5000);
 
-  let subtitlePanel = null;
-  let subtitlePanelVisible = false;
-
-  function toggleSubtitlePanel() {
-    if (subtitlePanelVisible) {
-      hideSubtitlePanel();
-    } else {
-      showSubtitlePanel();
-    }
-  }
-
-  async function showSubtitlePanel() {
-    // 同一位置の他パネルと排他
-    if (isChatSearchPanelVisible()) {
-      hideChatSearchPanel();
-    }
-    if (isHighlightPanelVisible()) {
-      hideHighlightPanel();
-    }
-
-    if (!subtitlePanel) {
-      createSubtitlePanel();
-    }
-    subtitlePanel.classList.add('visible');
-    subtitlePanelVisible = true;
-    updateTriggerButtonState();
-
-    // 字幕トラックを自動取得
-    const videoId = getVideoId();
-    if (videoId) {
-      await fetchSubtitleTracks(videoId);
-    }
-  }
-
-  function hideSubtitlePanel() {
-    if (subtitlePanel) {
-      subtitlePanel.classList.remove('visible');
-    }
-    subtitlePanelVisible = false;
-    updateTriggerButtonState();
-  }
-
-  function isSubtitlePanelVisible() {
-    return subtitlePanelVisible;
-  }
-
-  function createSubtitlePanel() {
-    if (subtitlePanel) return;
-
-    subtitlePanel = document.createElement('div');
-    subtitlePanel.id = 'ycs-subtitle-panel';
-    subtitlePanel.innerHTML = `
-    <style>
-      #ycs-subtitle-panel {
-        position: fixed;
-        bottom: 140px;
-        right: 70px;
-        z-index: 9997;
-        width: 400px;
-        max-height: 550px;
-        background: rgba(20, 20, 20, 0.95);
-        border-radius: 12px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-        font-family: 'Segoe UI', 'Hiragino Sans', sans-serif;
-        font-size: 13px;
-        color: #fff;
-        display: none;
-        flex-direction: column;
-        overflow: hidden;
-      }
-      #ycs-subtitle-panel.visible {
-        display: flex !important;
-      }
-      .stp-header {
-        padding: 12px 16px;
-        background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-      }
-      .stp-header-title {
-        font-weight: 600;
-        font-size: 14px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-      .stp-close-btn {
-        background: rgba(255,255,255,0.2);
-        border: none;
-        color: white;
-        width: 24px;
-        height: 24px;
-        border-radius: 50%;
-        cursor: pointer;
-        font-size: 14px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-      .stp-close-btn:hover {
-        background: rgba(255,255,255,0.3);
-      }
-      .stp-content {
-        padding: 12px;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        overflow-y: auto;
-        max-height: 460px;
-      }
-      .stp-controls {
-        display: flex;
-        gap: 8px;
-        align-items: center;
-      }
-      .stp-lang-select {
-        flex: 1;
-        background: #333;
-        border: 1px solid #444;
-        border-radius: 6px;
-        color: #fff;
-        padding: 6px 10px;
-        font-size: 12px;
-      }
-      .stp-btn {
-        padding: 6px 14px;
-        border: none;
-        border-radius: 6px;
-        font-size: 12px;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.2s;
-      }
-      .stp-btn-primary {
-        background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
-        color: white;
-      }
-      .stp-btn-primary:hover {
-        filter: brightness(1.1);
-      }
-      .stp-btn:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-      }
-      .stp-search-row {
-        display: flex;
-        gap: 8px;
-      }
-      .stp-search-input {
-        flex: 1;
-        background: #333;
-        border: 1px solid #444;
-        border-radius: 6px;
-        color: #fff;
-        padding: 6px 10px;
-        font-size: 12px;
-      }
-      .stp-search-input::placeholder {
-        color: #888;
-      }
-      .stp-status {
-        font-size: 12px;
-        color: #888;
-        text-align: center;
-        padding: 4px;
-      }
-      .stp-status.loading {
-        color: #a78bfa;
-      }
-      .stp-results {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-        max-height: 340px;
-        overflow-y: auto;
-      }
-      .stp-result-item {
-        display: flex;
-        gap: 8px;
-        padding: 6px 8px;
-        background: #2a2a2a;
-        border-radius: 4px;
-        cursor: pointer;
-        transition: background 0.2s;
-        align-items: flex-start;
-      }
-      .stp-result-item:hover {
-        background: #3a3a3a;
-      }
-      .stp-result-time {
-        color: #a78bfa;
-        font-family: monospace;
-        font-size: 11px;
-        flex-shrink: 0;
-        width: 58px;
-        text-align: right;
-      }
-      .stp-result-text {
-        flex: 1;
-        font-size: 12px;
-        color: #ddd;
-        line-height: 1.4;
-      }
-      .stp-empty {
-        text-align: center;
-        color: #888;
-        padding: 20px;
-        font-size: 12px;
-      }
-      .stp-load-more {
-        text-align: center;
-        color: #aaa;
-        padding: 8px;
-        font-size: 12px;
-        cursor: pointer;
-        border-top: 1px solid #444;
-        margin-top: 4px;
-      }
-      .stp-load-more:hover {
-        color: #fff;
-        background: #444;
-      }
-    </style>
-    <div class="stp-header">
-      <span class="stp-header-title">📝 字幕取得</span>
-      <button class="stp-close-btn" id="stp-close-btn">×</button>
-    </div>
-    <div class="stp-content">
-      <div class="stp-controls">
-        <select class="stp-lang-select" id="stp-lang-select">
-          <option value="">字幕トラックを読み込み中...</option>
-        </select>
-        <button class="stp-btn stp-btn-primary" id="stp-fetch-btn" disabled>取得</button>
-      </div>
-      <div class="stp-search-row">
-        <input type="text" class="stp-search-input" id="stp-search-input" placeholder="字幕内を検索...">
-      </div>
-      <div class="stp-status" id="stp-status">字幕トラックを読み込み中...</div>
-      <div class="stp-results" id="stp-results">
-        <div class="stp-empty">字幕がここに表示されます</div>
-      </div>
-    </div>
-  `;
-
-    document.body.appendChild(subtitlePanel);
-
-    // イベントリスナー設定
-    subtitlePanel.querySelector('#stp-close-btn').addEventListener('click', hideSubtitlePanel);
-    subtitlePanel.querySelector('#stp-fetch-btn').addEventListener('click', () => {
-      const videoId = getVideoId();
-      if (videoId) fetchSubtitleContent(videoId);
-    });
-    subtitlePanel.querySelector('#stp-search-input').addEventListener('input', filterSubtitleResults);
-  }
-
-  async function getCaptionTracksFromPage() {
-    await ensurePageBridge();
-
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        window.removeEventListener('message', handler);
-        reject(new Error('字幕データの取得がタイムアウトしました'));
-      }, 5000);
-
-      function handler(event) {
-        if (event.source !== window || event.data?.type !== 'YCS_CAPTION_TRACKS_RESPONSE') return;
-        window.removeEventListener('message', handler);
-        clearTimeout(timeout);
-
-        if (event.data.playabilityStatus !== 'OK') {
-          reject(new Error('動画を取得できません。動画が非公開・削除済み、または年齢制限がある可能性があります'));
-          return;
-        }
-        resolve(event.data.tracks);
-      }
-
-      window.addEventListener('message', handler);
-      window.postMessage({ type: 'YCS_GET_CAPTION_TRACKS' }, '*');
-    });
-  }
-
-  async function fetchSubtitleTracks(videoId) {
-    const statusEl = subtitlePanel?.querySelector('#stp-status');
-    const selectEl = subtitlePanel?.querySelector('#stp-lang-select');
-    const fetchBtn = subtitlePanel?.querySelector('#stp-fetch-btn');
-
-    if (statusEl) {
-      statusEl.textContent = '字幕トラックを読み込み中...';
-      statusEl.classList.add('loading');
-    }
-
-    try {
-      // ページコンテキストのytInitialPlayerResponseから字幕トラックデータを取得
-      const captionTracks = await getCaptionTracksFromPage();
-      state.currentCaptionTracks = captionTracks;
-
-      if (selectEl) {
-        if (captionTracks.length === 0) {
-          selectEl.innerHTML = '<option value="">字幕がありません</option>';
-          if (fetchBtn) fetchBtn.disabled = true;
-          if (statusEl) {
-            statusEl.textContent = 'この動画には字幕がありません';
-            statusEl.classList.remove('loading');
-          }
-          return;
-        }
-
-        selectEl.innerHTML = '';
-        let jaOption = null;
-        captionTracks.forEach(track => {
-          const option = document.createElement('option');
-          option.value = track.languageCode || '';
-          option.dataset.lang = track.languageCode || '';
-          option.textContent = (track.name || track.languageCode || '') + (track.kind === 'asr' ? ' (自動生成)' : '');
-          selectEl.appendChild(option);
-          if (track.languageCode === 'ja' && !jaOption) jaOption = option;
-        });
-
-        // 日本語を優先選択
-        if (jaOption) jaOption.selected = true;
-
-        if (fetchBtn) fetchBtn.disabled = false;
-      }
-
-      if (statusEl) {
-        statusEl.textContent = `${captionTracks.length}件の字幕トラックが見つかりました`;
-        statusEl.classList.remove('loading');
-      }
-
-      // トラックが見つかったら自動で字幕を取得
-      await fetchSubtitleContent(videoId);
-    } catch (error) {
-      console.error('字幕トラック取得エラー:', error);
-      if (statusEl) {
-        statusEl.textContent = 'エラー: ' + error.message;
-        statusEl.classList.remove('loading');
-      }
-      if (selectEl) {
-        selectEl.innerHTML = '<option value="">取得エラー</option>';
-      }
-      if (fetchBtn) fetchBtn.disabled = true;
-    }
-  }
-
-  async function fetchSubtitleContent(videoId) {
-    const statusEl = subtitlePanel?.querySelector('#stp-status');
-    const fetchBtn = subtitlePanel?.querySelector('#stp-fetch-btn');
-    const selectEl = subtitlePanel?.querySelector('#stp-lang-select');
-
-    if (!videoId) return;
-
-    if (fetchBtn) fetchBtn.disabled = true;
-    if (statusEl) {
-      statusEl.textContent = '字幕を取得中...';
-      statusEl.classList.add('loading');
-    }
-
-    try {
-      const selectedLang = selectEl?.value || 'ja';
-
-      // InnerTube player APIで最新のbaseUrlを取得してtimedtextをfetch
-      state.currentSubtitles = await fetchTimedText(videoId, selectedLang);
-
-      if (statusEl) {
-        statusEl.textContent = `${state.currentSubtitles.length}件の字幕を取得しました`;
-        statusEl.classList.remove('loading');
-      }
-
-      renderSubtitleResults(state.currentSubtitles);
-
-      // サーバーに自動送信
-      sendSubtitlesToServer(videoId, selectedLang, state.currentSubtitles);
-    } catch (error) {
-      console.error('字幕取得エラー:', error);
-      if (statusEl) {
-        statusEl.textContent = 'エラー: ' + error.message;
-        statusEl.classList.remove('loading');
-      }
-    } finally {
-      if (fetchBtn) fetchBtn.disabled = false;
-    }
-  }
-
-  // InnerTube player API経由で最新の字幕を取得（page-bridge.js経由）
-  // 毎回InnerTube APIを呼ぶことでbaseUrlの署名期限切れを回避する
-  function fetchTimedText(videoId, lang) {
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        window.removeEventListener('message', handler);
-        reject(new Error('字幕の取得がタイムアウトしました'));
-      }, 15000);
-
-      function handler(event) {
-        if (event.source !== window || event.data?.type !== 'YCS_TIMEDTEXT_RESPONSE') return;
-        window.removeEventListener('message', handler);
-        clearTimeout(timeout);
-        if (event.data.error) {
-          reject(new Error(event.data.error));
-        } else {
-          resolve(event.data.segments);
-        }
-      }
-
-      window.addEventListener('message', handler);
-      window.postMessage({ type: 'YCS_FETCH_TIMEDTEXT', videoId, lang }, '*');
-    });
-  }
-
-  function filterSubtitleResults() {
-    const query = subtitlePanel?.querySelector('#stp-search-input')?.value?.trim().toLowerCase() || '';
-    if (!query) {
-      renderSubtitleResults(state.currentSubtitles);
-      return;
-    }
-    const filtered = state.currentSubtitles.filter(sub => sub.text.toLowerCase().includes(query));
-    renderSubtitleResults(filtered);
-  }
-
-  function renderSubtitleResults(subtitles) {
-    const resultsEl = subtitlePanel?.querySelector('#stp-results');
-    if (!resultsEl) return;
-
-    if (subtitles.length === 0) {
-      resultsEl.innerHTML = '<div class="stp-empty">字幕がありません</div>';
-      return;
-    }
-
-    const CHUNK_SIZE = 500;
-    resultsEl.innerHTML = '';
-    resultsEl._subtitles = subtitles;
-    resultsEl._rendered = 0;
-
-    appendSubtitleChunk(resultsEl, CHUNK_SIZE);
-  }
-
-  function appendSubtitleChunk(resultsEl, chunkSize) {
-    const subtitles = resultsEl._subtitles;
-    const start = resultsEl._rendered;
-    const end = Math.min(start + chunkSize, subtitles.length);
-
-    const fragment = document.createDocumentFragment();
-    for (let i = start; i < end; i++) {
-      const sub = subtitles[i];
-      const sec = Math.floor(sub.start);
-      const item = document.createElement('div');
-      item.className = 'stp-result-item';
-      item.dataset.time = sec;
-      item.innerHTML = `<span class="stp-result-time">${formatSubtitleTime(sec)}</span><span class="stp-result-text">${escapeHtml(sub.text)}</span>`;
-      item.addEventListener('click', () => {
-        if (state.videoElement && !isNaN(sec)) {
-          state.videoElement.currentTime = sec;
-        }
-      });
-      fragment.appendChild(item);
-    }
-    resultsEl._rendered = end;
-
-    // 既存の「もっと表示」ボタンがあれば削除
-    const oldBtn = resultsEl.querySelector('.stp-load-more');
-    if (oldBtn) oldBtn.remove();
-
-    resultsEl.appendChild(fragment);
-
-    // まだ残りがあれば「もっと表示」ボタンを追加
-    if (end < subtitles.length) {
-      const remaining = subtitles.length - end;
-      const btn = document.createElement('div');
-      btn.className = 'stp-load-more';
-      btn.textContent = `もっと表示（残り ${remaining} 件）`;
-      btn.addEventListener('click', () => {
-        appendSubtitleChunk(resultsEl, chunkSize);
-      });
-      resultsEl.appendChild(btn);
-    }
-  }
-
-  let lyricsPastePopup = null;
-  let lyricsPastePopupCleanup = null;
-  let songCandidatePopup = null;
-  let songCandidatePopupCleanup = null;
-  let songCandidateRequestSeq = 0;
-  let suggestDebounceTimer = null;
-  let suggestAbortController = null;
-  let popupSelectedIndex = -1;
-  // ポップアップからのinsertText直後にinputイベントでサジェストが再発火するのを防ぐ
-  let suggestInsertGuard = false;
-
-  function getSongCandidateRequestSeq() { return songCandidateRequestSeq; }
-
-  function getSelectableItems(popup) {
-    return popup.querySelectorAll('.vdg-paste-popup-item:not(.message)');
-  }
-
-  function updatePopupSelection(popup, index) {
-    const items = getSelectableItems(popup);
-    items.forEach(el => el.classList.remove('selected'));
-    popupSelectedIndex = index;
-    if (index >= 0 && index < items.length) {
-      items[index].classList.add('selected');
-      items[index].scrollIntoView({ block: 'nearest' });
-    }
-  }
-
-  function isLyricsPastePopupOpen() {
-    return !!lyricsPastePopup;
-  }
-
-  function isSongCandidatePopupOpen() {
-    return !!songCandidatePopup;
-  }
-
-  function buildLyricsSplitCandidates(text) {
-    const tokens = text.trim().split(/\s+/);
-    // 単独の「歌詞」トークンより前の部分を「アーティスト名+曲名」とみなす
-    // （「歌詞検索」のような複合語は区切りとして扱わない）
-    const idx = tokens.indexOf('歌詞');
-    if (idx < 2) return null;
-    const parts = tokens.slice(0, idx);
-    const candidates = [];
-    for (let k = parts.length - 1; k >= 1; k--) {
-      const artist = parts.slice(0, k).join(' ');
-      const title = parts.slice(k).join(' ');
-      candidates.push(`${title} / ${artist}`);
-    }
-    return candidates;
-  }
-
-  function closeLyricsPastePopup() {
-    if (lyricsPastePopupCleanup) {
-      lyricsPastePopupCleanup();
-      lyricsPastePopupCleanup = null;
-    }
-    if (lyricsPastePopup) {
-      lyricsPastePopup.remove();
-      lyricsPastePopup = null;
-    }
-  }
-
-  function showLyricsPastePopup(input, candidates, rawText) {
-    closeLyricsPastePopup();
-    closeSongCandidatePopup();
-    if (!state.volumeGraphContainer) return;
-
-    // 候補値は属性に埋め込まずインデックスで参照する（escapeHtmlは引用符をエスケープしないため）
-    const values = [...candidates, rawText];
-    const popup = document.createElement('div');
-    popup.className = 'vdg-paste-popup';
-    popup.innerHTML = `
-    <div class="vdg-paste-popup-title">変換候補（クリックで挿入）</div>
-    ${candidates.map((c, i) => `<div class="vdg-paste-popup-item" data-index="${i}">${escapeHtml(c)}</div>`).join('')}
-    <div class="vdg-paste-popup-item raw" data-index="${candidates.length}">そのまま貼り付け</div>
-  `;
-
-    // 入力欄の直下に配置（グラフコンテナ基準の絶対配置）
-    // 一覧のスクロールに追従し、コンテナ右端からはみ出さないようにクランプする
-    const listEl = state.volumeGraphContainer.querySelector('#vdg-ts-list');
-    const reposition = () => {
-      const containerRect = state.volumeGraphContainer.getBoundingClientRect();
-      const inputRect = input.getBoundingClientRect();
-      const maxLeft = containerRect.width - popup.offsetWidth - 4;
-      popup.style.left = `${Math.max(0, Math.min(inputRect.left - containerRect.left, maxLeft))}px`;
-      popup.style.top = `${inputRect.bottom - containerRect.top + 2}px`;
-    };
-
-    // execCommandならネイティブのinputイベント発火とUndo履歴が維持される
-    const insertAndClose = (value) => {
-      closeLyricsPastePopup();
-      input.focus({ preventScroll: true });
-      document.execCommand('insertText', false, value);
-    };
-
-    popup.addEventListener('mousedown', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const item = e.target.closest('.vdg-paste-popup-item');
-      if (item) {
-        insertAndClose(values[parseInt(item.dataset.index)]);
-      }
-    });
-
-    popupSelectedIndex = -1;
-    const onKeydown = (e) => {
-      const items = getSelectableItems(popup);
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        e.stopPropagation();
-        updatePopupSelection(popup, popupSelectedIndex < items.length - 1 ? popupSelectedIndex + 1 : 0);
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        e.stopPropagation();
-        updatePopupSelection(popup, popupSelectedIndex > 0 ? popupSelectedIndex - 1 : items.length - 1);
-      } else if (e.key === 'Enter' && popupSelectedIndex >= 0 && popupSelectedIndex < items.length) {
-        e.preventDefault();
-        e.stopPropagation();
-        const idx = parseInt(items[popupSelectedIndex].dataset.index);
-        insertAndClose(values[idx]);
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        e.stopPropagation();
-        insertAndClose(rawText);
-      } else {
-        closeLyricsPastePopup();
-      }
-    };
-    const onOutsideMousedown = (e) => {
-      if (popup.contains(e.target) || e.target === input) return;
-      insertAndClose(rawText);
-    };
-
-    input.addEventListener('keydown', onKeydown, true);
-    document.addEventListener('mousedown', onOutsideMousedown, true);
-    listEl?.addEventListener('scroll', reposition);
-    lyricsPastePopupCleanup = () => {
-      input.removeEventListener('keydown', onKeydown, true);
-      document.removeEventListener('mousedown', onOutsideMousedown, true);
-      listEl?.removeEventListener('scroll', reposition);
-    };
-
-    lyricsPastePopup = popup;
-    state.volumeGraphContainer.appendChild(popup);
-    reposition();
-  }
-
-  function closeSongCandidatePopup() {
-    songCandidateRequestSeq++;
-    if (songCandidatePopupCleanup) {
-      songCandidatePopupCleanup();
-      songCandidatePopupCleanup = null;
-    }
-    if (songCandidatePopup) {
-      songCandidatePopup.remove();
-      songCandidatePopup = null;
-    }
-  }
-
-  function openSongCandidatePopup(input, items) {
-    closeSongCandidatePopup();
-    closeLyricsPastePopup();
-    if (!state.volumeGraphContainer) return;
-
-    const popup = document.createElement('div');
-    popup.className = 'vdg-paste-popup';
-    popup.innerHTML = `
-    <div class="vdg-paste-popup-title">曲名候補（クリックで挿入）</div>
-    ${items.map((item, i) => item.type === 'candidate' ? `
-      <div class="vdg-paste-popup-item" data-index="${i}">${escapeHtml(item.label)}${item.artist ? `<span class="artist">${escapeHtml(item.artist)}</span>` : ''}<span class="similarity">${Math.round((item.similarity || 0) * 100)}%</span></div>
-    ` : item.type === 'action' ? `
-      <div class="vdg-paste-popup-item action" data-action-index="${i}">${escapeHtml(item.label)}</div>
-    ` : `
-      <div class="vdg-paste-popup-item message">${escapeHtml(item.label)}</div>
-    `).join('')}
-  `;
-
-    const listEl = state.volumeGraphContainer.querySelector('#vdg-ts-list');
-    const reposition = () => {
-      const containerRect = state.volumeGraphContainer.getBoundingClientRect();
-      const inputRect = input.getBoundingClientRect();
-      const maxLeft = containerRect.width - popup.offsetWidth - 4;
-      popup.style.left = `${Math.max(0, Math.min(inputRect.left - containerRect.left, maxLeft))}px`;
-      popup.style.top = `${inputRect.bottom - containerRect.top + 2}px`;
-    };
-
-    // 候補クリック: 入力欄の内容を候補で置き換える
-    popup.addEventListener('mousedown', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const el = e.target.closest('.vdg-paste-popup-item');
-      if (!el) return;
-      if (el.dataset.actionIndex !== undefined) {
-        const selected = items[parseInt(el.dataset.actionIndex)];
-        if (selected?.action) {
-          closeSongCandidatePopup();
-          selected.action();
-        }
-        return;
-      }
-      if (el.dataset.index !== undefined) {
-        const selected = items[parseInt(el.dataset.index)];
-        const value = selected?.insertValue ?? selected?.label ?? '';
-        closeSongCandidatePopup();
-        input.focus({ preventScroll: true });
-        input.select();
-        suggestInsertGuard = true;
-        document.execCommand('insertText', false, value);
-        suggestInsertGuard = false;
-      }
-    });
-
-    popupSelectedIndex = -1;
-    const onKeydown = (e) => {
-      const selectables = getSelectableItems(popup);
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        e.stopPropagation();
-        updatePopupSelection(popup, popupSelectedIndex < selectables.length - 1 ? popupSelectedIndex + 1 : 0);
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        e.stopPropagation();
-        updatePopupSelection(popup, popupSelectedIndex > 0 ? popupSelectedIndex - 1 : selectables.length - 1);
-      } else if (e.key === 'Enter' && popupSelectedIndex >= 0 && popupSelectedIndex < selectables.length) {
-        e.preventDefault();
-        e.stopPropagation();
-        const el = selectables[popupSelectedIndex];
-        if (el.dataset.actionIndex !== undefined) {
-          const selected = items[parseInt(el.dataset.actionIndex)];
-          if (selected?.action) {
-            closeSongCandidatePopup();
-            selected.action();
-          }
-        } else if (el.dataset.index !== undefined) {
-          const selected = items[parseInt(el.dataset.index)];
-          const value = selected?.insertValue ?? selected?.label ?? '';
-          closeSongCandidatePopup();
-          input.focus({ preventScroll: true });
-          input.select();
-          suggestInsertGuard = true;
-          document.execCommand('insertText', false, value);
-          suggestInsertGuard = false;
-        }
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        e.stopPropagation();
-        closeSongCandidatePopup();
-      } else {
-        closeSongCandidatePopup();
-      }
-    };
-
-    const onOutsideMousedown = (e) => {
-      if (popup.contains(e.target) || e.target === input) return;
-      closeSongCandidatePopup();
-    };
-
-    input.addEventListener('keydown', onKeydown, true);
-    document.addEventListener('mousedown', onOutsideMousedown, true);
-    listEl?.addEventListener('scroll', reposition);
-    songCandidatePopupCleanup = () => {
-      input.removeEventListener('keydown', onKeydown, true);
-      document.removeEventListener('mousedown', onOutsideMousedown, true);
-      listEl?.removeEventListener('scroll', reposition);
-    };
-
-    songCandidatePopup = popup;
-    state.volumeGraphContainer.appendChild(popup);
-    reposition();
-  }
-
-  function cancelSongSuggest() {
-    if (suggestDebounceTimer) {
-      clearTimeout(suggestDebounceTimer);
-      suggestDebounceTimer = null;
-    }
-    if (suggestAbortController) {
-      suggestAbortController.abort();
-      suggestAbortController = null;
-    }
-  }
-
-  function onSongInputForSuggest(input) {
-    if (suggestInsertGuard) return;
-
-    cancelSongSuggest();
-
-    if (songCandidatePopup) return;
-
-    const query = input.value.trim();
-    if (query.length < 2) return;
-
-    if (!state.ycsApiToken) return;
-
-    suggestDebounceTimer = setTimeout(() => {
-      suggestDebounceTimer = null;
-      if (songCandidatePopup) return;
-      fetchAndShowSuggestions(input, query);
-    }, 300);
-  }
-
-  async function fetchAndShowSuggestions(input, query) {
-    suggestAbortController = new AbortController();
-    const seq = songCandidateRequestSeq;
-
-    try {
-      const url = `${state.ycsServerUrl}/api/extension/song-suggest?q=${encodeURIComponent(query)}`;
-      const response = await fetch(url, {
-        headers: {
-          'Accept': 'application/json',
-          'Authorization': `Bearer ${state.ycsApiToken}`,
-        },
-        signal: suggestAbortController.signal,
-      });
-
-      if (seq !== songCandidateRequestSeq) return;
-      if (!response.ok) return;
-
-      const data = await response.json();
-      if (seq !== songCandidateRequestSeq) return;
-      if (!document.activeElement || document.activeElement !== input) return;
-
-      const suggestions = data.suggestions || [];
-      if (suggestions.length === 0) return;
-
-      openSongSuggestPopup(input, suggestions);
-    } catch (e) {
-      if (e.name !== 'AbortError') {
-        console.warn('[YCS] サジェスト取得エラー:', e.message);
-      }
-    } finally {
-      suggestAbortController = null;
-    }
-  }
-
-  function openSongSuggestPopup(input, suggestions) {
-    closeSongCandidatePopup();
-    closeLyricsPastePopup();
-    if (!state.volumeGraphContainer) return;
-
-    const popup = document.createElement('div');
-    popup.className = 'vdg-paste-popup';
-    popup.innerHTML = `
-    <div class="vdg-paste-popup-title">サジェスト</div>
-    ${suggestions.map((s, i) => `
-      <div class="vdg-paste-popup-item" data-index="${i}">${escapeHtml(s.text)}${s.ts_count ? `<span class="similarity">${s.ts_count}件</span>` : ''}</div>
-    `).join('')}
-  `;
-
-    const listEl = state.volumeGraphContainer.querySelector('#vdg-ts-list');
-    const reposition = () => {
-      const containerRect = state.volumeGraphContainer.getBoundingClientRect();
-      const inputRect = input.getBoundingClientRect();
-      const maxLeft = containerRect.width - popup.offsetWidth - 4;
-      popup.style.left = `${Math.max(0, Math.min(inputRect.left - containerRect.left, maxLeft))}px`;
-      popup.style.top = `${inputRect.bottom - containerRect.top + 2}px`;
-    };
-
-    popup.addEventListener('mousedown', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const el = e.target.closest('.vdg-paste-popup-item');
-      if (!el || el.dataset.index === undefined) return;
-      const selected = suggestions[parseInt(el.dataset.index)];
-      if (!selected) return;
-      closeSongCandidatePopup();
-      input.focus({ preventScroll: true });
-      input.select();
-      suggestInsertGuard = true;
-      document.execCommand('insertText', false, selected.text);
-      suggestInsertGuard = false;
-    });
-
-    popupSelectedIndex = -1;
-    const onKeydown = (e) => {
-      const selectables = getSelectableItems(popup);
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        e.stopPropagation();
-        updatePopupSelection(popup, popupSelectedIndex < selectables.length - 1 ? popupSelectedIndex + 1 : 0);
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        e.stopPropagation();
-        updatePopupSelection(popup, popupSelectedIndex > 0 ? popupSelectedIndex - 1 : selectables.length - 1);
-      } else if (e.key === 'Enter' && popupSelectedIndex >= 0 && popupSelectedIndex < selectables.length) {
-        e.preventDefault();
-        e.stopPropagation();
-        const idx = parseInt(selectables[popupSelectedIndex].dataset.index);
-        const selected = suggestions[idx];
-        if (selected) {
-          closeSongCandidatePopup();
-          input.focus({ preventScroll: true });
-          input.select();
-          suggestInsertGuard = true;
-          document.execCommand('insertText', false, selected.text);
-          suggestInsertGuard = false;
-        }
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        e.stopPropagation();
-        closeSongCandidatePopup();
-      } else {
-        closeSongCandidatePopup();
-      }
-    };
-
-    const onOutsideMousedown = (e) => {
-      if (popup.contains(e.target) || e.target === input) return;
-      closeSongCandidatePopup();
-    };
-
-    input.addEventListener('keydown', onKeydown, true);
-    document.addEventListener('mousedown', onOutsideMousedown, true);
-    listEl?.addEventListener('scroll', reposition);
-    songCandidatePopupCleanup = () => {
-      input.removeEventListener('keydown', onKeydown, true);
-      document.removeEventListener('mousedown', onOutsideMousedown, true);
-      listEl?.removeEventListener('scroll', reposition);
-    };
-
-    songCandidatePopup = popup;
-    state.volumeGraphContainer.appendChild(popup);
-    reposition();
-  }
-
-  let subtitlePrepareFlow = null;
-
-  async function showSongCandidates(marker, threshold = null) {
-    const input = state.volumeGraphContainer?.querySelector(`.vdg-ts-text-input[data-marker-id="${marker.id}"]`);
-    if (!input) return;
-
-    // openSongCandidatePopupは開き直しのたびに内部で世代を進めるため、
-    // 自分で開いた直後の世代を控えて「外部から閉じられた/開き直された」を検出する
-    let seq;
-    const open = (items) => {
-      openSongCandidatePopup(input, items);
-      seq = getSongCandidateRequestSeq();
-    };
-    const isStale = () => seq !== getSongCandidateRequestSeq();
-
-    open([{ type: 'message', label: '候補を検索しています…' }]);
-
-    try {
-      if (!state.ycsApiToken) {
-        await loadYcsApiSettings();
-      }
-      if (!state.ycsApiToken) {
-        if (!isStale()) openSongCandidatePopup(input, [{ type: 'message', label: missingTokenMessage() }]);
-        return;
-      }
-
-      const videoId = getVideoId();
-      if (!videoId) {
-        if (!isStale()) openSongCandidatePopup(input, [{ type: 'message', label: '動画IDを取得できませんでした' }]);
-        return;
-      }
-
-      const sec = Math.floor(marker.time);
-      let result = await fetchSongCandidates(videoId, sec, threshold);
-      if (isStale()) return;
-
-      if (result.has_subtitles === false) {
-        open([{ type: 'message', label: '字幕を取得しています…' }]);
-        await ensureSubtitlesOnServer(videoId);
-        if (isStale()) return;
-        result = await fetchSongCandidates(videoId, sec, threshold);
-        if (isStale()) return;
-      }
-
-      if (result.has_fingerprint === false) {
-        openSongCandidatePopup(input, [{ type: 'message', label: 'この位置の字幕から候補を計算できませんでした（歌声の字幕が少ない可能性があります）' }]);
-        return;
-      }
-
-      const candidates = (result.candidates || []).slice(0, 5);
-      const currentThreshold = result.threshold || 0.15;
-
-      if (candidates.length === 0) {
-        if (currentThreshold > 0.05) {
-          const lowerThreshold = Math.max(0.05, Math.round((currentThreshold - 0.05) * 100) / 100);
-          openSongCandidatePopup(input, [{
-            type: 'action',
-            label: `候補が見つかりませんでした（閾値を下げて再検索）`,
-            action: () => showSongCandidates(marker, lowerThreshold),
-          }]);
-        } else {
-          openSongCandidatePopup(input, [{ type: 'message', label: '候補が見つかりませんでした' }]);
-        }
-        return;
-      }
-
-      const items = candidates.map(c => {
-        // マスタ未登録の候補は元の表記（text）を優先する
-        const title = c.song_title || c.text || c.normalized_text || '';
-        return {
-          type: 'candidate',
-          label: title,
-          artist: c.song_artist || '',
-          // 挿入値はタイムスタンプの表記慣習（「曲名 / アーティスト」）に合わせる
-          insertValue: c.song_artist ? `${title} / ${c.song_artist}` : title,
-          similarity: c.similarity,
-        };
-      });
-
-      if (candidates.length < 3 && currentThreshold > 0.05) {
-        const lowerThreshold = Math.max(0.05, Math.round((currentThreshold - 0.05) * 100) / 100);
-        items.push({
-          type: 'action',
-          label: '閾値を下げてもっと検索',
-          action: () => showSongCandidates(marker, lowerThreshold),
-        });
-      }
-
-      openSongCandidatePopup(input, items);
-    } catch (error) {
-      console.warn('[YCS] 曲名候補の取得エラー:', error.message);
-      if (!isStale()) openSongCandidatePopup(input, [{ type: 'message', label: 'エラー: ' + error.message }]);
-    }
-  }
-
-  async function fetchSongCandidates(videoId, sec, threshold = null) {
-    let url = `${state.ycsServerUrl}/api/extension/subtitle-matches?video_id=${encodeURIComponent(videoId)}&sec=${sec}`;
-    if (threshold !== null) {
-      url += `&threshold=${threshold}`;
-    }
-    const response = await fetch(url, {
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': `Bearer ${state.ycsApiToken}`,
-      },
-    });
-
-    if (response.status === 401) throw new Error('APIトークンが無効です');
-    if (response.status === 403) throw new Error('このチャンネルへのアクセス権限がありません');
-    if (response.status === 404) throw new Error('この動画はアーカイブに登録されていません');
-    if (!response.ok) throw new Error(`候補の取得に失敗しました (${response.status})`);
-
-    return response.json();
-  }
-
-  function ensureSubtitlesOnServer(videoId) {
-    if (subtitlePrepareFlow && subtitlePrepareFlow.videoId === videoId) {
-      return subtitlePrepareFlow.promise;
-    }
-
-    const promise = (async () => {
-      const tracks = await getCaptionTracksFromPage();
-      if (!tracks || tracks.length === 0) {
-        // 候補ボタン経由でも「字幕なし」を記録し、字幕スキャン対象から除外する
-        reportSubtitlesUnavailable(videoId);
-        throw new Error('この動画には字幕がありません');
-      }
-      const track = pickPreferredCaptionTrack(tracks);
-      const segments = await fetchTimedText(videoId, track.languageCode);
-      if (!segments || segments.length === 0) {
-        throw new Error('字幕を取得できませんでした');
-      }
-      await postSubtitlesToServer(videoId, track.languageCode, track.kind === 'asr' ? 'asr' : '', segments);
-    })().finally(() => {
-      if (subtitlePrepareFlow?.videoId === videoId) {
-        subtitlePrepareFlow = null;
-      }
-    });
-
-    subtitlePrepareFlow = { videoId, promise };
-    return promise;
-  }
-
-  function pickPreferredCaptionTrack(tracks) {
-    const ja = tracks.filter(t => (t.languageCode || '').startsWith('ja'));
-    return ja.find(t => t.kind !== 'asr') || ja[0] || tracks[0];
-  }
-
-  let subtitleScanTargets = [];
-
-  function getOwnTabId() {
-    return new Promise(resolve => {
-      try {
-        chrome.runtime.sendMessage({ type: 'GET_TAB_ID' }, res => {
-          resolve(res?.tabId ?? null);
-        });
-      } catch (e) {
-        resolve(null);
-      }
-    });
-  }
-
-  function setSubtitleScanStatus(text) {
-    const el = state.listScanPanel?.querySelector('#ssp-status');
-    if (el) el.textContent = text;
-  }
-
-  async function loadSubtitleScanTargets() {
-    if (!state.ycsApiToken) {
-      await loadYcsApiSettings();
-    }
-    if (!state.ycsApiToken) {
-      setSubtitleScanStatus(missingTokenMessage());
-      return;
-    }
-
-    setSubtitleScanStatus('対象を読み込んでいます…');
-
-    try {
-      const response = await fetch(`${state.ycsServerUrl}/api/extension/subtitle-targets`, {
-        headers: {
-          'Accept': 'application/json',
-          'Authorization': `Bearer ${state.ycsApiToken}`,
-        },
-      });
-      if (!response.ok) {
-        throw new Error(`一覧の取得に失敗しました (${response.status})`);
-      }
-
-      const data = await response.json();
-      subtitleScanTargets = data.targets || [];
-
-      const listEl = state.listScanPanel?.querySelector('#ssp-video-list');
-      if (listEl) {
-        listEl.innerHTML = subtitleScanTargets.length === 0
-          ? '<div class="lsp-empty">字幕未取得のアーカイブはありません</div>'
-          : subtitleScanTargets.map((t, i) => `
-            <div class="lsp-item">
-              <span class="lsp-item-index">${i + 1}.</span>
-              <span class="lsp-item-id" title="${escapeHtml(t.video_id)}">${escapeHtml(t.title || t.video_id)}</span>
-            </div>
-          `).join('');
-      }
-      setSubtitleScanStatus(`対象: ${subtitleScanTargets.length}件`);
-
-      const startBtn = state.listScanPanel?.querySelector('#ssp-start-btn');
-      if (startBtn) startBtn.disabled = subtitleScanTargets.length === 0;
-    } catch (error) {
-      console.error('[YCS] 字幕取得対象の読み込みエラー:', error);
-      setSubtitleScanStatus('エラー: ' + error.message);
-    }
-  }
-
-  async function startSubtitleScan() {
-    if (subtitleScanTargets.length === 0) return;
-
-    // 音量リストスキャンと同時に走ると遷移を取り合うため開始を拒否する
-    const { listScanActive } = await chrome.storage.local.get(['listScanActive']);
-    if (listScanActive) {
-      setSubtitleScanStatus('音量のリストスキャン実行中は開始できません。先に停止してください');
-      return;
-    }
-
-    const tabId = await getOwnTabId();
-    const videoIds = subtitleScanTargets.map(t => t.video_id);
-
-    await chrome.storage.local.set({
-      subtitleScanVideoIds: videoIds,
-      subtitleScanIndex: 0,
-      subtitleScanActive: true,
-      subtitleScanTabId: tabId,
-      subtitleScanResults: { sent: 0, skipped: 0, failed: 0 },
-    });
-
-    updateSubtitleScanButtons(true);
-
-    const firstVideoId = videoIds[0];
-    if (getVideoId() === firstVideoId) {
-      checkAndStartSubtitleScan();
-    } else {
-      window.location.href = `https://www.youtube.com/watch?v=${firstVideoId}`;
-    }
-  }
-
-  async function stopSubtitleScan() {
-    await chrome.storage.local.set({ subtitleScanActive: false });
-    updateSubtitleScanButtons(false);
-    setSubtitleScanStatus('停止しました');
-  }
-
-  function updateSubtitleScanButtons(running) {
-    if (!state.listScanPanel) return;
-    state.listScanPanel.querySelector('#ssp-start-btn').style.display = running ? 'none' : 'block';
-    state.listScanPanel.querySelector('#ssp-stop-btn').style.display = running ? 'block' : 'none';
-  }
-
-  async function restoreSubtitleScanPanelState() {
-    try {
-      const result = await chrome.storage.local.get([
-        'subtitleScanActive', 'subtitleScanVideoIds', 'subtitleScanIndex',
-      ]);
-      if (result.subtitleScanActive && result.subtitleScanVideoIds) {
-        updateSubtitleScanButtons(true);
-        setSubtitleScanStatus(`字幕取得中… ${(result.subtitleScanIndex || 0) + 1}/${result.subtitleScanVideoIds.length}`);
-      }
-    } catch (e) { /* 復元失敗は無視 */ }
-  }
-
-  async function checkAndStartSubtitleScan() {
-    try {
-      const result = await chrome.storage.local.get([
-        'subtitleScanVideoIds', 'subtitleScanIndex', 'subtitleScanActive', 'subtitleScanTabId',
-      ]);
-
-      if (!result.subtitleScanActive || !result.subtitleScanVideoIds) return;
-
-      const tabId = await getOwnTabId();
-      if (result.subtitleScanTabId != null && tabId !== result.subtitleScanTabId) return;
-
-      const videoIds = result.subtitleScanVideoIds;
-      const index = result.subtitleScanIndex || 0;
-      const videoId = getVideoId();
-      if (videoId !== videoIds[index]) return;
-
-      console.log(`[YCS] 字幕スキャン: ${index + 1}/${videoIds.length} を処理します`);
-      setSubtitleScanStatus(`字幕取得中… ${index + 1}/${videoIds.length}`);
-      updateSubtitleScanButtons(true);
-
-      waitForPlayerAndProcessSubtitle(videoId);
-    } catch (error) {
-      console.error('[YCS] 字幕スキャンチェックエラー:', error);
-    }
-  }
-
-  function waitForPlayerAndProcessSubtitle(videoId) {
-    let attempt = 0;
-    const check = () => {
-      if (state.videoElement && state.videoElement.readyState >= 2) {
-        processSubtitleScanVideo(videoId);
-      } else if (attempt >= 30) {
-        console.warn('[YCS] 字幕スキャン: プレイヤーが準備できないためスキップします', videoId);
-        recordSubtitleScanResult('skipped').then(proceedToNextSubtitleScanVideo);
-      } else {
-        attempt++;
-        setTimeout(check, 1000);
-      }
-    };
-    // ページ読み込み直後の切り替わりを待つ
-    setTimeout(check, 1500);
-  }
-
-  async function reportSubtitlesUnavailable(videoId) {
-    try {
-      if (!state.ycsApiToken) {
-        await loadYcsApiSettings();
-      }
-      if (!state.ycsApiToken) return;
-
-      await fetch(`${state.ycsServerUrl}/api/extension/subtitles/unavailable`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization': `Bearer ${state.ycsApiToken}`,
-        },
-        body: JSON.stringify({ video_id: videoId }),
-      });
-      console.log('[YCS] 字幕なしを記録しました:', videoId);
-    } catch (error) {
-      console.warn('[YCS] 字幕なし報告エラー:', error.message);
-    }
-  }
-
-  async function processSubtitleScanVideo(videoId) {
-    try {
-      const tracks = await getCaptionTracksFromPage();
-      if (!tracks || tracks.length === 0) {
-        console.log('[YCS] 字幕スキャン: 字幕がないためスキップ', videoId);
-        await reportSubtitlesUnavailable(videoId);
-        await recordSubtitleScanResult('skipped');
-      } else {
-        const track = pickPreferredCaptionTrack(tracks);
-        const segments = await fetchTimedText(videoId, track.languageCode);
-        if (!segments || segments.length === 0) {
-          await recordSubtitleScanResult('skipped');
-        } else {
-          await postSubtitlesToServer(videoId, track.languageCode, track.kind === 'asr' ? 'asr' : '', segments);
-          await recordSubtitleScanResult('sent');
-        }
-      }
-    } catch (error) {
-      console.warn('[YCS] 字幕スキャン: 取得・送信に失敗', videoId, error.message);
-      await recordSubtitleScanResult('failed');
-    }
-
-    await proceedToNextSubtitleScanVideo();
-  }
-
-  async function recordSubtitleScanResult(kind) {
-    const result = await chrome.storage.local.get(['subtitleScanResults']);
-    const counts = result.subtitleScanResults || { sent: 0, skipped: 0, failed: 0 };
-    counts[kind] = (counts[kind] || 0) + 1;
-    await chrome.storage.local.set({ subtitleScanResults: counts });
-  }
-
-  async function proceedToNextSubtitleScanVideo() {
-    const result = await chrome.storage.local.get([
-      'subtitleScanVideoIds', 'subtitleScanIndex', 'subtitleScanActive', 'subtitleScanTabId', 'subtitleScanResults',
-    ]);
-
-    if (!result.subtitleScanActive) return;
-
-    const tabId = await getOwnTabId();
-    if (result.subtitleScanTabId != null && tabId !== result.subtitleScanTabId) return;
-
-    const videoIds = result.subtitleScanVideoIds || [];
-    const nextIndex = (result.subtitleScanIndex || 0) + 1;
-
-    if (nextIndex >= videoIds.length) {
-      const counts = result.subtitleScanResults || {};
-      const summary = `字幕一括取得が完了しました（送信 ${counts.sent || 0}件 / スキップ ${counts.skipped || 0}件 / 失敗 ${counts.failed || 0}件）`;
-      console.log('[YCS] ' + summary);
-      await chrome.storage.local.set({ subtitleScanActive: false });
-      updateSubtitleScanButtons(false);
-      setSubtitleScanStatus(summary);
-      return;
-    }
-
-    await chrome.storage.local.set({ subtitleScanIndex: nextIndex });
-
-    // 連続アクセスを避けるため少し待ってから遷移する
-    setTimeout(async () => {
-      const { subtitleScanActive } = await chrome.storage.local.get(['subtitleScanActive']);
-      if (!subtitleScanActive) return;
-      window.location.href = `https://www.youtube.com/watch?v=${videoIds[nextIndex]}`;
-    }, 2000);
-  }
-
-  async function loadScannedVideosList() {
-    try {
-      const allData = await chrome.storage.local.get(null);
-      const videos = [];
-
-      for (const key in allData) {
-        if (key.startsWith('volumeData_')) {
-          const videoId = key.replace('volumeData_', '');
-          const data = allData[key];
-
-          if (!data || !data.data) continue;
-
-          const filledCount = data.data.filter(v => v > 0).length;
-          const progress = Math.round((filledCount / data.data.length) * 100);
-
-          videos.push({
-            videoId,
-            savedAt: data.savedAt || null,
-            duration: data.duration || 0,
-            progress: progress >= 95 ? 100 : progress
-          });
-        }
-      }
-
-      videos.sort((a, b) => {
-        if (!a.savedAt) return 1;
-        if (!b.savedAt) return -1;
-        return new Date(b.savedAt) - new Date(a.savedAt);
-      });
-
-      renderScannedVideosList(videos);
-    } catch (error) {
-      console.error('スキャン済み動画一覧取得エラー:', error);
-    }
-  }
-
-  function renderScannedVideosList(videos) {
-    if (!state.listScanPanel) return;
-
-    const listContainer = state.listScanPanel.querySelector('#lsp-scanned-video-list');
-    const countEl = state.listScanPanel.querySelector('#lsp-scanned-count');
-    const clearAllBtn = state.listScanPanel.querySelector('#lsp-clear-all-btn');
-
-    countEl.textContent = `${videos.length} 件のスキャン済み動画`;
-
-    if (videos.length === 0) {
-      listContainer.innerHTML = '<div class="lsp-empty">スキャン済みの動画がありません</div>';
-      clearAllBtn.disabled = true;
-      return;
-    }
-
-    clearAllBtn.disabled = false;
-
-    const html = videos.map(video => {
-      const dateStr = video.savedAt
-        ? new Date(video.savedAt).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })
-        : '-';
-
-      return `
-      <div class="lsp-scanned-item" data-video-id="${video.videoId}">
-        <span class="lsp-item-id">${video.videoId}</span>
-        <span class="lsp-item-date">${dateStr}</span>
-        <span class="lsp-item-status">${video.progress}%</span>
-        <div class="lsp-item-actions">
-          <button class="lsp-open-btn" data-action="open" data-video-id="${video.videoId}">開く</button>
-          <button class="lsp-delete-btn" data-action="delete" data-video-id="${video.videoId}">×</button>
-        </div>
-      </div>
-    `;
-    }).join('');
-
-    listContainer.innerHTML = html;
-
-    listContainer.querySelectorAll('[data-action="open"]').forEach(btn => {
-      btn.addEventListener('click', () => openYouTubeVideo(btn.dataset.videoId));
-    });
-
-    listContainer.querySelectorAll('[data-action="delete"]').forEach(btn => {
-      btn.addEventListener('click', () => deleteScannedVideo(btn.dataset.videoId));
-    });
-  }
-
-  function openYouTubeVideo(videoId) {
-    window.open(`https://www.youtube.com/watch?v=${videoId}`, '_blank');
-  }
-
-  async function deleteScannedVideo(videoId) {
-    const key = `volumeData_${videoId}`;
-    await chrome.storage.local.remove(key);
-    loadScannedVideosList();
-  }
-
-  async function clearAllScannedVideos() {
-    if (!confirm('全てのスキャン済みデータを削除しますか？')) {
-      return;
-    }
-
-    try {
-      const allData = await chrome.storage.local.get(null);
-      const keysToRemove = [];
-
-      for (const key in allData) {
-        if (key.startsWith('volumeData_')) {
-          keysToRemove.push(key);
-        }
-      }
-
-      if (keysToRemove.length > 0) {
-        await chrome.storage.local.remove(keysToRemove);
-      }
-
-      loadScannedVideosList();
-    } catch (error) {
-      console.error('全データ削除エラー:', error);
-    }
-  }
-
-  var subtitleScan = /*#__PURE__*/Object.freeze({
-    __proto__: null,
-    checkAndStartSubtitleScan: checkAndStartSubtitleScan,
-    clearAllScannedVideos: clearAllScannedVideos,
-    deleteScannedVideo: deleteScannedVideo,
-    getOwnTabId: getOwnTabId,
-    loadScannedVideosList: loadScannedVideosList,
-    loadSubtitleScanTargets: loadSubtitleScanTargets,
-    openYouTubeVideo: openYouTubeVideo,
-    proceedToNextSubtitleScanVideo: proceedToNextSubtitleScanVideo,
-    processSubtitleScanVideo: processSubtitleScanVideo,
-    recordSubtitleScanResult: recordSubtitleScanResult,
-    renderScannedVideosList: renderScannedVideosList,
-    reportSubtitlesUnavailable: reportSubtitlesUnavailable,
-    restoreSubtitleScanPanelState: restoreSubtitleScanPanelState,
-    setSubtitleScanStatus: setSubtitleScanStatus,
-    startSubtitleScan: startSubtitleScan,
-    stopSubtitleScan: stopSubtitleScan,
-    updateSubtitleScanButtons: updateSubtitleScanButtons,
-    waitForPlayerAndProcessSubtitle: waitForPlayerAndProcessSubtitle
-  });
-
-  function updatePlaylistUI() {
-    if (!state.volumeGraphContainer) return;
-
-    const autoScanBtn = state.volumeGraphContainer.querySelector('#vdg-auto-scan-btn');
-    const playlistInfo = state.volumeGraphContainer.querySelector('#vdg-playlist-info');
-
-    if (!isInPlaylist()) {
-      if (autoScanBtn) autoScanBtn.classList.add('hidden');
-      if (playlistInfo) playlistInfo.textContent = '';
-      return;
-    }
-
-    if (autoScanBtn) autoScanBtn.classList.remove('hidden');
-
-    const info = getPlaylistInfo();
-    if (info && playlistInfo) {
-      playlistInfo.textContent = `${info.currentIndex + 1}/${info.total}`;
-    }
-  }
-
-  async function startAutoScan() {
-    if (!isInPlaylist()) {
-      console.log('自動スキャン: 再生リスト外では使用できません');
-      return;
-    }
-
-    state.isAutoScanMode = true;
-    state.autoScanStopRequested = false;
-
-    const autoScanBtn = state.volumeGraphContainer?.querySelector('#vdg-auto-scan-btn');
-    if (autoScanBtn) {
-      autoScanBtn.classList.add('auto-scanning');
-      autoScanBtn.textContent = '停止';
-    }
-
-    console.log('自動スキャン開始');
-
-    const alreadyScanned = await isCurrentVideoScanned();
-    if (alreadyScanned) {
-      console.log('現在の動画はスキャン済み、次の動画へ移動');
-      proceedToNextVideoOrFinish();
-    } else {
-      startDirectScan();
-    }
-  }
-
-  function stopAutoScan() {
-    state.isAutoScanMode = false;
-    state.autoScanStopRequested = true;
-
-    const autoScanBtn = state.volumeGraphContainer?.querySelector('#vdg-auto-scan-btn');
-    if (autoScanBtn) {
-      autoScanBtn.classList.remove('auto-scanning');
-      autoScanBtn.textContent = '自動';
-    }
-
-    stopDirectScan();
-    chrome.runtime.sendMessage({ type: 'STOP_SCAN' });
-
-    console.log('自動スキャン停止');
-  }
-
-  function proceedToNextVideoOrFinish() {
-    if (!state.isAutoScanMode || state.autoScanStopRequested) {
-      return;
-    }
-
-    const info = getPlaylistInfo();
-    if (!info) {
-      stopAutoScan();
-      return;
-    }
-
-    if (info.currentIndex >= info.total - 1) {
-      console.log('自動スキャン完了: 再生リストの最後に到達');
-      stopAutoScan();
-      return;
-    }
-
-    console.log(`次の動画へ移動 (${info.currentIndex + 1}/${info.total})`);
-
-    setTimeout(() => {
-      if (state.isAutoScanMode && !state.autoScanStopRequested) {
-        goToNextVideo();
-      }
-    }, 1500);
-  }
-
   let isAutoDetectRunning = false;
   let tsEditorNoticeTimer = null;
   let chatHeatmapLoading = false;
@@ -4281,6 +3805,573 @@
       noticeEl.textContent = '';
       tsEditorNoticeTimer = null;
     }, 6000);
+  }
+
+  let lyricsPastePopup = null;
+  let lyricsPastePopupCleanup = null;
+  let songCandidatePopup = null;
+  let songCandidatePopupCleanup = null;
+  let songCandidateRequestSeq = 0;
+  let suggestDebounceTimer = null;
+  let suggestAbortController = null;
+  let popupSelectedIndex = -1;
+  // ポップアップからのinsertText直後にinputイベントでサジェストが再発火するのを防ぐ
+  let suggestInsertGuard = false;
+
+  function getSongCandidateRequestSeq() { return songCandidateRequestSeq; }
+
+  function getSelectableItems(popup) {
+    return popup.querySelectorAll('.vdg-paste-popup-item:not(.message)');
+  }
+
+  function updatePopupSelection(popup, index) {
+    const items = getSelectableItems(popup);
+    items.forEach(el => el.classList.remove('selected'));
+    popupSelectedIndex = index;
+    if (index >= 0 && index < items.length) {
+      items[index].classList.add('selected');
+      items[index].scrollIntoView({ block: 'nearest' });
+    }
+  }
+
+  function isLyricsPastePopupOpen() {
+    return !!lyricsPastePopup;
+  }
+
+  function isSongCandidatePopupOpen() {
+    return !!songCandidatePopup;
+  }
+
+  function buildLyricsSplitCandidates(text) {
+    const tokens = text.trim().split(/\s+/);
+    // 単独の「歌詞」トークンより前の部分を「アーティスト名+曲名」とみなす
+    // （「歌詞検索」のような複合語は区切りとして扱わない）
+    const idx = tokens.indexOf('歌詞');
+    if (idx < 2) return null;
+    const parts = tokens.slice(0, idx);
+    const candidates = [];
+    for (let k = parts.length - 1; k >= 1; k--) {
+      const artist = parts.slice(0, k).join(' ');
+      const title = parts.slice(k).join(' ');
+      candidates.push(`${title} / ${artist}`);
+    }
+    return candidates;
+  }
+
+  function closeLyricsPastePopup() {
+    if (lyricsPastePopupCleanup) {
+      lyricsPastePopupCleanup();
+      lyricsPastePopupCleanup = null;
+    }
+    if (lyricsPastePopup) {
+      lyricsPastePopup.remove();
+      lyricsPastePopup = null;
+    }
+  }
+
+  function showLyricsPastePopup(input, candidates, rawText) {
+    closeLyricsPastePopup();
+    closeSongCandidatePopup();
+    if (!state.volumeGraphContainer) return;
+
+    // 候補値は属性に埋め込まずインデックスで参照する（escapeHtmlは引用符をエスケープしないため）
+    const values = [...candidates, rawText];
+    const popup = document.createElement('div');
+    popup.className = 'vdg-paste-popup';
+    popup.innerHTML = `
+    <div class="vdg-paste-popup-title">変換候補（クリックで挿入）</div>
+    ${candidates.map((c, i) => `<div class="vdg-paste-popup-item" data-index="${i}">${escapeHtml(c)}</div>`).join('')}
+    <div class="vdg-paste-popup-item raw" data-index="${candidates.length}">そのまま貼り付け</div>
+  `;
+
+    // 入力欄の直下に配置（グラフコンテナ基準の絶対配置）
+    // 一覧のスクロールに追従し、コンテナ右端からはみ出さないようにクランプする
+    const listEl = state.volumeGraphContainer.querySelector('#vdg-ts-list');
+    const reposition = () => {
+      const containerRect = state.volumeGraphContainer.getBoundingClientRect();
+      const inputRect = input.getBoundingClientRect();
+      const maxLeft = containerRect.width - popup.offsetWidth - 4;
+      popup.style.left = `${Math.max(0, Math.min(inputRect.left - containerRect.left, maxLeft))}px`;
+      popup.style.top = `${inputRect.bottom - containerRect.top + 2}px`;
+    };
+
+    // execCommandならネイティブのinputイベント発火とUndo履歴が維持される
+    const insertAndClose = (value) => {
+      closeLyricsPastePopup();
+      input.focus({ preventScroll: true });
+      document.execCommand('insertText', false, value);
+    };
+
+    popup.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const item = e.target.closest('.vdg-paste-popup-item');
+      if (item) {
+        insertAndClose(values[parseInt(item.dataset.index)]);
+      }
+    });
+
+    popupSelectedIndex = -1;
+    const onKeydown = (e) => {
+      const items = getSelectableItems(popup);
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        e.stopPropagation();
+        updatePopupSelection(popup, popupSelectedIndex < items.length - 1 ? popupSelectedIndex + 1 : 0);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        e.stopPropagation();
+        updatePopupSelection(popup, popupSelectedIndex > 0 ? popupSelectedIndex - 1 : items.length - 1);
+      } else if (e.key === 'Enter' && popupSelectedIndex >= 0 && popupSelectedIndex < items.length) {
+        e.preventDefault();
+        e.stopPropagation();
+        const idx = parseInt(items[popupSelectedIndex].dataset.index);
+        insertAndClose(values[idx]);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        insertAndClose(rawText);
+      } else {
+        closeLyricsPastePopup();
+      }
+    };
+    const onOutsideMousedown = (e) => {
+      if (popup.contains(e.target) || e.target === input) return;
+      insertAndClose(rawText);
+    };
+
+    input.addEventListener('keydown', onKeydown, true);
+    document.addEventListener('mousedown', onOutsideMousedown, true);
+    listEl?.addEventListener('scroll', reposition);
+    lyricsPastePopupCleanup = () => {
+      input.removeEventListener('keydown', onKeydown, true);
+      document.removeEventListener('mousedown', onOutsideMousedown, true);
+      listEl?.removeEventListener('scroll', reposition);
+    };
+
+    lyricsPastePopup = popup;
+    state.volumeGraphContainer.appendChild(popup);
+    reposition();
+  }
+
+  function closeSongCandidatePopup() {
+    songCandidateRequestSeq++;
+    if (songCandidatePopupCleanup) {
+      songCandidatePopupCleanup();
+      songCandidatePopupCleanup = null;
+    }
+    if (songCandidatePopup) {
+      songCandidatePopup.remove();
+      songCandidatePopup = null;
+    }
+  }
+
+  function openSongCandidatePopup(input, items) {
+    closeSongCandidatePopup();
+    closeLyricsPastePopup();
+    if (!state.volumeGraphContainer) return;
+
+    const popup = document.createElement('div');
+    popup.className = 'vdg-paste-popup';
+    popup.innerHTML = `
+    <div class="vdg-paste-popup-title">曲名候補（クリックで挿入）</div>
+    ${items.map((item, i) => item.type === 'candidate' ? `
+      <div class="vdg-paste-popup-item" data-index="${i}">${escapeHtml(item.label)}${item.artist ? `<span class="artist">${escapeHtml(item.artist)}</span>` : ''}<span class="similarity">${Math.round((item.similarity || 0) * 100)}%</span></div>
+    ` : item.type === 'action' ? `
+      <div class="vdg-paste-popup-item action" data-action-index="${i}">${escapeHtml(item.label)}</div>
+    ` : `
+      <div class="vdg-paste-popup-item message">${escapeHtml(item.label)}</div>
+    `).join('')}
+  `;
+
+    const listEl = state.volumeGraphContainer.querySelector('#vdg-ts-list');
+    const reposition = () => {
+      const containerRect = state.volumeGraphContainer.getBoundingClientRect();
+      const inputRect = input.getBoundingClientRect();
+      const maxLeft = containerRect.width - popup.offsetWidth - 4;
+      popup.style.left = `${Math.max(0, Math.min(inputRect.left - containerRect.left, maxLeft))}px`;
+      popup.style.top = `${inputRect.bottom - containerRect.top + 2}px`;
+    };
+
+    // 候補クリック: 入力欄の内容を候補で置き換える
+    popup.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const el = e.target.closest('.vdg-paste-popup-item');
+      if (!el) return;
+      if (el.dataset.actionIndex !== undefined) {
+        const selected = items[parseInt(el.dataset.actionIndex)];
+        if (selected?.action) {
+          closeSongCandidatePopup();
+          selected.action();
+        }
+        return;
+      }
+      if (el.dataset.index !== undefined) {
+        const selected = items[parseInt(el.dataset.index)];
+        const value = selected?.insertValue ?? selected?.label ?? '';
+        closeSongCandidatePopup();
+        input.focus({ preventScroll: true });
+        input.select();
+        suggestInsertGuard = true;
+        document.execCommand('insertText', false, value);
+        suggestInsertGuard = false;
+      }
+    });
+
+    popupSelectedIndex = -1;
+    const onKeydown = (e) => {
+      const selectables = getSelectableItems(popup);
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        e.stopPropagation();
+        updatePopupSelection(popup, popupSelectedIndex < selectables.length - 1 ? popupSelectedIndex + 1 : 0);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        e.stopPropagation();
+        updatePopupSelection(popup, popupSelectedIndex > 0 ? popupSelectedIndex - 1 : selectables.length - 1);
+      } else if (e.key === 'Enter' && popupSelectedIndex >= 0 && popupSelectedIndex < selectables.length) {
+        e.preventDefault();
+        e.stopPropagation();
+        const el = selectables[popupSelectedIndex];
+        if (el.dataset.actionIndex !== undefined) {
+          const selected = items[parseInt(el.dataset.actionIndex)];
+          if (selected?.action) {
+            closeSongCandidatePopup();
+            selected.action();
+          }
+        } else if (el.dataset.index !== undefined) {
+          const selected = items[parseInt(el.dataset.index)];
+          const value = selected?.insertValue ?? selected?.label ?? '';
+          closeSongCandidatePopup();
+          input.focus({ preventScroll: true });
+          input.select();
+          suggestInsertGuard = true;
+          document.execCommand('insertText', false, value);
+          suggestInsertGuard = false;
+        }
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        closeSongCandidatePopup();
+      } else {
+        closeSongCandidatePopup();
+      }
+    };
+
+    const onOutsideMousedown = (e) => {
+      if (popup.contains(e.target) || e.target === input) return;
+      closeSongCandidatePopup();
+    };
+
+    input.addEventListener('keydown', onKeydown, true);
+    document.addEventListener('mousedown', onOutsideMousedown, true);
+    listEl?.addEventListener('scroll', reposition);
+    songCandidatePopupCleanup = () => {
+      input.removeEventListener('keydown', onKeydown, true);
+      document.removeEventListener('mousedown', onOutsideMousedown, true);
+      listEl?.removeEventListener('scroll', reposition);
+    };
+
+    songCandidatePopup = popup;
+    state.volumeGraphContainer.appendChild(popup);
+    reposition();
+  }
+
+  function cancelSongSuggest() {
+    if (suggestDebounceTimer) {
+      clearTimeout(suggestDebounceTimer);
+      suggestDebounceTimer = null;
+    }
+    if (suggestAbortController) {
+      suggestAbortController.abort();
+      suggestAbortController = null;
+    }
+  }
+
+  function onSongInputForSuggest(input) {
+    if (suggestInsertGuard) return;
+
+    cancelSongSuggest();
+
+    if (songCandidatePopup) return;
+
+    const query = input.value.trim();
+    if (query.length < 2) return;
+
+    if (!state.ycsApiToken) return;
+
+    suggestDebounceTimer = setTimeout(() => {
+      suggestDebounceTimer = null;
+      if (songCandidatePopup) return;
+      fetchAndShowSuggestions(input, query);
+    }, 300);
+  }
+
+  async function fetchAndShowSuggestions(input, query) {
+    suggestAbortController = new AbortController();
+    const seq = songCandidateRequestSeq;
+
+    try {
+      const url = `${state.ycsServerUrl}/api/extension/song-suggest?q=${encodeURIComponent(query)}`;
+      const response = await fetch(url, {
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${state.ycsApiToken}`,
+        },
+        signal: suggestAbortController.signal,
+      });
+
+      if (seq !== songCandidateRequestSeq) return;
+      if (!response.ok) return;
+
+      const data = await response.json();
+      if (seq !== songCandidateRequestSeq) return;
+      if (!document.activeElement || document.activeElement !== input) return;
+
+      const suggestions = data.suggestions || [];
+      if (suggestions.length === 0) return;
+
+      openSongSuggestPopup(input, suggestions);
+    } catch (e) {
+      if (e.name !== 'AbortError') {
+        console.warn('[YCS] サジェスト取得エラー:', e.message);
+      }
+    } finally {
+      suggestAbortController = null;
+    }
+  }
+
+  function openSongSuggestPopup(input, suggestions) {
+    closeSongCandidatePopup();
+    closeLyricsPastePopup();
+    if (!state.volumeGraphContainer) return;
+
+    const popup = document.createElement('div');
+    popup.className = 'vdg-paste-popup';
+    popup.innerHTML = `
+    <div class="vdg-paste-popup-title">サジェスト</div>
+    ${suggestions.map((s, i) => `
+      <div class="vdg-paste-popup-item" data-index="${i}">${escapeHtml(s.text)}${s.ts_count ? `<span class="similarity">${s.ts_count}件</span>` : ''}</div>
+    `).join('')}
+  `;
+
+    const listEl = state.volumeGraphContainer.querySelector('#vdg-ts-list');
+    const reposition = () => {
+      const containerRect = state.volumeGraphContainer.getBoundingClientRect();
+      const inputRect = input.getBoundingClientRect();
+      const maxLeft = containerRect.width - popup.offsetWidth - 4;
+      popup.style.left = `${Math.max(0, Math.min(inputRect.left - containerRect.left, maxLeft))}px`;
+      popup.style.top = `${inputRect.bottom - containerRect.top + 2}px`;
+    };
+
+    popup.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const el = e.target.closest('.vdg-paste-popup-item');
+      if (!el || el.dataset.index === undefined) return;
+      const selected = suggestions[parseInt(el.dataset.index)];
+      if (!selected) return;
+      closeSongCandidatePopup();
+      input.focus({ preventScroll: true });
+      input.select();
+      suggestInsertGuard = true;
+      document.execCommand('insertText', false, selected.text);
+      suggestInsertGuard = false;
+    });
+
+    popupSelectedIndex = -1;
+    const onKeydown = (e) => {
+      const selectables = getSelectableItems(popup);
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        e.stopPropagation();
+        updatePopupSelection(popup, popupSelectedIndex < selectables.length - 1 ? popupSelectedIndex + 1 : 0);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        e.stopPropagation();
+        updatePopupSelection(popup, popupSelectedIndex > 0 ? popupSelectedIndex - 1 : selectables.length - 1);
+      } else if (e.key === 'Enter' && popupSelectedIndex >= 0 && popupSelectedIndex < selectables.length) {
+        e.preventDefault();
+        e.stopPropagation();
+        const idx = parseInt(selectables[popupSelectedIndex].dataset.index);
+        const selected = suggestions[idx];
+        if (selected) {
+          closeSongCandidatePopup();
+          input.focus({ preventScroll: true });
+          input.select();
+          suggestInsertGuard = true;
+          document.execCommand('insertText', false, selected.text);
+          suggestInsertGuard = false;
+        }
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        closeSongCandidatePopup();
+      } else {
+        closeSongCandidatePopup();
+      }
+    };
+
+    const onOutsideMousedown = (e) => {
+      if (popup.contains(e.target) || e.target === input) return;
+      closeSongCandidatePopup();
+    };
+
+    input.addEventListener('keydown', onKeydown, true);
+    document.addEventListener('mousedown', onOutsideMousedown, true);
+    listEl?.addEventListener('scroll', reposition);
+    songCandidatePopupCleanup = () => {
+      input.removeEventListener('keydown', onKeydown, true);
+      document.removeEventListener('mousedown', onOutsideMousedown, true);
+      listEl?.removeEventListener('scroll', reposition);
+    };
+
+    songCandidatePopup = popup;
+    state.volumeGraphContainer.appendChild(popup);
+    reposition();
+  }
+
+  let subtitlePrepareFlow = null;
+
+  async function showSongCandidates(marker, threshold = null) {
+    const input = state.volumeGraphContainer?.querySelector(`.vdg-ts-text-input[data-marker-id="${marker.id}"]`);
+    if (!input) return;
+
+    // openSongCandidatePopupは開き直しのたびに内部で世代を進めるため、
+    // 自分で開いた直後の世代を控えて「外部から閉じられた/開き直された」を検出する
+    let seq;
+    const open = (items) => {
+      openSongCandidatePopup(input, items);
+      seq = getSongCandidateRequestSeq();
+    };
+    const isStale = () => seq !== getSongCandidateRequestSeq();
+
+    open([{ type: 'message', label: '候補を検索しています…' }]);
+
+    try {
+      if (!state.ycsApiToken) {
+        await loadYcsApiSettings();
+      }
+      if (!state.ycsApiToken) {
+        if (!isStale()) openSongCandidatePopup(input, [{ type: 'message', label: missingTokenMessage() }]);
+        return;
+      }
+
+      const videoId = getVideoId();
+      if (!videoId) {
+        if (!isStale()) openSongCandidatePopup(input, [{ type: 'message', label: '動画IDを取得できませんでした' }]);
+        return;
+      }
+
+      const sec = Math.floor(marker.time);
+      let result = await fetchSongCandidates(videoId, sec, threshold);
+      if (isStale()) return;
+
+      if (result.has_subtitles === false) {
+        open([{ type: 'message', label: '字幕を取得しています…' }]);
+        await ensureSubtitlesOnServer(videoId);
+        if (isStale()) return;
+        result = await fetchSongCandidates(videoId, sec, threshold);
+        if (isStale()) return;
+      }
+
+      if (result.has_fingerprint === false) {
+        openSongCandidatePopup(input, [{ type: 'message', label: 'この位置の字幕から候補を計算できませんでした（歌声の字幕が少ない可能性があります）' }]);
+        return;
+      }
+
+      const candidates = (result.candidates || []).slice(0, 5);
+      const currentThreshold = result.threshold || 0.15;
+
+      if (candidates.length === 0) {
+        if (currentThreshold > 0.05) {
+          const lowerThreshold = Math.max(0.05, Math.round((currentThreshold - 0.05) * 100) / 100);
+          openSongCandidatePopup(input, [{
+            type: 'action',
+            label: `候補が見つかりませんでした（閾値を下げて再検索）`,
+            action: () => showSongCandidates(marker, lowerThreshold),
+          }]);
+        } else {
+          openSongCandidatePopup(input, [{ type: 'message', label: '候補が見つかりませんでした' }]);
+        }
+        return;
+      }
+
+      const items = candidates.map(c => {
+        // マスタ未登録の候補は元の表記（text）を優先する
+        const title = c.song_title || c.text || c.normalized_text || '';
+        return {
+          type: 'candidate',
+          label: title,
+          artist: c.song_artist || '',
+          // 挿入値はタイムスタンプの表記慣習（「曲名 / アーティスト」）に合わせる
+          insertValue: c.song_artist ? `${title} / ${c.song_artist}` : title,
+          similarity: c.similarity,
+        };
+      });
+
+      if (candidates.length < 3 && currentThreshold > 0.05) {
+        const lowerThreshold = Math.max(0.05, Math.round((currentThreshold - 0.05) * 100) / 100);
+        items.push({
+          type: 'action',
+          label: '閾値を下げてもっと検索',
+          action: () => showSongCandidates(marker, lowerThreshold),
+        });
+      }
+
+      openSongCandidatePopup(input, items);
+    } catch (error) {
+      console.warn('[YCS] 曲名候補の取得エラー:', error.message);
+      if (!isStale()) openSongCandidatePopup(input, [{ type: 'message', label: 'エラー: ' + error.message }]);
+    }
+  }
+
+  async function fetchSongCandidates(videoId, sec, threshold = null) {
+    let url = `${state.ycsServerUrl}/api/extension/subtitle-matches?video_id=${encodeURIComponent(videoId)}&sec=${sec}`;
+    if (threshold !== null) {
+      url += `&threshold=${threshold}`;
+    }
+    const response = await fetch(url, {
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${state.ycsApiToken}`,
+      },
+    });
+
+    if (response.status === 401) throw new Error('APIトークンが無効です');
+    if (response.status === 403) throw new Error('このチャンネルへのアクセス権限がありません');
+    if (response.status === 404) throw new Error('この動画はアーカイブに登録されていません');
+    if (!response.ok) throw new Error(`候補の取得に失敗しました (${response.status})`);
+
+    return response.json();
+  }
+
+  function ensureSubtitlesOnServer(videoId) {
+    if (subtitlePrepareFlow && subtitlePrepareFlow.videoId === videoId) {
+      return subtitlePrepareFlow.promise;
+    }
+
+    const promise = (async () => {
+      const { tracks, direct } = await getCaptionTracks(videoId);
+      if (!tracks || tracks.length === 0) {
+        reportSubtitlesUnavailable(videoId);
+        throw new Error('この動画には字幕がありません');
+      }
+      const track = pickPreferredCaptionTrack(tracks);
+      const segments = await fetchSubtitleSegments(track, videoId, direct);
+      if (!segments || segments.length === 0) {
+        throw new Error('字幕を取得できませんでした');
+      }
+      await postSubtitlesToServer(videoId, track.languageCode, track.kind === 'asr' ? 'asr' : '', segments);
+    })().finally(() => {
+      if (subtitlePrepareFlow?.videoId === videoId) {
+        subtitlePrepareFlow = null;
+      }
+    });
+
+    subtitlePrepareFlow = { videoId, promise };
+    return promise;
   }
 
   function copyTimestamps() {

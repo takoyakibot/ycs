@@ -2,7 +2,7 @@
   "name": "ycs-browser-extension",
   "private": true,
   "scripts": {
-    "build": "rollup -c",
+    "build": "bash build.sh",
     "watch": "rollup -c -w"
   },
   "devDependencies": {

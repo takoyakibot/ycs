@@ -262,33 +262,7 @@ function createSubtitlePanel() {
   subtitlePanel.querySelector('#stp-search-input').addEventListener('input', filterSubtitleResults);
 }
 
-export { ensurePageBridge } from './page-bridge-loader.js';
-
-export async function getCaptionTracksFromPage() {
-  await ensurePageBridge();
-
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      window.removeEventListener('message', handler);
-      reject(new Error('字幕データの取得がタイムアウトしました'));
-    }, 5000);
-
-    function handler(event) {
-      if (event.source !== window || event.data?.type !== 'YCS_CAPTION_TRACKS_RESPONSE') return;
-      window.removeEventListener('message', handler);
-      clearTimeout(timeout);
-
-      if (event.data.playabilityStatus !== 'OK') {
-        reject(new Error('動画を取得できません。動画が非公開・削除済み、または年齢制限がある可能性があります'));
-        return;
-      }
-      resolve(event.data.tracks);
-    }
-
-    window.addEventListener('message', handler);
-    window.postMessage({ type: 'YCS_GET_CAPTION_TRACKS' }, '*');
-  });
-}
+export { ensurePageBridge, getCaptionTracksFromPage } from './page-bridge-loader.js';
 
 export async function fetchSubtitleTracks(videoId) {
   const statusEl = subtitlePanel?.querySelector('#stp-status');
@@ -392,30 +366,7 @@ async function fetchSubtitleContent(videoId) {
   }
 }
 
-// InnerTube player API経由で最新の字幕を取得（page-bridge.js経由）
-// 毎回InnerTube APIを呼ぶことでbaseUrlの署名期限切れを回避する
-export function fetchTimedText(videoId, lang) {
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      window.removeEventListener('message', handler);
-      reject(new Error('字幕の取得がタイムアウトしました'));
-    }, 15000);
-
-    function handler(event) {
-      if (event.source !== window || event.data?.type !== 'YCS_TIMEDTEXT_RESPONSE') return;
-      window.removeEventListener('message', handler);
-      clearTimeout(timeout);
-      if (event.data.error) {
-        reject(new Error(event.data.error));
-      } else {
-        resolve(event.data.segments);
-      }
-    }
-
-    window.addEventListener('message', handler);
-    window.postMessage({ type: 'YCS_FETCH_TIMEDTEXT', videoId, lang }, '*');
-  });
-}
+export { fetchTimedText } from './page-bridge-loader.js';
 
 function filterSubtitleResults() {
   const query = subtitlePanel?.querySelector('#stp-search-input')?.value?.trim().toLowerCase() || '';

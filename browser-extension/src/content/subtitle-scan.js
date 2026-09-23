@@ -1,8 +1,7 @@
 import state from './state.js';
-import { pickPreferredCaptionTrack } from './song-candidates.js';
+import { pickPreferredCaptionTrack, getCaptionTracks, fetchSubtitleSegments } from './caption-fetch.js';
 import { getVideoId, escapeHtml } from './utils.js';
 import { loadYcsApiSettings, missingTokenMessage, postSubtitlesToServer } from './api.js';
-import { getCaptionTracksFromPage, fetchTimedText } from './subtitle-panel.js';
 
 let subtitleScanTargets = [];
 
@@ -191,14 +190,14 @@ export async function reportSubtitlesUnavailable(videoId) {
 
 export async function processSubtitleScanVideo(videoId) {
   try {
-    const tracks = await getCaptionTracksFromPage();
+    const { tracks, direct } = await getCaptionTracks(videoId);
     if (!tracks || tracks.length === 0) {
       console.log('[YCS] 字幕スキャン: 字幕がないためスキップ', videoId);
       await reportSubtitlesUnavailable(videoId);
       await recordSubtitleScanResult('skipped');
     } else {
       const track = pickPreferredCaptionTrack(tracks);
-      const segments = await fetchTimedText(videoId, track.languageCode);
+      const segments = await fetchSubtitleSegments(track, videoId, direct);
       if (!segments || segments.length === 0) {
         await recordSubtitleScanResult('skipped');
       } else {

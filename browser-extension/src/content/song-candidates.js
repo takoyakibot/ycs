@@ -2,7 +2,11 @@ import state from './state.js';
 import { reportSubtitlesUnavailable } from './subtitle-scan.js';
 import { getVideoId } from './utils.js';
 import { loadYcsApiSettings, postSubtitlesToServer, missingTokenMessage } from './api.js';
-import { getCaptionTracksFromPage, fetchTimedText, } from './subtitle-panel.js';
+import {
+  pickPreferredCaptionTrack,
+  getCaptionTracks,
+  fetchSubtitleSegments,
+} from './caption-fetch.js';
 import {
   closeSongCandidatePopup,
   openSongCandidatePopup,
@@ -20,6 +24,10 @@ export {
   cancelSongSuggest,
   onSongInputForSuggest,
 } from './song-candidates-shared.js';
+
+// pickPreferredCaptionTrackをcaption-fetch.jsから再エクスポート
+// （subtitle-scan.jsなどが song-candidates.js 経由で使っているため）
+export { pickPreferredCaptionTrack } from './caption-fetch.js';
 
 let subtitlePrepareFlow = null;
 
@@ -142,14 +150,13 @@ export function ensureSubtitlesOnServer(videoId) {
   }
 
   const promise = (async () => {
-    const tracks = await getCaptionTracksFromPage();
+    const { tracks, direct } = await getCaptionTracks(videoId);
     if (!tracks || tracks.length === 0) {
-      // 候補ボタン経由でも「字幕なし」を記録し、字幕スキャン対象から除外する
       reportSubtitlesUnavailable(videoId);
       throw new Error('この動画には字幕がありません');
     }
     const track = pickPreferredCaptionTrack(tracks);
-    const segments = await fetchTimedText(videoId, track.languageCode);
+    const segments = await fetchSubtitleSegments(track, videoId, direct);
     if (!segments || segments.length === 0) {
       throw new Error('字幕を取得できませんでした');
     }
@@ -162,9 +169,4 @@ export function ensureSubtitlesOnServer(videoId) {
 
   subtitlePrepareFlow = { videoId, promise };
   return promise;
-}
-
-export function pickPreferredCaptionTrack(tracks) {
-  const ja = tracks.filter(t => (t.languageCode || '').startsWith('ja'));
-  return ja.find(t => t.kind !== 'asr') || ja[0] || tracks[0];
 }

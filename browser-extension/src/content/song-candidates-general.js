@@ -7,9 +7,9 @@ import {
   getSongCandidateRequestSeq,
 } from './song-candidates-shared.js';
 import {
-  getCaptionTracksViaInnerTube,
-  fetchTimedTextDirect,
   pickPreferredCaptionTrack,
+  getCaptionTracks,
+  fetchSubtitleSegments,
   extractSubtitleWindow,
 } from './caption-fetch.js';
 
@@ -29,12 +29,12 @@ let subtitleCache = null;
 
 async function getSubtitleTextForPosition(videoId, sec) {
   if (!subtitleCache || subtitleCache.videoId !== videoId) {
-    const tracks = await getCaptionTracksViaInnerTube(videoId);
+    const { tracks, direct } = await getCaptionTracks(videoId);
     if (!tracks || tracks.length === 0) {
       throw new Error('この動画には字幕がありません');
     }
     const track = pickPreferredCaptionTrack(tracks);
-    const segments = await fetchTimedTextDirect(track.baseUrl);
+    const segments = await fetchSubtitleSegments(track, videoId, direct);
     if (!segments || segments.length === 0) {
       throw new Error('字幕を取得できませんでした');
     }

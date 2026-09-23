@@ -1,4 +1,5 @@
 import { getVideoId } from './utils.js';
+import { getCaptionTracksFromPage, fetchTimedText } from './page-bridge-loader.js';
 
 const INNERTUBE_API_KEY = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
 
@@ -76,6 +77,27 @@ export async function fetchTimedTextDirect(baseUrl) {
     return parseJson3(JSON.parse(text));
   }
   return parseXml(text);
+}
+
+export async function getCaptionTracks(videoId) {
+  let tracks;
+  try {
+    tracks = await getCaptionTracksFromPage();
+    if (tracks && tracks.length > 0) return { tracks, direct: false };
+  } catch (e) {
+    if (e.message.includes('動画を取得できません')) throw e;
+    console.warn('[YCS] page bridge経由の字幕トラック取得に失敗:', e.message);
+  }
+  tracks = await getCaptionTracksViaInnerTube(videoId);
+  return { tracks: tracks || [], direct: true };
+}
+
+export async function fetchSubtitleSegments(track, videoId, direct) {
+  if (direct) {
+    if (!track.baseUrl) throw new Error('字幕トラックのURLを取得できませんでした');
+    return fetchTimedTextDirect(track.baseUrl);
+  }
+  return fetchTimedText(videoId, track.languageCode);
 }
 
 export function extractSubtitleWindow(segments, sec, windowSec = 60) {
