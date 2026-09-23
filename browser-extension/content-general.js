@@ -432,6 +432,8 @@
   }
 
   function isSubtitlePanelVisible() { return false; }
+  async function getCaptionTracksFromPage() { return []; }
+  function fetchTimedText() { return Promise.reject(new Error('subtitle-panel is not available in general edition')); }
 
   function isHighlightPanelVisible() { return false; }
 
@@ -1795,6 +1797,35 @@
     return parseXml(text);
   }
 
+  /**
+   * page bridge → InnerTube APIの順にキャプショントラック取得を試みる共通関数。
+   * 両版・字幕スキャンで同じフォールバック戦略を使うことで動作差異を防ぐ。
+   */
+  async function getCaptionTracks(videoId) {
+    let tracks;
+    try {
+      tracks = await getCaptionTracksFromPage();
+      if (tracks && tracks.length > 0) return { tracks, direct: false };
+    } catch (e) {
+      // 動画自体にアクセスできない場合はフォールバックせず即エラー
+      if (e.message.includes('動画を取得できません')) throw e;
+      console.warn('[YCS] page bridge経由の字幕トラック取得に失敗:', e.message);
+    }
+    tracks = await getCaptionTracksViaInnerTube(videoId);
+    return { tracks: tracks || [], direct: true };
+  }
+
+  /**
+   * getCaptionTracksの結果に応じた方法でセグメントを取得する。
+   */
+  async function fetchSubtitleSegments(track, videoId, direct) {
+    if (direct) {
+      if (!track.baseUrl) throw new Error('字幕トラックのURLを取得できませんでした');
+      return fetchTimedTextDirect(track.baseUrl);
+    }
+    return fetchTimedText(videoId, track.languageCode);
+  }
+
   function extractSubtitleWindow(segments, sec, windowSec = 60) {
     const halfWindow = windowSec / 2;
     const start = sec - halfWindow;
@@ -1809,12 +1840,12 @@
 
   async function getSubtitleTextForPosition(videoId, sec) {
     if (!subtitleCache || subtitleCache.videoId !== videoId) {
-      const tracks = await getCaptionTracksViaInnerTube(videoId);
+      const { tracks, direct } = await getCaptionTracks(videoId);
       if (!tracks || tracks.length === 0) {
         throw new Error('この動画には字幕がありません');
       }
       const track = pickPreferredCaptionTrack(tracks);
-      const segments = await fetchTimedTextDirect(track.baseUrl);
+      const segments = await fetchSubtitleSegments(track, videoId, direct);
       if (!segments || segments.length === 0) {
         throw new Error('字幕を取得できませんでした');
       }

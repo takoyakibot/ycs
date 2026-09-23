@@ -1,4 +1,5 @@
 import { getVideoId } from './utils.js';
+import { getCaptionTracksFromPage, fetchTimedText } from './subtitle-panel.js';
 
 const INNERTUBE_API_KEY = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
 
@@ -76,6 +77,35 @@ export async function fetchTimedTextDirect(baseUrl) {
     return parseJson3(JSON.parse(text));
   }
   return parseXml(text);
+}
+
+/**
+ * page bridge → InnerTube APIの順にキャプショントラック取得を試みる共通関数。
+ * 両版・字幕スキャンで同じフォールバック戦略を使うことで動作差異を防ぐ。
+ */
+export async function getCaptionTracks(videoId) {
+  let tracks;
+  try {
+    tracks = await getCaptionTracksFromPage();
+    if (tracks && tracks.length > 0) return { tracks, direct: false };
+  } catch (e) {
+    // 動画自体にアクセスできない場合はフォールバックせず即エラー
+    if (e.message.includes('動画を取得できません')) throw e;
+    console.warn('[YCS] page bridge経由の字幕トラック取得に失敗:', e.message);
+  }
+  tracks = await getCaptionTracksViaInnerTube(videoId);
+  return { tracks: tracks || [], direct: true };
+}
+
+/**
+ * getCaptionTracksの結果に応じた方法でセグメントを取得する。
+ */
+export async function fetchSubtitleSegments(track, videoId, direct) {
+  if (direct) {
+    if (!track.baseUrl) throw new Error('字幕トラックのURLを取得できませんでした');
+    return fetchTimedTextDirect(track.baseUrl);
+  }
+  return fetchTimedText(videoId, track.languageCode);
 }
 
 export function extractSubtitleWindow(segments, sec, windowSec = 60) {

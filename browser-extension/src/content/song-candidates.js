@@ -2,8 +2,11 @@ import state from './state.js';
 import { reportSubtitlesUnavailable } from './subtitle-scan.js';
 import { getVideoId } from './utils.js';
 import { loadYcsApiSettings, postSubtitlesToServer, missingTokenMessage } from './api.js';
-import { getCaptionTracksFromPage, fetchTimedText, } from './subtitle-panel.js';
-import { getCaptionTracksViaInnerTube, fetchTimedTextDirect } from './caption-fetch.js';
+import {
+  pickPreferredCaptionTrack,
+  getCaptionTracks,
+  fetchSubtitleSegments,
+} from './caption-fetch.js';
 import {
   closeSongCandidatePopup,
   openSongCandidatePopup,
@@ -21,6 +24,10 @@ export {
   cancelSongSuggest,
   onSongInputForSuggest,
 } from './song-candidates-shared.js';
+
+// pickPreferredCaptionTrackをcaption-fetch.jsから再エクスポート
+// （subtitle-scan.jsなどが song-candidates.js 経由で使っているため）
+export { pickPreferredCaptionTrack } from './caption-fetch.js';
 
 let subtitlePrepareFlow = null;
 
@@ -143,31 +150,13 @@ export function ensureSubtitlesOnServer(videoId) {
   }
 
   const promise = (async () => {
-    // page bridge経由で取得を試み、失敗時はInnerTube APIにフォールバック
-    let tracks;
-    let useDirectFetch = false;
-    try {
-      tracks = await getCaptionTracksFromPage();
-    } catch (e) {
-      // playabilityStatus異常（非公開・削除済み・年齢制限）はフォールバックせず即座にエラー
-      if (e.message.includes('動画を取得できません')) throw e;
-      console.warn('[YCS] page bridge経由の字幕トラック取得に失敗、InnerTube APIで再試行:', e.message);
-    }
-    if (!tracks || tracks.length === 0) {
-      tracks = await getCaptionTracksViaInnerTube(videoId);
-      useDirectFetch = true;
-    }
+    const { tracks, direct } = await getCaptionTracks(videoId);
     if (!tracks || tracks.length === 0) {
       reportSubtitlesUnavailable(videoId);
       throw new Error('この動画には字幕がありません');
     }
     const track = pickPreferredCaptionTrack(tracks);
-    if (useDirectFetch && !track.baseUrl) {
-      throw new Error('字幕トラックのURLを取得できませんでした');
-    }
-    const segments = useDirectFetch
-      ? await fetchTimedTextDirect(track.baseUrl)
-      : await fetchTimedText(videoId, track.languageCode);
+    const segments = await fetchSubtitleSegments(track, videoId, direct);
     if (!segments || segments.length === 0) {
       throw new Error('字幕を取得できませんでした');
     }
@@ -180,9 +169,4 @@ export function ensureSubtitlesOnServer(videoId) {
 
   subtitlePrepareFlow = { videoId, promise };
   return promise;
-}
-
-export function pickPreferredCaptionTrack(tracks) {
-  const ja = tracks.filter(t => (t.languageCode || '').startsWith('ja'));
-  return ja.find(t => t.kind !== 'asr') || ja[0] || tracks[0];
 }
