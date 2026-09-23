@@ -432,8 +432,6 @@
   }
 
   function isSubtitlePanelVisible() { return false; }
-  async function getCaptionTracksFromPage() { return []; }
-  function fetchTimedText() { return Promise.reject(new Error('subtitle-panel is not available in general edition')); }
 
   function isHighlightPanelVisible() { return false; }
 
@@ -451,6 +449,55 @@
       document.documentElement.appendChild(script);
     });
     return state.pageBridgeReady;
+  }
+
+  async function getCaptionTracksFromPage() {
+    await ensurePageBridge();
+
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        window.removeEventListener('message', handler);
+        reject(new Error('字幕データの取得がタイムアウトしました'));
+      }, 5000);
+
+      function handler(event) {
+        if (event.source !== window || event.data?.type !== 'YCS_CAPTION_TRACKS_RESPONSE') return;
+        window.removeEventListener('message', handler);
+        clearTimeout(timeout);
+
+        if (event.data.playabilityStatus !== 'OK') {
+          reject(new Error('動画を取得できません。動画が非公開・削除済み、または年齢制限がある可能性があります'));
+          return;
+        }
+        resolve(event.data.tracks);
+      }
+
+      window.addEventListener('message', handler);
+      window.postMessage({ type: 'YCS_GET_CAPTION_TRACKS' }, '*');
+    });
+  }
+
+  function fetchTimedText(videoId, lang) {
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        window.removeEventListener('message', handler);
+        reject(new Error('字幕の取得がタイムアウトしました'));
+      }, 15000);
+
+      function handler(event) {
+        if (event.source !== window || event.data?.type !== 'YCS_TIMEDTEXT_RESPONSE') return;
+        window.removeEventListener('message', handler);
+        clearTimeout(timeout);
+        if (event.data.error) {
+          reject(new Error(event.data.error));
+        } else {
+          resolve(event.data.segments);
+        }
+      }
+
+      window.addEventListener('message', handler);
+      window.postMessage({ type: 'YCS_FETCH_TIMEDTEXT', videoId, lang }, '*');
+    });
   }
 
   async function loadYcsApiSettings() {
@@ -1759,6 +1806,7 @@
   }
 
   async function getCaptionTracksViaInnerTube(videoId) {
+    console.log('[YCS][InnerTube] リクエスト送信:', videoId);
     const response = await fetch(`https://www.youtube.com/youtubei/v1/player?key=${INNERTUBE_API_KEY}&prettyPrint=false`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1774,15 +1822,21 @@
         videoId: videoId,
       }),
     });
+    console.log('[YCS][InnerTube] レスポンスステータス:', response.status);
     if (!response.ok) throw new Error(`InnerTube API error: ${response.status}`);
     const data = await response.json();
+    console.log('[YCS][InnerTube] playabilityStatus:', data.playabilityStatus?.status);
+    console.log('[YCS][InnerTube] captions存在:', !!data.captions);
+    console.log('[YCS][InnerTube] captionTracks数:', data.captions?.playerCaptionsTracklistRenderer?.captionTracks?.length ?? 'なし');
     const captionTracks = data.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
-    return captionTracks.map(track => ({
+    const result = captionTracks.map(track => ({
       languageCode: track.languageCode || '',
       name: track.name?.simpleText || '',
       kind: track.kind || '',
       baseUrl: track.baseUrl || '',
     }));
+    console.log('[YCS][InnerTube] 結果:', JSON.stringify(result.map(t => ({ lang: t.languageCode, kind: t.kind, name: t.name }))));
+    return result;
   }
 
   async function fetchTimedTextDirect(baseUrl) {
@@ -1802,16 +1856,19 @@
    * 両版・字幕スキャンで同じフォールバック戦略を使うことで動作差異を防ぐ。
    */
   async function getCaptionTracks(videoId) {
+    console.log('[YCS][getCaptionTracks] 開始:', videoId);
     let tracks;
     try {
       tracks = await getCaptionTracksFromPage();
+      console.log('[YCS][getCaptionTracks] page bridge結果:', tracks?.length ?? 0, '件');
       if (tracks && tracks.length > 0) return { tracks, direct: false };
     } catch (e) {
-      // 動画自体にアクセスできない場合はフォールバックせず即エラー
+      console.warn('[YCS][getCaptionTracks] page bridge失敗:', e.message);
       if (e.message.includes('動画を取得できません')) throw e;
-      console.warn('[YCS] page bridge経由の字幕トラック取得に失敗:', e.message);
     }
+    console.log('[YCS][getCaptionTracks] InnerTube APIにフォールバック');
     tracks = await getCaptionTracksViaInnerTube(videoId);
+    console.log('[YCS][getCaptionTracks] 最終結果:', tracks?.length ?? 0, '件, direct:', true);
     return { tracks: tracks || [], direct: true };
   }
 
