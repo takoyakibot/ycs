@@ -155,6 +155,18 @@ class ExtensionSongSuggestTest extends TestCase
         $this->assertLessThanOrEqual(10, count($response->json('suggestions')));
     }
 
+    public function test_public_endpoint_works_without_auth(): void
+    {
+        Song::factory()->create(['title' => 'ドライフラワー', 'artist' => '優里']);
+
+        $response = $this->getJson('/api/public/song-suggest?q='.urlencode('ドライ'));
+
+        $response->assertOk();
+        $suggestions = $response->json('suggestions');
+        $this->assertCount(1, $suggestions);
+        $this->assertSame('song', $suggestions[0]['source']);
+    }
+
     public function test_hidden_ts_items_are_excluded(): void
     {
         TsItem::factory()->create([
