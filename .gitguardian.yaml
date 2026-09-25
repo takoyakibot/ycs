@@ -1,0 +1,4 @@
+secret:
+  ignored-matches:
+    - name: YouTube InnerTube public API key
+      match: AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8
