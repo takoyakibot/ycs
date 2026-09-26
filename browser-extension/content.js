@@ -2976,7 +2976,7 @@
     const runs = message.runs || [];
     return runs.map(run => {
       if (run.text) return run.text;
-      if (run.emoji) return run.emoji.shortcuts?.[0] || '';
+      if (run.emoji) return run.emoji.shortcuts?.[0] || run.emoji.emojiId || '';
       return '';
     }).join('');
   }
@@ -5397,7 +5397,7 @@
       </div>
       <div class="vdg-ts-footer">
         <div class="vdg-ts-help">
-          クリック: マーカー追加(付近は選択/ドラッグで移動) | Enter: 曲名入力/入力終了 | Del/BS: 削除 | Esc: 入力終了・選択解除 | ←→: 1秒移動(2度押し5秒) | ↑↓: マーカー移動(入力中は行頭/行末へ) | Space: 再生/停止 | J/L: 再生を10秒戻す/進める | Ctrl+Z/Y: 操作を戻す/やり直す | −/+ボタン or Ctrl+ホイール: 拡大/縮小
+          クリック: マーカー追加(付近は選択/ドラッグで移動) | Enter: 曲名入力/入力終了 | Del/BS: 削除 | Esc: 入力終了・選択解除 | ←→: 1秒移動 | ↑↓: マーカー移動(入力中は行頭/行末へ) | Space: 再生/停止 | J/L: 再生を10秒戻す/進める | Ctrl+Z/Y: 操作を戻す/やり直す | −/+ボタン or Ctrl+ホイール: 拡大/縮小
         </div>
         <label class="vdg-ts-format-toggle">
           <input type="checkbox" id="vdg-ts-zeropad">

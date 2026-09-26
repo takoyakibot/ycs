@@ -566,7 +566,7 @@ function getMessageText(message) {
   const runs = message.runs || [];
   return runs.map(run => {
     if (run.text) return run.text;
-    if (run.emoji) return run.emoji.shortcuts?.[0] || '';
+    if (run.emoji) return run.emoji.shortcuts?.[0] || run.emoji.emojiId || '';
     return '';
   }).join('');
 }
