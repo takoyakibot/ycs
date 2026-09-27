@@ -584,7 +584,7 @@ export function createVolumeGraph() {
       </div>
       <div class="vdg-ts-footer">
         <div class="vdg-ts-help">
-          クリック: マーカー追加(付近は選択/ドラッグで移動) | Enter: 曲名入力/入力終了 | Del/BS: 削除 | Esc: 入力終了・選択解除 | ←→: 1秒移動 | ↑↓: マーカー移動(入力中は行頭/行末へ) | Space: 再生/停止 | J/L: 再生を10秒戻す/進める | Ctrl+Z/Y: 操作を戻す/やり直す | −/+ボタン or Ctrl+ホイール: 拡大/縮小
+          クリック: マーカー追加(付近は選択/ドラッグで移動) | Enter: 曲名入力/入力終了 | Del/BS: 削除 | Esc: 入力終了・選択解除 | ←→: 1秒移動(同方向連打5秒) | ↑↓: マーカー移動(入力中は行頭/行末へ) | Space: 再生/停止 | J/L: 再生を10秒戻す/進める | Ctrl+Z/Y: 操作を戻す/やり直す | −/+ボタン or Ctrl+ホイール: 拡大/縮小
         </div>
         <label class="vdg-ts-format-toggle">
           <input type="checkbox" id="vdg-ts-zeropad">
@@ -1092,6 +1092,8 @@ export function setupVolumeGraphEvents() {
   // キーボード操作
   // YouTube本体のショートカットと二重に発火すると打ち消し合うため、
   // キャプチャフェーズで先に処理してstopImmediatePropagationで止める
+  let lastArrowTime = 0;
+  let lastArrowDirection = 0;
   document.addEventListener('keydown', (e) => {
     const isTextInput = e.target.classList.contains('vdg-ts-text-input');
     if (isTextInput && !['Delete', 'ArrowUp', 'ArrowDown', 'Enter', 'Escape'].includes(e.key)) return;
@@ -1168,7 +1170,11 @@ export function setupVolumeGraphEvents() {
       e.preventDefault();
       e.stopImmediatePropagation();
       const direction = e.key === 'ArrowLeft' ? -1 : 1;
-      moveSelectedMarker(direction);
+      const now = Date.now();
+      const delta = (direction === lastArrowDirection && now - lastArrowTime < 200) ? 5 : 1;
+      lastArrowTime = now;
+      lastArrowDirection = direction;
+      moveSelectedMarker(direction * delta);
     } else if (e.key === 'Enter' && !isTextInput) {
       // 選択中マーカーの曲名入力欄にフォーカス
       e.preventDefault();
