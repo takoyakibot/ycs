@@ -130,4 +130,37 @@ class SongTagSearchTest extends TestCase
 
         $this->assertSame(['EasyPop'], collect($songs)->pluck('artist')->all());
     }
+
+    public function test_symbol_only_search_does_not_return_all_songs(): void
+    {
+        $this->songWithTags('曲A', 'EasyPop', ['初音ミク']);
+
+        $this->assertSame([], $this->fetchSongTitles('♪'));
+    }
+
+    public function test_exact_mode_exclusion_applies_to_tags(): void
+    {
+        $this->songWithTags('曲A', 'EasyPop', ['初音ミク']);
+        $this->songWithTags('曲B', 'EasyPop', ['鏡音リン']);
+
+        $this->assertSame(['曲B'], $this->fetchSongTitles('EasyPop -"初音ミク"', 'exact'));
+    }
+
+    public function test_sync_artist_tags_updates_normalized_value(): void
+    {
+        $song = Song::factory()->create(['title' => '曲A', 'artist' => 'Kana Nishino']);
+
+        $song->syncArtistTags('Kana Nishino', '西野カナ');
+
+        $this->assertSame(['西野カナ'], $song->tags()->pluck('normalized_value')->all());
+    }
+
+    public function test_tag_without_normalized_value_does_not_break_fuzzy_search(): void
+    {
+        $song = $this->songWithTags('曲A', 'EasyPop', ['初音ミク']);
+        \Illuminate\Support\Facades\DB::table('song_tags')->where('song_id', $song->id)->update(['normalized_value' => null]);
+
+        $this->assertSame(['曲A'], $this->fetchSongTitles('曲A'));
+        $this->assertSame([], $this->fetchSongTitles('初音ミク'));
+    }
 }
