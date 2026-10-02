@@ -56,10 +56,10 @@ export class ArtistTagSyncDialog {
                         </p>
 
                         <div class="flex gap-2 justify-end">
-                            <button id="syncTagsBtn" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                            <button id="syncTagsBtn" data-action="sync" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
                                 タグも更新する
                             </button>
-                            <button id="skipTagsBtn" class="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded hover:bg-gray-400 dark:hover:bg-gray-500">
+                            <button id="skipTagsBtn" data-action="skip" class="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded hover:bg-gray-400 dark:hover:bg-gray-500">
                                 タグはそのまま
                             </button>
                         </div>
@@ -67,11 +67,13 @@ export class ArtistTagSyncDialog {
                 </div>
             `;
 
-            document.body.insertAdjacentHTML('beforeend', dialogHtml);
-
-            const dialog = document.getElementById('artistTagSyncDialog');
-            const syncBtn = document.getElementById('syncTagsBtn');
-            const skipBtn = document.getElementById('skipTagsBtn');
+            // id で引くと既に開いている同名ダイアログを拾ってしまうため、生成した要素から辿る
+            const template = document.createElement('template');
+            template.innerHTML = dialogHtml.trim();
+            const dialog = template.content.firstElementChild;
+            document.body.appendChild(dialog);
+            const syncBtn = dialog.querySelector('[data-action="sync"]');
+            const skipBtn = dialog.querySelector('[data-action="skip"]');
 
             syncBtn.addEventListener('click', () => {
                 dialog.remove();
@@ -82,6 +84,9 @@ export class ArtistTagSyncDialog {
                 dialog.remove();
                 resolve({ action: 'skip' });
             });
+
+            // 背後の入力欄にフォーカスが残ると、Enter でフォームが再送信されダイアログが重なる
+            syncBtn.focus();
         });
     }
 }

@@ -2357,6 +2357,17 @@ export class TimestampNormalization {
      * 楽曲マスタを更新
      */
     async updateSong() {
+        // タグ同期の確認中や更新中に Enter で再送信されても多重実行しない
+        if (this.isUpdatingSong) return;
+        this.isUpdatingSong = true;
+        try {
+            await this.doUpdateSong();
+        } finally {
+            this.isUpdatingSong = false;
+        }
+    }
+
+    async doUpdateSong() {
         const songId = document.getElementById('editSongId').value;
         const title = document.getElementById('editSongTitle').value.trim();
         const artist = document.getElementById('editSongArtist').value.trim();
