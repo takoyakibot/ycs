@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class TimestampDecomposition extends Model
 {
@@ -56,6 +57,14 @@ class TimestampDecomposition extends Model
     }
 
     /**
+     * 現在のマッピング（正規化画面での紐付け）
+     */
+    public function currentMapping(): HasOne
+    {
+        return $this->hasOne(TimestampSongMapping::class, 'normalized_text', 'normalized_text');
+    }
+
+    /**
      * 作成者
      */
     public function creator(): BelongsTo
@@ -69,6 +78,27 @@ class TimestampDecomposition extends Model
     public function updater(): BelongsTo
     {
         return $this->belongsTo(User::class, 'updated_by');
+    }
+
+    /**
+     * 判定時と現在のマッピングが食い違っているか
+     *
+     * SQL側の changed フィルタ（TimestampDecompositionService::getAutoMatchedList）と
+     * 同じ仕様を PHP で判定する。片方を変更したら他方も合わせること。
+     */
+    public function isMappingChanged(): bool
+    {
+        $mapping = $this->currentMapping;
+
+        if ($mapping === null) {
+            return $this->song_id !== null;
+        }
+
+        if ($mapping->is_not_song) {
+            return true;
+        }
+
+        return ($mapping->song_id ?? '') !== ($this->song_id ?? '');
     }
 
     /**

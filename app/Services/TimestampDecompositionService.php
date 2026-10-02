@@ -933,7 +933,7 @@ class TimestampDecompositionService
      */
     public function getAutoMatchedList(?string $filter = null, int $perPage = 50): LengthAwarePaginator
     {
-        $query = TimestampDecomposition::with('song')
+        $query = TimestampDecomposition::with(['song', 'currentMapping.song'])
             ->where('status', TimestampDecomposition::STATUS_AUTO_MATCHED)
             ->orderByDesc('updated_at')
             ->orderByDesc('id');
@@ -943,7 +943,6 @@ class TimestampDecompositionService
         } elseif ($filter === 'unlinked') {
             $query->whereNull('song_id');
         } elseif ($filter === 'empty_artist') {
-            // 紐付け済みなら楽曲マスタのアーティスト名、未紐付けなら判定結果を見る
             $query->where(function ($outer) {
                 $outer->where(function ($q) {
                     $q->whereNull('song_id')
@@ -956,6 +955,26 @@ class TimestampDecompositionService
                             $songQuery->whereNull('artist')->orWhere('artist', '');
                         });
                 });
+            });
+        } elseif ($filter === 'changed') {
+            $query->where(function ($outer) {
+                $outer->whereExists(function ($sub) {
+                    $sub->selectRaw('1')
+                        ->from('timestamp_song_mappings as tsm')
+                        ->whereColumn('tsm.normalized_text', 'timestamp_decompositions.normalized_text')
+                        ->where(function ($cond) {
+                            $cond->whereRaw("COALESCE(tsm.song_id, '') != COALESCE(timestamp_decompositions.song_id, '')")
+                                ->orWhere('tsm.is_not_song', true);
+                        });
+                })
+                    ->orWhere(function ($q) {
+                        $q->whereNotNull('timestamp_decompositions.song_id')
+                            ->whereNotExists(function ($sub) {
+                                $sub->selectRaw('1')
+                                    ->from('timestamp_song_mappings as tsm')
+                                    ->whereColumn('tsm.normalized_text', 'timestamp_decompositions.normalized_text');
+                            });
+                    });
             });
         }
 
