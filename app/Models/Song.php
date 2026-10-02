@@ -43,6 +43,13 @@ class Song extends Model
     protected static function booted(): void
     {
         static::saving(function (Song $song) {
+            if ($song->title !== null) {
+                $song->title = trim($song->title);
+            }
+            if ($song->artist !== null) {
+                $song->artist = trim($song->artist);
+            }
+
             if ($song->isDirty('title') || $song->normalized_title === null) {
                 $song->normalized_title = TextNormalizer::normalize($song->title);
             }
