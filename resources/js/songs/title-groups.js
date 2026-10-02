@@ -156,8 +156,12 @@ function registerTitleGroupsComponent() {
         async copyGroupSearch(group) {
             const title = group.songs[0]?.title || '';
             const artists = [];
+            const seen = new Set();
             for (const song of group.songs) {
-                if (song.artist && !artists.includes(song.artist)) {
+                if (!song.artist) continue;
+                const key = song.artist.toLowerCase();
+                if (!seen.has(key)) {
+                    seen.add(key);
                     artists.push(song.artist);
                 }
             }
