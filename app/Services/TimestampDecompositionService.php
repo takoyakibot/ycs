@@ -21,6 +21,11 @@ class TimestampDecompositionService
     public const AUTO_SELECT_THRESHOLD = 0.8;
 
     /**
+     * 前後にスペースのないハイフン類で分割した場合の確信度の上限（AUTO_SELECT_THRESHOLD 未満）
+     */
+    public const UNSPACED_HYPHEN_CONFIDENCE_CAP = 0.5;
+
+    /**
      * 区切り文字を含むタイムスタンプをスキャンして分解結果をDBに保存
      *
      * @return int 新規追加された件数
@@ -118,6 +123,10 @@ class TimestampDecompositionService
     {
         $splitResult = TextNormalizer::splitBySeparators($text);
         $detection = TextNormalizer::detectTitleArtistPattern($splitResult['parts']);
+
+        if (TextNormalizer::hasUnspacedHyphenSplit($text)) {
+            $detection['confidence'] = min($detection['confidence'], self::UNSPACED_HYPHEN_CONFIDENCE_CAP);
+        }
 
         return [
             'parts' => $splitResult['parts'],
@@ -427,6 +436,11 @@ class TimestampDecompositionService
             ->where('id', '!=', $excludeId)
             ->chunk(100, function ($decompositions) use ($normalizedArtist, $artistName, &$count, $cascadeGroupId) {
                 foreach ($decompositions as $decomposition) {
+                    // 語中ハイフンか区切りかを判別できないものは、カスケードでも自動確定しない
+                    if (TextNormalizer::hasUnspacedHyphenSplit($decomposition->original_text)) {
+                        continue;
+                    }
+
                     $matchResult = $this->findArtistInParts($decomposition->parts, $normalizedArtist);
 
                     if ($matchResult === null) {

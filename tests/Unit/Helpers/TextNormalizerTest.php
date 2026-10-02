@@ -750,4 +750,14 @@ class TextNormalizerTest extends TestCase
             $this->assertTrue(TextNormalizer::hasSeparators($text), $text);
         }
     }
+
+    public function test_has_unspaced_hyphen_split(): void
+    {
+        foreach (['夜に駆ける-YOASOBI', 'Hi-Fi', 'Hi-Fi / Artist', 'Lemon－cover'] as $text) {
+            $this->assertTrue(TextNormalizer::hasUnspacedHyphenSplit($text), $text);
+        }
+        foreach (['YOASOBI - 夜に駆ける', '夜に駆ける -YOASOBI', '夜に駆ける　-　YOASOBI', 'チュ-リップ', '夜に駆ける / YOASOBI', ''] as $text) {
+            $this->assertFalse(TextNormalizer::hasUnspacedHyphenSplit($text), $text);
+        }
+    }
 }
