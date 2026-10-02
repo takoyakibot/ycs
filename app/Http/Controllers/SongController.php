@@ -1059,7 +1059,7 @@ class SongController extends Controller
             $song->update($songData);
 
             if ($syncTags) {
-                return $this->syncArtistTags($song, $validated['old_artist'], $validated['artist']);
+                return $song->syncArtistTags($validated['old_artist'], $validated['artist']);
             }
 
             return [];
@@ -1070,27 +1070,6 @@ class SongController extends Controller
             'song' => $song,
             'updated_tags' => $updatedTags,
         ]);
-    }
-
-    /**
-     * アーティスト名変更時にタグを同期
-     */
-    private function syncArtistTags(Song $song, string $oldArtist, string $newArtist): array
-    {
-        $matchingTags = $song->tags()->where('value', $oldArtist)->get();
-        $updatedTags = [];
-
-        foreach ($matchingTags as $tag) {
-            $oldValue = $tag->value;
-            $tag->update(['value' => $newArtist]);
-            $updatedTags[] = [
-                'id' => $tag->id,
-                'old_value' => $oldValue,
-                'new_value' => $newArtist,
-            ];
-        }
-
-        return $updatedTags;
     }
 
     /**
