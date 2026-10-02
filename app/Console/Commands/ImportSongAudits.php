@@ -23,6 +23,12 @@ class ImportSongAudits extends Command
             return Command::FAILURE;
         }
 
+        if ($file === null && stream_isatty(STDIN)) {
+            $this->error('JSON ファイルを指定するか、標準入力から渡してください');
+
+            return Command::FAILURE;
+        }
+
         $json = $file !== null ? file_get_contents($file) : stream_get_contents(STDIN);
         $items = json_decode($json, true);
         if (! is_array($items) || ! array_is_list($items)) {

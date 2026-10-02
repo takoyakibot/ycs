@@ -18,7 +18,7 @@ class SongAuditService
 {
     private const TEXT_EXAMPLE_LIMIT = 3;
 
-    private const CHUNK_SIZE = 200;
+    public function __construct(private int $chunkSize = 200) {}
 
     /**
      * 未判定、または判定後に内容が変わった対象を最大 $limit 件返す
@@ -27,7 +27,7 @@ class SongAuditService
     {
         $results = [];
 
-        $this->targetQuery($type)->chunkById(self::CHUNK_SIZE, function (Collection $targets) use ($type, $limit, &$results) {
+        $this->targetQuery($type)->chunkById($this->chunkSize, function (Collection $targets) use ($type, $limit, &$results) {
             $judged = SongAudit::where('target_type', $type)
                 ->whereIn('target_id', $targets->pluck('id'))
                 ->pluck('fingerprint', 'target_id');
@@ -61,6 +61,7 @@ class SongAuditService
     public function import(array $items, string $judgedBy, bool $dryRun = false): array
     {
         $summary = ['registered' => 0, 'stale' => [], 'errors' => []];
+        $seen = [];
 
         foreach (array_values($items) as $index => $item) {
             $label = '#'.($index + 1);
@@ -71,6 +72,14 @@ class SongAuditService
 
                 continue;
             }
+
+            $key = $item['type'].':'.$item['id'];
+            if (isset($seen[$key])) {
+                $summary['errors'][] = "{$label}: {$seen[$key]} と同じ対象です ({$item['type']} {$item['id']})";
+
+                continue;
+            }
+            $seen[$key] = $label;
 
             // export の対象条件では絞らない。紐付けが外れた行は「対象なし」ではなく更新扱いにする
             $target = $item['type'] === SongAudit::TARGET_SONG
@@ -95,7 +104,7 @@ class SongAuditService
                         'fingerprint' => $item['fingerprint'],
                         'verdict' => $item['verdict'],
                         'reason' => $item['reason'] ?? null,
-                        'suggestion' => $item['suggestion'] ?? null,
+                        'suggestion' => $this->normalizeSuggestion($item['suggestion'] ?? null),
                         'judged_by' => $judgedBy,
                         'judged_at' => now(),
                         'resolution' => SongAudit::RESOLUTION_PENDING,
@@ -125,12 +134,13 @@ class SongAuditService
             $content = [
                 $target->normalized_text,
                 $target->song_id,
+                (bool) $target->is_not_song,
                 $target->song?->title,
                 $target->song?->artist,
             ];
         }
 
-        return sha1(json_encode($content, JSON_UNESCAPED_UNICODE));
+        return sha1(json_encode($content, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
     }
 
     private function targetQuery(string $type)
@@ -165,8 +175,10 @@ class SongAuditService
         $normalizedTexts = $textsByTarget->flatten()->unique()->values();
         $originals = DB::table('ts_items')
             ->whereIn('normalized_text', $normalizedTexts)
+            ->select(['normalized_text', 'text'])
+            ->distinct()
             ->orderBy('text')
-            ->get(['normalized_text', 'text'])
+            ->get()
             ->groupBy('normalized_text')
             ->map(fn ($rows) => $rows->pluck('text')->unique()->values());
 
@@ -223,8 +235,8 @@ class SongAuditService
             'verdict' => ['required', 'string', 'in:'.SongAudit::VERDICT_OK.','.SongAudit::VERDICT_NEEDS_FIX],
             'reason' => ['nullable', 'string', 'max:1000', 'required_if:verdict,'.SongAudit::VERDICT_NEEDS_FIX],
             'suggestion' => ['nullable', 'array'],
-            'suggestion.title' => ['nullable', 'string', 'max:255'],
-            'suggestion.artist' => ['nullable', 'string', 'max:255'],
+            'suggestion.title' => ['nullable', 'string', 'filled', 'max:255'],
+            'suggestion.artist' => ['nullable', 'string', 'filled', 'max:255'],
             'suggestion.is_not_song' => ['nullable', 'boolean'],
         ]);
 
@@ -238,10 +250,26 @@ class SongAuditService
             return 'suggestion に未知のキーがあります: '.implode(', ', $unknownKeys);
         }
 
-        if (($item['suggestion']['is_not_song'] ?? false) && $item['type'] !== SongAudit::TARGET_MAPPING) {
+        if (array_key_exists('is_not_song', $item['suggestion'] ?? []) && $item['type'] !== SongAudit::TARGET_MAPPING) {
             return 'is_not_song は紐付けの判定でのみ指定できます';
         }
 
         return null;
+    }
+
+    /**
+     * is_not_song は "1" や 1 でも受け付けるため、保存前に bool に揃える
+     */
+    private function normalizeSuggestion(?array $suggestion): ?array
+    {
+        if (empty($suggestion)) {
+            return null;
+        }
+
+        if (array_key_exists('is_not_song', $suggestion)) {
+            $suggestion['is_not_song'] = filter_var($suggestion['is_not_song'], FILTER_VALIDATE_BOOLEAN);
+        }
+
+        return $suggestion;
     }
 }

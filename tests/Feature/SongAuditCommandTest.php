@@ -283,6 +283,72 @@ class SongAuditCommandTest extends TestCase
         $this->assertSame(1, Artisan::call('song-audit:export', ['type' => 'song', '--limit' => 0]));
     }
 
+    public function test_import_treats_mapping_marked_as_not_song_as_stale(): void
+    {
+        $song = Song::factory()->create();
+        $mapping = $this->createLinkedTimestamp($song, 'テキスト');
+        $exported = $this->export(SongAudit::TARGET_MAPPING)[0];
+        $mapping->update(['is_not_song' => true]);
+
+        $this->import([$this->judgement($exported)]);
+
+        $this->assertSame(0, SongAudit::count());
+        $this->assertStringContainsString('更新されています', Artisan::output());
+    }
+
+    public function test_export_across_chunks_skips_judged_and_fills_limit(): void
+    {
+        $this->app->instance(SongAuditService::class, new SongAuditService(chunkSize: 2));
+        $songs = Song::factory()->count(5)->create()->sortBy('id')->values();
+
+        // 先頭の1チャンク分（2件）を判定済みにする
+        $this->import(array_map(fn ($e) => $this->judgement($e), $this->export(SongAudit::TARGET_SONG, 2)));
+
+        $ids = array_column($this->export(SongAudit::TARGET_SONG, 3), 'id');
+
+        $this->assertSame($songs->slice(2)->pluck('id')->values()->all(), $ids);
+    }
+
+    public function test_import_rejects_duplicate_target_in_same_payload(): void
+    {
+        Song::factory()->create();
+        $exported = $this->export(SongAudit::TARGET_SONG)[0];
+
+        $exitCode = $this->import([
+            $this->judgement($exported),
+            $this->judgement($exported, ['verdict' => SongAudit::VERDICT_NEEDS_FIX, 'reason' => '理由']),
+        ]);
+
+        $this->assertSame(1, $exitCode);
+        $this->assertSame(SongAudit::VERDICT_OK, SongAudit::sole()->verdict);
+        $this->assertStringContainsString('#2: #1 と同じ対象です', Artisan::output());
+    }
+
+    public function test_import_rejects_blank_suggestion_values(): void
+    {
+        Song::factory()->create();
+        $exported = $this->export(SongAudit::TARGET_SONG)[0];
+
+        $this->assertSame(1, $this->import([$this->judgement($exported, ['suggestion' => ['title' => '  ']])]));
+        $this->assertSame(1, $this->import([$this->judgement($exported, ['suggestion' => ['artist' => '']])]));
+        $this->assertSame(0, SongAudit::count());
+    }
+
+    public function test_import_normalizes_is_not_song_to_boolean(): void
+    {
+        $song = Song::factory()->create();
+        $this->createLinkedTimestamp($song, 'テキスト');
+        $exported = $this->export(SongAudit::TARGET_MAPPING)[0];
+
+        $this->import([$this->judgement($exported, [
+            'verdict' => SongAudit::VERDICT_NEEDS_FIX,
+            'reason' => '楽曲ではない',
+            'suggestion' => ['is_not_song' => '1'],
+        ])]);
+
+        $this->assertSame(['is_not_song' => true], SongAudit::sole()->suggestion);
+    }
+
     public function test_song_fingerprint_ignores_tag_order(): void
     {
         $service = app(SongAuditService::class);
