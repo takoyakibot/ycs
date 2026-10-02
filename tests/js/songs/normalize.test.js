@@ -23,6 +23,7 @@ vi.mock('@/songs/services/SongApiService.js', () => ({
         fetchSongs: vi.fn().mockResolvedValue({ data: [], total: 0 }),
         searchSongs: vi.fn().mockResolvedValue({ data: [], total: 0 }),
         fetchNotations: vi.fn().mockResolvedValue({ data: { notations: [] } }),
+        updateSong: vi.fn().mockResolvedValue({ song: { id: 'song1' } }),
     },
 }));
 vi.mock('@/songs/components/SimilarSongsDialog.js', () => ({
@@ -721,6 +722,55 @@ describe('TimestampNormalization', () => {
         it('文字列をそのまま表示する', () => {
             instance.updateSongsCount('検索中...');
             expect(document.getElementById('songsCount').textContent).toBe('検索中...');
+        });
+    });
+    // =========================================================================
+    // updateSong — 二重送信の防止
+    // =========================================================================
+    describe('updateSong', () => {
+        let ArtistTagSyncDialog;
+        let songApiService;
+
+        beforeEach(async () => {
+            ({ ArtistTagSyncDialog } = await import('@/songs/components/ArtistTagSyncDialog.js'));
+            ({ songApiService } = await import('@/songs/services/SongApiService.js'));
+            ArtistTagSyncDialog.show.mockReset();
+            songApiService.updateSong.mockClear();
+
+            document.getElementById('editSongId').value = 'song1';
+            document.getElementById('editSongTitle').value = 'Darling';
+            document.getElementById('editSongArtist').value = '西野カナ';
+            instance.editingSong = { id: 'song1', artist: 'Kana Nishino' };
+            instance.editingSongTags = [{ value: 'Kana Nishino' }];
+            instance.showLoading = vi.fn();
+            instance.hideLoading = vi.fn();
+            instance.closeEditModal = vi.fn();
+            instance.loadSongs = vi.fn().mockResolvedValue();
+            instance.loadTimestamps = vi.fn().mockResolvedValue();
+        });
+
+        it('タグ同期の確認中に再度送信されても、確認ダイアログと更新は1回だけ', async () => {
+            let resolveDialog;
+            ArtistTagSyncDialog.show.mockReturnValue(new Promise((r) => { resolveDialog = r; }));
+
+            const first = instance.updateSong();
+            // 確認ダイアログ表示中にフォームで再度 Enter
+            const second = instance.updateSong();
+
+            resolveDialog({ action: 'sync' });
+            await Promise.all([first, second]);
+
+            expect(ArtistTagSyncDialog.show).toHaveBeenCalledTimes(1);
+            expect(songApiService.updateSong).toHaveBeenCalledTimes(1);
+        });
+
+        it('更新完了後は再度送信できる', async () => {
+            ArtistTagSyncDialog.show.mockResolvedValue({ action: 'skip' });
+
+            await instance.updateSong();
+            await instance.updateSong();
+
+            expect(songApiService.updateSong).toHaveBeenCalledTimes(2);
         });
     });
 });
