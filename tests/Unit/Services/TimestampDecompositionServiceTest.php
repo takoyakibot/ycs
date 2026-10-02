@@ -1998,4 +1998,61 @@ class TimestampDecompositionServiceTest extends TestCase
         $this->assertEquals(0, $count);
         $this->assertEquals(0, Song::count());
     }
+
+    /**
+     * 前後にスペースのないハイフン類で分割した場合は自動確定の閾値未満にする（#1015）
+     */
+    public function test_decompose_caps_confidence_for_unspaced_hyphen_split(): void
+    {
+        $spaced = $this->service->decompose('Lemon - cover');
+        $unspaced = $this->service->decompose('Lemon-cover');
+
+        $this->assertGreaterThanOrEqual(TimestampDecompositionService::AUTO_SELECT_THRESHOLD, $spaced['detection']['confidence']);
+        $this->assertSame(['Lemon', 'cover'], $unspaced['parts']);
+        $this->assertLessThan(TimestampDecompositionService::AUTO_SELECT_THRESHOLD, $unspaced['detection']['confidence']);
+    }
+
+    public function test_scan_does_not_auto_match_unspaced_hyphen_split(): void
+    {
+        $this->actingAs(User::factory()->create());
+        // スペースの有無だけが違うテキストはスキャン時に1件へまとめられるため、別の曲名にする
+        $this->createVisibleTsItem('Lemon - cover');
+        $this->createVisibleTsItem('Flamingo-cover');
+
+        $this->service->scanAndDecompose();
+
+        $this->assertSame(
+            TimestampDecomposition::STATUS_AUTO_MATCHED,
+            TimestampDecomposition::where('original_text', 'Lemon - cover')->value('status')
+        );
+        $this->assertSame(
+            TimestampDecomposition::STATUS_PENDING,
+            TimestampDecomposition::where('original_text', 'Flamingo-cover')->value('status')
+        );
+    }
+
+    public function test_cascade_skips_unspaced_hyphen_split(): void
+    {
+        $this->actingAs(User::factory()->create());
+        $this->createVisibleTsItem('星街すいせい / GHOST');
+        $this->createVisibleTsItem('星街すいせい-Stellar Stellar');
+
+        $make = fn (string $text, array $parts) => TimestampDecomposition::create([
+            'id' => (string) Str::ulid(),
+            'normalized_text' => TextNormalizer::normalize($text),
+            'original_text' => $text,
+            'parts' => $parts,
+            'separator_count' => 1,
+            'status' => TimestampDecomposition::STATUS_PENDING,
+            'confidence' => 0.5,
+        ]);
+        $spaced = $make('星街すいせい / GHOST', ['星街すいせい', 'GHOST']);
+        $unspaced = $make('星街すいせい-Stellar Stellar', ['星街すいせい', 'Stellar Stellar']);
+
+        $count = $this->service->cascadeArtistSelection('星街すいせい', (string) Str::ulid());
+
+        $this->assertSame(1, $count);
+        $this->assertSame(TimestampDecomposition::STATUS_AUTO_MATCHED, $spaced->fresh()->status);
+        $this->assertSame(TimestampDecomposition::STATUS_PENDING, $unspaced->fresh()->status);
+    }
 }

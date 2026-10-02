@@ -332,6 +332,22 @@ class TextNormalizer
     }
 
     /**
+     * 前後にスペースのないハイフン類で分割されるテキストか
+     *
+     * 「Hi-Fi」のような語中ハイフンと「曲名-アーティスト」のような区切りは機械的に判別できないため、
+     * 該当するものは自動確定せず人の選別に回す（#1015）。
+     * カタカナに挟まれたハイフン類はそもそも区切らないので対象外。
+     */
+    public static function hasUnspacedHyphenSplit(?string $text): bool
+    {
+        if ($text === null || $text === '') {
+            return false;
+        }
+
+        return preg_match('/(?<=[^\s\x{3000}])'.self::HYPHEN_SEPARATOR.'(?=[^\s\x{3000}])/u', $text) === 1;
+    }
+
+    /**
      * パーツが無視すべき（楽曲名・アーティスト名の候補にならない）かどうかを判定
      *
      * 無視キーワードと記号、および残留した数字だけで構成されているパーツのみを
