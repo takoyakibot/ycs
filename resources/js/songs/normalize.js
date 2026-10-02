@@ -2338,8 +2338,8 @@ export class TimestampNormalization {
     }
 
     applyNotation(text) {
-        // SEPARATOR_PATTERN と同じ: /[\/／\-−－:：|｜]/u
-        const separatorPattern = /[\/／\-−－:：|｜]/u;
+        // TextNormalizer::SEPARATOR_PATTERN と同じ（カタカナに挟まれたハイフン類は区切らない）
+        const separatorPattern = /[\/／:：|｜]|(?:(?<![ァ-ヺーｦ-ﾟ])[-−－]|[-−－](?![ァ-ヺーｦ-ﾟ]))/u;
         const match = text.match(separatorPattern);
         if (match) {
             const idx = match.index;

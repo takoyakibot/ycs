@@ -292,6 +292,13 @@ describe('TimestampNormalization', () => {
             expect(document.getElementById('editSongTitle').value).toBe('Lemon');
         });
 
+        it('カタカナに挟まれたハイフン類は伸ばし棒とみなして分割しない', () => {
+            document.getElementById('editSongArtist').value = '';
+            instance.applyNotation('チュ－リップ');
+            expect(document.getElementById('editSongTitle').value).toBe('チュ－リップ');
+            expect(document.getElementById('editSongArtist').value).toBe('');
+        });
+
         it('コロン区切りでも分割する', () => {
             instance.applyNotation('King Gnu：飛行艇');
             expect(document.getElementById('editSongArtist').value).toBe('King Gnu');
