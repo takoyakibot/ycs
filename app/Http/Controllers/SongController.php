@@ -1064,15 +1064,22 @@ class SongController extends Controller
         $songData = collect($validated)->except(['sync_tags', 'old_artist'])->all();
         $syncTags = ! empty($validated['sync_tags']) && ! empty($validated['old_artist']) && isset($validated['artist']);
 
-        $updatedTags = DB::transaction(function () use ($song, $songData, $syncTags, $validated) {
-            $song->update($songData);
+        try {
+            $updatedTags = DB::transaction(function () use ($song, $songData, $syncTags, $validated) {
+                $song->update($songData);
 
-            if ($syncTags) {
-                return $song->syncArtistTags($validated['old_artist'], $validated['artist']);
-            }
+                if ($syncTags) {
+                    return $song->syncArtistTags($validated['old_artist'], $validated['artist']);
+                }
 
-            return [];
-        });
+                return [];
+            });
+        } catch (UniqueConstraintViolationException) {
+            // 照合順序（utf8mb4_unicode_ci）で同値の組み合わせも含むため、事前チェックではなく制約違反で判定する
+            return response()->json([
+                'message' => '同じ曲名・アーティストの楽曲マスタが既にあります。「楽曲の統合」で統合してください。',
+            ], 409);
+        }
 
         return response()->json([
             'message' => '楽曲マスタを更新しました。',
