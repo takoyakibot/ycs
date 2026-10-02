@@ -7,6 +7,7 @@ use App\Models\SongGroupReview;
 use App\Models\TimestampSongMapping;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class SongCleansingTest extends TestCase
@@ -316,9 +317,11 @@ class SongCleansingTest extends TestCase
 
     public function test_preview_artist_rename_ignores_surrounding_spaces_in_stored_artist(): void
     {
-        // 一覧に " Kana Nishino" と表示されても、送信値は TrimStrings で前後スペースが除去される
-        Song::factory()->create(['title' => 'Darling', 'artist' => ' Kana Nishino']);
-        Song::factory()->create(['title' => 'Best Friend', 'artist' => 'Kana Nishino ']);
+        // Song 保存時の trim をバイパスしてレガシーデータを再現する
+        $s1 = Song::factory()->create(['title' => 'Darling', 'artist' => 'Kana Nishino']);
+        DB::table('songs')->where('id', $s1->id)->update(['artist' => ' Kana Nishino']);
+        $s2 = Song::factory()->create(['title' => 'Best Friend', 'artist' => 'Kana Nishino']);
+        DB::table('songs')->where('id', $s2->id)->update(['artist' => 'Kana Nishino ']);
 
         $response = $this->actingAs($this->user)
             ->getJson('/api/songs/cleansing/artist-rename-preview?'.http_build_query([
@@ -332,7 +335,8 @@ class SongCleansingTest extends TestCase
 
     public function test_rename_artist_ignores_surrounding_spaces_in_stored_artist(): void
     {
-        $song = Song::factory()->create(['title' => 'Darling', 'artist' => ' Kana Nishino']);
+        $song = Song::factory()->create(['title' => 'Darling', 'artist' => 'Kana Nishino']);
+        DB::table('songs')->where('id', $song->id)->update(['artist' => ' Kana Nishino']);
 
         $this->actingAs($this->user)
             ->postJson('/api/songs/cleansing/artist-rename', [
@@ -347,7 +351,8 @@ class SongCleansingTest extends TestCase
     public function test_rename_artist_merges_into_target_with_surrounding_spaces(): void
     {
         $source = Song::factory()->create(['title' => 'Darling', 'artist' => 'Kana Nishino']);
-        $target = Song::factory()->create(['title' => 'Darling', 'artist' => ' 西野カナ']);
+        $target = Song::factory()->create(['title' => 'Darling', 'artist' => '西野カナ']);
+        DB::table('songs')->where('id', $target->id)->update(['artist' => ' 西野カナ']);
 
         $this->actingAs($this->user)
             ->postJson('/api/songs/cleansing/artist-rename', [
@@ -364,8 +369,10 @@ class SongCleansingTest extends TestCase
     public function test_artists_with_count_groups_artist_ignoring_surrounding_spaces(): void
     {
         Song::factory()->create(['title' => 'Song A', 'artist' => 'Alpha']);
-        Song::factory()->create(['title' => 'Song B', 'artist' => ' Alpha']);
-        Song::factory()->create(['title' => 'Song C', 'artist' => '  ']);
+        $s2 = Song::factory()->create(['title' => 'Song B', 'artist' => 'Alpha2']);
+        DB::table('songs')->where('id', $s2->id)->update(['artist' => ' Alpha']);
+        $s3 = Song::factory()->create(['title' => 'Song C', 'artist' => 'placeholder']);
+        DB::table('songs')->where('id', $s3->id)->update(['artist' => '  ']);
 
         $response = $this->actingAs($this->user)
             ->getJson('/api/songs/artists-with-count');
@@ -377,7 +384,8 @@ class SongCleansingTest extends TestCase
     public function test_songs_by_artist_ignores_surrounding_spaces_in_stored_artist(): void
     {
         Song::factory()->create(['title' => 'Song A', 'artist' => 'Alpha']);
-        Song::factory()->create(['title' => 'Song B', 'artist' => ' Alpha']);
+        $s2 = Song::factory()->create(['title' => 'Song B', 'artist' => 'Alpha2']);
+        DB::table('songs')->where('id', $s2->id)->update(['artist' => ' Alpha']);
 
         $response = $this->actingAs($this->user)
             ->getJson('/api/songs/by-artist?artist='.urlencode(' Alpha'));
@@ -389,7 +397,8 @@ class SongCleansingTest extends TestCase
     public function test_rename_artist_merges_same_title_variants_with_and_without_spaces(): void
     {
         $first = Song::factory()->create(['title' => 'Darling', 'artist' => 'Kana Nishino']);
-        $second = Song::factory()->create(['title' => 'Darling', 'artist' => ' Kana Nishino']);
+        $second = Song::factory()->create(['title' => 'Darling', 'artist' => 'Kana Nishino2']);
+        DB::table('songs')->where('id', $second->id)->update(['artist' => ' Kana Nishino']);
         $params = ['from' => 'Kana Nishino', 'to' => '西野カナ'];
 
         $preview = $this->actingAs($this->user)
