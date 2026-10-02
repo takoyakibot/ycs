@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Helpers\TextNormalizer;
 use App\Models\Song;
 use App\Models\TimestampDecomposition;
+use App\Models\TimestampSongMapping;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -43,10 +44,7 @@ class AutoMatchedLinkListTest extends TestCase
     }
 
     /**
-     * 紐付け済みは楽曲マスタの値が表示されること
-     *
-     * 元テキストと楽曲マスタの値をあえて別の文字列にして、
-     * 元テキストの表示で偶然通ってしまわないようにする
+     * 紐付け済みは「判定時」列に楽曲マスタの値が表示されること
      */
     public function test_shows_song_master_values_for_linked(): void
     {
@@ -62,8 +60,6 @@ class AutoMatchedLinkListTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('紐付け済みの元テキスト');
-        $response->assertSee('マスタの曲名');
-        $response->assertSee('マスタのアーティスト');
         $response->assertSee('マスタの曲名');
         $response->assertSee('マスタのアーティスト');
     }
@@ -404,11 +400,11 @@ class AutoMatchedLinkListTest extends TestCase
     }
 
     /**
-     * 正規化画面での修正が反映されないことが画面に書かれていること
+     * 「判定時」列は正規化画面での変更が反映されない旨の注記があること
      *
-     * この画面は正規化画面へ誘導しているが、そこでの解除・付け替えは
-     * timestamp_song_mappings しか更新せず一覧には反映されない。
-     * 注記が無いと、案内どおり直した利用者に古い紐付けを見せ続ける。
+     * 「判定時」列は timestamp_decompositions.song_id を根拠にしており、
+     * 正規化画面での解除・付け替えは反映されない。
+     * 「現在」列で差分を確認できるが、判定時の表示が古い理由の注記は必要。
      */
     public function test_shows_notice_that_normalization_is_not_reflected(): void
     {
@@ -445,7 +441,7 @@ class AutoMatchedLinkListTest extends TestCase
         $song = Song::factory()->create(['title' => '現在マスタ曲名', 'artist' => '現在マスタアーティスト']);
         $decomposition = $this->createDecomposition('紐付け済みのテキスト', ['song_id' => $song->id]);
 
-        \App\Models\TimestampSongMapping::create([
+        TimestampSongMapping::create([
             'normalized_text' => $decomposition->normalized_text,
             'song_id' => $song->id,
         ]);
@@ -467,7 +463,7 @@ class AutoMatchedLinkListTest extends TestCase
         $currentSong = Song::factory()->create(['title' => '現在の曲', 'artist' => 'B']);
         $decomposition = $this->createDecomposition('変更ありのテキスト', ['song_id' => $autoSong->id]);
 
-        \App\Models\TimestampSongMapping::create([
+        TimestampSongMapping::create([
             'normalized_text' => $decomposition->normalized_text,
             'song_id' => $currentSong->id,
         ]);
@@ -486,7 +482,7 @@ class AutoMatchedLinkListTest extends TestCase
 
         $song1 = Song::factory()->create(['title' => '一致の曲']);
         $decomp1 = $this->createDecomposition('一致テキスト', ['song_id' => $song1->id]);
-        \App\Models\TimestampSongMapping::create([
+        TimestampSongMapping::create([
             'normalized_text' => $decomp1->normalized_text,
             'song_id' => $song1->id,
         ]);
@@ -494,7 +490,7 @@ class AutoMatchedLinkListTest extends TestCase
         $song2 = Song::factory()->create(['title' => '変更の曲']);
         $song3 = Song::factory()->create(['title' => '別の曲']);
         $decomp2 = $this->createDecomposition('変更テキスト', ['song_id' => $song2->id]);
-        \App\Models\TimestampSongMapping::create([
+        TimestampSongMapping::create([
             'normalized_text' => $decomp2->normalized_text,
             'song_id' => $song3->id,
         ]);

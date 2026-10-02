@@ -84,13 +84,7 @@
                                             $currentSong = $mapping?->song;
                                             $isNotSong = $mapping?->is_not_song;
                                             $hasMapping = $mapping !== null;
-
-                                            $currentSongId = $isNotSong ? '__not_song__' : ($currentSong?->id ?? ($hasMapping ? null : '__no_mapping__'));
-                                            $autoSongId = $decomposition->song_id;
-                                            $isChanged = $currentSongId !== $autoSongId
-                                                && !($currentSongId === null && $autoSongId === null)
-                                                && !($currentSongId === '__no_mapping__' && $autoSongId === null);
-                                            if ($isNotSong && $autoSongId !== null) $isChanged = true;
+                                            $isChanged = $decomposition->isMappingChanged();
                                         @endphp
                                         <tr class="border-b border-gray-100 dark:border-gray-700 {{ $isChanged ? 'bg-yellow-50 dark:bg-yellow-900/20' : ($titleIsEmpty || $artistIsEmpty ? 'bg-amber-50 dark:bg-amber-900/20' : '') }}">
                                             <td class="py-2 pr-4 break-all">

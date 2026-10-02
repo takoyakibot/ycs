@@ -81,6 +81,27 @@ class TimestampDecomposition extends Model
     }
 
     /**
+     * 判定時と現在のマッピングが食い違っているか
+     *
+     * SQL側の changed フィルタ（TimestampDecompositionService::getAutoMatchedList）と
+     * 同じ仕様を PHP で判定する。片方を変更したら他方も合わせること。
+     */
+    public function isMappingChanged(): bool
+    {
+        $mapping = $this->currentMapping;
+
+        if ($mapping === null) {
+            return $this->song_id !== null;
+        }
+
+        if ($mapping->is_not_song) {
+            return true;
+        }
+
+        return ($mapping->song_id ?? '') !== ($this->song_id ?? '');
+    }
+
+    /**
      * 未処理のレコードを取得するスコープ
      */
     public function scopePending($query)
