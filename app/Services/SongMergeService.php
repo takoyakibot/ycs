@@ -27,57 +27,8 @@ class SongMergeService
             return [];
         }
 
-        $rawKeywords = QueryHelper::splitSearchKeywords($search);
-        $exclusions = [];
-        $positiveRawTerms = [];
-        $positiveExactTerms = [];
-        foreach ($rawKeywords as $kw) {
-            $parsed = QueryHelper::parseSearchTerm($kw);
-            if ($parsed['exclude']) {
-                $exclusions[] = $parsed;
-            } elseif ($parsed['exact']) {
-                $positiveExactTerms[] = $parsed['term'];
-            } else {
-                $positiveRawTerms[] = $kw;
-            }
-        }
-
-        $positiveSearch = implode(' ', $positiveRawTerms);
-
         $query = Song::query();
-
-        foreach ($positiveExactTerms as $exactTerm) {
-            $query->where(function ($q) use ($exactTerm) {
-                $q->where('title', '=', $exactTerm)
-                    ->orWhere('artist', '=', $exactTerm);
-            });
-        }
-
-        if ($positiveSearch !== '') {
-            $keywords = QueryHelper::splitFuzzyKeywords($positiveSearch);
-            if ($keywords !== []) {
-                QueryHelper::applyFuzzySearch($query, $positiveSearch, ['normalized_title', 'normalized_artist']);
-            } else {
-                QueryHelper::applyAndSearchAny($query, $positiveSearch, ['title', 'artist']);
-            }
-        }
-
-        foreach ($exclusions as $excl) {
-            if ($excl['exact']) {
-                $query->where(function ($q) use ($excl) {
-                    $q->where('title', '!=', $excl['term'])
-                        ->where('artist', '!=', $excl['term']);
-                });
-            } else {
-                $escaped = QueryHelper::escapeLikeString($excl['term']);
-                $query->where(function ($q) use ($escaped) {
-                    $q->where('title', 'not like', "%{$escaped}%")
-                        ->where('artist', 'not like', "%{$escaped}%");
-                });
-            }
-        }
-
-        if ($positiveSearch === '' && $positiveExactTerms === [] && $exclusions === []) {
+        if (! QueryHelper::applySongSearch($query, $search)) {
             return [];
         }
 
