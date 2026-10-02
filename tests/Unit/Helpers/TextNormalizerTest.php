@@ -718,4 +718,36 @@ class TextNormalizerTest extends TestCase
             TextNormalizer::toComparisonKey($b)
         );
     }
+
+    /**
+     * カタカナに挟まれたハイフン類は伸ばし棒の誤入力とみなし、区切り文字として扱わない（#1015）
+     */
+    public function test_hyphen_between_katakana_is_not_separator(): void
+    {
+        foreach (['チュ-リップ', 'チュ－リップ', 'チュ−リップ', 'ｺｰﾋ-ｶｯﾌﾟ'] as $text) {
+            $this->assertSame([$text], TextNormalizer::splitBySeparators($text)['parts'], $text);
+            $this->assertFalse(TextNormalizer::hasSeparators($text), $text);
+            $this->assertSame([$text], TextNormalizer::splitForChips($text), $text);
+        }
+    }
+
+    /**
+     * 片側でもカタカナ以外なら、ハイフン類は従来どおり区切り文字として扱う
+     */
+    public function test_hyphen_not_between_katakana_is_still_separator(): void
+    {
+        $cases = [
+            'YOASOBI - 夜に駆ける' => ['YOASOBI', '夜に駆ける'],
+            '夜に駆ける-YOASOBI' => ['夜に駆ける', 'YOASOBI'],
+            'ルパン三世-テーマ' => ['ルパン三世', 'テーマ'],
+            'リップ-ああ' => ['リップ', 'ああ'],
+            'チュ - リップ' => ['チュ', 'リップ'],
+            'Hi-Fi' => ['Hi', 'Fi'],
+        ];
+
+        foreach ($cases as $text => $expected) {
+            $this->assertSame($expected, TextNormalizer::splitBySeparators($text)['parts'], $text);
+            $this->assertTrue(TextNormalizer::hasSeparators($text), $text);
+        }
+    }
 }

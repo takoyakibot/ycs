@@ -231,14 +231,21 @@ class TextNormalizer
      * 区切り文字パターン（正規化前のテキスト用）
      * 類似の区切り文字を含む
      * 注意: 長音記号（ー U+30FC）は含まない（コーヒー等の誤分割を防ぐため）
+     * 注意: カタカナに挟まれた（スペースなしの）ハイフン類は伸ばし棒の誤入力とみなし区切らない
+     *       （「チュ-リップ」を「チュ」「リップ」に分割しない）
      */
-    private const SEPARATOR_PATTERN = '/[\/／\-−－:：|｜]/u';
+    private const SEPARATOR_PATTERN = '/[\/／:：|｜]|'.self::HYPHEN_SEPARATOR.'/u';
+
+    /**
+     * 区切り文字として扱うハイフン類（前後の両方がカタカナの場合を除く）
+     */
+    private const HYPHEN_SEPARATOR = '(?:(?<![ァ-ヺーｦ-ﾟ])[\-−－]|[\-−－](?![ァ-ヺーｦ-ﾟ]))';
 
     /**
      * 候補チップ用の区切り文字パターン
      * SEPARATOR_PATTERN に加え、括弧類・スペースでも分割する
      */
-    private const CHIP_SEPARATOR_PATTERN = '/[\s\x{3000}\/／\-−－:：|｜【】『』「」\(\)（）\[\]［］\{\}＜＞<>〈〉《》]+/u';
+    private const CHIP_SEPARATOR_PATTERN = '/(?:[\s\x{3000}\/／:：|｜【】『』「」\(\)（）\[\]［］\{\}＜＞<>〈〉《》]|'.self::HYPHEN_SEPARATOR.')+/u';
 
     /**
      * テキストを区切り文字で分解（正規化前のテキスト用）
