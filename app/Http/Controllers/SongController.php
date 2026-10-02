@@ -23,6 +23,7 @@ use App\Services\SongSearchService;
 use App\Services\SpotifyService;
 use App\Services\VideoUrlService;
 use App\Services\YouTubeApiService;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -217,11 +218,19 @@ class SongController extends Controller
             'to' => 'required|string|max:255|different:from',
         ]);
 
-        $result = $this->songCleansingService->executeArtistRename(
-            $validated['from'],
-            $validated['to'],
-            Auth::id()
-        );
+        try {
+            $result = $this->songCleansingService->executeArtistRename(
+                $validated['from'],
+                $validated['to'],
+                Auth::id()
+            );
+        } catch (UniqueConstraintViolationException $e) {
+            report($e);
+
+            return response()->json([
+                'message' => '変換先に同じ曲名・アーティストの楽曲マスタがあるため変換できませんでした。楽曲整理画面で該当する楽曲を統合してから再実行してください。',
+            ], 409);
+        }
 
         return response()->json([
             'message' => sprintf(

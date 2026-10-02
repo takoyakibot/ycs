@@ -422,4 +422,57 @@ class SongCleansingTest extends TestCase
         $this->assertEquals('西野カナ', Song::find($renamedId)->artist);
         $this->assertEquals(1, Song::whereIn('id', [$first->id, $second->id])->count());
     }
+
+    public function test_rename_artist_merges_into_target_whose_title_matches_only_by_db_collation(): void
+    {
+        // 本番の「もっと…」と「もっと...」のように、DB の照合順序では同じ title だが normalized_title が異なるケース。
+        // SQLite は BINARY 比較のため、title は同じ文字列にして normalized_title だけをずらして再現する
+        $source = Song::factory()->create(['title' => 'もっと…', 'artist' => 'Kana Nishino']);
+        $target = Song::factory()->create(['title' => 'もっと…', 'artist' => '西野カナ']);
+        DB::table('songs')->where('id', $target->id)->update(['normalized_title' => 'もっと...']);
+        $params = ['from' => 'Kana Nishino', 'to' => '西野カナ'];
+
+        $this->actingAs($this->user)
+            ->getJson('/api/songs/cleansing/artist-rename-preview?'.http_build_query($params))
+            ->assertStatus(200)
+            ->assertJsonPath('merge_count', 1)
+            ->assertJsonPath('plan.0.conflict_song_id', $target->id);
+
+        $this->actingAs($this->user)
+            ->postJson('/api/songs/cleansing/artist-rename', $params)
+            ->assertStatus(200)
+            ->assertJsonCount(1, 'merged');
+
+        $this->assertNull(Song::find($source->id));
+        $this->assertNotNull(Song::find($target->id));
+    }
+
+    public function test_rename_artist_prefers_normalized_title_match_as_merge_target(): void
+    {
+        $source = Song::factory()->create(['title' => 'Song', 'artist' => 'A']);
+        $byTitle = Song::factory()->create(['title' => 'Song', 'artist' => 'B']);
+        DB::table('songs')->where('id', $byTitle->id)->update(['normalized_title' => 'song-other']);
+        DB::table('songs')->where('id', $source->id)->update(['normalized_title' => 'song']);
+        $byNormalized = Song::factory()->create(['title' => 'SONG', 'artist' => 'B']);
+        DB::table('songs')->where('id', $byNormalized->id)->update(['normalized_title' => 'song']);
+
+        $this->actingAs($this->user)
+            ->postJson('/api/songs/cleansing/artist-rename', ['from' => 'A', 'to' => 'B'])
+            ->assertStatus(200)
+            ->assertJsonPath('merged.0.target_song_id', $byNormalized->id);
+    }
+
+    public function test_rename_artist_returns_409_instead_of_500_on_unique_violation(): void
+    {
+        $this->mock(\App\Services\SongCleansingService::class, function ($mock) {
+            $mock->shouldReceive('executeArtistRename')->andThrow(new \Illuminate\Database\UniqueConstraintViolationException(
+                'mysql', 'update songs', [], new \Exception('Duplicate entry')
+            ));
+        });
+
+        $this->actingAs($this->user)
+            ->postJson('/api/songs/cleansing/artist-rename', ['from' => 'A', 'to' => 'B'])
+            ->assertStatus(409)
+            ->assertJsonPath('message', fn ($m) => str_contains($m, '統合'));
+    }
 }
