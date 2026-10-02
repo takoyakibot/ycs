@@ -30,6 +30,15 @@ disable-model-invocation: true
 
 ## 手順
 
+0. **直近のブランチの確認**（Issueより先に処理する）
+   - `git fetch --prune` の後、`git for-each-ref --sort=-committerdate refs/remotes/origin/ refs/heads/` で**昨日・今日にコミットがあるブランチ**を抽出する
+   - `gh pr list --state all --json number,state,headRefName` と突き合わせ、未マージのものを対象にする
+     - OPENのPRがある: 最新のdevelopにrebase → テスト（PHP・JS）→ 失敗があれば修正 → PRをレビュー → 問題なければマージ
+     - PRが無く、developに未取り込みのコミットがある: 内容を確認し、ワークフローに従ってPRを作成して同様に処理する
+     - squashマージ済みのローカルコピー（`pr-<番号>` など）は対象外
+   - 【通常モード】対象ブランチを提示し、どれを対応するか確認
+   - 【自律モード】全て処理してからIssueの確認に進む
+
 1. **Issue一覧の確認**
    - `gh issue list --state open` でオープンなIssueを一覧表示
    - **全Issueの本文を `gh issue view <番号>` で読む**（タイトルだけで判断しない）
