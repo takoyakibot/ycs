@@ -7,7 +7,7 @@ import {
   updateTimestampList, pushMarkerHistory, snapshotMarkers,
   undoMarkers, redoMarkers, deleteSelectedMarker, moveSelectedMarker,
   deselectMarker, blurMarkerTextInput, updateTimestampListSelection,
-  scrollSelectedRowIntoView,
+  scrollSelectedRowIntoView, addMarkerAtCurrentTime,
 } from './timestamp-editor.js';
 import { autoDetectSongStarts, loadChatForHeatmap } from './auto-detect.js';
 import { copyTimestamps, importTimestamps, saveMarkersToStorage, loadMarkersFromStorage } from './timestamp-io.js';
@@ -571,6 +571,7 @@ export function createVolumeGraph() {
         </div>
         <span class="vdg-ts-notice" id="vdg-ts-notice"></span>
         <div class="vdg-ts-editor-actions">
+          <button class="vdg-btn" id="vdg-ts-add-now-btn" title="再生中の位置にマーカーを追加 (N)">＋ 現在位置</button>
           <button class="vdg-btn vdg-btn-detect" id="vdg-ts-detect-btn" title="音量とチャット（拍手）から楽曲の開始位置を検出し、候補マーカーを一括追加（既存マーカー付近は除く）">自動検出</button>
           <button class="vdg-btn" id="vdg-ts-undo-btn" title="元に戻す (Ctrl+Z)" disabled>↶ 戻る</button>
           <button class="vdg-btn" id="vdg-ts-redo-btn" title="やり直す (Ctrl+Y)" disabled>↷ 進む</button>
@@ -580,11 +581,11 @@ export function createVolumeGraph() {
         </div>
       </div>
       <div class="vdg-ts-list" id="vdg-ts-list">
-        <div class="vdg-ts-empty">波形グラフをクリックしてタイムスタンプを追加</div>
+        <div class="vdg-ts-empty">波形グラフをクリック、または再生中に N キー（＋ 現在位置）でタイムスタンプを追加</div>
       </div>
       <div class="vdg-ts-footer">
         <div class="vdg-ts-help">
-          クリック: マーカー追加(付近は選択/ドラッグで移動) | Enter: 曲名入力/入力終了 | Del/BS: 削除 | Esc: 入力終了・選択解除 | ←→: 1秒移動(同方向連打5秒) | ↑↓: マーカー移動(入力中は行頭/行末へ) | Space: 再生/停止 | J/L: 再生を10秒戻す/進める | Ctrl+Z/Y: 操作を戻す/やり直す | −/+ボタン or Ctrl+ホイール: 拡大/縮小
+          クリック: マーカー追加(付近は選択/ドラッグで移動) | N: 再生位置にマーカー追加 | Enter: 曲名入力/入力終了 | Del/BS: 削除 | Esc: 入力終了・選択解除 | ←→: 1秒移動(同方向連打5秒) | ↑↓: マーカー移動(入力中は行頭/行末へ) | Space: 再生/停止 | J/L: 再生を10秒戻す/進める | Ctrl+Z/Y: 操作を戻す/やり直す | −/+ボタン or Ctrl+ホイール: 拡大/縮小
         </div>
         <label class="vdg-ts-format-toggle">
           <input type="checkbox" id="vdg-ts-zeropad">
@@ -993,6 +994,17 @@ export function setupVolumeGraphEvents() {
     resizeCanvas();
   });
 
+  // タイムスタンプエディタ: 再生位置にマーカーを追加
+  const tsAddNowBtn = state.volumeGraphContainer.querySelector('#vdg-ts-add-now-btn');
+  if (tsAddNowBtn) {
+    tsAddNowBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      addMarkerAtCurrentTime();
+      // ボタンにフォーカスが残るとSpace等がボタンに奪われるため外す
+      tsAddNowBtn.blur();
+    });
+  }
+
   // タイムスタンプエディタ: 戻す/やり直すボタン
   const tsUndoBtn = state.volumeGraphContainer.querySelector('#vdg-ts-undo-btn');
   const tsRedoBtn = state.volumeGraphContainer.querySelector('#vdg-ts-redo-btn');
@@ -1140,6 +1152,14 @@ export function setupVolumeGraphEvents() {
       e.stopImmediatePropagation();
       const pos = e.key === 'ArrowUp' ? 0 : e.target.value.length;
       e.target.setSelectionRange(pos, pos);
+      return;
+    }
+
+    // N: 再生位置にマーカーを追加（マーカー未選択でも使えるよう、選択チェックより前に置く）
+    if (!isTextInput && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'n') {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      addMarkerAtCurrentTime();
       return;
     }
 

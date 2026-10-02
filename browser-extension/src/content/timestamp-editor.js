@@ -38,7 +38,7 @@ export function updateTimestampList() {
   closeSongCandidatePopup();
 
   if (state.tsMarkers.length === 0) {
-    listEl.innerHTML = '<div class="vdg-ts-empty">波形グラフをクリックしてタイムスタンプを追加</div>';
+    listEl.innerHTML = '<div class="vdg-ts-empty">波形グラフをクリック、または再生中に N キー（＋ 現在位置）でタイムスタンプを追加</div>';
     return;
   }
 
@@ -277,6 +277,30 @@ export function deselectMarker() {
   if (state.selectedMarkerId === null) return;
   state.selectedMarkerId = null;
   updateTimestampListSelection();
+  drawVolumeGraph();
+}
+
+/**
+ * 再生位置（秒未満切り捨て）にマーカーを追加して選択する
+ *
+ * 動画を見ながら打つ用途なので、再生位置は動かさない。
+ * 同じ秒に既存マーカーがあれば重複させず、そちらを選択する。
+ */
+export function addMarkerAtCurrentTime() {
+  if (!state.videoElement) return;
+  const time = Math.floor(state.videoElement.currentTime);
+  const existing = state.tsMarkers.find(m => m.time === time);
+  if (existing) {
+    state.selectedMarkerId = existing.id;
+  } else {
+    pushMarkerHistory();
+    const marker = { id: state.nextMarkerId++, time, text: '' };
+    state.tsMarkers.push(marker);
+    state.tsMarkers.sort((a, b) => a.time - b.time);
+    state.selectedMarkerId = marker.id;
+    saveMarkersToStorage();
+  }
+  updateTimestampList();
   drawVolumeGraph();
 }
 
