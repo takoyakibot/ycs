@@ -51,7 +51,7 @@ class SongCleansingService
     public function executeArtistRename(string $from, string $to, int $userId): array
     {
         return DB::transaction(function () use ($from, $to, $userId) {
-            $songs = Song::whereArtistIgnoringSpaces($from)->orderBy('title')->get();
+            $songs = Song::whereArtistIgnoringSpaces($from)->orderBy('title')->orderBy('id')->get();
 
             $renamed = [];
             $merged = [];
@@ -100,7 +100,7 @@ class SongCleansingService
 
     private function buildArtistRenamePlan(string $from, string $to): array
     {
-        $songs = Song::whereArtistIgnoringSpaces($from)->orderBy('title')->get();
+        $songs = Song::whereArtistIgnoringSpaces($from)->orderBy('title')->orderBy('id')->get();
 
         // 同一バッチ内の重複タイトルを検出するため、リネーム済みタイトルを追跡
         $renamedByNormalizedTitle = []; // normalized_title => song_id

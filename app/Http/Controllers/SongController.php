@@ -169,7 +169,7 @@ class SongController extends Controller
             ->whereNotNull('artist')
             ->whereRaw("TRIM(artist) != ''")
             ->groupByRaw('TRIM(artist)')
-            ->orderBy('artist')
+            ->orderByRaw('TRIM(artist)')
             ->get()
             ->map(fn ($row) => ['name' => $row->artist, 'count' => $row->count]);
 

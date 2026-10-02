@@ -385,4 +385,32 @@ class SongCleansingTest extends TestCase
         $response->assertStatus(200);
         $this->assertCount(2, $response->json());
     }
+
+    public function test_rename_artist_merges_same_title_variants_with_and_without_spaces(): void
+    {
+        $first = Song::factory()->create(['title' => 'Darling', 'artist' => 'Kana Nishino']);
+        $second = Song::factory()->create(['title' => 'Darling', 'artist' => ' Kana Nishino']);
+        $params = ['from' => 'Kana Nishino', 'to' => '西野カナ'];
+
+        $preview = $this->actingAs($this->user)
+            ->getJson('/api/songs/cleansing/artist-rename-preview?'.http_build_query($params))
+            ->assertStatus(200)
+            ->json();
+
+        $result = $this->actingAs($this->user)
+            ->postJson('/api/songs/cleansing/artist-rename', $params)
+            ->assertStatus(200)
+            ->json();
+
+        $this->assertEquals(1, $preview['rename_count']);
+        $this->assertEquals(1, $preview['merge_count']);
+        $this->assertCount(1, $result['renamed']);
+        $this->assertCount(1, $result['merged']);
+
+        // プレビューで示したリネーム側の曲が、実行後も残る
+        $renamedId = collect($preview['plan'])->firstWhere('action', 'rename')['song_id'];
+        $this->assertEquals($renamedId, $result['renamed'][0]['song_id']);
+        $this->assertEquals('西野カナ', Song::find($renamedId)->artist);
+        $this->assertEquals(1, Song::whereIn('id', [$first->id, $second->id])->count());
+    }
 }
