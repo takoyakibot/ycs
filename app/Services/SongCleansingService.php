@@ -132,11 +132,24 @@ class SongCleansingService
         })->values()->toArray();
     }
 
+    /**
+     * 変換先アーティストに同じ曲のマスタがあるか
+     *
+     * normalized_title の一致に加えて、title をDBの照合順序で比較した一致も競合とみなす。
+     * ユニーク制約 (title, artist) は utf8mb4_unicode_ci で判定されるため、
+     * 「もっと…」と「もっと...」のように TextNormalizer では揃わないが DB では同値の
+     * タイトルを見落とすと、リネームがユニーク制約違反になる。
+     */
     private function findRenameConflict(Song $song, string $to): ?Song
     {
-        return Song::where('normalized_title', $song->normalized_title)
+        return Song::where(function ($query) use ($song) {
+            $query->where('normalized_title', $song->normalized_title)
+                ->orWhere('title', $song->title);
+        })
             ->whereArtistIgnoringSpaces($to)
             ->where('id', '!=', $song->id)
+            ->orderByRaw('CASE WHEN normalized_title = ? THEN 0 ELSE 1 END', [$song->normalized_title])
+            ->orderBy('id')
             ->first();
     }
 
