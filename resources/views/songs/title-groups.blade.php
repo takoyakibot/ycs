@@ -69,7 +69,14 @@
                     <div class="space-y-3 max-h-[70vh] overflow-y-auto">
                         <template x-for="group in groups" :key="groupKey(group)">
                             <div class="border border-gray-200 dark:border-gray-700 rounded-md p-3 flex gap-4">
-                                <div class="flex-shrink-0 font-medium text-sm pt-1 w-36 truncate" x-text="group.normalized_title" :title="group.normalized_title"></div>
+                                <div class="flex-shrink-0 w-36 pt-1">
+                                    <div class="font-medium text-sm truncate" x-text="group.normalized_title" :title="group.normalized_title"></div>
+                                    <button @click="copyGroupSearch(group)"
+                                            class="mt-1 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline"
+                                            title="曲名とアーティストを検索用にコピー">
+                                        検索コピー
+                                    </button>
+                                </div>
 
                                 <div class="flex flex-col gap-1 flex-shrink-0 pt-0.5">
                                     <button @click="mergeGroup(group)"

@@ -153,6 +153,32 @@ function registerTitleGroupsComponent() {
             }
         },
 
+        async copyGroupSearch(group) {
+            const title = group.songs[0]?.title || '';
+            const artists = [];
+            for (const song of group.songs) {
+                if (song.artist && !artists.includes(song.artist)) {
+                    artists.push(song.artist);
+                }
+            }
+            const text = [title, ...artists].join(' ');
+
+            if (!navigator.clipboard) {
+                this.message = 'コピーできません';
+                this.messageType = 'error';
+                return;
+            }
+
+            try {
+                await navigator.clipboard.writeText(text);
+                this.message = 'コピーしました';
+                this.messageType = 'success';
+            } catch {
+                this.message = 'コピーできません';
+                this.messageType = 'error';
+            }
+        },
+
         async reviewGroup(group, decision) {
             const label = decision === 'pending' ? '保留' : '別の曲';
             if (!confirm(`このグループを「${label}」として記録します。よろしいですか？`)) return;
