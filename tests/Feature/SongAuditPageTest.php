@@ -263,6 +263,69 @@ class SongAuditPageTest extends TestCase
         $this->assertSame(SongAudit::RESOLUTION_PENDING, $audit->resolution);
     }
 
+    public function test_apply_mapping_link_requires_title_and_artist(): void
+    {
+        $mapping = $this->mapping(Song::factory()->create());
+        $audit = $this->audit($mapping);
+
+        $this->actingAs($this->user)
+            ->post(route('songs.audits.apply', $audit), ['action' => 'link', 'title' => '', 'artist' => ''])
+            ->assertSessionHasErrors(['title', 'artist']);
+    }
+
+    public function test_apply_mapping_link_shows_linked_song_in_message(): void
+    {
+        $mapping = $this->mapping(Song::factory()->create(['title' => '別の曲', 'artist' => 'X']));
+        Song::factory()->create(['title' => '正しい曲', 'artist' => 'Y']);
+        $audit = $this->audit($mapping);
+
+        $this->actingAs($this->user)
+            ->post(route('songs.audits.apply', $audit), ['action' => 'link', 'title' => '正しい曲', 'artist' => 'Y'])
+            ->assertSessionHas('success', '「正しい曲 / Y」に付け替えました。');
+    }
+
+    public function test_apply_mapping_not_song_refuses_when_already_not_song(): void
+    {
+        $mapping = TimestampSongMapping::create(['normalized_text' => 'テキスト', 'song_id' => null, 'is_not_song' => true]);
+        $audit = $this->audit($mapping);
+
+        $this->actingAs($this->user)
+            ->post(route('songs.audits.apply', $audit), ['action' => 'not_song'])
+            ->assertSessionHas('error');
+
+        $this->assertSame(SongAudit::RESOLUTION_PENDING, $audit->fresh()->resolution);
+    }
+
+    public function test_second_apply_is_refused(): void
+    {
+        $song = Song::factory()->create(['title' => 'A', 'artist' => 'X']);
+        $audit = $this->audit($song);
+
+        $this->actingAs($this->user)->post(route('songs.audits.apply', $audit), ['title' => 'B', 'artist' => 'X'])
+            ->assertSessionHas('success');
+        $this->actingAs($this->user)->post(route('songs.audits.apply', $audit), ['title' => 'C', 'artist' => 'X'])
+            ->assertSessionHas('error');
+
+        $this->assertSame('B', $song->fresh()->title);
+    }
+
+    public function test_mark_needs_fix_takes_fingerprint_of_current_content(): void
+    {
+        $song = Song::factory()->create(['title' => 'A', 'artist' => 'X']);
+        $audit = $this->audit($song, ['verdict' => SongAudit::VERDICT_OK, 'reason' => null]);
+        $song->update(['title' => 'A（cover）']);
+
+        $this->actingAs($this->user)
+            ->post(route('songs.audits.needsFix', $audit), ['reason' => '補足が混入'])
+            ->assertSessionHas('success');
+
+        // 人が見た現在の内容に対する判定なので、そのまま適用できる
+        $this->actingAs($this->user)
+            ->post(route('songs.audits.apply', $audit), ['title' => 'A', 'artist' => 'X'])
+            ->assertSessionHas('success');
+        $this->assertSame('A', $song->fresh()->title);
+    }
+
     public function test_mark_needs_fix_requires_reason(): void
     {
         $audit = $this->audit(Song::factory()->create(), ['verdict' => SongAudit::VERDICT_OK, 'reason' => null]);

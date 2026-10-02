@@ -78,15 +78,21 @@ class SongAuditController extends Controller
             ]);
             if ($validated['action'] === 'not_song') {
                 $this->resolutionService->applyMappingNotSong($audit, $userId);
-            } else {
-                $this->resolutionService->applyMappingLink($audit, $validated['title'], $validated['artist'], $userId);
+
+                return '「楽曲ではない」にしました。';
             }
+
+            $song = $this->resolutionService->applyMappingLink($audit, $validated['title'], $validated['artist'], $userId);
+
+            return "「{$song->title} / {$song->artist}」に付け替えました。";
         }, '修正を適用しました。');
     }
 
     public function reject(SongAudit $audit): RedirectResponse
     {
-        return $this->resolve(fn () => $this->resolutionService->reject($audit), '却下しました。');
+        return $this->resolve(function () use ($audit) {
+            $this->resolutionService->reject($audit);
+        }, '却下しました。');
     }
 
     public function markNeedsFix(Request $request, SongAudit $audit): RedirectResponse
@@ -96,7 +102,9 @@ class SongAuditController extends Controller
         ]);
 
         return $this->resolve(
-            fn () => $this->resolutionService->markNeedsFix($audit, $validated['reason'], Auth::id()),
+            function () use ($audit, $validated) {
+                $this->resolutionService->markNeedsFix($audit, $validated['reason'], Auth::id());
+            },
             '要修正に変更しました。'
         );
     }
@@ -104,12 +112,12 @@ class SongAuditController extends Controller
     private function resolve(callable $action, string $successMessage): RedirectResponse
     {
         try {
-            $action();
+            $message = $action();
         } catch (SongAuditResolutionException $e) {
             return back()->with('error', $e->getMessage())->withInput();
         }
 
-        return back()->with('success', $successMessage);
+        return back()->with('success', is_string($message) ? $message : $successMessage);
     }
 
     /**

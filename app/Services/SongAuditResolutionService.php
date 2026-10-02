@@ -6,6 +6,7 @@ use App\Exceptions\SongAuditResolutionException;
 use App\Models\Song;
 use App\Models\SongAudit;
 use App\Models\TimestampSongMapping;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -13,6 +14,8 @@ use Illuminate\Support\Facades\DB;
  */
 class SongAuditResolutionService
 {
+    private const DUPLICATE_MESSAGE = '同じ曲名・アーティストの楽曲マスタが既にあります。正規化画面の「楽曲の統合」で統合してください。';
+
     public function __construct(
         private SongAuditService $auditService,
         private SongMappingService $mappingService,
@@ -26,26 +29,25 @@ class SongAuditResolutionService
      */
     public function applySong(SongAudit $audit, string $title, string $artist, int $userId): void
     {
-        $this->assertPendingNeedsFix($audit, SongAudit::TARGET_SONG);
-
-        $song = Song::with('tags')->find($audit->target_id);
-        if ($song === null) {
-            throw new SongAuditResolutionException('対象の楽曲マスタが削除されています。');
-        }
-        $this->assertUnchanged($audit, $song);
-
         $title = trim($title);
         $artist = trim($artist);
-        if ($title === $song->title && $artist === $song->artist) {
-            throw new SongAuditResolutionException('変更内容がありません。');
-        }
 
-        $duplicate = Song::where('title', $title)->where('artist', $artist)->where('id', '!=', $song->id)->exists();
-        if ($duplicate) {
-            throw new SongAuditResolutionException('同じ曲名・アーティストの楽曲マスタが既にあります。正規化画面の「楽曲の統合」で統合してください。');
-        }
+        $this->inLockedTransaction($audit, SongAudit::TARGET_SONG, function (SongAudit $audit) use ($title, $artist, $userId) {
+            $song = Song::with('tags')->lockForUpdate()->find($audit->target_id);
+            if ($song === null) {
+                throw new SongAuditResolutionException('対象の楽曲マスタが削除されています。');
+            }
+            $this->assertUnchanged($audit, $song);
 
-        DB::transaction(function () use ($audit, $song, $title, $artist, $userId) {
+            if ($title === $song->title && $artist === $song->artist) {
+                throw new SongAuditResolutionException('変更内容がありません。');
+            }
+
+            $duplicate = Song::where('title', $title)->where('artist', $artist)->where('id', '!=', $song->id)->exists();
+            if ($duplicate) {
+                throw new SongAuditResolutionException(self::DUPLICATE_MESSAGE);
+            }
+
             $oldArtist = $song->artist;
             $song->update(['title' => $title, 'artist' => $artist, 'updated_by' => $userId]);
 
@@ -59,22 +61,26 @@ class SongAuditResolutionService
 
     /**
      * 紐付けの修正を適用する（別の楽曲マスタへの付け替え）
+     *
+     * @return Song 付け替え先（照合順序により入力と大文字小文字などが異なる場合があるため、表示に使う）
      */
-    public function applyMappingLink(SongAudit $audit, string $title, string $artist, int $userId): void
+    public function applyMappingLink(SongAudit $audit, string $title, string $artist, int $userId): Song
     {
-        $mapping = $this->findUnchangedMapping($audit);
+        return $this->inLockedTransaction($audit, SongAudit::TARGET_MAPPING, function (SongAudit $audit) use ($title, $artist, $userId) {
+            $mapping = $this->findUnchangedMapping($audit);
 
-        $song = Song::where('title', trim($title))->where('artist', trim($artist))->first();
-        if ($song === null) {
-            throw new SongAuditResolutionException('該当する楽曲マスタがありません。先に楽曲マスタを登録してください。');
-        }
-        if ($song->id === $mapping->song_id) {
-            throw new SongAuditResolutionException('現在と同じ楽曲マスタです。');
-        }
+            $song = Song::where('title', trim($title))->where('artist', trim($artist))->first();
+            if ($song === null) {
+                throw new SongAuditResolutionException('該当する楽曲マスタがありません。先に楽曲マスタを登録してください。');
+            }
+            if ($song->id === $mapping->song_id) {
+                throw new SongAuditResolutionException('現在と同じ楽曲マスタです。');
+            }
 
-        DB::transaction(function () use ($audit, $mapping, $song, $userId) {
             $this->mappingService->linkTimestamp($mapping->normalized_text, $song->id, $userId);
             $audit->update(['resolution' => SongAudit::RESOLUTION_APPLIED]);
+
+            return $song;
         });
     }
 
@@ -83,9 +89,12 @@ class SongAuditResolutionService
      */
     public function applyMappingNotSong(SongAudit $audit, int $userId): void
     {
-        $mapping = $this->findUnchangedMapping($audit);
+        $this->inLockedTransaction($audit, SongAudit::TARGET_MAPPING, function (SongAudit $audit) use ($userId) {
+            $mapping = $this->findUnchangedMapping($audit);
+            if ($mapping->is_not_song) {
+                throw new SongAuditResolutionException('すでに「楽曲ではない」になっています。');
+            }
 
-        DB::transaction(function () use ($audit, $mapping, $userId) {
             $this->mappingService->markAsNotSong($mapping->normalized_text, $userId);
             $audit->update(['resolution' => SongAudit::RESOLUTION_APPLIED]);
         });
@@ -93,35 +102,69 @@ class SongAuditResolutionService
 
     public function reject(SongAudit $audit): void
     {
-        $this->assertPendingNeedsFix($audit, $audit->target_type);
-
-        $audit->update(['resolution' => SongAudit::RESOLUTION_REJECTED]);
+        $this->inLockedTransaction($audit, null, function (SongAudit $audit) {
+            $audit->update(['resolution' => SongAudit::RESOLUTION_REJECTED]);
+        });
     }
 
     /**
      * 「問題なし」の判定を人が「要修正」に変更する
+     *
+     * 人は画面で現在の内容を見て判断しているため、fingerprint も現在の内容で取り直す。
      */
     public function markNeedsFix(SongAudit $audit, string $reason, int $userId): void
     {
-        if ($audit->verdict !== SongAudit::VERDICT_OK) {
-            throw new SongAuditResolutionException('「問題なし」の判定ではありません。');
-        }
+        DB::transaction(function () use ($audit, $reason, $userId) {
+            $audit = SongAudit::lockForUpdate()->find($audit->id);
+            if ($audit === null || $audit->verdict !== SongAudit::VERDICT_OK) {
+                throw new SongAuditResolutionException('「問題なし」の判定ではありません。');
+            }
 
-        $audit->update([
-            'verdict' => SongAudit::VERDICT_NEEDS_FIX,
-            'reason' => $reason,
-            'suggestion' => null,
-            'judged_by' => 'user:'.$userId,
-            'judged_at' => now(),
-            'resolution' => SongAudit::RESOLUTION_PENDING,
-        ]);
+            $target = $audit->target_type === SongAudit::TARGET_SONG
+                ? Song::with('tags')->find($audit->target_id)
+                : TimestampSongMapping::with('song')->find($audit->target_id);
+            if ($target === null) {
+                throw new SongAuditResolutionException('対象が削除されています。');
+            }
+
+            $audit->update([
+                'fingerprint' => $this->auditService->fingerprint($audit->target_type, $target),
+                'verdict' => SongAudit::VERDICT_NEEDS_FIX,
+                'reason' => $reason,
+                'suggestion' => null,
+                'judged_by' => 'user:'.$userId,
+                'judged_at' => now(),
+                'resolution' => SongAudit::RESOLUTION_PENDING,
+            ]);
+        });
+    }
+
+    /**
+     * 点検結果の行をロックして読み直し、未対応の「要修正」であることを確かめてから処理する
+     *
+     * 同じ行を2つのタブから同時に適用しても、2回目は「未対応ではない」で止まる。
+     */
+    private function inLockedTransaction(SongAudit $audit, ?string $type, callable $callback): mixed
+    {
+        try {
+            return DB::transaction(function () use ($audit, $type, $callback) {
+                $locked = SongAudit::lockForUpdate()->find($audit->id);
+                if ($locked === null) {
+                    throw new SongAuditResolutionException('点検結果が削除されています。');
+                }
+                $this->assertPendingNeedsFix($locked, $type ?? $locked->target_type);
+
+                return $callback($locked);
+            });
+        } catch (UniqueConstraintViolationException) {
+            // 重複チェックの後に別の経路で同名の楽曲が作られた場合
+            throw new SongAuditResolutionException(self::DUPLICATE_MESSAGE);
+        }
     }
 
     private function findUnchangedMapping(SongAudit $audit): TimestampSongMapping
     {
-        $this->assertPendingNeedsFix($audit, SongAudit::TARGET_MAPPING);
-
-        $mapping = TimestampSongMapping::with('song')->find($audit->target_id);
+        $mapping = TimestampSongMapping::with('song')->lockForUpdate()->find($audit->target_id);
         if ($mapping === null) {
             throw new SongAuditResolutionException('対象の紐付けが削除されています。');
         }
