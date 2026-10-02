@@ -250,9 +250,9 @@ class QueryHelper
      * @param  string[]  $columns  検索対象のカラム名
      * @return Builder 条件が適用されたクエリビルダー
      */
-    public static function applyAndSearchAny(Builder $query, string $search, array $columns): Builder
+    public static function applyAndSearchAny(Builder $query, string $search, array $columns, ?string $tagColumn = null): Builder
     {
-        return self::applyKeywordsToColumns($query, self::splitSearchKeywords($search), $columns);
+        return self::applyKeywordsToColumns($query, self::splitSearchKeywords($search), $columns, $tagColumn);
     }
 
     /**
@@ -268,9 +268,54 @@ class QueryHelper
      * @param  string[]  $columns  検索対象の正規化カラム名
      * @return Builder 条件が適用されたクエリビルダー
      */
-    public static function applyFuzzySearch(Builder $query, string $search, array $columns): Builder
+    public static function applyFuzzySearch(Builder $query, string $search, array $columns, ?string $tagColumn = null): Builder
     {
-        return self::applyKeywordsToColumns($query, self::splitFuzzyKeywords($search), $columns);
+        return self::applyKeywordsToColumns($query, self::splitFuzzyKeywords($search), $columns, $tagColumn);
+    }
+
+    /**
+     * 楽曲マスタの検索条件を適用する（曲名・アーティスト・タグを同列に扱う）
+     *
+     * 各キーワードが「曲名・アーティスト・タグのいずれか」に含まれればヒットする（キーワード間はAND）。
+     * 完全一致指定（"xxx"）と除外語（-xxx / -"xxx"）は生の値（title / artist / tags.value）に、
+     * それ以外は $fuzzy なら正規化カラム（normalized_title / normalized_artist / tags.normalized_value）に適用する。
+     *
+     * @return bool 検索条件を1つ以上適用したか（false なら呼び出し側で全件を返さないようにする）
+     */
+    public static function applySongSearch(Builder $query, string $search, bool $fuzzy = true): bool
+    {
+        $exclusions = [];
+        $exactTerms = [];
+        $positiveRawTerms = [];
+        foreach (self::splitSearchKeywords($search) as $keyword) {
+            $parsed = self::parseSearchTerm($keyword);
+            if ($parsed['exclude']) {
+                $exclusions[] = $parsed;
+            } elseif ($parsed['exact']) {
+                $exactTerms[] = $parsed['term'];
+            } else {
+                $positiveRawTerms[] = $keyword;
+            }
+        }
+
+        $exactKeywords = array_map(fn ($term) => '"'.$term.'"', $exactTerms);
+        self::applyKeywordsToColumns($query, $exactKeywords, ['title', 'artist'], 'value');
+
+        $positiveSearch = implode(' ', $positiveRawTerms);
+        $fuzzyKeywords = $fuzzy && $positiveSearch !== '' ? self::splitFuzzyKeywords($positiveSearch) : [];
+        if ($fuzzyKeywords !== []) {
+            self::applyKeywordsToColumns($query, $fuzzyKeywords, ['normalized_title', 'normalized_artist'], 'normalized_value');
+        } else {
+            self::applyKeywordsToColumns($query, $positiveRawTerms, ['title', 'artist'], 'value');
+        }
+
+        $exclusionKeywords = array_map(
+            fn ($parsed) => '-'.($parsed['exact'] ? '"'.$parsed['term'].'"' : $parsed['term']),
+            $exclusions
+        );
+        self::applyKeywordsToColumns($query, $exclusionKeywords, ['title', 'artist'], 'value');
+
+        return $exactTerms !== [] || $positiveRawTerms !== [] || $exclusions !== [];
     }
 
     /**
@@ -283,9 +328,10 @@ class QueryHelper
      * @param  Builder  $query  クエリビルダー
      * @param  string[]  $keywords  キーワード配列
      * @param  string[]  $columns  検索対象のカラム名
+     * @param  string|null  $tagColumn  指定するとタグ（tags リレーションのこのカラム）も同列の検索対象にする
      * @return Builder 条件が適用されたクエリビルダー
      */
-    private static function applyKeywordsToColumns(Builder $query, array $keywords, array $columns): Builder
+    private static function applyKeywordsToColumns(Builder $query, array $keywords, array $columns, ?string $tagColumn = null): Builder
     {
         if ($columns === []) {
             return $query;
@@ -294,7 +340,11 @@ class QueryHelper
         foreach ($keywords as $keyword) {
             ['term' => $term, 'exclude' => $exclude, 'exact' => $exact] = self::parseSearchTerm($keyword);
             $escaped = $exact ? null : self::escapeLikeString($term);
-            $query->where(function ($q) use ($term, $escaped, $columns, $exclude, $exact) {
+            $matchTag = function ($tags) use ($tagColumn, $term, $escaped, $exact) {
+                $exact ? $tags->where($tagColumn, '=', $term) : $tags->where($tagColumn, 'like', "%{$escaped}%");
+            };
+
+            $query->where(function ($q) use ($term, $escaped, $columns, $exclude, $exact, $tagColumn, $matchTag) {
                 if ($exclude) {
                     foreach ($columns as $column) {
                         if ($exact) {
@@ -303,6 +353,9 @@ class QueryHelper
                             $q->where($column, 'not like', "%{$escaped}%");
                         }
                     }
+                    if ($tagColumn !== null) {
+                        $q->whereDoesntHave('tags', $matchTag);
+                    }
                 } else {
                     foreach ($columns as $column) {
                         if ($exact) {
@@ -310,6 +363,9 @@ class QueryHelper
                         } else {
                             $q->orWhere($column, 'like', "%{$escaped}%");
                         }
+                    }
+                    if ($tagColumn !== null) {
+                        $q->orWhereHas('tags', $matchTag);
                     }
                 }
             });
