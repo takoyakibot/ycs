@@ -2424,7 +2424,7 @@ export class TimestampNormalization {
             }
         } catch (error) {
             console.error('更新に失敗しました:', error);
-            toast.error('更新に失敗しました。');
+            toast.error(error.response?.data?.message || '更新に失敗しました。');
         } finally {
             this.hideLoading();
         }

@@ -1756,6 +1756,28 @@ class SongControllerTest extends TestCase
     }
 
     /**
+     * 既存マスタと同じ曲名・アーティストへの変更は500ではなく409で理由を返す
+     */
+    public function test_update_song_to_existing_title_and_artist_returns_409(): void
+    {
+        Song::factory()->create(['title' => '大不正解', 'artist' => 'back number']);
+        $song = Song::factory()->create(['title' => '大不正解（cover）', 'artist' => 'back number']);
+        $song->tags()->delete();
+        $song->tags()->create(['value' => 'back number']);
+
+        $response = $this->actingAs($this->user)->putJson(route('songs.updateSong', $song->id), [
+            'title' => '大不正解',
+            'artist' => 'back number',
+            'sync_tags' => true,
+            'old_artist' => 'back number',
+        ]);
+
+        $response->assertStatus(409);
+        $this->assertStringContainsString('統合', $response->json('message'));
+        $this->assertSame('大不正解（cover）', $song->fresh()->title);
+    }
+
+    /**
      * 楽曲マスタの更新テスト（video_url付き）
      */
     public function test_update_song_with_video_url(): void
