@@ -4,6 +4,7 @@
         'linked' => '紐付け済み',
         'unlinked' => '未紐付け',
         'empty_artist' => '⚠ アーティスト名が空',
+        'changed' => '現在と異なる',
     ];
 @endphp
 
@@ -39,8 +40,8 @@
 
                     <p class="mt-3 text-xs text-gray-500 dark:text-gray-400">
                         紐付けが誤っている場合はタイムスタンプ正規化画面で修正してください。
-                        ただしこの一覧はTS分解時の自動判定の紐付けを表示しているため、
-                        正規化画面での解除・付け替えは反映されません。
+                        「判定時」列はTS分解時の自動判定の結果で、正規化画面での変更は反映されません。
+                        「現在」列は正規化画面での紐付け状態を表示しています。
                     </p>
                 </div>
             </div>
@@ -61,26 +62,37 @@
                         </p>
                     @else
                         <div class="overflow-x-auto">
-                            <table class="w-full min-w-[880px] text-sm">
+                            <table class="w-full min-w-[1060px] text-sm">
                                 <thead>
                                     <tr class="text-left text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
-                                        <th class="py-2 pr-4 font-medium w-2/5">元テキスト</th>
-                                        <th class="py-2 pr-4 font-medium w-2/5">曲名 / アーティスト</th>
+                                        <th class="py-2 pr-4 font-medium">元テキスト</th>
+                                        <th class="py-2 pr-4 font-medium">判定時</th>
+                                        <th class="py-2 pr-4 font-medium">現在</th>
                                         <th class="py-2 pr-4 font-medium whitespace-nowrap">確信度</th>
-                                        <th class="py-2 pr-4 font-medium whitespace-nowrap">状態</th>
                                         <th class="py-2 font-medium whitespace-nowrap">日時</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     @foreach ($decompositions as $decomposition)
                                         @php
-                                            // 紐付け済みなら楽曲マスタの値、未紐付けなら判定結果を表示する
                                             $title = $decomposition->song ? $decomposition->song->title : $decomposition->derived_title;
                                             $artist = $decomposition->song ? $decomposition->song->artist : $decomposition->derived_artist;
                                             $titleIsEmpty = $title === null || trim($title) === '';
                                             $artistIsEmpty = $artist === null || trim($artist) === '';
+
+                                            $mapping = $decomposition->currentMapping;
+                                            $currentSong = $mapping?->song;
+                                            $isNotSong = $mapping?->is_not_song;
+                                            $hasMapping = $mapping !== null;
+
+                                            $currentSongId = $isNotSong ? '__not_song__' : ($currentSong?->id ?? ($hasMapping ? null : '__no_mapping__'));
+                                            $autoSongId = $decomposition->song_id;
+                                            $isChanged = $currentSongId !== $autoSongId
+                                                && !($currentSongId === null && $autoSongId === null)
+                                                && !($currentSongId === '__no_mapping__' && $autoSongId === null);
+                                            if ($isNotSong && $autoSongId !== null) $isChanged = true;
                                         @endphp
-                                        <tr class="border-b border-gray-100 dark:border-gray-700 {{ $titleIsEmpty || $artistIsEmpty ? 'bg-amber-50 dark:bg-amber-900/20' : '' }}">
+                                        <tr class="border-b border-gray-100 dark:border-gray-700 {{ $isChanged ? 'bg-yellow-50 dark:bg-yellow-900/20' : ($titleIsEmpty || $artistIsEmpty ? 'bg-amber-50 dark:bg-amber-900/20' : '') }}">
                                             <td class="py-2 pr-4 break-all">
                                                 <div class="flex items-start gap-2">
                                                     <span>{{ $decomposition->original_text }}</span>
@@ -93,8 +105,6 @@
                                                 </div>
                                             </td>
                                             <td class="py-2 pr-4 break-all">
-                                                {{-- アーティスト側と文言を分けること。同じ文言にすると
-                                                     どちらが欠けているのか画面から判別できなくなる。 --}}
                                                 @if ($titleIsEmpty)
                                                     <span class="text-amber-700 dark:text-amber-400 font-medium">⚠ 曲名なし</span>
                                                 @else
@@ -107,15 +117,24 @@
                                                     <span class="text-green-600 dark:text-green-400">{{ $artist }}</span>
                                                 @endif
                                             </td>
-                                            <td class="py-2 pr-4 whitespace-nowrap">
-                                                {{ $decomposition->confidence === null ? '-' : round($decomposition->confidence * 100).'%' }}
-                                            </td>
-                                            <td class="py-2 pr-4 whitespace-nowrap" data-status="{{ $decomposition->song_id ? 'linked' : 'unlinked' }}">
-                                                @if ($decomposition->song_id)
-                                                    <span class="text-green-600 dark:text-green-400">紐付け済み</span>
+                                            <td class="py-2 pr-4 break-all">
+                                                @if ($isNotSong)
+                                                    <span class="text-orange-600 dark:text-orange-400">楽曲ではない</span>
+                                                @elseif (! $hasMapping)
+                                                    <span class="text-gray-400 dark:text-gray-500">マッピングなし</span>
+                                                @elseif ($currentSong)
+                                                    <span class="text-blue-600 dark:text-blue-400">{{ $currentSong->title }}</span>
+                                                    <span class="text-gray-400">/</span>
+                                                    <span class="text-green-600 dark:text-green-400">{{ $currentSong->artist ?: '(未設定)' }}</span>
                                                 @else
                                                     <span class="text-gray-500 dark:text-gray-400">未紐付け</span>
                                                 @endif
+                                                @if ($isChanged)
+                                                    <span class="ml-1 px-1.5 py-0.5 text-xs rounded bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200">変更あり</span>
+                                                @endif
+                                            </td>
+                                            <td class="py-2 pr-4 whitespace-nowrap">
+                                                {{ $decomposition->confidence === null ? '-' : round($decomposition->confidence * 100).'%' }}
                                             </td>
                                             <td class="py-2 whitespace-nowrap text-gray-500 dark:text-gray-400">
                                                 <x-datetime :value="$decomposition->updated_at" />

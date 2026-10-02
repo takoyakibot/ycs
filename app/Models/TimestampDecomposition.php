@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class TimestampDecomposition extends Model
 {
@@ -53,6 +54,14 @@ class TimestampDecomposition extends Model
     public function song(): BelongsTo
     {
         return $this->belongsTo(Song::class, 'song_id');
+    }
+
+    /**
+     * 現在のマッピング（正規化画面での紐付け）
+     */
+    public function currentMapping(): HasOne
+    {
+        return $this->hasOne(TimestampSongMapping::class, 'normalized_text', 'normalized_text');
     }
 
     /**

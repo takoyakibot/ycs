@@ -43,7 +43,7 @@ class TimestampDecompositionController extends Controller
     public function linked(Request $request): View
     {
         $filter = $request->query('filter');
-        $filter = in_array($filter, ['linked', 'unlinked', 'empty_artist'], true) ? $filter : null;
+        $filter = in_array($filter, ['linked', 'unlinked', 'empty_artist', 'changed'], true) ? $filter : null;
 
         return view('songs.decompose-linked', [
             'decompositions' => $this->service->getAutoMatchedList($filter),

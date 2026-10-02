@@ -64,7 +64,8 @@ class AutoMatchedLinkListTest extends TestCase
         $response->assertSee('紐付け済みの元テキスト');
         $response->assertSee('マスタの曲名');
         $response->assertSee('マスタのアーティスト');
-        $response->assertSee('data-status="linked"', false);
+        $response->assertSee('マスタの曲名');
+        $response->assertSee('マスタのアーティスト');
     }
 
     /**
@@ -88,7 +89,6 @@ class AutoMatchedLinkListTest extends TestCase
         $response->assertSee('未紐付けの元テキスト');
         $response->assertSee('判定された曲名');
         $response->assertSee('判定されたアーティスト');
-        $response->assertSee('data-status="unlinked"', false);
     }
 
     /**
@@ -389,25 +389,18 @@ class AutoMatchedLinkListTest extends TestCase
     }
 
     /**
-     * 紐付け状態は song_id を根拠にすること
-     *
-     * マッピングが無くても song_id があれば「紐付け済み」と表示する。
-     * bulkLinkAutoMatched() の対象条件に song_id IS NULL が含まれるため、
-     * 「未紐付け」が一括紐付けの対象集合を包含する（厳密な一致ではない。
-     * derived_title が空の行は拾われない）。判定元を timestamp_song_mappings に
-     * 付け替えるとこの包含関係すら崩れる。
+     * マッピングが無い場合、「現在」列に「マッピングなし」が表示されること
      */
-    public function test_status_is_based_on_song_id_not_mapping(): void
+    public function test_shows_no_mapping_when_mapping_missing(): void
     {
         $this->actingAs(User::factory()->create());
 
-        // マッピングは作らない
         $song = Song::factory()->create(['title' => 'マスタの曲名', 'artist' => 'マスタのアーティスト']);
         $this->createDecomposition('マッピングが無いテキスト', ['song_id' => $song->id]);
 
         $this->get(route('songs.decompose.linked'))
             ->assertOk()
-            ->assertSee('data-status="linked"', false);
+            ->assertSee('マッピングなし');
     }
 
     /**
@@ -443,27 +436,73 @@ class AutoMatchedLinkListTest extends TestCase
     }
 
     /**
-     * 状態列の可視ラベルが出ていること
-     *
-     * data-status 属性と @if が別々に条件を書いているため、
-     * 属性だけを見ていると人間が読むラベルの入れ替わりを検知できない。
+     * 「現在」列に現在のマッピング先の楽曲情報が表示されること
      */
-    public function test_shows_visible_status_labels(): void
+    public function test_shows_current_mapping_song(): void
     {
         $this->actingAs(User::factory()->create());
 
-        $song = Song::factory()->create();
-        $this->createDecomposition('紐付け済みのテキスト', ['song_id' => $song->id]);
+        $song = Song::factory()->create(['title' => '現在マスタ曲名', 'artist' => '現在マスタアーティスト']);
+        $decomposition = $this->createDecomposition('紐付け済みのテキスト', ['song_id' => $song->id]);
+
+        \App\Models\TimestampSongMapping::create([
+            'normalized_text' => $decomposition->normalized_text,
+            'song_id' => $song->id,
+        ]);
 
         $this->get(route('songs.decompose.linked'))
             ->assertOk()
-            ->assertSee('>紐付け済み</span>', false);
+            ->assertSee('現在マスタ曲名')
+            ->assertSee('現在マスタアーティスト');
+    }
 
-        $this->createDecomposition('未紐付けのテキスト');
+    /**
+     * 現在のマッピングが判定時と異なる場合に「変更あり」バッジが表示されること
+     */
+    public function test_shows_changed_badge_when_mapping_differs(): void
+    {
+        $this->actingAs(User::factory()->create());
+
+        $autoSong = Song::factory()->create(['title' => '判定時の曲', 'artist' => 'A']);
+        $currentSong = Song::factory()->create(['title' => '現在の曲', 'artist' => 'B']);
+        $decomposition = $this->createDecomposition('変更ありのテキスト', ['song_id' => $autoSong->id]);
+
+        \App\Models\TimestampSongMapping::create([
+            'normalized_text' => $decomposition->normalized_text,
+            'song_id' => $currentSong->id,
+        ]);
 
         $this->get(route('songs.decompose.linked'))
             ->assertOk()
-            ->assertSee('>未紐付け</span>', false);
+            ->assertSee('変更あり');
+    }
+
+    /**
+     * filter=changed で現在と異なる行のみ表示されること
+     */
+    public function test_filter_changed(): void
+    {
+        $this->actingAs(User::factory()->create());
+
+        $song1 = Song::factory()->create(['title' => '一致の曲']);
+        $decomp1 = $this->createDecomposition('一致テキスト', ['song_id' => $song1->id]);
+        \App\Models\TimestampSongMapping::create([
+            'normalized_text' => $decomp1->normalized_text,
+            'song_id' => $song1->id,
+        ]);
+
+        $song2 = Song::factory()->create(['title' => '変更の曲']);
+        $song3 = Song::factory()->create(['title' => '別の曲']);
+        $decomp2 = $this->createDecomposition('変更テキスト', ['song_id' => $song2->id]);
+        \App\Models\TimestampSongMapping::create([
+            'normalized_text' => $decomp2->normalized_text,
+            'song_id' => $song3->id,
+        ]);
+
+        $this->get(route('songs.decompose.linked', ['filter' => 'changed']))
+            ->assertOk()
+            ->assertSee('変更テキスト')
+            ->assertDontSee('一致テキスト');
     }
 
     /**
