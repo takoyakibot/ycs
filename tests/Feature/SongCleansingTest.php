@@ -313,4 +313,76 @@ class SongCleansingTest extends TestCase
         $this->assertEquals('Song A', $data[0]['title']);
         $this->assertEquals('Song B', $data[1]['title']);
     }
+
+    public function test_preview_artist_rename_ignores_surrounding_spaces_in_stored_artist(): void
+    {
+        // 一覧に " Kana Nishino" と表示されても、送信値は TrimStrings で前後スペースが除去される
+        Song::factory()->create(['title' => 'Darling', 'artist' => ' Kana Nishino']);
+        Song::factory()->create(['title' => 'Best Friend', 'artist' => 'Kana Nishino ']);
+
+        $response = $this->actingAs($this->user)
+            ->getJson('/api/songs/cleansing/artist-rename-preview?'.http_build_query([
+                'from' => ' Kana Nishino',
+                'to' => '西野カナ',
+            ]));
+
+        $response->assertStatus(200);
+        $this->assertEquals(2, $response->json('rename_count'));
+    }
+
+    public function test_rename_artist_ignores_surrounding_spaces_in_stored_artist(): void
+    {
+        $song = Song::factory()->create(['title' => 'Darling', 'artist' => ' Kana Nishino']);
+
+        $this->actingAs($this->user)
+            ->postJson('/api/songs/cleansing/artist-rename', [
+                'from' => ' Kana Nishino',
+                'to' => '西野カナ',
+            ])
+            ->assertStatus(200);
+
+        $this->assertEquals('西野カナ', $song->fresh()->artist);
+    }
+
+    public function test_rename_artist_merges_into_target_with_surrounding_spaces(): void
+    {
+        $source = Song::factory()->create(['title' => 'Darling', 'artist' => 'Kana Nishino']);
+        $target = Song::factory()->create(['title' => 'Darling', 'artist' => ' 西野カナ']);
+
+        $this->actingAs($this->user)
+            ->postJson('/api/songs/cleansing/artist-rename', [
+                'from' => 'Kana Nishino',
+                'to' => '西野カナ',
+            ])
+            ->assertStatus(200)
+            ->assertJsonCount(1, 'merged');
+
+        $this->assertNull(Song::find($source->id));
+        $this->assertNotNull(Song::find($target->id));
+    }
+
+    public function test_artists_with_count_groups_artist_ignoring_surrounding_spaces(): void
+    {
+        Song::factory()->create(['title' => 'Song A', 'artist' => 'Alpha']);
+        Song::factory()->create(['title' => 'Song B', 'artist' => ' Alpha']);
+        Song::factory()->create(['title' => 'Song C', 'artist' => '  ']);
+
+        $response = $this->actingAs($this->user)
+            ->getJson('/api/songs/artists-with-count');
+
+        $response->assertStatus(200);
+        $this->assertEquals([['name' => 'Alpha', 'count' => 2]], $response->json());
+    }
+
+    public function test_songs_by_artist_ignores_surrounding_spaces_in_stored_artist(): void
+    {
+        Song::factory()->create(['title' => 'Song A', 'artist' => 'Alpha']);
+        Song::factory()->create(['title' => 'Song B', 'artist' => ' Alpha']);
+
+        $response = $this->actingAs($this->user)
+            ->getJson('/api/songs/by-artist?artist='.urlencode(' Alpha'));
+
+        $response->assertStatus(200);
+        $this->assertCount(2, $response->json());
+    }
 }
