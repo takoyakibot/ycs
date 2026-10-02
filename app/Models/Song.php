@@ -95,6 +95,28 @@ class Song extends Model
         return $query->whereRaw('TRIM(artist) = ?', [trim($artist, ' ')]);
     }
 
+    /**
+     * アーティスト名変更時に、旧アーティスト名と同じ値のタグを新しい名前に揃える
+     *
+     * @return array<int, array{id: string, old_value: string, new_value: string}>
+     */
+    public function syncArtistTags(string $oldArtist, string $newArtist): array
+    {
+        $updatedTags = [];
+
+        foreach ($this->tags()->where('value', $oldArtist)->get() as $tag) {
+            $oldValue = $tag->value;
+            $tag->update(['value' => $newArtist]);
+            $updatedTags[] = [
+                'id' => $tag->id,
+                'old_value' => $oldValue,
+                'new_value' => $newArtist,
+            ];
+        }
+
+        return $updatedTags;
+    }
+
     public function mappings()
     {
         return $this->hasMany(TimestampSongMapping::class, 'song_id', 'id');

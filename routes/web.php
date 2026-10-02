@@ -11,6 +11,7 @@ use App\Http\Controllers\ManageController;
 use App\Http\Controllers\ManageSettingsApiController;
 use App\Http\Controllers\MarkdownController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\SongAuditController;
 use App\Http\Controllers\SongController;
 use App\Http\Controllers\SubtitleApiController;
 use App\Http\Controllers\TimestampDecompositionController;
@@ -56,6 +57,10 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::get('/songs/normalize', [SongController::class, 'index'])->name('songs.index');
     Route::get('/songs/title-groups', [SongController::class, 'titleGroups'])->name('songs.titleGroups');
     Route::get('/songs/artist-rename', [SongController::class, 'artistRename'])->name('songs.artistRename');
+    Route::get('/songs/audits', [SongAuditController::class, 'index'])->name('songs.audits.index');
+    Route::post('/songs/audits/{audit}/apply', [SongAuditController::class, 'apply'])->name('songs.audits.apply');
+    Route::post('/songs/audits/{audit}/reject', [SongAuditController::class, 'reject'])->name('songs.audits.reject');
+    Route::post('/songs/audits/{audit}/needs-fix', [SongAuditController::class, 'markNeedsFix'])->name('songs.audits.needsFix');
 
     // タイムスタンプ分解・選別
     Route::get('/songs/decompose', [TimestampDecompositionController::class, 'index'])->name('songs.decompose');
