@@ -163,12 +163,13 @@ class SongController extends Controller
      */
     public function artistsWithCount(): JsonResponse
     {
-        $artists = Song::select('artist')
+        // 前後スペース違いの表記は同一アーティストとして1件にまとめる
+        $artists = Song::selectRaw('TRIM(artist) as artist')
             ->selectRaw('COUNT(*) as count')
             ->whereNotNull('artist')
-            ->where('artist', '!=', '')
-            ->groupBy('artist')
-            ->orderBy('artist')
+            ->whereRaw("TRIM(artist) != ''")
+            ->groupByRaw('TRIM(artist)')
+            ->orderByRaw('TRIM(artist)')
             ->get()
             ->map(fn ($row) => ['name' => $row->artist, 'count' => $row->count]);
 
@@ -184,7 +185,7 @@ class SongController extends Controller
             'artist' => 'required|string|max:255',
         ]);
 
-        $songs = Song::where('artist', $validated['artist'])
+        $songs = Song::whereArtistIgnoringSpaces($validated['artist'])
             ->orderBy('title')
             ->get(['id', 'title']);
 

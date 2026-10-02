@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Helpers\ArtistTagHelper;
 use App\Helpers\TextNormalizer;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -81,6 +82,17 @@ class Song extends Model
                 );
             }
         });
+    }
+
+    /**
+     * アーティスト名を前後の半角スペースを無視して一致させる
+     *
+     * 登録済みの artist に前後スペースが混入していても、TrimStrings で除去された
+     * リクエスト値と一致させるため（SQL の TRIM は半角スペースのみ除去する）
+     */
+    public function scopeWhereArtistIgnoringSpaces(Builder $query, string $artist): Builder
+    {
+        return $query->whereRaw('TRIM(artist) = ?', [trim($artist, ' ')]);
     }
 
     public function mappings()
