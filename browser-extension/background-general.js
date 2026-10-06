@@ -3,10 +3,6 @@
 
   /**
    * 歌枠タイムスタンプ検出 - Background Service Worker
-   *
-   * Offscreen Documentを使用してYouTubeタブの音声をキャプチャし、
-   * 音量変化を検出してタイムスタンプ候補を生成する
-   * 音量ダイナミクスグラフ用のデータを蓄積する
    */
 
   let timestamps = [];
@@ -14,11 +10,8 @@
 
   // 音量グラフ用データ
   let volumeGraphData = [];
-  let spectralGraphData = [];
   let videoDuration = 0;
   let isScanning = false;
-  const LEGACY_GRAPH_RESOLUTION = 500; // 旧形式との互換用
-  let currentGraphResolution = LEGACY_GRAPH_RESOLUTION;
 
   // デフォルト設定
   const DEFAULT_CONFIG = {
@@ -75,27 +68,6 @@
         sendResponse({ success: true, config: CONFIG });
         return true;
 
-      case 'UPDATE_VIDEO_TIME':
-        return false;
-
-      case 'TIMESTAMP_DETECTED_FROM_OFFSCREEN':
-        return false;
-
-      case 'VOLUME_DATA_FROM_OFFSCREEN':
-        return false;
-
-      case 'START_SCAN':
-        {
-          sendResponse({ success: false, error: 'NOT_AVAILABLE_IN_GENERAL_EDITION' });
-          return true;
-        }
-
-      case 'STOP_SCAN':
-        {
-          sendResponse({ success: true });
-          return true;
-        }
-
       case 'GET_VOLUME_DATA':
         if (sender.tab?.id !== currentTabId) {
           sendResponse({ data: [], duration: 0 });
@@ -106,7 +78,6 @@
 
       case 'CLEAR_VOLUME_DATA':
         volumeGraphData = [];
-        spectralGraphData = [];
         videoDuration = 0;
         sendResponse({ success: true });
         return true;
@@ -118,12 +89,6 @@
       case 'SHOW_VOLUME_GRAPH':
         showVolumeGraph();
         return false;
-
-      case 'CHECK_TOXICITY':
-        {
-          sendResponse({ toxic: false, reason: '', skipped: true });
-          return true;
-        }
     }
   });
 
@@ -131,15 +96,6 @@
    * 音量データをコンテンツスクリプトに送信
    */
   async function sendVolumeDataToContent() {
-    try {
-      // スキャン中のタブ（キャプチャ対象）に送る。アクティブタブ宛てにすると、
-      // スキャン中に別タブでアーカイブを開いたとき無関係な動画にグラフが
-      // 表示・誤保存されてしまう（#614）
-      const tab = currentTabId ? { id: currentTabId } : null;
-      if (tab?.id) ;
-    } catch (error) {
-      console.error('音量データ送信エラー:', error);
-    }
   }
 
   /**

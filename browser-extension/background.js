@@ -1,9 +1,5 @@
 /**
  * 歌枠タイムスタンプ検出 - Background Service Worker
- *
- * Offscreen Documentを使用してYouTubeタブの音声をキャプチャし、
- * 音量変化を検出してタイムスタンプ候補を生成する
- * 音量ダイナミクスグラフ用のデータを蓄積する
  */
 
 const IS_GENERAL_EDITION = chrome.runtime.getManifest().x_edition === 'general';
@@ -77,6 +73,10 @@ if (!IS_GENERAL_EDITION) {
     }
   })();
 }
+
+// 管理者版は Offscreen Document を使用して YouTube タブの音声をキャプチャし（tabCapture スキャン）、
+// 音量変化を検出してタイムスタンプ候補を生成する。音量ダイナミクスグラフ用のデータを蓄積する
+// （一般版は content script 内でスキャンするため、このキャプチャ処理は成果物に含めない）
 
 // Service Worker起動時にクリーンアップ
 // tabCaptureの「つかみっぱなし」を防ぐため、既存のOffscreen Documentを閉じる
@@ -158,68 +158,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ success: true, config: CONFIG });
       return true;
 
-    case 'UPDATE_VIDEO_TIME':
-      if (IS_GENERAL_EDITION) return false;
-      if (!isCapturing || sender.tab?.id !== currentTabId) {
-        return false;
-      }
-      chrome.runtime.sendMessage({
-        type: 'UPDATE_VIDEO_TIME',
-        time: message.time
-      }).catch(() => {});
-      return false;
-
-    case 'TIMESTAMP_DETECTED_FROM_OFFSCREEN':
-      if (IS_GENERAL_EDITION) return false;
-      timestamps.push(message.timestamp);
-      notifyContentScript(message.timestamp);
-      return false;
-
-    case 'VOLUME_DATA_FROM_OFFSCREEN':
-      if (IS_GENERAL_EDITION) return false;
-      console.log('音量データ受信(raw)', { index: message.index, volume: message.volume });
-      if (message.index >= 0 && message.index < currentGraphResolution) {
-        const oldValue = volumeGraphData[message.index] || 0;
-        if (message.volume > oldValue) {
-          volumeGraphData[message.index] = message.volume;
-          if (message.spectral) spectralGraphData[message.index] = message.spectral;
-        } else if (!spectralGraphData[message.index] && message.spectral) {
-          spectralGraphData[message.index] = message.spectral;
-        }
-      }
-      // 200msごとにUIを更新
-      const now = Date.now();
-      if (now - lastVolumeUpdateTime >= 200) {
-        lastVolumeUpdateTime = now;
-        sendVolumeDataToContent();
-      }
-      return false;
-
-    case 'START_SCAN':
-      if (IS_GENERAL_EDITION) {
-        sendResponse({ success: false, error: 'NOT_AVAILABLE_IN_GENERAL_EDITION' });
-        return true;
-      }
-      console.log('START_SCAN受信', { isScanning });
-      if (isScanning) {
-        stopScan();
-        sendResponse({ success: true, isScanning: false });
-      } else {
-        startScan(message.muted).then(result => {
-          sendResponse({ success: result.success, isScanning, error: result.error });
-        });
-      }
-      return true;
-
-    case 'STOP_SCAN':
-      if (IS_GENERAL_EDITION) {
-        sendResponse({ success: true });
-        return true;
-      }
-      stopScan();
-      sendResponse({ success: true });
-      return true;
-
     case 'GET_VOLUME_DATA':
       if (sender.tab?.id !== currentTabId) {
         sendResponse({ data: [], duration: 0 });
@@ -243,17 +181,78 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       showVolumeGraph();
       return false;
 
-    case 'CHECK_TOXICITY':
-      if (IS_GENERAL_EDITION) {
-        sendResponse({ toxic: false, reason: '', skipped: true });
-        return true;
+    default:
+      // 以降は管理者版の content script（tabCapture スキャン・チャット遅延送信）と offscreen からのみ届く。
+      // 一般版は送信元がないため成果物から除く
+      if (!IS_GENERAL_EDITION) {
+        return handleAdminMessage(message, sender, sendResponse);
       }
+  }
+});
+
+/**
+ * 管理者版のみのメッセージ（tabCapture スキャン・offscreen・AI毒性チェック）
+ */
+function handleAdminMessage(message, sender, sendResponse) {
+  switch (message.type) {
+    case 'UPDATE_VIDEO_TIME':
+      if (!isCapturing || sender.tab?.id !== currentTabId) {
+        return false;
+      }
+      chrome.runtime.sendMessage({
+        type: 'UPDATE_VIDEO_TIME',
+        time: message.time
+      }).catch(() => {});
+      return false;
+
+    case 'TIMESTAMP_DETECTED_FROM_OFFSCREEN':
+      timestamps.push(message.timestamp);
+      notifyContentScript(message.timestamp);
+      return false;
+
+    case 'VOLUME_DATA_FROM_OFFSCREEN':
+      console.log('音量データ受信(raw)', { index: message.index, volume: message.volume });
+      if (message.index >= 0 && message.index < currentGraphResolution) {
+        const oldValue = volumeGraphData[message.index] || 0;
+        if (message.volume > oldValue) {
+          volumeGraphData[message.index] = message.volume;
+          if (message.spectral) spectralGraphData[message.index] = message.spectral;
+        } else if (!spectralGraphData[message.index] && message.spectral) {
+          spectralGraphData[message.index] = message.spectral;
+        }
+      }
+      // 200msごとにUIを更新
+      const now = Date.now();
+      if (now - lastVolumeUpdateTime >= 200) {
+        lastVolumeUpdateTime = now;
+        sendVolumeDataToContent();
+      }
+      return false;
+
+    case 'START_SCAN':
+      console.log('START_SCAN受信', { isScanning });
+      if (isScanning) {
+        stopScan();
+        sendResponse({ success: true, isScanning: false });
+      } else {
+        startScan(message.muted).then(result => {
+          sendResponse({ success: result.success, isScanning, error: result.error });
+        });
+      }
+      return true;
+
+    case 'STOP_SCAN':
+      stopScan();
+      sendResponse({ success: true });
+      return true;
+
+    case 'CHECK_TOXICITY':
       checkToxicity(message.text, message.recentMessages)
         .then(result => sendResponse(result))
         .catch(error => sendResponse({ error: error.message }));
       return true;
   }
-});
+}
 
 /**
  * Offscreen Documentが存在するか確認

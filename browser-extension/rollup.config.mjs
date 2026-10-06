@@ -97,6 +97,7 @@ export default [
       file: 'background-general.js',
       format: 'iife',
     },
+    treeshake: GENERAL_TREESHAKE,
     plugins: [fixGeneralEdition()],
   },
 ];
