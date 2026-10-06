@@ -36,6 +36,27 @@ function editionStubs(stubs) {
   };
 }
 
+// background.js は管理者版ではそのまま使い、一般版ではこの定数を true に固定してビルドする。
+// 定数が畳み込まれ、一般版で到達しない分岐（tabCapture / offscreen / Claude API など）が
+// tree-shaking で成果物から消える（ストア審査で権限・通信先として問われないようにするため）
+const EDITION_DETECTION = "const IS_GENERAL_EDITION = chrome.runtime.getManifest().x_edition === 'general';";
+
+function fixGeneralEdition() {
+  return {
+    name: 'fix-general-edition',
+    transform(code, id) {
+      if (basename(id) !== 'background.js') return null;
+      if (!code.includes(EDITION_DETECTION)) {
+        this.error(
+          `background.js に「${EDITION_DETECTION}」が見つかりません。` +
+          `一般版の分岐を畳み込めないため、rollup.config.mjs の EDITION_DETECTION を合わせてください。`
+        );
+      }
+      return { code: code.replace(EDITION_DETECTION, 'const IS_GENERAL_EDITION = true;'), map: null };
+    },
+  };
+}
+
 const generalStubs = {
   'list-scan.js': 'stubs/list-scan.js',
   'highlight.js': 'stubs/highlight.js',
@@ -58,5 +79,13 @@ export default [
       format: 'iife',
     },
     plugins: [editionStubs(generalStubs)],
+  },
+  {
+    input: 'background.js',
+    output: {
+      file: 'background-general.js',
+      format: 'iife',
+    },
+    plugins: [fixGeneralEdition()],
   },
 ];

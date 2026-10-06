@@ -34,7 +34,9 @@ rm -rf dist/general
 mkdir -p dist/general
 cp content-general.js dist/general/content.js
 cp manifest.general.json dist/general/manifest.json
-for f in background.js popup.html popup.js page-bridge.js; do
+# 一般版で到達しない分岐（tabCapture / offscreen / Claude API など）を除いたもの（rollup.config.mjs 参照）
+cp background-general.js dist/general/background.js
+for f in popup.html popup.js page-bridge.js; do
   cp "$f" "dist/general/$f"
 done
 cp -r icons dist/general/
