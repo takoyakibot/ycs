@@ -37,7 +37,7 @@ function editionStubs(stubs) {
   };
 }
 
-// background.js / popup.js は管理者版ではそのまま使い、一般版ではこの定数を true に固定してビルドする。
+// popup.js は管理者版ではそのまま使い、一般版ではこの定数を true に固定してビルドする。
 // 定数が畳み込まれ、一般版で到達しない分岐（tabCapture / offscreen / Claude API / 管理者向け設定欄など）が
 // tree-shaking で成果物から消える（ストア審査で権限・通信先・使っていない機能として問われないようにするため）
 // src/content/ 側は edition.js を edition-general.js に差し替えて同じことをする（generalStubs 参照）
@@ -159,15 +159,6 @@ export default [
     },
     treeshake: GENERAL_TREESHAKE,
     plugins: [editionStubs(generalStubs)],
-  },
-  {
-    input: 'background.js',
-    output: {
-      file: 'background-general.js',
-      format: 'iife',
-    },
-    treeshake: GENERAL_TREESHAKE,
-    plugins: [fixGeneralEdition()],
   },
   {
     input: 'popup.js',

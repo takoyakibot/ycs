@@ -37,11 +37,12 @@ argument-hint: "[--version <x.y.z>]"
   - 管理者専用モジュールは `generalStubs` でスタブ（または一般版専用モジュール）に差し替える
   - 共有モジュール内の管理者向け分岐は `src/content/edition.js` の `IS_GENERAL_EDITION` 定数で書く。一般版ビルドでは `generalStubs` で `edition-general.js`（`true`）に差し替わるので、`if (!IS_GENERAL_EDITION) { ... }` の中身は tree-shaking で消える。`state` などの実行時の値でエディションを判定すると成果物に残るので使わない
   - トークン必須の `api/extension/*` 呼び出し、`ycsApiToken` の読み込み、tabCapture / offscreen とのメッセージはこの方法で一般版から除いている
-- `background-general.js` / `popup-general.js`: `background.js` / `popup.js` の `IS_GENERAL_EDITION` 判定（`chrome.runtime.getManifest().x_edition`）を `fixGeneralEdition` で `true` に置き換えてバンドルする。一般版に入れたくない処理は `if (!IS_GENERAL_EDITION)` の中か、そこからしか呼ばれない関数・定数に置く（共通部分から参照すると残る）
+- background（service worker）は一般版に入れない。一般版の content / popup は `chrome.runtime.sendMessage` を送らず、background の役割（tabCapture スキャンの中継、Claude API 呼び出し）は管理者版専用のため。一般版で background が必要な機能を足すときは、manifest への追加と rollup での一般版ビルドを改めて用意する
+- `popup-general.js`: `popup.js` の `IS_GENERAL_EDITION` 判定（`chrome.runtime.getManifest().x_edition`）を `fixGeneralEdition` で `true` に置き換えてバンドルする。一般版に入れたくない処理は `if (!IS_GENERAL_EDITION)` の中か、そこからしか呼ばれない関数・定数に置く（共通部分から参照すると残る）
 - `popup-general.html`: `popup.html` から `data-admin-only` の付いた要素（`<style data-admin-only>` を含む）と HTML コメントを除き、見出しを一般版 manifest の `name` にしたもの。管理者向けの要素には必ず `data-admin-only` を付ける。一般版 `popup.js` が `getElementById` で参照する要素が消えているとビルドがエラーになる
 - 一般版の tree-shaking は `tryCatchDeoptimization: false`（`GENERAL_TREESHAKE`）。既定のままだと try ブロック内の管理者向け分岐が抜け殻として残り、呼び出し先の関数も成果物に残るため
 - `page-bridge.js` はビルドを通らずそのままコピーされる。アイコンは manifest が参照する PNG だけを入れる（`icons/icon.svg` は入れない）
-- `content.js` / `content-general.js` / `background-general.js` / `popup-general.js` / `popup-general.html` は git で管理している成果物なので、ビルド後は `git status` で差分を確認し、ソースと一緒にコミットする
+- `content.js` / `content-general.js` / `popup-general.js` / `popup-general.html` は git で管理している成果物なので、ビルド後は `git status` で差分を確認し、ソースと一緒にコミットする
 
 ## 手順
 
@@ -55,7 +56,7 @@ git log --oneline <前回タグ>..HEAD -- browser-extension/
 ```
 
 - タグが無ければ初回公開として扱う
-- 差分のうち一般版に効くもの（`src/content/` の共有モジュール、`index-general.js`、`background.js`、`popup.*`、`page-bridge.js`、`manifest.general.json`）を拾い、CHANGELOG と説明文の更新要否を判断する
+- 差分のうち一般版に効くもの（`src/content/` の共有モジュール、`index-general.js`、`popup.*`、`page-bridge.js`、`manifest.general.json`）を拾い、CHANGELOG と説明文の更新要否を判断する
 
 ### 2. ビルドして点検する
 

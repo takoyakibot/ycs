@@ -34,9 +34,9 @@ rm -rf dist/general
 mkdir -p dist/general
 cp content-general.js dist/general/content.js
 cp manifest.general.json dist/general/manifest.json
-# 一般版で到達しない分岐（tabCapture / offscreen / Claude API / 管理者向け設定欄など）を
-# 除いたもの（rollup.config.mjs 参照）
-cp background-general.js dist/general/background.js
+# 一般版で到達しない分岐（管理者向け設定欄など）を除いたもの（rollup.config.mjs 参照）
+# background（service worker）は一般版では使わない。一般版の content / popup は
+# chrome.runtime.sendMessage を送らず、background の役割（tabCapture スキャンの中継など）が管理者版専用のため
 cp popup-general.js dist/general/popup.js
 cp popup-general.html dist/general/popup.html
 cp page-bridge.js dist/general/page-bridge.js
