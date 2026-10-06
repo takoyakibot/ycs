@@ -119,34 +119,68 @@ echo "  ↑ コンテンツスクリプトの indexedDB / localStorage は拡張
 
 echo
 echo "## 管理者専用機能の混入チェック"
-# 一般版に入ってはいけないもの。チャットリプレイ取得は一般版に含める方針（2026-10 オーナー判断）なので対象外
-check_absent() {
+# 一般版に入ってはいけないもの。管理者向けのコード・UI・文字列はビルド時に成果物から除く方針
+# （実行時に隠すだけでは ZIP の中身として審査で見えるため）。
+# チャットリプレイの取得・ローカル保存・自動検出での利用は一般版に含める方針（2026-10 オーナー判断）なので対象外
+check_ng() {
   local label="$1" pattern="$2"
+  shift 2
+  local files=("$@")
   local hit
-  hit=$(grep -lE "$pattern" $JS_FILES | xargs -n1 basename 2>/dev/null | tr '\n' ' ')
+  hit=$(grep -lE -- "$pattern" "${files[@]}" 2>/dev/null | xargs -n1 basename 2>/dev/null | tr '\n' ' ')
   if [ -n "$hit" ]; then
-    echo "[要確認] ${label}: $hit"
+    echo "[NG] ${label}: $hit"
+    grep -nE -- "$pattern" "${files[@]}" 2>/dev/null | sed "s|$DIST/||" | cut -c1-140 | head -5 | sed 's/^/  /'
+    NG=1
   else
     echo "[OK] ${label}: なし"
   fi
 }
-check_absent "管理画面API (api/manage)" "api/manage/"
-check_absent "Claude API 直接呼び出し" "api\.anthropic\.com"
-check_absent "localhost への通信" "https?://(localhost|127\.0\.0\.1)"
-check_absent "ハイライト検出API" "api/extension/highlights"
-check_absent "リストスキャン系API" "scan-targets|subtitle-targets"
+# shellcheck disable=SC2206
+JS_LIST=($JS_FILES)
+HTML_LIST=($(find "$DIST" -name '*.html' | sort))
+check_ng "管理画面API (api/manage)" "api/manage/" "${JS_LIST[@]}"
+check_ng "トークン必須の書き込みAPI (api/extension)" "api/extension/" "${JS_LIST[@]}"
+check_ng "APIトークンの読み込み・送信 (ycsApiToken / Authorization)" "ycsApiToken|Authorization" "${JS_LIST[@]}"
+check_ng "Claude API・APIキー (anthropic / sk-ant- / claudeApiKey)" "anthropic|sk-ant-|claudeApiKey" "${JS_LIST[@]}" "${HTML_LIST[@]}"
+check_ng "localhost への通信" "https?://(localhost|127\.0\.0\.1)" "${JS_LIST[@]}"
+check_ng "ハイライト検出・リストスキャン・字幕一括取得" "highlights|scan-targets|subtitle-targets|listScan|subtitleScan" "${JS_LIST[@]}"
+check_ng "tabCapture / offscreen 連携のメッセージ" "START_SCAN|STOP_SCAN|UPDATE_VIDEO_TIME|_FROM_OFFSCREEN|SCAN_PERMISSION_ERROR|CHECK_TOXICITY" "${JS_LIST[@]}"
+check_ng "管理者向けUI要素 (data-admin-only)" "data-admin-only" "${JS_LIST[@]}" "${HTML_LIST[@]}"
+check_ng "管理者向け設定欄 (トークン・サーバーURL・チャット遅延・Google AI)" "ycs-api-token|ycs-server-url|chat-delay|hide-google-ai|toxicity" "${HTML_LIST[@]}" "${JS_LIST[@]}"
+# エディションの実行時判定が残っている＝ビルド時に畳み込まれず、管理者向けの分岐が成果物に残っている
+check_ng "エディションの実行時判定 (x_edition / state.edition / IS_GENERAL_EDITION)" "x_edition|\.edition\b|IS_GENERAL_EDITION" "${JS_LIST[@]}"
 grep -qE "localhost|127\.0\.0\.1" "$MANIFEST" && { echo "[NG] manifest に localhost 系の記述がある"; NG=1; }
 
 echo
-echo "## トークン必須の書き込みAPI（一般版ではトークン未設定で実行されないこと）"
-grep -nE "api/extension/" $JS_FILES | sed "s|$ROOT/||" | while IFS= read -r line; do
-  echo "  $line"
-done
-echo "  ↑ 各呼び出しの直前で ycsApiToken の有無を判定していることをコードで確認する"
-
-echo
-echo "## popup.html に残る管理者向け要素（実行時に data-admin-only で消えるが、ZIP の中身としては審査で見える）"
-grep -nE "data-admin-only|sk-ant-|api-token|server-url" "$DIST/popup.html" | cut -c1-140
+echo "## 成果物に含まれるファイルの要否"
+# manifest・popup.html から参照されないファイルは一般版で使わないので入れない（icons/icon.svg など）
+UNUSED=$(node -e '
+const fs = require("fs"), path = require("path");
+const dist = process.argv[1];
+const m = JSON.parse(fs.readFileSync(path.join(dist, "manifest.json"), "utf8"));
+const used = new Set(["manifest.json"]);
+const add = p => p && used.add(p.replace(/^\//, ""));
+Object.values(m.icons || {}).forEach(add);
+Object.values((m.action || {}).default_icon || {}).forEach(add);
+add((m.action || {}).default_popup);
+add((m.background || {}).service_worker);
+(m.content_scripts || []).forEach(c => (c.js || []).concat(c.css || []).forEach(add));
+(m.web_accessible_resources || []).forEach(w => (w.resources || []).forEach(add));
+for (const page of [...used].filter(p => p.endsWith(".html"))) {
+  const html = fs.readFileSync(path.join(dist, page), "utf8");
+  for (const [, ref] of html.matchAll(/(?:src|href)="([^"#:]+)"/g)) add(path.posix.join(path.posix.dirname(page), ref));
+}
+const walk = d => fs.readdirSync(d, { withFileTypes: true }).flatMap(e => e.isDirectory() ? walk(path.join(d, e.name)) : [path.relative(dist, path.join(d, e.name))]);
+console.log(walk(dist).filter(f => !used.has(f)).join("\n"));
+' "$DIST")
+if [ -n "$UNUSED" ]; then
+  echo "[NG] manifest・popup.html から参照されないファイルがある（build.sh で一般版に入れないようにする）:"
+  echo "$UNUSED" | sed 's/^/  /'
+  NG=1
+else
+  echo "[OK] すべて manifest・popup.html から参照されている"
+fi
 
 echo
 echo "## 成果物サイズ"
