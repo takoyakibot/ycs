@@ -71,10 +71,16 @@
     currentCaptionTracks: [],
     pageBridgeReady: null,
 
-    // API
-    ycsApiToken: null,
+    // API（api.js の loadYcsApiSettings で設定する）
     ycsServerUrl: null,
   };
+
+  // 管理者版か一般版かを表すビルド時定数（このファイルの値は管理者版用）。
+  // 一般版ビルドでは rollup.config.mjs の generalStubs が edition-general.js（true）に差し替えるため、
+  // `if (!IS_GENERAL_EDITION)` の分岐が畳み込まれ、一般版で到達しない管理者向けのコードが
+  // tree-shaking で成果物から消える。
+  // 実行時に判定する値（state など）で分岐させると成果物に残るので、必ずこの定数を使うこと。
+  const IS_GENERAL_EDITION = false;
 
   const SAMPLING_INTERVAL_SEC = 2;
   const LEGACY_GRAPH_RESOLUTION = 500;
@@ -358,10 +364,13 @@
 
     state.timeUpdateInterval = setInterval(() => {
       if (state.videoElement && !state.videoElement.paused) {
-        chrome.runtime.sendMessage({
-          type: 'UPDATE_VIDEO_TIME',
-          time: state.videoElement.currentTime
-        });
+        // 再生位置を offscreen（管理者版の tabCapture スキャン）に伝える。一般版は受け手がないため送らない
+        {
+          chrome.runtime.sendMessage({
+            type: 'UPDATE_VIDEO_TIME',
+            time: state.videoElement.currentTime
+          });
+        }
         if (state.isGraphVisible) {
           updateTimeMarker();
         }
@@ -616,6 +625,7 @@
   const subtitleSendInFlight = new Map();
 
   async function loadYcsApiSettings() {
+    // state.ycsApiToken は管理者版でだけ使うため state.js の初期値には持たせず、ここで設定する
     try {
       const result = await chrome.storage.local.get(['ycsApiToken', 'ycsServerUrl']);
       state.ycsApiToken = result.ycsApiToken || null;
@@ -1213,7 +1223,10 @@
     }
 
     stopDirectScan();
-    chrome.runtime.sendMessage({ type: 'STOP_SCAN' });
+    // 管理者版の tabCapture スキャンも止める（一般版にはないため送らない）
+    {
+      chrome.runtime.sendMessage({ type: 'STOP_SCAN' });
+    }
 
     console.log('自動スキャン停止');
   }
@@ -3637,7 +3650,8 @@
       try {
         await initChatDB();
         chats = await loadChatDataForVideo(videoId);
-        if (chats.length > 0) {
+        // サーバーへの送信はトークン必須のため管理者版のみ（ローカルのチャットは一般版でも自動検出に使う）
+        if (!IS_GENERAL_EDITION && chats.length > 0) {
           sendChatReplayDataToServer(videoId, chats, state.videoDuration);
         }
       } catch (e) {
@@ -3656,7 +3670,7 @@
             if (fetched.length > 0) {
               await saveChatsToDB(videoId, fetched);
               chats = fetched;
-              sendChatReplayDataToServer(videoId, fetched, state.videoDuration, { force: true });
+              if (!IS_GENERAL_EDITION) sendChatReplayDataToServer(videoId, fetched, state.videoDuration, { force: true });
               resetChatHeatmap();
             } else {
               chatUnavailable = true;
@@ -4117,7 +4131,8 @@
       const serverUrl = state.ycsServerUrl || DEFAULT_YCS_SERVER_URL;
       const url = `${serverUrl}/api/public/song-suggest?q=${encodeURIComponent(query)}`;
       const headers = { 'Accept': 'application/json' };
-      if (state.ycsApiToken) {
+      // 一般版はトークンを持たないため付けない
+      if (!IS_GENERAL_EDITION && state.ycsApiToken) {
         headers['Authorization'] = `Bearer ${state.ycsApiToken}`;
       }
       const response = await fetch(url, {
@@ -4470,11 +4485,14 @@
     const suffix = notes.length > 0 ? `（${notes.join('、')}）` : '';
     showTsEditorNotice(`${valid.length}件のタイムスタンプを取り込みました${suffix}`);
 
-    const videoId = getVideoId();
-    if (videoId && state.ycsApiToken) {
-      try {
-        await ensureSubtitlesOnServer(videoId);
-      } catch { /* 字幕取得失敗は候補ボタン押下時に再試行される */ }
+    // 字幕のサーバー登録はトークン必須のため管理者版のみ
+    {
+      const videoId = getVideoId();
+      if (videoId && state.ycsApiToken) {
+        try {
+          await ensureSubtitlesOnServer(videoId);
+        } catch { /* 字幕取得失敗は候補ボタン押下時に再試行される */ }
+      }
     }
   }
 
@@ -4851,7 +4869,7 @@
   }
 
   function graphElementId() {
-    return state.edition === 'general' ? 'volume-dynamics-graph-general' : 'volume-dynamics-graph';
+    return 'volume-dynamics-graph';
   }
 
   function createVolumeGraph() {
@@ -5765,9 +5783,7 @@
     if (scanBtn) {
       scanBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        if (state.edition === 'general') {
-          startDirectScan();
-        } else {
+        {
           try {
             const response = await chrome.runtime.sendMessage({ type: 'START_SCAN' });
             console.log('START_SCAN応答:', response);
@@ -5801,9 +5817,7 @@
 
         await discardVolumeDataAndReset();
 
-        if (state.edition === 'general') {
-          startDirectScan();
-        } else {
+        {
           try {
             await chrome.runtime.sendMessage({ type: 'START_SCAN' });
           } catch (error) {
@@ -7986,6 +8000,10 @@
       .ycs-btn.active {
         background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);
       }
+    </style>
+    <button class="ycs-btn" id="ycs-trigger-btn" title="タイムスタンプ検出グラフを表示/非表示">YCS</button>
+    ${`
+    <style>
       #ycs-list-btn {
         font-size: 16px;
       }
@@ -7999,13 +8017,11 @@
         font-size: 14px;
       }
     </style>
-    <button class="ycs-btn" id="ycs-trigger-btn" title="タイムスタンプ検出グラフを表示/非表示">YCS</button>
-    ${state.edition !== 'general' ? `
     <button class="ycs-btn" id="ycs-list-btn" title="リストスキャンパネルを開く">☰</button>
     <button class="ycs-btn" id="ycs-chat-btn" title="チャット検索パネルを開く">💬</button>
     <button class="ycs-btn" id="ycs-subtitle-btn" title="字幕取得パネルを開く">📝</button>
     <button class="ycs-btn" id="ycs-highlight-btn" title="ハイライト検出パネルを開く">✨</button>
-    ` : ''}
+    ` }
   `;
 
     document.body.appendChild(buttonContainer);
@@ -8016,7 +8032,7 @@
       toggleEmbeddedUI();
     });
 
-    if (state.edition !== 'general') {
+    {
       // リストボタンのイベント
       buttonContainer.querySelector('#ycs-list-btn')?.addEventListener('click', () => {
         toggleListScanPanel();
@@ -8068,7 +8084,7 @@
       }
     }
 
-    if (state.edition !== 'general') {
+    {
       const listBtn = state.embeddedTriggerButton.querySelector('#ycs-list-btn');
       if (listBtn) {
         if (isListScanPanelVisible()) {
@@ -8137,11 +8153,6 @@
         sendResponse({ success: true });
         return true;
 
-      case 'TIMESTAMP_DETECTED':
-        state.detectedTimestamps.push(message.timestamp);
-        drawVolumeGraph();
-        break;
-
       case 'SHOW_VOLUME_GRAPH':
         if (state.volumeGraphContainer) {
           state.volumeGraphContainer.classList.add('visible');
@@ -8194,6 +8205,22 @@
             resizeCanvas();
           }
         }
+        break;
+
+      default:
+        // 以降は管理者版の background（tabCapture スキャン）とpopupのスキャンボタンからのみ届く。
+        // 一般版は送信元がないため成果物から除く
+        {
+          return handleTabCaptureMessage(message, sendResponse);
+        }
+    }
+  }
+
+  function handleTabCaptureMessage(message, sendResponse) {
+    switch (message.type) {
+      case 'TIMESTAMP_DETECTED':
+        state.detectedTimestamps.push(message.timestamp);
+        drawVolumeGraph();
         break;
 
       case 'VOLUME_DATA_UPDATE':

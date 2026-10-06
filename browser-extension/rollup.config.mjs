@@ -57,11 +57,21 @@ function fixGeneralEdition() {
   };
 }
 
+// 一般版の tree-shaking 設定。
+// rollup は既定で try ブロック内の tree-shaking を控える（例外を投げさせる機能検出のため）。
+// そのままだと try 内の `if (!IS_GENERAL_EDITION) sendChatReplayDataToServer(...)` が `if (!true) ;` として残り、
+// 呼び出し先の関数や管理者向けパネルの変数も参照ありとみなされて成果物に残る。
+// 拡張のコードは例外による機能検出をしていないため、一般版では無効にして到達しないコードを確実に消す。
+// （管理者版の content.js は従来どおり既定の設定でビルドする）
+const GENERAL_TREESHAKE = { tryCatchDeoptimization: false };
+
 const generalStubs = {
   'list-scan.js': 'stubs/list-scan.js',
   'highlight.js': 'stubs/highlight.js',
   'subtitle-panel.js': 'stubs/subtitle-panel.js',
   'song-candidates.js': 'song-candidates-general.js',
+  // 管理者向け分岐の定数（src/content/edition.js 参照）
+  'edition.js': 'edition-general.js',
 };
 
 export default [
@@ -78,6 +88,7 @@ export default [
       file: 'content-general.js',
       format: 'iife',
     },
+    treeshake: GENERAL_TREESHAKE,
     plugins: [editionStubs(generalStubs)],
   },
   {

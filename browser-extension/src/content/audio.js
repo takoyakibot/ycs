@@ -1,4 +1,5 @@
 import state from './state.js';
+import { IS_GENERAL_EDITION } from './edition.js';
 import { SAMPLING_INTERVAL_SEC } from './config.js';
 import {
   getVideoId, calcGraphResolution, isSavedVolumeDataStale,
@@ -273,7 +274,7 @@ export function stopDirectScan() {
   // スキャン完了時に結果を保存
   if (state.volumeData.length > 0 && state.volumeData.some(v => v > 0)) {
     saveVolumeData();
-    sendSpectralDataToServer();
+    if (!IS_GENERAL_EDITION) sendSpectralDataToServer();
   }
 
   console.log('スキャン停止');
@@ -380,6 +381,8 @@ export async function saveVolumeData() {
 }
 
 export async function sendSpectralDataToServer() {
+  // トークン必須のAPIのため一般版では送らない
+  if (IS_GENERAL_EDITION) return;
   const videoId = getVideoId();
   if (!videoId) return;
 

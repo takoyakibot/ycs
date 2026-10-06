@@ -9,8 +9,6 @@ import { isCurrentVideoScanned } from './utils.js';
 import { handleMessage, handleStorageChange } from './handlers.js';
 import { resetChatHeatmap } from './auto-detect.js';
 
-state.edition = 'general';
-
 function initWatchPageUI() {
   findVideoElement();
   createVolumeGraph();
@@ -33,7 +31,6 @@ function hideWatchPageUI() {
 
   if (state.isScanning) {
     stopDirectScan();
-    chrome.runtime.sendMessage({ type: 'STOP_SCAN' });
   }
 }
 

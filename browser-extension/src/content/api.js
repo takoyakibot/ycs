@@ -1,4 +1,5 @@
 import state from './state.js';
+import { IS_GENERAL_EDITION } from './edition.js';
 import { DEFAULT_YCS_SERVER_URL } from './config.js';
 import { getVideoId } from './utils.js';
 
@@ -6,6 +7,13 @@ const subtitleSentCache = new Set();
 const subtitleSendInFlight = new Map();
 
 export async function loadYcsApiSettings() {
+  // 一般版はサーバーURL・トークンを設定する手段がない（popup に設定欄がない）ため、
+  // 公開API用の既定URLだけを使い、ストレージは読まない
+  if (IS_GENERAL_EDITION) {
+    state.ycsServerUrl = DEFAULT_YCS_SERVER_URL;
+    return;
+  }
+  // state.ycsApiToken は管理者版でだけ使うため state.js の初期値には持たせず、ここで設定する
   try {
     const result = await chrome.storage.local.get(['ycsApiToken', 'ycsServerUrl']);
     state.ycsApiToken = result.ycsApiToken || null;
@@ -48,6 +56,8 @@ export async function sendSubtitlesToServer(videoId, lang, subtitles) {
 const chatReplaySentCache = new Map();
 
 export async function sendChatReplayDataToServer(videoId, chats, duration, { force = false } = {}) {
+  // トークン必須のAPIのため一般版では送らない（取得したチャットのローカル保存・自動検出での利用は一般版でも行う）
+  if (IS_GENERAL_EDITION) return;
   if (!videoId || !chats || chats.length === 0) return;
 
   if (getVideoId() !== videoId) return;

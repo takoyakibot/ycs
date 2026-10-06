@@ -1,4 +1,5 @@
 import state from './state.js';
+import { IS_GENERAL_EDITION } from './edition.js';
 import { toggleListScanPanel } from './list-scan.js';
 import { toggleChatSearchPanel } from './chat-search.js';
 import { toggleSubtitlePanel } from './subtitle-panel.js';
@@ -54,6 +55,10 @@ export function createEmbeddedTriggerButton() {
       .ycs-btn.active {
         background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);
       }
+    </style>
+    <button class="ycs-btn" id="ycs-trigger-btn" title="タイムスタンプ検出グラフを表示/非表示">YCS</button>
+    ${!IS_GENERAL_EDITION ? `
+    <style>
       #ycs-list-btn {
         font-size: 16px;
       }
@@ -67,8 +72,6 @@ export function createEmbeddedTriggerButton() {
         font-size: 14px;
       }
     </style>
-    <button class="ycs-btn" id="ycs-trigger-btn" title="タイムスタンプ検出グラフを表示/非表示">YCS</button>
-    ${state.edition !== 'general' ? `
     <button class="ycs-btn" id="ycs-list-btn" title="リストスキャンパネルを開く">☰</button>
     <button class="ycs-btn" id="ycs-chat-btn" title="チャット検索パネルを開く">💬</button>
     <button class="ycs-btn" id="ycs-subtitle-btn" title="字幕取得パネルを開く">📝</button>
@@ -84,7 +87,7 @@ export function createEmbeddedTriggerButton() {
     toggleEmbeddedUI();
   });
 
-  if (state.edition !== 'general') {
+  if (!IS_GENERAL_EDITION) {
     // リストボタンのイベント
     buttonContainer.querySelector('#ycs-list-btn')?.addEventListener('click', () => {
       toggleListScanPanel();
@@ -136,7 +139,7 @@ export function updateTriggerButtonState() {
     }
   }
 
-  if (state.edition !== 'general') {
+  if (!IS_GENERAL_EDITION) {
     const listBtn = state.embeddedTriggerButton.querySelector('#ycs-list-btn');
     if (listBtn) {
       if (isListScanPanelVisible()) {

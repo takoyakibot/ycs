@@ -1,4 +1,5 @@
 import state from './state.js';
+import { IS_GENERAL_EDITION } from './edition.js';
 import { escapeHtml } from './utils.js';
 import { loadYcsApiSettings } from './api.js';
 import { DEFAULT_YCS_SERVER_URL } from './config.js';
@@ -313,7 +314,8 @@ async function fetchAndShowSuggestions(input, query) {
     const serverUrl = state.ycsServerUrl || DEFAULT_YCS_SERVER_URL;
     const url = `${serverUrl}/api/public/song-suggest?q=${encodeURIComponent(query)}`;
     const headers = { 'Accept': 'application/json' };
-    if (state.ycsApiToken) {
+    // 一般版はトークンを持たないため付けない
+    if (!IS_GENERAL_EDITION && state.ycsApiToken) {
       headers['Authorization'] = `Bearer ${state.ycsApiToken}`;
     }
     const response = await fetch(url, {

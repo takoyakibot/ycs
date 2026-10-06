@@ -68,8 +68,7 @@ const state = {
   currentCaptionTracks: [],
   pageBridgeReady: null,
 
-  // API
-  ycsApiToken: null,
+  // API（api.js の loadYcsApiSettings で設定する）
   ycsServerUrl: null,
 };
 

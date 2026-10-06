@@ -1,4 +1,5 @@
 import state from './state.js';
+import { IS_GENERAL_EDITION } from './edition.js';
 import { ZOOM_LEVELS, MARKER_SNAP_THRESHOLD_SEC, MARKER_SNAP_THRESHOLD_PX } from './config.js';
 import { formatTimeDisplay, updateTimeMarker } from './utils.js';
 import { updatePlaylistUI, startAutoScan, stopAutoScan } from './playlist.js';
@@ -14,7 +15,7 @@ import { copyTimestamps, importTimestamps, saveMarkersToStorage, loadMarkersFrom
 import { closeLyricsPastePopup, closeSongCandidatePopup, isLyricsPastePopupOpen, isSongCandidatePopupOpen } from './song-candidates.js';
 
 function graphElementId() {
-  return state.edition === 'general' ? 'volume-dynamics-graph-general' : 'volume-dynamics-graph';
+  return IS_GENERAL_EDITION ? 'volume-dynamics-graph-general' : 'volume-dynamics-graph';
 }
 
 export function createVolumeGraph() {
@@ -930,7 +931,7 @@ export function setupVolumeGraphEvents() {
   if (scanBtn) {
     scanBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
-      if (state.edition === 'general') {
+      if (IS_GENERAL_EDITION) {
         startDirectScan();
       } else {
         try {
@@ -966,7 +967,7 @@ export function setupVolumeGraphEvents() {
 
       await discardVolumeDataAndReset();
 
-      if (state.edition === 'general') {
+      if (IS_GENERAL_EDITION) {
         startDirectScan();
       } else {
         try {
