@@ -34,11 +34,12 @@ rm -rf dist/general
 mkdir -p dist/general
 cp content-general.js dist/general/content.js
 cp manifest.general.json dist/general/manifest.json
-# 一般版で到達しない分岐（tabCapture / offscreen / Claude API など）を除いたもの（rollup.config.mjs 参照）
+# 一般版で到達しない分岐（tabCapture / offscreen / Claude API / 管理者向け設定欄など）を
+# 除いたもの（rollup.config.mjs 参照）
 cp background-general.js dist/general/background.js
-for f in popup.html popup.js page-bridge.js; do
-  cp "$f" "dist/general/$f"
-done
+cp popup-general.js dist/general/popup.js
+cp popup-general.html dist/general/popup.html
+cp page-bridge.js dist/general/page-bridge.js
 cp -r icons dist/general/
 
 echo ""

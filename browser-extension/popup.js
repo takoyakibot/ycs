@@ -1,10 +1,21 @@
 /**
  * 歌枠タイムスタンプ検出 - Popup Script
- * 埋め込みUIの表示/非表示とGoogle AI概要の表示/非表示を切り替える
- * スキャン済み動画一覧の表示・管理
+ * 埋め込みUIの表示/非表示・音量グラフの高さ設定・スキャン済み動画一覧の表示と管理
  */
 
+const IS_GENERAL_EDITION = chrome.runtime.getManifest().x_edition === 'general';
+
 const STORAGE_KEY_EMBEDDED_UI = 'showEmbeddedUI';
+const STORAGE_KEY_GRAPH_BASE_HEIGHT = 'graphBaseHeight';
+const STORAGE_KEY_GRAPH_HEIGHT_STEP = 'graphHeightStep';
+
+// 以下「管理者版のみ」としたものについて:
+// 一般版は rollup.config.mjs で IS_GENERAL_EDITION を true に固定してビルドし（popup-general.js）、
+// 管理者向けの分岐・関数・定数を tree-shaking で成果物から除く。
+// そのため管理者版でしか使わないものは、必ず `if (!IS_GENERAL_EDITION)` の内側か
+// そこからしか参照されない関数・定数に置き、共通部分から参照しないこと。
+// HTML側の管理者向け要素には data-admin-only を付ける（一般版の popup.html 生成時に除かれる）。
+// 管理者版のみ: Google AI概要の非表示・チャット遅延送信・AI毒性チェック・YCS API設定
 const STORAGE_KEY_HIDE_GOOGLE_AI = 'hideGoogleAI';
 const STORAGE_KEY_CHAT_DELAY_ENABLED = 'chatDelayEnabled';
 const STORAGE_KEY_CHAT_DELAY_SECONDS = 'chatDelaySeconds';
@@ -13,12 +24,7 @@ const STORAGE_KEY_CLAUDE_API_KEY = 'claudeApiKey';
 const STORAGE_KEY_YCS_SERVER_URL = 'ycsServerUrl';
 const STORAGE_KEY_YCS_API_TOKEN = 'ycsApiToken';
 
-const STORAGE_KEY_GRAPH_BASE_HEIGHT = 'graphBaseHeight';
-const STORAGE_KEY_GRAPH_HEIGHT_STEP = 'graphHeightStep';
-
-const IS_GENERAL_EDITION = chrome.runtime.getManifest().x_edition === 'general';
-
-// 字幕データ等の送信先。ローカル開発時は設定で上書きする
+// 字幕データ等の送信先。ローカル開発時は設定で上書きする（管理者版のみ）
 const DEFAULT_YCS_SERVER_URL = 'https://ycs.alpacasandbag.jp';
 
 // 音量グラフの高さ（content.js側の既定値と揃えること）
@@ -30,6 +36,17 @@ const GRAPH_HEIGHT_STEP_RANGE = { min: 0, max: 100 };
 // DOM要素
 const elements = {
   showEmbeddedUI: document.getElementById('show-embedded-ui'),
+  infoContainer: document.getElementById('info-container'),
+  helpLink: document.getElementById('help-link'),
+  scannedList: document.getElementById('scanned-list'),
+  clearAllBtn: document.getElementById('clear-all-btn'),
+  graphBaseHeight: document.getElementById('graph-base-height'),
+  graphHeightStep: document.getElementById('graph-height-step'),
+  graphHeightStatus: document.getElementById('graph-height-status')
+};
+
+// 管理者版のみのDOM要素（一般版の popup.html には存在しない）
+const adminElements = IS_GENERAL_EDITION ? null : {
   hideGoogleAI: document.getElementById('hide-google-ai'),
   chatDelayEnabled: document.getElementById('chat-delay-enabled'),
   chatDelayOptions: document.getElementById('chat-delay-options'),
@@ -40,16 +57,9 @@ const elements = {
   claudeApiKey: document.getElementById('claude-api-key'),
   saveApiKey: document.getElementById('save-api-key'),
   apiKeyStatus: document.getElementById('api-key-status'),
-  infoContainer: document.getElementById('info-container'),
-  helpLink: document.getElementById('help-link'),
-  scannedList: document.getElementById('scanned-list'),
-  clearAllBtn: document.getElementById('clear-all-btn'),
   scanSection: document.getElementById('scan-section'),
   scanBtn: document.getElementById('scan-btn'),
   scanStatus: document.getElementById('scan-status'),
-  graphBaseHeight: document.getElementById('graph-base-height'),
-  graphHeightStep: document.getElementById('graph-height-step'),
-  graphHeightStatus: document.getElementById('graph-height-status'),
   ycsServerUrl: document.getElementById('ycs-server-url'),
   ycsApiToken: document.getElementById('ycs-api-token'),
   saveYcsSettings: document.getElementById('save-ycs-settings'),
@@ -62,16 +72,9 @@ let isScanning = false;
  * 初期化
  */
 async function init() {
-  if (IS_GENERAL_EDITION) {
-    document.querySelectorAll('[data-admin-only]').forEach(el => el.remove());
-    const title = document.getElementById('popup-title');
-    if (title) title.textContent = chrome.runtime.getManifest().name;
-  }
-
   // 現在のタブを取得
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   const isYouTube = tab?.url?.includes('youtube.com/watch');
-  const isGoogle = tab?.url?.includes('google.com/search') || tab?.url?.includes('google.co.jp/search');
 
   // YouTube埋め込みUI設定
   if (!isYouTube) {
@@ -80,41 +83,26 @@ async function init() {
   }
 
   // 保存された設定を読み込み
-  const result = await chrome.storage.local.get([
+  const storageKeys = [
     STORAGE_KEY_EMBEDDED_UI,
-    STORAGE_KEY_HIDE_GOOGLE_AI,
-    STORAGE_KEY_CHAT_DELAY_ENABLED,
-    STORAGE_KEY_CHAT_DELAY_SECONDS,
-    STORAGE_KEY_TOXICITY_CHECK,
-    STORAGE_KEY_CLAUDE_API_KEY,
-    STORAGE_KEY_YCS_SERVER_URL,
-    STORAGE_KEY_YCS_API_TOKEN,
     STORAGE_KEY_GRAPH_BASE_HEIGHT,
     STORAGE_KEY_GRAPH_HEIGHT_STEP
-  ]);
+  ];
+  if (!IS_GENERAL_EDITION) {
+    storageKeys.push(
+      STORAGE_KEY_HIDE_GOOGLE_AI,
+      STORAGE_KEY_CHAT_DELAY_ENABLED,
+      STORAGE_KEY_CHAT_DELAY_SECONDS,
+      STORAGE_KEY_TOXICITY_CHECK,
+      STORAGE_KEY_CLAUDE_API_KEY,
+      STORAGE_KEY_YCS_SERVER_URL,
+      STORAGE_KEY_YCS_API_TOKEN
+    );
+  }
+  const result = await chrome.storage.local.get(storageKeys);
   const showUI = result[STORAGE_KEY_EMBEDDED_UI] !== false; // デフォルトはtrue
-  const hideGoogleAI = result[STORAGE_KEY_HIDE_GOOGLE_AI] !== false; // デフォルトはtrue
-  const chatDelayEnabled = result[STORAGE_KEY_CHAT_DELAY_ENABLED] === true; // デフォルトはfalse
-  const chatDelaySeconds = result[STORAGE_KEY_CHAT_DELAY_SECONDS] || 10;
-  const toxicityCheckEnabled = result[STORAGE_KEY_TOXICITY_CHECK] === true;
-  const hasApiKey = !!result[STORAGE_KEY_CLAUDE_API_KEY];
 
   elements.showEmbeddedUI.checked = showUI;
-
-  if (!IS_GENERAL_EDITION) {
-    elements.hideGoogleAI.checked = hideGoogleAI;
-    elements.chatDelayEnabled.checked = chatDelayEnabled;
-    elements.chatDelaySeconds.value = chatDelaySeconds;
-    elements.chatDelayValue.textContent = chatDelaySeconds + '秒';
-    elements.chatDelayOptions.style.display = chatDelayEnabled ? 'block' : 'none';
-    elements.toxicityCheckEnabled.checked = toxicityCheckEnabled;
-    elements.apiKeySection.style.display = toxicityCheckEnabled ? 'block' : 'none';
-    if (hasApiKey) {
-      elements.claudeApiKey.placeholder = '設定済み';
-      elements.apiKeyStatus.textContent = 'APIキー設定済み';
-      elements.apiKeyStatus.style.color = '#2e7d32';
-    }
-  }
 
   // 音量グラフの高さ設定を読み込み
   elements.graphBaseHeight.value = clampNumber(
@@ -123,16 +111,6 @@ async function init() {
     result[STORAGE_KEY_GRAPH_HEIGHT_STEP], DEFAULT_GRAPH_HEIGHT_STEP, GRAPH_HEIGHT_STEP_RANGE);
   updateGraphHeightStatus();
 
-  if (!IS_GENERAL_EDITION) {
-    // YCS API設定を読み込み
-    elements.ycsServerUrl.value = (result[STORAGE_KEY_YCS_SERVER_URL] || DEFAULT_YCS_SERVER_URL).replace(/\/+$/, '');
-    if (result[STORAGE_KEY_YCS_API_TOKEN]) {
-      elements.ycsApiToken.placeholder = '設定済み';
-      elements.ycsSettingsStatus.textContent = 'APIトークン設定済み';
-      elements.ycsSettingsStatus.style.color = '#2e7d32';
-    }
-  }
-
   // イベントリスナーを設定
   elements.showEmbeddedUI.addEventListener('change', toggleEmbeddedUI);
   elements.graphBaseHeight.addEventListener('change', saveGraphHeightSettings);
@@ -140,33 +118,69 @@ async function init() {
   elements.helpLink.addEventListener('click', showHelp);
   elements.clearAllBtn.addEventListener('click', clearAllScannedData);
 
-  if (!IS_GENERAL_EDITION) {
-    elements.hideGoogleAI.addEventListener('change', toggleHideGoogleAI);
-    elements.chatDelayEnabled.addEventListener('change', toggleChatDelay);
-    elements.chatDelaySeconds.addEventListener('input', changeChatDelaySeconds);
-    elements.toxicityCheckEnabled.addEventListener('change', toggleToxicityCheck);
-    elements.saveApiKey.addEventListener('click', saveClaudeApiKey);
-    elements.saveYcsSettings.addEventListener('click', saveYcsSettings);
-  }
-
   // YouTube埋め込みUIの初期状態をコンテンツスクリプトに通知
   if (isYouTube) {
     notifyYouTubeContentScript(showUI);
-    if (!IS_GENERAL_EDITION) {
-      // tabCaptureスキャンセクションを表示
-      elements.scanSection.style.display = 'block';
-      elements.scanBtn.addEventListener('click', toggleScan);
-      await updateScanButtonState(tab.id);
-    }
   }
 
-  // Googleの場合は設定変更を通知
-  if (!IS_GENERAL_EDITION && isGoogle) {
-    notifyGoogleContentScript(hideGoogleAI);
+  if (!IS_GENERAL_EDITION) {
+    await initAdminSettings(tab, isYouTube, result);
   }
 
   // スキャン済み一覧を読み込み
   await loadScannedList();
+}
+
+/**
+ * 管理者版のみの設定欄・スキャンボタンを初期化
+ */
+async function initAdminSettings(tab, isYouTube, result) {
+  const isGoogle = tab?.url?.includes('google.com/search') || tab?.url?.includes('google.co.jp/search');
+  const hideGoogleAI = result[STORAGE_KEY_HIDE_GOOGLE_AI] !== false; // デフォルトはtrue
+  const chatDelayEnabled = result[STORAGE_KEY_CHAT_DELAY_ENABLED] === true; // デフォルトはfalse
+  const chatDelaySeconds = result[STORAGE_KEY_CHAT_DELAY_SECONDS] || 10;
+  const toxicityCheckEnabled = result[STORAGE_KEY_TOXICITY_CHECK] === true;
+  const hasApiKey = !!result[STORAGE_KEY_CLAUDE_API_KEY];
+
+  adminElements.hideGoogleAI.checked = hideGoogleAI;
+  adminElements.chatDelayEnabled.checked = chatDelayEnabled;
+  adminElements.chatDelaySeconds.value = chatDelaySeconds;
+  adminElements.chatDelayValue.textContent = chatDelaySeconds + '秒';
+  adminElements.chatDelayOptions.style.display = chatDelayEnabled ? 'block' : 'none';
+  adminElements.toxicityCheckEnabled.checked = toxicityCheckEnabled;
+  adminElements.apiKeySection.style.display = toxicityCheckEnabled ? 'block' : 'none';
+  if (hasApiKey) {
+    adminElements.claudeApiKey.placeholder = '設定済み';
+    adminElements.apiKeyStatus.textContent = 'APIキー設定済み';
+    adminElements.apiKeyStatus.style.color = '#2e7d32';
+  }
+
+  // YCS API設定を読み込み
+  adminElements.ycsServerUrl.value = (result[STORAGE_KEY_YCS_SERVER_URL] || DEFAULT_YCS_SERVER_URL).replace(/\/+$/, '');
+  if (result[STORAGE_KEY_YCS_API_TOKEN]) {
+    adminElements.ycsApiToken.placeholder = '設定済み';
+    adminElements.ycsSettingsStatus.textContent = 'APIトークン設定済み';
+    adminElements.ycsSettingsStatus.style.color = '#2e7d32';
+  }
+
+  adminElements.hideGoogleAI.addEventListener('change', toggleHideGoogleAI);
+  adminElements.chatDelayEnabled.addEventListener('change', toggleChatDelay);
+  adminElements.chatDelaySeconds.addEventListener('input', changeChatDelaySeconds);
+  adminElements.toxicityCheckEnabled.addEventListener('change', toggleToxicityCheck);
+  adminElements.saveApiKey.addEventListener('click', saveClaudeApiKey);
+  adminElements.saveYcsSettings.addEventListener('click', saveYcsSettings);
+
+  if (isYouTube) {
+    // tabCaptureスキャンセクションを表示
+    adminElements.scanSection.style.display = 'block';
+    adminElements.scanBtn.addEventListener('click', toggleScan);
+    await updateScanButtonState(tab.id);
+  }
+
+  // Googleの場合は設定変更を通知
+  if (isGoogle) {
+    notifyGoogleContentScript(hideGoogleAI);
+  }
 }
 
 /**
@@ -186,7 +200,7 @@ async function toggleEmbeddedUI() {
  * Google AI概要の非表示を切り替え
  */
 async function toggleHideGoogleAI() {
-  const hide = elements.hideGoogleAI.checked;
+  const hide = adminElements.hideGoogleAI.checked;
 
   // 設定を保存
   await chrome.storage.local.set({ [STORAGE_KEY_HIDE_GOOGLE_AI]: hide });
@@ -199,17 +213,17 @@ async function toggleHideGoogleAI() {
  * チャット遅延送信を切り替え
  */
 async function toggleChatDelay() {
-  const enabled = elements.chatDelayEnabled.checked;
+  const enabled = adminElements.chatDelayEnabled.checked;
   await chrome.storage.local.set({ [STORAGE_KEY_CHAT_DELAY_ENABLED]: enabled });
-  elements.chatDelayOptions.style.display = enabled ? 'block' : 'none';
+  adminElements.chatDelayOptions.style.display = enabled ? 'block' : 'none';
 }
 
 /**
  * チャット遅延秒数を変更
  */
 async function changeChatDelaySeconds() {
-  const seconds = parseInt(elements.chatDelaySeconds.value, 10);
-  elements.chatDelayValue.textContent = seconds + '秒';
+  const seconds = parseInt(adminElements.chatDelaySeconds.value, 10);
+  adminElements.chatDelayValue.textContent = seconds + '秒';
   await chrome.storage.local.set({ [STORAGE_KEY_CHAT_DELAY_SECONDS]: seconds });
 }
 
@@ -217,16 +231,16 @@ async function changeChatDelaySeconds() {
  * AI毒性チェックを切り替え
  */
 async function toggleToxicityCheck() {
-  const enabled = elements.toxicityCheckEnabled.checked;
+  const enabled = adminElements.toxicityCheckEnabled.checked;
   await chrome.storage.local.set({ [STORAGE_KEY_TOXICITY_CHECK]: enabled });
-  elements.apiKeySection.style.display = enabled ? 'block' : 'none';
+  adminElements.apiKeySection.style.display = enabled ? 'block' : 'none';
 
   // APIキーが未設定の場合に警告
   if (enabled) {
     const result = await chrome.storage.local.get(STORAGE_KEY_CLAUDE_API_KEY);
     if (!result[STORAGE_KEY_CLAUDE_API_KEY]) {
-      elements.apiKeyStatus.textContent = 'APIキーを入力してください';
-      elements.apiKeyStatus.style.color = '#f57c00';
+      adminElements.apiKeyStatus.textContent = 'APIキーを入力してください';
+      adminElements.apiKeyStatus.style.color = '#f57c00';
     }
   }
 }
@@ -235,24 +249,24 @@ async function toggleToxicityCheck() {
  * Claude APIキーを保存
  */
 async function saveClaudeApiKey() {
-  const apiKey = elements.claudeApiKey.value.trim();
+  const apiKey = adminElements.claudeApiKey.value.trim();
   if (!apiKey) {
-    elements.apiKeyStatus.textContent = 'APIキーを入力してください';
-    elements.apiKeyStatus.style.color = '#c62828';
+    adminElements.apiKeyStatus.textContent = 'APIキーを入力してください';
+    adminElements.apiKeyStatus.style.color = '#c62828';
     return;
   }
 
   if (!apiKey.startsWith('sk-ant-')) {
-    elements.apiKeyStatus.textContent = 'APIキーはsk-ant-で始まる必要があります';
-    elements.apiKeyStatus.style.color = '#c62828';
+    adminElements.apiKeyStatus.textContent = 'APIキーはsk-ant-で始まる必要があります';
+    adminElements.apiKeyStatus.style.color = '#c62828';
     return;
   }
 
   await chrome.storage.local.set({ [STORAGE_KEY_CLAUDE_API_KEY]: apiKey });
-  elements.claudeApiKey.value = '';
-  elements.claudeApiKey.placeholder = '設定済み';
-  elements.apiKeyStatus.textContent = 'APIキーを保存しました';
-  elements.apiKeyStatus.style.color = '#2e7d32';
+  adminElements.claudeApiKey.value = '';
+  adminElements.claudeApiKey.placeholder = '設定済み';
+  adminElements.apiKeyStatus.textContent = 'APIキーを保存しました';
+  adminElements.apiKeyStatus.style.color = '#2e7d32';
 }
 
 /**
@@ -304,8 +318,8 @@ async function saveGraphHeightSettings() {
  */
 async function saveYcsSettings() {
   // 末尾のスラッシュは除去する（APIパス連結時に「//」になるのを防ぐ）
-  const serverUrl = (elements.ycsServerUrl.value.trim() || DEFAULT_YCS_SERVER_URL).replace(/\/+$/, '');
-  const apiToken = elements.ycsApiToken.value.trim();
+  const serverUrl = (adminElements.ycsServerUrl.value.trim() || DEFAULT_YCS_SERVER_URL).replace(/\/+$/, '');
+  const apiToken = adminElements.ycsApiToken.value.trim();
 
   const settings = { [STORAGE_KEY_YCS_SERVER_URL]: serverUrl };
   if (apiToken) {
@@ -313,14 +327,14 @@ async function saveYcsSettings() {
   }
 
   await chrome.storage.local.set(settings);
-  elements.ycsServerUrl.value = serverUrl;
+  adminElements.ycsServerUrl.value = serverUrl;
 
   if (apiToken) {
-    elements.ycsApiToken.value = '';
-    elements.ycsApiToken.placeholder = '設定済み';
+    adminElements.ycsApiToken.value = '';
+    adminElements.ycsApiToken.placeholder = '設定済み';
   }
-  elements.ycsSettingsStatus.textContent = '設定を保存しました';
-  elements.ycsSettingsStatus.style.color = '#2e7d32';
+  adminElements.ycsSettingsStatus.textContent = '設定を保存しました';
+  adminElements.ycsSettingsStatus.style.color = '#2e7d32';
 }
 
 /**
@@ -521,20 +535,20 @@ async function updateScanButtonState(tabId) {
   try {
     const status = await chrome.tabs.sendMessage(tabId, { type: 'GET_SCAN_STATUS' });
     if (status.isComplete) {
-      elements.scanBtn.textContent = '完了';
-      elements.scanBtn.style.background = '#2e7d32';
-      elements.scanStatus.textContent = 'スキャン完了済み';
+      adminElements.scanBtn.textContent = '完了';
+      adminElements.scanBtn.style.background = '#2e7d32';
+      adminElements.scanStatus.textContent = 'スキャン完了済み';
     } else if (status.hasData && status.progress > 0) {
-      elements.scanBtn.textContent = `再開 (${status.progress.toFixed(0)}%)`;
-      elements.scanBtn.style.background = '#f57c00';
-      elements.scanStatus.textContent = `${status.progress.toFixed(1)}%完了`;
+      adminElements.scanBtn.textContent = `再開 (${status.progress.toFixed(0)}%)`;
+      adminElements.scanBtn.style.background = '#f57c00';
+      adminElements.scanStatus.textContent = `${status.progress.toFixed(1)}%完了`;
     } else {
-      elements.scanBtn.textContent = 'スキャン開始';
-      elements.scanStatus.textContent = '';
+      adminElements.scanBtn.textContent = 'スキャン開始';
+      adminElements.scanStatus.textContent = '';
     }
   } catch (error) {
     console.log('スキャン状態取得エラー:', error.message);
-    elements.scanBtn.textContent = 'スキャン開始';
+    adminElements.scanBtn.textContent = 'スキャン開始';
   }
 }
 
@@ -547,14 +561,14 @@ async function toggleScan() {
     console.log('スキャン応答:', response);
 
     if (response.isScanning) {
-      elements.scanBtn.textContent = '停止';
-      elements.scanBtn.classList.add('scanning');
-      elements.scanStatus.textContent = 'スキャン中...';
+      adminElements.scanBtn.textContent = '停止';
+      adminElements.scanBtn.classList.add('scanning');
+      adminElements.scanStatus.textContent = 'スキャン中...';
       isScanning = true;
     } else {
-      elements.scanBtn.textContent = 'スキャン開始';
-      elements.scanBtn.classList.remove('scanning');
-      elements.scanStatus.textContent = '';
+      adminElements.scanBtn.textContent = 'スキャン開始';
+      adminElements.scanBtn.classList.remove('scanning');
+      adminElements.scanStatus.textContent = '';
       isScanning = false;
       // 状態を再確認
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -564,7 +578,7 @@ async function toggleScan() {
     }
   } catch (error) {
     console.error('スキャンエラー:', error);
-    elements.scanStatus.textContent = 'エラー: ' + error.message;
+    adminElements.scanStatus.textContent = 'エラー: ' + error.message;
   }
 }
 
