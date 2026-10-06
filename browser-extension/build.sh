@@ -40,7 +40,11 @@ cp background-general.js dist/general/background.js
 cp popup-general.js dist/general/popup.js
 cp popup-general.html dist/general/popup.html
 cp page-bridge.js dist/general/page-bridge.js
-cp -r icons dist/general/
+# manifest が参照するアイコンだけを入れる（icon.svg などは一般版で使わない）
+mkdir -p dist/general/icons
+for size in 16 48 128; do
+  cp "icons/icon${size}.png" "dist/general/icons/icon${size}.png"
+done
 
 echo ""
 echo "  管理者版 content.js: $(wc -c < dist/admin/content.js | tr -d ' ') bytes"
