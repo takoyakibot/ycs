@@ -63,11 +63,33 @@ for ns in $(grep -ohE 'chrome\.[a-zA-Z]+' $JS_FILES | sort -u | sed 's/chrome\./
 done
 for p in $PERMS; do
   case "$p" in
-    activeTab) continue ;;  # API 呼び出しを伴わない権限
+    activeTab)
+      # API 呼び出しを伴わない権限なのでコードからは要否を判定できない
+      echo "[要確認] activeTab — host_permissions で足りるなら不要。ポップアップ等から host_permissions 外のタブを操作するときだけ必要"
+      continue ;;
   esac
   if ! grep -qE "chrome\.$p\b" $JS_FILES; then
     echo "[NG] 権限 \"$p\" を宣言しているがコード上で使っていない（審査で却下理由になる）"
     NG=1
+  fi
+done
+if grep -qE "\.url\b" "$DIST/background.js" "$DIST/popup.js" 2>/dev/null && grep -qE "chrome\.tabs" "$DIST/background.js" "$DIST/popup.js" 2>/dev/null; then
+  echo "[要確認] chrome.tabs でタブの url を読んでいる — host_permissions（または activeTab）の範囲内のタブであること"
+fi
+
+echo
+echo "## host_permissions の要否"
+# MV3 ではコンテンツスクリプトからの fetch はページのオリジン扱い（CORS はサーバー側の設定次第）で、
+# host_permissions が効くのは background / popup / offscreen などの拡張コンテキストからの通信と、
+# コンテンツスクリプトの注入・tabs の url 参照だけ
+for hp in $(node -e 'console.log((require(process.argv[1]).host_permissions||[]).join(" "))' "$MANIFEST"); do
+  host=$(echo "$hp" | sed -E 's|^[a-z*]+://([^/]+)/.*|\1|')
+  ext_ctx=$(grep -lF "$host" "$DIST/background.js" "$DIST/popup.js" "$DIST/popup.html" 2>/dev/null | xargs -n1 basename 2>/dev/null | tr '\n' ' ')
+  in_cs=$(node -e 'const m=require(process.argv[1]);console.log((m.content_scripts||[]).some(c=>c.matches.some(x=>x.includes(process.argv[2])))?"yes":"")' "$MANIFEST" "$host")
+  if [ -n "$ext_ctx" ] || [ -n "$in_cs" ]; then
+    echo "[OK] ${hp}（拡張コンテキストでの参照: ${ext_ctx:-なし} / content_scripts の対象: ${in_cs:-no}）"
+  else
+    echo "[要確認] ${hp} — 拡張コンテキストからの通信もコンテンツスクリプトの注入もない。コンテンツスクリプトからの通信だけなら不要（サーバーの CORS で許可する）"
   fi
 done
 
@@ -78,6 +100,16 @@ echo "-- 本体サーバーのAPIパス"
 grep -ohE "/api/[a-zA-Z0-9/_-]+" $JS_FILES | sort | uniq -c
 echo "-- YouTube 内部API"
 grep -ohE "youtubei/v1/[a-zA-Z0-9_/]+|/api/timedtext" $JS_FILES | sort | uniq -c
+echo "-- fetch / XHR / sendBeacon の呼び出し箇所（URL が変数の箇所は前後のコードで送信先を確認する）"
+grep -nE "\bfetch\(|XMLHttpRequest|sendBeacon\(" $JS_FILES | sed "s|$DIST/||" | cut -c1-160
+
+echo
+echo "## ポリシーに書くべきブラウザ内の保存・読み取り"
+for pat in "indexedDB" "localStorage" "sessionStorage" "navigator\.clipboard\.readText" "navigator\.clipboard\.writeText" "document\.cookie"; do
+  files=$(grep -lE "$pat" $JS_FILES | xargs -n1 basename 2>/dev/null | tr '\n' ' ')
+  [ -n "$files" ] && echo "  $pat: $files"
+done
+echo "  ↑ コンテンツスクリプトの indexedDB / localStorage は拡張ではなくページ（www.youtube.com）のオリジンに保存され、アンインストールしても消えない"
 
 echo
 echo "## 管理者専用機能の混入チェック"
@@ -87,9 +119,9 @@ check_absent() {
   local hit
   hit=$(grep -lE "$pattern" $JS_FILES | xargs -n1 basename 2>/dev/null | tr '\n' ' ')
   if [ -n "$hit" ]; then
-    echo "[要確認] $label: $hit"
+    echo "[要確認] ${label}: $hit"
   else
-    echo "[OK] $label: なし"
+    echo "[OK] ${label}: なし"
   fi
 }
 check_absent "管理画面API (api/manage)" "api/manage/"
@@ -105,6 +137,10 @@ grep -nE "fetch\([^)]*api/extension/" $JS_FILES | sed "s|$ROOT/||" | while IFS= 
   echo "  $line"
 done
 echo "  ↑ 各呼び出しの直前で ycsApiToken の有無を判定していることをコードで確認する"
+
+echo
+echo "## popup.html に残る管理者向け要素（実行時に data-admin-only で消えるが、ZIP の中身としては審査で見える）"
+grep -nE "data-admin-only|sk-ant-|api-token|server-url" "$DIST/popup.html" | cut -c1-140
 
 echo
 echo "## 成果物サイズ"
