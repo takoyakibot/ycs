@@ -1,4 +1,5 @@
 import state from './state.js';
+import { IS_GENERAL_EDITION } from './edition.js';
 import { getVideoId } from './utils.js';
 import { formatTimestamp, showTsEditorNotice } from './auto-detect.js';
 import { pushMarkerHistory, updateTimestampList, updateUndoRedoButtons } from './timestamp-editor.js';
@@ -99,11 +100,14 @@ export async function importTimestamps() {
   const suffix = notes.length > 0 ? `（${notes.join('、')}）` : '';
   showTsEditorNotice(`${valid.length}件のタイムスタンプを取り込みました${suffix}`);
 
-  const videoId = getVideoId();
-  if (videoId && state.ycsApiToken) {
-    try {
-      await ensureSubtitlesOnServer(videoId);
-    } catch { /* 字幕取得失敗は候補ボタン押下時に再試行される */ }
+  // 字幕のサーバー登録はトークン必須のため管理者版のみ
+  if (!IS_GENERAL_EDITION) {
+    const videoId = getVideoId();
+    if (videoId && state.ycsApiToken) {
+      try {
+        await ensureSubtitlesOnServer(videoId);
+      } catch { /* 字幕取得失敗は候補ボタン押下時に再試行される */ }
+    }
   }
 }
 

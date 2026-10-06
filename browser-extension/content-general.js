@@ -17,7 +17,6 @@
     spectralData: [],
     isGraphVisible: false,
     zoomIndex: 0,
-    lastSaveTime: 0,
     isRelativeVolumeMode: false,
     graphBaseHeightPx: 60,
     graphHeightStepPx: 20,
@@ -37,12 +36,6 @@
     // Auto-scan (playlist)
     isAutoScanMode: false,
     autoScanStopRequested: false,
-
-    // List scan
-    isListScanMode: false,
-    listScanProceeding: false,
-    listScanPanel: null,
-    listScanPanelVisible: false,
 
     // Detected timestamps
     detectedTimestamps: [],
@@ -71,8 +64,7 @@
     currentCaptionTracks: [],
     pageBridgeReady: null,
 
-    // API
-    ycsApiToken: null,
+    // API（api.js の loadYcsApiSettings で設定する）
     ycsServerUrl: null,
   };
 
@@ -87,7 +79,6 @@
   const DEFAULT_GRAPH_HEIGHT_STEP_PX = 20;
   const GRAPH_BASE_HEIGHT_RANGE = { min: 40, max: 400 };
   const GRAPH_HEIGHT_STEP_RANGE = { min: 0, max: 100 };
-  const SAVE_INTERVAL = 3000;
 
   const TS_HISTORY_LIMIT = 50;
   const TS_HISTORY_COALESCE_MS = 1500;
@@ -351,10 +342,6 @@
 
     state.timeUpdateInterval = setInterval(() => {
       if (state.videoElement && !state.videoElement.paused) {
-        chrome.runtime.sendMessage({
-          type: 'UPDATE_VIDEO_TIME',
-          time: state.videoElement.currentTime
-        });
         if (state.isGraphVisible) {
           updateTimeMarker();
         }
@@ -413,27 +400,11 @@
     }
   }
 
-  function formatTimestampMsec(msec) {
-    const totalSeconds = Math.floor(msec / 1000);
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
-
-    if (hours > 0) {
-      return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-    }
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-  }
-
   function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text || '';
     return div.innerHTML;
   }
-
-  function isSubtitlePanelVisible() { return false; }
-
-  function isHighlightPanelVisible() { return false; }
 
   function ensurePageBridge() {
     if (state.pageBridgeReady) return state.pageBridgeReady;
@@ -501,348 +472,15 @@
   }
 
   async function loadYcsApiSettings() {
-    try {
-      const result = await chrome.storage.local.get(['ycsApiToken', 'ycsServerUrl']);
-      state.ycsApiToken = result.ycsApiToken || null;
-      // 末尾のスラッシュは除去する（APIパス連結時に「//」になるのを防ぐ）
-      state.ycsServerUrl = (result.ycsServerUrl || DEFAULT_YCS_SERVER_URL).replace(/\/+$/, '');
-    } catch (error) {
-      console.warn('[YCS] API設定読み込みエラー:', error);
+    // 一般版はサーバーURL・トークンを設定する手段がない（popup に設定欄がない）ため、
+    // 公開API用の既定URLだけを使い、ストレージは読まない
+    {
+      state.ycsServerUrl = DEFAULT_YCS_SERVER_URL;
+      return;
     }
   }
 
-  const chatReplaySentCache = new Map();
-
-  async function sendChatReplayDataToServer(videoId, chats, duration, { force = false } = {}) {
-    if (!videoId || !chats || chats.length === 0) return;
-
-    if (getVideoId() !== videoId) return;
-
-    if (!force) {
-      const cached = chatReplaySentCache.get(videoId);
-      if (cached && cached >= chats.length) return;
-    }
-
-    if (!state.ycsApiToken) {
-      await loadYcsApiSettings();
-    }
-    if (!state.ycsApiToken) return;
-
-    try {
-      const MAX_CHAT_ITEMS = 50000;
-      const source = chats.length > MAX_CHAT_ITEMS ? chats.slice(0, MAX_CHAT_ITEMS) : chats;
-      const chatData = source.map(c => ({
-        message: c.message || '',
-        timestamp: c.timestamp,
-        type: c.type || 'normal',
-      }));
-
-      const response = await fetch(`${state.ycsServerUrl}/api/extension/chat-replay-data`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization': `Bearer ${state.ycsApiToken}`,
-        },
-        body: JSON.stringify({
-          video_id: videoId,
-          duration: duration,
-          chat_data: chatData,
-        }),
-      });
-
-      if (response.ok) {
-        chatReplaySentCache.set(videoId, chatData.length);
-        console.log(`[YCS] チャットリプレイデータをサーバーに送信しました: ${videoId} (${chatData.length}件)`);
-      } else {
-        console.warn(`[YCS] チャットリプレイデータ送信エラー: ${response.status}`);
-      }
-    } catch (error) {
-      console.warn('[YCS] チャットリプレイデータ送信エラー:', error.message);
-    }
-  }
-
-  let chatSearchPanel = null;
-  let chatSearchPanelVisible = false;
   let chatSearchDB = null;
-
-  function toggleChatSearchPanel() {
-    if (chatSearchPanelVisible) {
-      hideChatSearchPanel();
-    } else {
-      showChatSearchPanel();
-    }
-  }
-
-  async function showChatSearchPanel() {
-
-    if (!chatSearchPanel) {
-      createChatSearchPanel();
-    }
-    chatSearchPanel.classList.add('visible');
-    chatSearchPanelVisible = true;
-    updateTriggerButtonState();
-
-    // IndexedDBを初期化
-    await initChatDB();
-
-    // 既存のチャットデータがあるか確認
-    const videoId = getVideoId();
-    if (videoId) {
-      await loadChatDataForVideo(videoId);
-    }
-  }
-
-  function hideChatSearchPanel() {
-    if (chatSearchPanel) {
-      chatSearchPanel.classList.remove('visible');
-    }
-    chatSearchPanelVisible = false;
-    updateTriggerButtonState();
-  }
-
-  function isChatSearchPanelVisible() {
-    return chatSearchPanelVisible;
-  }
-
-  function createChatSearchPanel() {
-    if (chatSearchPanel) return;
-
-    chatSearchPanel = document.createElement('div');
-    chatSearchPanel.id = 'ycs-chat-search-panel';
-    chatSearchPanel.innerHTML = `
-    <style>
-      #ycs-chat-search-panel {
-        position: fixed;
-        bottom: 140px;
-        right: 70px;
-        z-index: 9997;
-        width: 360px;
-        max-height: 500px;
-        background: rgba(20, 20, 20, 0.95);
-        border-radius: 12px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-        font-family: 'Segoe UI', 'Hiragino Sans', sans-serif;
-        font-size: 13px;
-        color: #fff;
-        display: none;
-        flex-direction: column;
-        overflow: hidden;
-      }
-      #ycs-chat-search-panel.visible {
-        display: flex !important;
-      }
-      .csp-header {
-        padding: 12px 16px;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-      }
-      .csp-header-title {
-        font-weight: 600;
-        font-size: 14px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-      .csp-close-btn {
-        background: rgba(255,255,255,0.2);
-        border: none;
-        color: white;
-        width: 24px;
-        height: 24px;
-        border-radius: 50%;
-        cursor: pointer;
-        font-size: 14px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-      .csp-close-btn:hover {
-        background: rgba(255,255,255,0.3);
-      }
-      .csp-content {
-        padding: 12px;
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-        overflow-y: auto;
-        max-height: 400px;
-      }
-      .csp-search-row {
-        display: flex;
-        gap: 8px;
-      }
-      .csp-search-input {
-        flex: 1;
-        background: #333;
-        border: 1px solid #444;
-        border-radius: 6px;
-        color: #fff;
-        padding: 8px 12px;
-        font-size: 13px;
-      }
-      .csp-search-input::placeholder {
-        color: #888;
-      }
-      .csp-btn {
-        padding: 8px 16px;
-        border: none;
-        border-radius: 6px;
-        font-size: 12px;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.2s;
-      }
-      .csp-btn-primary {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-      }
-      .csp-btn-primary:hover {
-        filter: brightness(1.1);
-      }
-      .csp-btn-secondary {
-        background: #444;
-        color: white;
-      }
-      .csp-btn-secondary:hover {
-        background: #555;
-      }
-      .csp-filters {
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-      }
-      .csp-filter-btn {
-        padding: 4px 12px;
-        border: 1px solid #444;
-        border-radius: 16px;
-        background: transparent;
-        color: #aaa;
-        font-size: 11px;
-        cursor: pointer;
-        transition: all 0.2s;
-      }
-      .csp-filter-btn:hover {
-        border-color: #666;
-        color: #fff;
-      }
-      .csp-filter-btn.active {
-        background: #667eea;
-        border-color: #667eea;
-        color: #fff;
-      }
-      .csp-status {
-        font-size: 12px;
-        color: #888;
-        text-align: center;
-        padding: 4px;
-      }
-      .csp-status.loading {
-        color: #ff9800;
-      }
-      .csp-results {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-        max-height: 280px;
-        overflow-y: auto;
-      }
-      .csp-result-item {
-        display: flex;
-        gap: 8px;
-        padding: 8px;
-        background: #2a2a2a;
-        border-radius: 6px;
-        cursor: pointer;
-        transition: background 0.2s;
-      }
-      .csp-result-item:hover {
-        background: #3a3a3a;
-      }
-      .csp-result-time {
-        color: #667eea;
-        font-family: monospace;
-        font-size: 11px;
-        flex-shrink: 0;
-        width: 60px;
-      }
-      .csp-result-message {
-        flex: 1;
-        font-size: 12px;
-        color: #ddd;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-      .csp-result-badge {
-        font-size: 10px;
-        padding: 2px 6px;
-        border-radius: 4px;
-        flex-shrink: 0;
-      }
-      .csp-badge-superchat {
-        background: #ff6b6b;
-        color: white;
-      }
-      .csp-empty {
-        text-align: center;
-        color: #888;
-        padding: 20px;
-        font-size: 12px;
-      }
-      .csp-actions {
-        display: flex;
-        gap: 8px;
-        padding-top: 8px;
-        border-top: 1px solid #333;
-      }
-    </style>
-    <div class="csp-header">
-      <span class="csp-header-title">💬 チャット検索</span>
-      <button class="csp-close-btn" id="csp-close-btn">×</button>
-    </div>
-    <div class="csp-content">
-      <div class="csp-search-row">
-        <input type="text" class="csp-search-input" id="csp-search-input" placeholder="検索ワードを入力...">
-        <button class="csp-btn csp-btn-primary" id="csp-search-btn">検索</button>
-      </div>
-      <div class="csp-filters">
-        <button class="csp-filter-btn active" data-filter="all">全て</button>
-        <button class="csp-filter-btn" data-filter="superchat">スパチャ</button>
-      </div>
-      <div class="csp-status" id="csp-status">チャットを読み込み中...</div>
-      <div class="csp-results" id="csp-results">
-        <div class="csp-empty">検索結果がここに表示されます</div>
-      </div>
-      <div class="csp-actions">
-        <button class="csp-btn csp-btn-secondary" id="csp-fetch-btn">チャット取得</button>
-        <button class="csp-btn csp-btn-secondary" id="csp-clear-btn">データ削除</button>
-      </div>
-    </div>
-  `;
-
-    document.body.appendChild(chatSearchPanel);
-
-    // イベントリスナー設定
-    chatSearchPanel.querySelector('#csp-close-btn').addEventListener('click', hideChatSearchPanel);
-    chatSearchPanel.querySelector('#csp-search-btn').addEventListener('click', searchChats);
-    chatSearchPanel.querySelector('#csp-search-input').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') searchChats();
-    });
-    chatSearchPanel.querySelector('#csp-fetch-btn').addEventListener('click', fetchChatData);
-    chatSearchPanel.querySelector('#csp-clear-btn').addEventListener('click', clearChatDataForVideo);
-
-    // フィルターボタンのイベント
-    chatSearchPanel.querySelectorAll('.csp-filter-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        chatSearchPanel.querySelectorAll('.csp-filter-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        searchChats();
-      });
-    });
-  }
 
   // initChatDB returns the DB handle so other modules can use it without accessing chatSearchDB directly
   function initChatDB() {
@@ -875,7 +513,6 @@
   }
 
   async function loadChatDataForVideo(videoId) {
-    const statusEl = chatSearchPanel?.querySelector('#csp-status');
 
     try {
       await initChatDB();
@@ -888,79 +525,15 @@
       return new Promise((resolve) => {
         request.onsuccess = () => {
           const chats = request.result || [];
-          if (statusEl) {
-            statusEl.textContent = chats.length > 0
-              ? `${chats.length}件のチャットを読み込み済み`
-              : 'チャットデータがありません。「チャット取得」ボタンで取得してください';
-            statusEl.classList.remove('loading');
-          }
           resolve(chats);
         };
         request.onerror = () => {
-          if (statusEl) {
-            statusEl.textContent = 'チャット読み込みエラー';
-          }
           resolve([]);
         };
       });
     } catch (error) {
       console.error('チャット読み込みエラー:', error);
-      if (statusEl) {
-        statusEl.textContent = 'チャット読み込みエラー';
-      }
       return [];
-    }
-  }
-
-  async function fetchChatData() {
-    const videoId = getVideoId();
-    if (!videoId) return;
-
-    const statusEl = chatSearchPanel?.querySelector('#csp-status');
-    if (statusEl) {
-      statusEl.textContent = 'チャットを取得中...';
-      statusEl.classList.add('loading');
-    }
-
-    try {
-      // ytInitialDataからcontinuationトークンを取得
-      const continuation = await getChatContinuation();
-      if (!continuation) {
-        if (statusEl) {
-          statusEl.textContent = 'チャットリプレイが見つかりません（チャットが無い動画、またはチャットリプレイが無効な動画です）';
-          statusEl.classList.remove('loading');
-        }
-        return;
-      }
-
-      // チャットを取得
-      const chats = await fetchAllChatReplays(continuation);
-
-      if (getVideoId() !== videoId) {
-        if (statusEl) {
-          statusEl.textContent = '動画が変更されたため取得を中断しました';
-          statusEl.classList.remove('loading');
-        }
-        return;
-      }
-
-      // IndexedDBに保存
-      await saveChatsToDB(videoId, chats);
-
-      if (chats.length > 0 && state.videoDuration) {
-        sendChatReplayDataToServer(videoId, chats, state.videoDuration, { force: true });
-      }
-
-      if (statusEl) {
-        statusEl.textContent = `${chats.length}件のチャットを取得しました`;
-        statusEl.classList.remove('loading');
-      }
-    } catch (error) {
-      console.error('チャット取得エラー:', error);
-      if (statusEl) {
-        statusEl.textContent = 'チャット取得エラー: ' + error.message;
-        statusEl.classList.remove('loading');
-      }
     }
   }
 
@@ -997,11 +570,6 @@
 
     while (continuation && iterations < maxIterations) {
       iterations++;
-
-      const statusEl = chatSearchPanel?.querySelector('#csp-status');
-      if (statusEl) {
-        statusEl.textContent = `チャットを取得中... (${chats.length}件)`;
-      }
       if (onProgress) onProgress(chats.length);
 
       const response = await fetchChatReplayPage(continuation);
@@ -1184,120 +752,6 @@
       transaction.oncomplete = () => resolve();
       transaction.onerror = () => reject(transaction.error);
     });
-  }
-
-  async function searchChats() {
-    const videoId = getVideoId();
-    if (!videoId) return;
-
-    const searchInput = chatSearchPanel?.querySelector('#csp-search-input');
-    chatSearchPanel?.querySelector('#csp-results');
-    const activeFilter = chatSearchPanel?.querySelector('.csp-filter-btn.active')?.dataset.filter || 'all';
-
-    const query = searchInput?.value?.trim().toLowerCase() || '';
-
-    // チャットを取得
-    const chats = await loadChatDataForVideo(videoId);
-
-    // フィルタリング
-    let filtered = chats;
-
-    if (activeFilter === 'superchat') {
-      filtered = filtered.filter(c => c.isSuperchat);
-    }
-
-    // 検索
-    if (query) {
-      filtered = filtered.filter(c =>
-        c.message?.toLowerCase().includes(query)
-      );
-    }
-
-    // 時刻でソート
-    filtered.sort((a, b) => a.timestamp - b.timestamp);
-
-    // 結果を表示
-    renderChatResults(filtered);
-  }
-
-  function renderChatResults(chats) {
-    const resultsEl = chatSearchPanel?.querySelector('#csp-results');
-    if (!resultsEl) return;
-
-    if (chats.length === 0) {
-      resultsEl.innerHTML = '<div class="csp-empty">検索結果がありません</div>';
-      return;
-    }
-
-    const html = chats.slice(0, 200).map(chat => {
-      const timeStr = formatTimestampMsec(chat.timestamp);
-      const badge = chat.isSuperchat
-        ? `<span class="csp-result-badge csp-badge-superchat">${chat.amount || 'SC'}</span>`
-        : '';
-
-      return `
-      <div class="csp-result-item" data-timestamp="${chat.timestamp}">
-        <span class="csp-result-time">${timeStr}</span>
-        <span class="csp-result-message">${escapeHtml(chat.message)}</span>
-        ${badge}
-      </div>
-    `;
-    }).join('');
-
-    resultsEl.innerHTML = html;
-
-    // クリックでシーク
-    resultsEl.querySelectorAll('.csp-result-item').forEach(item => {
-      item.addEventListener('click', () => {
-        const timestamp = parseInt(item.dataset.timestamp);
-        if (state.videoElement && !isNaN(timestamp)) {
-          state.videoElement.currentTime = timestamp / 1000;
-        }
-      });
-    });
-  }
-
-  async function clearChatDataForVideo() {
-    const videoId = getVideoId();
-    if (!videoId) return;
-
-    if (!confirm('この動画のチャットデータを削除しますか？')) {
-      return;
-    }
-
-    try {
-      await initChatDB();
-
-      const transaction = chatSearchDB.transaction([CHAT_STORE_NAME], 'readwrite');
-      const store = transaction.objectStore(CHAT_STORE_NAME);
-      const index = store.index('videoId');
-      const request = index.openCursor(IDBKeyRange.only(videoId));
-
-      request.onsuccess = () => {
-        const cursor = request.result;
-        if (cursor) {
-          cursor.delete();
-          cursor.continue();
-        }
-      };
-
-      await new Promise((resolve, reject) => {
-        transaction.oncomplete = () => resolve();
-        transaction.onerror = () => reject(transaction.error);
-      });
-
-      const statusEl = chatSearchPanel?.querySelector('#csp-status');
-      if (statusEl) {
-        statusEl.textContent = 'チャットデータを削除しました';
-      }
-
-      const resultsEl = chatSearchPanel?.querySelector('#csp-results');
-      if (resultsEl) {
-        resultsEl.innerHTML = '<div class="csp-empty">検索結果がここに表示されます</div>';
-      }
-    } catch (error) {
-      console.error('チャット削除エラー:', error);
-    }
   }
 
   async function cleanupOldChatData() {
@@ -1651,9 +1105,6 @@
       const serverUrl = state.ycsServerUrl || DEFAULT_YCS_SERVER_URL;
       const url = `${serverUrl}/api/public/song-suggest?q=${encodeURIComponent(query)}`;
       const headers = { 'Accept': 'application/json' };
-      if (state.ycsApiToken) {
-        headers['Authorization'] = `Bearer ${state.ycsApiToken}`;
-      }
       const response = await fetch(url, {
         headers,
         signal: suggestAbortController.signal,
@@ -1998,8 +1449,6 @@
     }
   }
 
-  async function ensureSubtitlesOnServer() {}
-
   function computeSpectralFeatures(freqData, sampleRate) {
     const binCount = freqData.length;
     const binWidth = sampleRate / (binCount * 2);
@@ -2263,7 +1712,6 @@
     // スキャン完了時に結果を保存
     if (state.volumeData.length > 0 && state.volumeData.some(v => v > 0)) {
       saveVolumeData();
-      sendSpectralDataToServer();
     }
 
     console.log('スキャン停止');
@@ -2354,44 +1802,6 @@
     });
   }
 
-  async function sendSpectralDataToServer() {
-    const videoId = getVideoId();
-    if (!videoId) return;
-
-    const hasSpectral = state.spectralData.some(s => s !== null);
-    if (!hasSpectral) return;
-
-    if (!state.ycsApiToken) {
-      await loadYcsApiSettings();
-    }
-    if (!state.ycsApiToken) return;
-
-    try {
-      const response = await fetch(`${state.ycsServerUrl}/api/extension/spectral-data`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization': `Bearer ${state.ycsApiToken}`,
-        },
-        body: JSON.stringify({
-          video_id: videoId,
-          sampling_interval: SAMPLING_INTERVAL_SEC,
-          duration: state.videoDuration,
-          spectral_data: state.spectralData,
-        }),
-      });
-
-      if (response.ok) {
-        console.log(`[YCS] スペクトルデータをサーバーに送信しました: ${videoId}`);
-      } else {
-        console.warn(`[YCS] スペクトルデータ送信エラー: ${response.status}`);
-      }
-    } catch (error) {
-      console.warn('[YCS] スペクトルデータ送信エラー:', error.message);
-    }
-  }
-
   function loadVolumeData() {
     const videoId = getVideoId();
     if (!videoId) return;
@@ -2444,53 +1854,6 @@
       scanBtn.textContent = 'スキャン';
       scanBtn.title = '動画全体をスキャンしてグラフを生成';
       scanBtn.style.background = '#333';
-    }
-  }
-
-  function showPermissionError() {
-    if (!state.volumeGraphContainer) return;
-
-    if (state.volumeGraphContainer.querySelector('.vdg-permission-error')) return;
-
-    const message = document.createElement('div');
-    message.className = 'vdg-permission-error';
-    message.innerHTML = `
-    <div style="
-      background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
-      border: 1px solid #ffb74d;
-      border-radius: 8px;
-      padding: 12px 16px;
-      margin: 8px 0;
-      font-size: 13px;
-      color: #e65100;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    ">
-      <span style="font-size: 18px;">⚠️</span>
-      <div>
-        <div style="font-weight: 600; margin-bottom: 4px;">スキャンを開始できません</div>
-        <div style="font-size: 12px; color: #f57c00;">
-          拡張機能アイコンをクリックしてポップアップを開き、<br>
-          「スキャン開始」ボタンからスキャンしてください。
-        </div>
-      </div>
-    </div>
-  `;
-
-    const graphContainer = state.volumeGraphContainer.querySelector('.vdg-canvas-container');
-    if (graphContainer) {
-      graphContainer.parentNode.insertBefore(message, graphContainer);
-    } else {
-      state.volumeGraphContainer.appendChild(message);
-    }
-  }
-
-  function hidePermissionError() {
-    if (!state.volumeGraphContainer) return;
-    const errorMsg = state.volumeGraphContainer.querySelector('.vdg-permission-error');
-    if (errorMsg) {
-      errorMsg.remove();
     }
   }
 
@@ -2610,7 +1973,6 @@
     }
 
     stopDirectScan();
-    chrome.runtime.sendMessage({ type: 'STOP_SCAN' });
 
     console.log('自動スキャン停止');
   }
@@ -3075,9 +2437,6 @@
       try {
         await initChatDB();
         chats = await loadChatDataForVideo(videoId);
-        if (chats.length > 0) {
-          sendChatReplayDataToServer(videoId, chats, state.videoDuration);
-        }
       } catch (e) {
         console.warn('[YCS 自動検出] チャットDB読込失敗:', e);
       }
@@ -3094,7 +2453,6 @@
             if (fetched.length > 0) {
               await saveChatsToDB(videoId, fetched);
               chats = fetched;
-              sendChatReplayDataToServer(videoId, fetched, state.videoDuration, { force: true });
               resetChatHeatmap();
             } else {
               chatUnavailable = true;
@@ -3337,13 +2695,6 @@
     if (outOfRange > 0) notes.push(`${outOfRange}件は動画長超過で除外`);
     const suffix = notes.length > 0 ? `（${notes.join('、')}）` : '';
     showTsEditorNotice(`${valid.length}件のタイムスタンプを取り込みました${suffix}`);
-
-    const videoId = getVideoId();
-    if (videoId && state.ycsApiToken) {
-      try {
-        await ensureSubtitlesOnServer(videoId);
-      } catch { /* 字幕取得失敗は候補ボタン押下時に再試行される */ }
-    }
   }
 
   function saveMarkersToStorage() {
@@ -3719,7 +3070,7 @@
   }
 
   function graphElementId() {
-    return state.edition === 'general' ? 'volume-dynamics-graph-general' : 'volume-dynamics-graph';
+    return 'volume-dynamics-graph-general' ;
   }
 
   function createVolumeGraph() {
@@ -4633,15 +3984,8 @@
     if (scanBtn) {
       scanBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        if (state.edition === 'general') {
+        {
           startDirectScan();
-        } else {
-          try {
-            const response = await chrome.runtime.sendMessage({ type: 'START_SCAN' });
-            console.log('START_SCAN応答:', response);
-          } catch (error) {
-            console.error('START_SCANエラー:', error);
-          }
         }
       });
     }
@@ -4669,14 +4013,8 @@
 
         await discardVolumeDataAndReset();
 
-        if (state.edition === 'general') {
+        {
           startDirectScan();
-        } else {
-          try {
-            await chrome.runtime.sendMessage({ type: 'START_SCAN' });
-          } catch (error) {
-            console.error('START_SCANエラー:', error);
-          }
         }
       });
     }
@@ -5196,26 +4534,9 @@
       .ycs-btn.active {
         background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);
       }
-      #ycs-list-btn {
-        font-size: 16px;
-      }
-      #ycs-chat-btn {
-        font-size: 14px;
-      }
-      #ycs-subtitle-btn {
-        font-size: 14px;
-      }
-      #ycs-highlight-btn {
-        font-size: 14px;
-      }
     </style>
     <button class="ycs-btn" id="ycs-trigger-btn" title="タイムスタンプ検出グラフを表示/非表示">YCS</button>
-    ${state.edition !== 'general' ? `
-    <button class="ycs-btn" id="ycs-list-btn" title="リストスキャンパネルを開く">☰</button>
-    <button class="ycs-btn" id="ycs-chat-btn" title="チャット検索パネルを開く">💬</button>
-    <button class="ycs-btn" id="ycs-subtitle-btn" title="字幕取得パネルを開く">📝</button>
-    <button class="ycs-btn" id="ycs-highlight-btn" title="ハイライト検出パネルを開く">✨</button>
-    ` : ''}
+    ${''}
   `;
 
     document.body.appendChild(buttonContainer);
@@ -5225,25 +4546,6 @@
     buttonContainer.querySelector('#ycs-trigger-btn').addEventListener('click', () => {
       toggleEmbeddedUI();
     });
-
-    if (state.edition !== 'general') {
-      // リストボタンのイベント
-      buttonContainer.querySelector('#ycs-list-btn')?.addEventListener('click', () => {
-      });
-
-      // チャット検索ボタンのイベント
-      buttonContainer.querySelector('#ycs-chat-btn')?.addEventListener('click', () => {
-        toggleChatSearchPanel();
-      });
-
-      // 字幕取得ボタンのイベント
-      buttonContainer.querySelector('#ycs-subtitle-btn')?.addEventListener('click', () => {
-      });
-
-      // ハイライト検出ボタンのイベント
-      buttonContainer.querySelector('#ycs-highlight-btn')?.addEventListener('click', () => {
-      });
-    }
 
     updateTriggerButtonState();
   }
@@ -5272,30 +4574,6 @@
         ycsBtn.classList.add('active');
       } else {
         ycsBtn.classList.remove('active');
-      }
-    }
-
-    if (state.edition !== 'general') {
-      const listBtn = state.embeddedTriggerButton.querySelector('#ycs-list-btn');
-      if (listBtn) {
-        {
-          listBtn.classList.remove('active');
-        }
-      }
-
-      const chatBtn = state.embeddedTriggerButton.querySelector('#ycs-chat-btn');
-      if (chatBtn) {
-        chatBtn.classList.toggle('active', isChatSearchPanelVisible());
-      }
-
-      const subtitleBtn = state.embeddedTriggerButton.querySelector('#ycs-subtitle-btn');
-      if (subtitleBtn) {
-        subtitleBtn.classList.toggle('active', isSubtitlePanelVisible());
-      }
-
-      const highlightBtn = state.embeddedTriggerButton.querySelector('#ycs-highlight-btn');
-      if (highlightBtn) {
-        highlightBtn.classList.toggle('active', isHighlightPanelVisible());
       }
     }
   }
@@ -5341,11 +4619,6 @@
         hideEmbeddedUI();
         sendResponse({ success: true });
         return true;
-
-      case 'TIMESTAMP_DETECTED':
-        state.detectedTimestamps.push(message.timestamp);
-        drawVolumeGraph();
-        break;
 
       case 'SHOW_VOLUME_GRAPH':
         if (state.volumeGraphContainer) {
@@ -5398,103 +4671,6 @@
             updateVideoDuration();
             resizeCanvas();
           }
-        }
-        break;
-
-      case 'VOLUME_DATA_UPDATE':
-        if (!state.backgroundScanVideoId || state.backgroundScanVideoId !== getVideoId()) {
-          break;
-        }
-        state.volumeData = message.data;
-        state.volumeDataVideoId = getVideoId();
-        if (message.spectral) state.spectralData = message.spectral;
-        updateProgress(message.progress || 0);
-        drawVolumeGraph();
-        {
-          const now = Date.now();
-          if (now - state.lastSaveTime >= SAVE_INTERVAL && state.volumeData.some(v => v > 0)) {
-            state.lastSaveTime = now;
-            saveVolumeData();
-            console.log('スキャン中: 音量データを自動保存');
-          }
-        }
-        break;
-
-      case 'SCAN_STARTED':
-        state.backgroundScanVideoId = getVideoId();
-        if (state.volumeGraphContainer) {
-          const scanBtn = state.volumeGraphContainer.querySelector('#vdg-scan-btn');
-          if (scanBtn) {
-            scanBtn.classList.add('scanning');
-            scanBtn.textContent = '停止';
-          }
-          hidePermissionError();
-        }
-        break;
-
-      case 'SCAN_PERMISSION_ERROR':
-        showPermissionError();
-        break;
-
-      case 'SCAN_STOPPED':
-        state.backgroundScanVideoId = null;
-        if (state.volumeGraphContainer) {
-          const scanBtnStop = state.volumeGraphContainer.querySelector('#vdg-scan-btn');
-          if (scanBtnStop) {
-            scanBtnStop.classList.remove('scanning');
-          }
-        }
-        if (state.volumeData.length > 0) {
-          saveVolumeData();
-          sendSpectralDataToServer();
-        }
-        getScanStatus().then(status => {
-          updateScanButtonState(status);
-        });
-        if (state.isAutoScanMode && !state.autoScanStopRequested) {
-          proceedToNextVideoOrFinish();
-        }
-        break;
-
-      case 'GET_VIDEO_INFO':
-        updateVideoDuration();
-        sendResponse({
-          duration: state.videoDuration,
-          currentTime: state.videoElement?.currentTime || 0
-        });
-        return true;
-
-      case 'GET_SCAN_STATUS':
-        getScanStatus().then(status => sendResponse(status));
-        return true;
-
-      case 'SEEK_VIDEO':
-        if (state.videoElement) {
-          state.videoElement.currentTime = message.time;
-        }
-        break;
-
-      case 'SET_PLAYBACK_RATE':
-        if (state.videoElement) {
-          state.videoElement.playbackRate = message.rate;
-        }
-        break;
-
-      case 'SET_MUTED':
-        if (state.videoElement) {
-          state.videoElement.muted = message.muted;
-        }
-        break;
-
-      case 'PLAY_VIDEO':
-        if (state.videoElement) {
-          state.videoElement.play();
-        }
-        break;
-
-      case 'PAUSE_VIDEO':
-        if (state.videoElement) {
-          state.videoElement.pause();
         }
         break;
     }
@@ -5576,8 +4752,6 @@
     }
   }
 
-  state.edition = 'general';
-
   function initWatchPageUI() {
     findVideoElement();
     createVolumeGraph();
@@ -5600,7 +4774,6 @@
 
     if (state.isScanning) {
       stopDirectScan();
-      chrome.runtime.sendMessage({ type: 'STOP_SCAN' });
     }
   }
 

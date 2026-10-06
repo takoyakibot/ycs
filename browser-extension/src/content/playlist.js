@@ -1,4 +1,5 @@
 import state from './state.js';
+import { IS_GENERAL_EDITION } from './edition.js';
 import { getPlaylistInfo, isInPlaylist, goToNextVideo, isCurrentVideoScanned } from './utils.js';
 import { startDirectScan, stopDirectScan } from './audio.js';
 
@@ -59,7 +60,10 @@ export function stopAutoScan() {
   }
 
   stopDirectScan();
-  chrome.runtime.sendMessage({ type: 'STOP_SCAN' });
+  // 管理者版の tabCapture スキャンも止める（一般版にはないため送らない）
+  if (!IS_GENERAL_EDITION) {
+    chrome.runtime.sendMessage({ type: 'STOP_SCAN' });
+  }
 
   console.log('自動スキャン停止');
 }

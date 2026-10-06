@@ -1,4 +1,5 @@
 import state from './state.js';
+import { IS_GENERAL_EDITION } from './edition.js';
 import {
   SONG_DETECT_CONFIG,
   CHAT_SIGNAL_CONFIG,
@@ -450,7 +451,8 @@ async function fetchChats(videoId) {
     try {
       await initChatDB();
       chats = await loadChatDataForVideo(videoId);
-      if (chats.length > 0) {
+      // サーバーへの送信はトークン必須のため管理者版のみ（ローカルのチャットは一般版でも自動検出に使う）
+      if (!IS_GENERAL_EDITION && chats.length > 0) {
         sendChatReplayDataToServer(videoId, chats, state.videoDuration);
       }
     } catch (e) {
@@ -469,7 +471,7 @@ async function fetchChats(videoId) {
           if (fetched.length > 0) {
             await saveChatsToDB(videoId, fetched);
             chats = fetched;
-            sendChatReplayDataToServer(videoId, fetched, state.videoDuration, { force: true });
+            if (!IS_GENERAL_EDITION) sendChatReplayDataToServer(videoId, fetched, state.videoDuration, { force: true });
             resetChatHeatmap();
           } else {
             chatUnavailable = true;

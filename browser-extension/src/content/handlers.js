@@ -1,4 +1,5 @@
 import state from './state.js';
+import { IS_GENERAL_EDITION } from './edition.js';
 import { SAVE_INTERVAL, DEFAULT_GRAPH_BASE_HEIGHT_PX, DEFAULT_GRAPH_HEIGHT_STEP_PX, GRAPH_BASE_HEIGHT_RANGE, GRAPH_HEIGHT_STEP_RANGE } from './config.js';
 import { getVideoId, clampGraphHeightValue, updateVideoDuration, updateProgress, isCurrentVideoScanned, getScanStatus } from './utils.js';
 import { showEmbeddedUI, hideEmbeddedUI, hideVolumeGraphPanel } from './ui.js';
@@ -23,11 +24,6 @@ export function handleMessage(message, sender, sendResponse) {
       hideEmbeddedUI();
       sendResponse({ success: true });
       return true;
-
-    case 'TIMESTAMP_DETECTED':
-      state.detectedTimestamps.push(message.timestamp);
-      drawVolumeGraph();
-      break;
 
     case 'SHOW_VOLUME_GRAPH':
       if (state.volumeGraphContainer) {
@@ -81,6 +77,22 @@ export function handleMessage(message, sender, sendResponse) {
           resizeCanvas();
         }
       }
+      break;
+
+    default:
+      // 以降は管理者版の background（tabCapture スキャン）とpopupのスキャンボタンからのみ届く。
+      // 一般版は送信元がないため成果物から除く
+      if (!IS_GENERAL_EDITION) {
+        return handleTabCaptureMessage(message, sendResponse);
+      }
+  }
+}
+
+function handleTabCaptureMessage(message, sendResponse) {
+  switch (message.type) {
+    case 'TIMESTAMP_DETECTED':
+      state.detectedTimestamps.push(message.timestamp);
+      drawVolumeGraph();
       break;
 
     case 'VOLUME_DATA_UPDATE':

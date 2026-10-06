@@ -23,7 +23,7 @@ argument-hint: "[--version <x.y.z>]"
 
 - 配布形態は **限定公開（unlisted）** で Store 登録し、サイトから誘導する。一般公開への切り替えは別判断
 - チャットリプレイ取得（`youtubei/v1/live_chat/get_live_chat_replay`）と `page-bridge.js` は一般版に含める。その代わりプライバシーポリシーで取得と保存先を明記する
-- 一般版は認証不要。公開API（`api/public/*`）だけを使い、トークン必須の書き込みAPIはトークン未設定なら呼ばれないこと
+- 一般版は認証不要。公開API（`api/public/*`）だけを使う。トークン必須の書き込みAPI（`api/extension/*`）の呼び出しと `ycsApiToken` の読み込みは一般版の成果物に含めない（一般版はトークンを設定する手段がなく、出す理由がない）
 - チャット遅延・Google AI非表示は一般版に含めない（単一用途ポリシーのため）
 - 名前とアイコンに「YouTube」を含めない（商標）。説明文で「YouTube動画の〜」のように対象として言及するのは可。提携・公認と読める書き方はしない
 
@@ -31,10 +31,18 @@ argument-hint: "[--version <x.y.z>]"
 
 ## ビルドの仕組み（NG を直すときに必要）
 
-- `content-general.js`: `src/content/index-general.js` を rollup でバンドル。管理者専用モジュールは `rollup.config.mjs` の `generalStubs` でスタブに差し替える
-- `background-general.js`: `background.js` の `IS_GENERAL_EDITION` 判定を rollup で `true` に置き換えてバンドルし、一般版で到達しない分岐を tree-shaking で消す。一般版に入れたくない background の処理は `if (!IS_GENERAL_EDITION)` の中に置けば成果物から消える
-- `popup.html` / `popup.js` / `page-bridge.js` はビルドを通らずそのままコピーされる。一般版で不要な UI は `data-admin-only` で実行時に消しているだけで、ZIP には残る
-- `content-general.js` と `background-general.js` は git で管理している成果物なので、ビルド後は `git status` で差分を確認し、ソースと一緒にコミットする
+管理者向けのコード・UI・文字列は、実行時に隠すのではなく**ビルド時に一般版の成果物から物理的に除く**（ZIP の中身は審査で見られるため）。設定はすべて `browser-extension/rollup.config.mjs`。
+
+- `content-general.js`: `src/content/index-general.js` を rollup でバンドル
+  - 管理者専用モジュールは `generalStubs` でスタブ（または一般版専用モジュール）に差し替える
+  - 共有モジュール内の管理者向け分岐は `src/content/edition.js` の `IS_GENERAL_EDITION` 定数で書く。一般版ビルドでは `generalStubs` で `edition-general.js`（`true`）に差し替わるので、`if (!IS_GENERAL_EDITION) { ... }` の中身は tree-shaking で消える。`state` などの実行時の値でエディションを判定すると成果物に残るので使わない
+  - トークン必須の `api/extension/*` 呼び出し、`ycsApiToken` の読み込み、tabCapture / offscreen とのメッセージはこの方法で一般版から除いている
+- background（service worker）は一般版に入れない。一般版の content / popup は `chrome.runtime.sendMessage` を送らず、background の役割（tabCapture スキャンの中継、Claude API 呼び出し）は管理者版専用のため。一般版で background が必要な機能を足すときは、manifest への追加と rollup での一般版ビルドを改めて用意する
+- `popup-general.js`: `popup.js` の `IS_GENERAL_EDITION` 判定（`chrome.runtime.getManifest().x_edition`）を `fixGeneralEdition` で `true` に置き換えてバンドルする。一般版に入れたくない処理は `if (!IS_GENERAL_EDITION)` の中か、そこからしか呼ばれない関数・定数に置く（共通部分から参照すると残る）
+- `popup-general.html`: `popup.html` から `data-admin-only` の付いた要素（`<style data-admin-only>` を含む）と HTML コメントを除き、見出しを一般版 manifest の `name` にしたもの。管理者向けの要素には必ず `data-admin-only` を付ける。一般版 `popup.js` が `getElementById` で参照する要素が消えているとビルドがエラーになる
+- 一般版の tree-shaking は `tryCatchDeoptimization: false`（`GENERAL_TREESHAKE`）。既定のままだと try ブロック内の管理者向け分岐が抜け殻として残り、呼び出し先の関数も成果物に残るため
+- `page-bridge.js` はビルドを通らずそのままコピーされる。アイコンは manifest が参照する PNG だけを入れる（`icons/icon.svg` は入れない）
+- `content.js` / `content-general.js` / `popup-general.js` / `popup-general.html` は git で管理している成果物なので、ビルド後は `git status` で差分を確認し、ソースと一緒にコミットする
 
 ## 手順
 
@@ -48,7 +56,7 @@ git log --oneline <前回タグ>..HEAD -- browser-extension/
 ```
 
 - タグが無ければ初回公開として扱う
-- 差分のうち一般版に効くもの（`src/content/` の共有モジュール、`index-general.js`、`background.js`、`popup.*`、`page-bridge.js`、`manifest.general.json`）を拾い、CHANGELOG と説明文の更新要否を判断する
+- 差分のうち一般版に効くもの（`src/content/` の共有モジュール、`index-general.js`、`popup.*`、`page-bridge.js`、`manifest.general.json`）を拾い、CHANGELOG と説明文の更新要否を判断する
 
 ### 2. ビルドして点検する
 
@@ -61,9 +69,9 @@ git log --oneline <前回タグ>..HEAD -- browser-extension/
 
 - **[NG] 権限なしの chrome API**：一般版で到達しないコードなら成果物から除く（スタブ化、または一般版専用のエントリを分ける）。必要な機能なら権限を追加し、store-listing.md に理由を書く。単に権限を足して解決しないこと。権限は審査で一番見られる
 - **[NG] 宣言しているが使っていない権限**：manifest から外す
-- **[要確認] 管理者専用機能**：一般版に入る理由がなければ除く。Claude API や localhost 宛ての通信が成果物に文字列として残るだけでも、審査で通信先として質問されることがある
+- **[NG] 管理者専用機能の混入**：管理者向けの API・トークン・UI 要素・エディションの実行時判定が成果物に残っている。上の「ビルドの仕組み」の方法でビルド時に除く。Claude API や localhost 宛ての通信、使っていない入力欄が成果物に文字列として残るだけでも、審査で通信先や未使用機能として質問されることがある
+- **[NG] 参照されないファイル**：manifest・popup.html から参照されないファイルは一般版で使わないので、`build.sh` で `dist/general/` に入れないようにする
 - **外部への通信先**：この一覧がプライバシーポリシーとデータ使用の申告の根拠になる。一覧にある通信先はすべて、資料のどこかで説明されていなければならない
-- **トークン必須の書き込みAPI**：呼び出し箇所の直前で `ycsApiToken` を判定しているかをコードで確認する
 
 - **host_permissions の要否**：MV3 ではコンテンツスクリプトからの `fetch` はページのオリジン扱いになり、host_permissions は効かない（通るかどうかはサーバーの CORS 次第。`config/cors.php` で `https://www.youtube.com` を許可済み）。拡張コンテキストから使わない host は外す
 - **ブラウザ内の保存・読み取り**：IndexedDB・クリップボードなどはポリシーに書く。コンテンツスクリプトの IndexedDB は `www.youtube.com` のオリジンに保存され、拡張をアンインストールしても消えないので、「データの削除」の説明に影響する
@@ -80,7 +88,7 @@ NG を直したら、ビルドと点検をやり直して NG が消えるまで�
 
 ### 3. 機能の棚卸し
 
-点検結果とコード（`src/content/index-general.js` から辿れるモジュール、`popup.html` のうち `data-admin-only` でない要素）から、一般版でユーザーができることを列挙する。説明文の「主な機能」はこの棚卸しと一致させる。管理者版にしかない機能（トークン設定、サーバー保存、リストスキャン、ハイライト検出など）を書かないこと。
+点検結果とコード（`src/content/index-general.js` から辿れるモジュール、生成された `popup-general.html`）から、一般版でユーザーができることを列挙する。説明文の「主な機能」はこの棚卸しと一致させる。管理者版にしかない機能（トークン設定、サーバー保存、リストスキャン、ハイライト検出など）を書かないこと。
 
 ### 4. バージョンを決める
 

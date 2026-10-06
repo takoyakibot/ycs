@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "歌枠タイムスタンプ検出（一般版）",
+  "name": "歌枠タイムスタンプ検出",
   "version": "0.1.0",
   "x_edition": "general",
-  "description": "YouTube動画の音量変化を検出し、楽曲開始のタイムスタンプ候補を生成します",
+  "description": "歌枠アーカイブの曲目タイムスタンプ作成を支援。音量とチャットの拍手から曲の開始位置を検出し、字幕から曲名候補を表示。動画上のエディタで編集・コピーできます",
   "permissions": [
     "storage"
   ],
@@ -22,9 +22,6 @@
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     }
-  },
-  "background": {
-    "service_worker": "background.js"
   },
   "web_accessible_resources": [
     {

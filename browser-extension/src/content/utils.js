@@ -1,4 +1,5 @@
 import state from './state.js';
+import { IS_GENERAL_EDITION } from './edition.js';
 import {
   SAMPLING_INTERVAL_SEC,
   LEGACY_GRAPH_RESOLUTION,
@@ -220,10 +221,13 @@ export function startTimeSync() {
 
   state.timeUpdateInterval = setInterval(() => {
     if (state.videoElement && !state.videoElement.paused) {
-      chrome.runtime.sendMessage({
-        type: 'UPDATE_VIDEO_TIME',
-        time: state.videoElement.currentTime
-      });
+      // 再生位置を offscreen（管理者版の tabCapture スキャン）に伝える。一般版は受け手がないため送らない
+      if (!IS_GENERAL_EDITION) {
+        chrome.runtime.sendMessage({
+          type: 'UPDATE_VIDEO_TIME',
+          time: state.videoElement.currentTime
+        });
+      }
       if (state.isGraphVisible) {
         updateTimeMarker();
       }
