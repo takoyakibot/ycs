@@ -51,7 +51,7 @@ for ns in $(grep -ohE 'chrome\.[a-zA-Z]+' $JS_FILES | sort -u | sed 's/chrome\./
   count=$(grep -ohE "chrome\.$ns\b" $JS_FILES | wc -l | tr -d ' ')
   files=$(grep -lE "chrome\.$ns\b" $JS_FILES | xargs -n1 basename | tr '\n' ' ')
   case "$ns" in
-    runtime|tabs|action|i18n) need="" ;;   # tabs は query/sendMessage 程度なら権限不要
+    runtime|tabs|action|i18n|windows|extension) need="" ;;   # tabs は query/sendMessage/create なら権限不要（url を読む場合は下で別途確認）
     *) need="$ns" ;;
   esac
   if [ -n "$need" ] && ! echo " $PERMS " | grep -q " $need "; then
@@ -73,8 +73,11 @@ for p in $PERMS; do
     NG=1
   fi
 done
-if grep -qE "\.url\b" "$DIST/background.js" "$DIST/popup.js" 2>/dev/null && grep -qE "chrome\.tabs" "$DIST/background.js" "$DIST/popup.js" 2>/dev/null; then
-  echo "[要確認] chrome.tabs でタブの url を読んでいる — host_permissions（または activeTab）の範囲内のタブであること"
+# tab.url / tab.title を読むには対象タブが host_permissions（または activeTab）の範囲内である必要がある
+TAB_URL_READS=$(grep -nE "\btabs?\??\.(url|title|pendingUrl)\b" "$DIST/background.js" "$DIST/popup.js" 2>/dev/null | sed "s|$DIST/||" | cut -c1-140)
+if [ -n "$TAB_URL_READS" ]; then
+  echo "-- タブの url / title を読んでいる箇所（対象タブが host_permissions の範囲内か確認。popup.js の YouTube 判定は既知で問題なし）"
+  echo "$TAB_URL_READS" | sed 's/^/  /'
 fi
 
 echo
@@ -84,10 +87,13 @@ echo "## host_permissions の要否"
 # コンテンツスクリプトの注入・tabs の url 参照だけ
 for hp in $(node -e 'console.log((require(process.argv[1]).host_permissions||[]).join(" "))' "$MANIFEST"); do
   host=$(echo "$hp" | sed -E 's|^[a-z*]+://([^/]+)/.*|\1|')
-  ext_ctx=$(grep -lF "$host" "$DIST/background.js" "$DIST/popup.js" "$DIST/popup.html" 2>/dev/null | xargs -n1 basename 2>/dev/null | tr '\n' ' ')
   in_cs=$(node -e 'const m=require(process.argv[1]);console.log((m.content_scripts||[]).some(c=>c.matches.some(x=>x.includes(process.argv[2])))?"yes":"")' "$MANIFEST" "$host")
-  if [ -n "$ext_ctx" ] || [ -n "$in_cs" ]; then
-    echo "[OK] ${hp}（拡張コンテキストでの参照: ${ext_ctx:-なし} / content_scripts の対象: ${in_cs:-no}）"
+  # 拡張コンテキストからこのホストへ通信しているか（URL 文字列の有無ではなく fetch/XHR の行で見る）
+  ext_fetch=$(grep -lE "(fetch|open)\(.*$host" "$DIST/background.js" "$DIST/popup.js" 2>/dev/null | xargs -n1 basename 2>/dev/null | tr '\n' ' ')
+  if [ -n "$in_cs" ] || [ -n "$ext_fetch" ]; then
+    echo "[OK] ${hp}（content_scripts の対象: ${in_cs:-no} / 拡張コンテキストからの通信: ${ext_fetch:-なし}）"
+  elif [ -n "$TAB_URL_READS" ]; then
+    echo "[要確認] ${hp} — 通信も注入もない。上の「タブの url を読んでいる箇所」でこのホストのタブを判定しているなら必要、そうでなければ不要"
   else
     echo "[要確認] ${hp} — 拡張コンテキストからの通信もコンテンツスクリプトの注入もない。コンテンツスクリプトからの通信だけなら不要（サーバーの CORS で許可する）"
   fi
@@ -133,7 +139,7 @@ grep -qE "localhost|127\.0\.0\.1" "$MANIFEST" && { echo "[NG] manifest に local
 
 echo
 echo "## トークン必須の書き込みAPI（一般版ではトークン未設定で実行されないこと）"
-grep -nE "fetch\([^)]*api/extension/" $JS_FILES | sed "s|$ROOT/||" | while IFS= read -r line; do
+grep -nE "api/extension/" $JS_FILES | sed "s|$ROOT/||" | while IFS= read -r line; do
   echo "  $line"
 done
 echo "  ↑ 各呼び出しの直前で ycsApiToken の有無を判定していることをコードで確認する"
