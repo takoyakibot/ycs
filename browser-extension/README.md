@@ -121,23 +121,64 @@ YouTube動画の音量変化を検出し、楽曲開始のタイムスタンプ�
 - チャット遅延送信はライブ配信中のみ有効（リプレイでは無効）
 - AI毒性チェックにはClaude APIキーが必要
 
+## エディション
+
+本拡張は**管理者版**と**一般版**の2つのエディションでビルドされる。
+
+### 管理者版
+- `manifest.json` を使用
+- background（Service Worker）・offscreen を含む全機能が有効
+- tabCapture による音声キャプチャ、Claude API 毒性チェック、YCS API 連携（トークン認証）等
+
+### 一般版
+- `manifest.general.json` を使用
+- background（Service Worker）を持たない
+- 管理者向け機能（tabCapture スキャン、チャット遅延送信、Google AI概要非表示、Claude API、YCS APIトークン連携）はビルド時に除去される
+- Chrome Web Store に限定公開
+
+### ビルドの仕組み
+
+管理者向けのコード・UIは実行時に隠すのではなく、**ビルド時に一般版の成果物から物理的に除去**される。
+
+- `content-general.js`: `src/content/index-general.js` を rollup でバンドル。管理者専用モジュールは `rollup.config.mjs` の `generalStubs` でスタブに差し替え。共有モジュール内の管理者向け分岐は `src/content/edition.js` の `IS_GENERAL_EDITION` で書き、一般版ビルドでは `edition-general.js`（`true`）に差し替わるため tree-shaking で消える
+- `popup-general.js`: `popup.js` の `IS_GENERAL_EDITION` 判定を `true` に置き換えてバンドル
+- `popup-general.html`: `popup.html` から `data-admin-only` 属性の付いた要素と HTML コメントを除去
+- `page-bridge.js`: ビルドを通らずそのままコピー
+
+ビルドコマンド:
+
+```bash
+cd browser-extension && bash build.sh
+```
+
 ## ファイル構成
 
 ```
 browser-extension/
-├── manifest.json          # 拡張機能の設定（Manifest V3）
-├── background.js          # Service Worker（音声キャプチャ制御・メッセージハブ）
-├── offscreen.html         # Offscreen Document（HTML）
-├── offscreen.js           # Offscreen音声処理（Web Audio APIによる音量解析）
-├── content.js             # YouTube用Content Script（UI埋め込み・グラフ表示）
-├── content-chat-delay.js  # YouTubeチャット遅延送信Content Script
-├── content-google.js      # Google検索AI概要非表示Content Script
-├── content-ycs.js         # ycs管理画面連携Content Script
-├── page-bridge.js         # ページコンテキスト字幕データ取得ブリッジ
-├── popup.html             # ポップアップUI
-├── popup.js               # ポップアップのロジック
+├── manifest.json              # 管理者版の設定（Manifest V3）
+├── manifest.general.json      # 一般版の設定（background なし）
+├── background.js              # Service Worker（管理者版のみ: 音声キャプチャ制御・メッセージハブ）
+├── offscreen.html             # Offscreen Document（管理者版のみ）
+├── offscreen.js               # Offscreen音声処理（管理者版のみ: Web Audio APIによる音量解析）
+├── content.js                 # 管理者版 Content Script（ビルド生成物）
+├── content-general.js         # 一般版 Content Script（ビルド生成物）
+├── content-chat-delay.js      # YouTubeチャット遅延送信（管理者版のみ）
+├── content-google.js          # Google検索AI概要非表示（管理者版のみ）
+├── content-ycs.js             # ycs管理画面連携（管理者版のみ）
+├── page-bridge.js             # ページコンテキスト字幕データ取得ブリッジ
+├── popup.html                 # 管理者版ポップアップUI
+├── popup.js                   # 管理者版ポップアップのロジック
+├── popup-general.html         # 一般版ポップアップUI（ビルド生成物）
+├── popup-general.js           # 一般版ポップアップのロジック（ビルド生成物）
+├── rollup.config.mjs          # Rollup ビルド設定
+├── build.sh                   # ビルド・パッケージングスクリプト
+├── src/content/               # Content Script のソース（モジュール分割）
+│   ├── index.js               # 管理者版エントリポイント
+│   ├── index-general.js       # 一般版エントリポイント
+│   ├── edition.js             # エディション判定（管理者版: false）
+│   └── edition-general.js     # エディション判定（一般版: true）
 ├── icons/
-│   └── icon.svg           # アイコン（SVG原本）
+│   └── icon.svg               # アイコン（SVG原本）
 └── README.md
 ```
 
@@ -145,6 +186,6 @@ browser-extension/
 
 - Chrome Extension Manifest V3
 - Web Audio API（音声解析）
-- tabCapture API（タブ音声キャプチャ）
-- Offscreen Documents API（バックグラウンド音声処理）
-- Anthropic Claude API（毒性チェック、オプション）
+- tabCapture API（タブ音声キャプチャ、管理者版のみ）
+- Offscreen Documents API（バックグラウンド音声処理、管理者版のみ）
+- Anthropic Claude API（毒性チェック、管理者版のみ・オプション）
