@@ -1,13 +1,14 @@
 import state from './state.js';
 import { IS_GENERAL_EDITION } from './edition.js';
 import { SAVE_INTERVAL, DEFAULT_GRAPH_BASE_HEIGHT_PX, DEFAULT_GRAPH_HEIGHT_STEP_PX, GRAPH_BASE_HEIGHT_RANGE, GRAPH_HEIGHT_STEP_RANGE } from './config.js';
-import { getVideoId, clampGraphHeightValue, updateVideoDuration, updateProgress, isCurrentVideoScanned, getScanStatus } from './utils.js';
+import { getVideoId, getChannelHandle, clampGraphHeightValue, updateVideoDuration, updateProgress, isCurrentVideoScanned, getScanStatus, STORAGE_KEY_CHANNEL_CLAP_PATTERNS } from './utils.js';
 import { showEmbeddedUI, hideEmbeddedUI, hideVolumeGraphPanel } from './ui.js';
 import { drawVolumeGraph, createVolumeGraph, insertVolumeGraph, resizeCanvas } from './volume-graph.js';
 import { closeLyricsPastePopup, closeSongCandidatePopup } from './song-candidates.js';
 import { saveVolumeData, sendSpectralDataToServer, updateScanButtonState, showPermissionError, hidePermissionError } from './audio.js';
 import { updateListScanButtonState, showListScanButton, hideListScanButton, proceedToNextListScanVideo } from './list-scan.js';
 import { proceedToNextVideoOrFinish } from './playlist.js';
+import { resetChatHeatmap, loadChatForHeatmap } from './auto-detect.js';
 
 export function handleMessage(message, sender, sendResponse) {
   switch (message.type) {
@@ -39,6 +40,10 @@ export function handleMessage(message, sender, sendResponse) {
     case 'HIDE_VOLUME_GRAPH':
       hideVolumeGraphPanel();
       break;
+
+    case 'GET_CHANNEL_HANDLE':
+      sendResponse({ channelHandle: getChannelHandle() });
+      return true;
 
     case 'TOGGLE_VOLUME_GRAPH':
       console.log('TOGGLE_VOLUME_GRAPH 受信', { volumeGraphContainer: !!state.volumeGraphContainer, inDOM: state.volumeGraphContainer?.parentNode });
@@ -232,6 +237,12 @@ export function handleStorageChange(changes, areaName) {
     } else {
       hideEmbeddedUI();
     }
+  }
+
+  // チャンネル別拍手パターンが変更されたらヒートマップを再計算
+  if (changes[STORAGE_KEY_CHANNEL_CLAP_PATTERNS] && state.chatHeatmapLoaded) {
+    resetChatHeatmap();
+    loadChatForHeatmap();
   }
 
   const videoId = getVideoId();

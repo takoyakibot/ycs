@@ -132,7 +132,7 @@
 
   const EMOJI_ONLY_RE = /^[\p{Extended_Pictographic}\p{Emoji_Presentation}\p{So}\s‍️︎]+$/u;
 
-  const EMOJI_SHORTCODE_RE = /:[a-zA-Z0-9_]+:/g;
+  const EMOJI_SHORTCODE_RE = /:[a-zA-Z0-9_぀-ゟ゠-ヿ]+:/g;
 
   const CHAT_ONLY_CONFIG = {
     BUCKET_SEC: 10,
@@ -455,6 +455,56 @@
       return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
     }
     return `${m}:${s.toString().padStart(2, '0')}`;
+  }
+
+  // popup.js にも同名の定数がある（popup は content script のモジュールをインポートできないため二重定義）
+  const STORAGE_KEY_CHANNEL_CLAP_PATTERNS = 'channelClapPatterns';
+
+  /**
+   * 現在のYouTubeページからチャンネルハンドル（@付き）を取得する。
+   * @returns {string|null}
+   */
+  function getChannelHandle() {
+    // 方法1: ページ内のチャンネルリンクから取得
+    const link = document.querySelector('#owner a[href*="/@"], #channel-name a[href*="/@"], ytd-video-owner-renderer a[href*="/@"]');
+    if (link) {
+      const handle = extractHandleFromHref(link.getAttribute('href'));
+      if (handle) return handle;
+    }
+    // 方法2: meta タグから取得
+    const meta = document.querySelector('span[itemprop="author"] link[itemprop="url"]');
+    if (meta) {
+      const handle = extractHandleFromHref(meta.getAttribute('href'));
+      if (handle) return handle;
+    }
+    return null;
+  }
+
+  function extractHandleFromHref(href) {
+    const match = href?.match(/\/@([^/?]+)/);
+    if (!match) return null;
+    try {
+      return '@' + decodeURIComponent(match[1]);
+    } catch {
+      return '@' + match[1];
+    }
+  }
+
+  /**
+   * 指定チャンネルのカスタム拍手パターンを読み込む。
+   * @param {string} channelHandle - チャンネルハンドル（@付き）
+   * @returns {Promise<string[]>}
+   */
+  async function loadChannelClapPatterns(channelHandle) {
+    if (!channelHandle) return [];
+    try {
+      const result = await chrome.storage.local.get(STORAGE_KEY_CHANNEL_CLAP_PATTERNS);
+      const all = result[STORAGE_KEY_CHANNEL_CLAP_PATTERNS] || {};
+      return Array.isArray(all[channelHandle]) ? all[channelHandle] : [];
+    } catch (e) {
+      console.warn('[YCS] チャンネル別拍手パターンの読み込み失敗:', e);
+      return [];
+    }
   }
 
   function ensurePageBridge() {
@@ -3367,10 +3417,22 @@
     return segments;
   }
 
-  function detectClapBursts(chats, videoDurationSec) {
+  /**
+   * メッセージが拍手かどうかを判定する。
+   * 基本パターン（CLAP_PATTERN）に加えて、チャンネル固有の追加パターンもチェックする。
+   * @param {string} message - チャットメッセージ
+   * @param {string[]} extraPatterns - チャンネル固有の追加パターン（プレーンテキスト、includes で比較）
+   * @returns {boolean}
+   */
+  function isClapMessage(message, extraPatterns = []) {
+    if (CLAP_PATTERN.test(message)) return true;
+    return extraPatterns.length > 0 && extraPatterns.some(p => message.includes(p));
+  }
+
+  function detectClapBursts(chats, videoDurationSec, extraPatterns = []) {
     const cfg = CHAT_SIGNAL_CONFIG;
     const clapTimes = (chats || [])
-      .filter(c => typeof c.message === 'string' && CLAP_PATTERN.test(c.message))
+      .filter(c => typeof c.message === 'string' && isClapMessage(c.message, extraPatterns))
       .map(c => (Number(c.timestamp) || 0) / 1000 - cfg.CHAT_DELAY_SEC)
       .filter(t => t >= 0 && (!videoDurationSec || t <= videoDurationSec))
       .sort((a, b) => a - b);
@@ -3403,7 +3465,7 @@
     return withoutShortcodes.length === 0 || EMOJI_ONLY_RE.test(withoutShortcodes);
   }
 
-  function buildChatBuckets(chats, videoDurationSec, bucketSec) {
+  function buildChatBuckets(chats, videoDurationSec, bucketSec, extraPatterns = []) {
     const delaySec = CHAT_SIGNAL_CONFIG.CHAT_DELAY_SEC;
     const numBuckets = Math.ceil(videoDurationSec / bucketSec);
     const buckets = Array.from({ length: numBuckets }, () => ({ total: 0, emojiOnly: 0, clap: 0 }));
@@ -3414,8 +3476,7 @@
       if (timeSec < 0 || timeSec >= videoDurationSec) continue;
       const idx = Math.min(numBuckets - 1, Math.floor(timeSec / bucketSec));
       buckets[idx].total++;
-      const isClap = CLAP_PATTERN.test(c.message);
-      if (isClap) {
+      if (isClapMessage(c.message, extraPatterns)) {
         buckets[idx].clap++;
       } else if (isEmojiOnlyMessage(c.message)) {
         buckets[idx].emojiOnly++;
@@ -3518,7 +3579,7 @@
     return null;
   }
 
-  function chatOnlyDetectSongStarts(chats, videoDurationSec) {
+  function chatOnlyDetectSongStarts(chats, videoDurationSec, extraPatterns = []) {
     const cfg = CHAT_ONLY_CONFIG;
     const clapCfg = CHAT_SIGNAL_CONFIG;
 
@@ -3526,9 +3587,9 @@
       return { starts: [], method: 'insufficient' };
     }
 
-    const buckets = buildChatBuckets(chats, videoDurationSec, cfg.BUCKET_SEC);
+    const buckets = buildChatBuckets(chats, videoDurationSec, cfg.BUCKET_SEC, extraPatterns);
     const emojiSegments = detectEmojiSingingSegments(buckets, cfg.BUCKET_SEC);
-    const bursts = detectClapBursts(chats, videoDurationSec);
+    const bursts = detectClapBursts(chats, videoDurationSec, extraPatterns);
     const chatActive = bursts.length >= clapCfg.MIN_BURSTS_TO_TRUST;
 
     if (emojiSegments.length === 0 && bursts.length === 0) {
@@ -3730,6 +3791,8 @@
     isAutoDetectRunning = true;
     try {
       const videoId = getVideoId();
+      const channelHandle = getChannelHandle();
+      const extraPatterns = await loadChannelClapPatterns(channelHandle);
       const { chats, chatUnavailable } = await fetchChats(videoId);
       if (videoId && getVideoId() !== videoId) return;
 
@@ -3742,8 +3805,8 @@
           return;
         }
 
-        const bursts = detectClapBursts(chats, state.videoDuration);
-        const chatBuckets = chats.length > 0 ? buildChatBuckets(chats, state.videoDuration, CHAT_ONLY_CONFIG.BUCKET_SEC) : [];
+        const bursts = detectClapBursts(chats, state.videoDuration, extraPatterns);
+        const chatBuckets = chats.length > 0 ? buildChatBuckets(chats, state.videoDuration, CHAT_ONLY_CONFIG.BUCKET_SEC, extraPatterns) : [];
         const fused = fuseSegmentsWithChat(segments, bursts, chatBuckets, CHAT_ONLY_CONFIG.BUCKET_SEC);
 
         const sourceNote = fused.chatActive
@@ -3751,7 +3814,7 @@
           : (chats.length > 0 ? '音量のみ（拍手が少ない配信）' : (chatUnavailable ? '音量のみ（チャットなし）' : '音量のみ'));
         addDetectedMarkers(fused.starts, sourceNote);
       } else {
-        const result = chatOnlyDetectSongStarts(chats, state.videoDuration);
+        const result = chatOnlyDetectSongStarts(chats, state.videoDuration, extraPatterns);
         if (result.starts.length === 0) {
           const reason = result.method === 'insufficient'
             ? 'チャットデータが不足しています'
@@ -3790,8 +3853,11 @@
       if (chatHeatmapEpoch !== myEpoch) return;
 
       if (chats.length > 0) {
+        const channelHandle = getChannelHandle();
+        const extraPatterns = await loadChannelClapPatterns(channelHandle);
+        if (chatHeatmapEpoch !== myEpoch) return;
         const bucketSec = CHAT_ONLY_CONFIG.BUCKET_SEC;
-        state.chatHeatmapBuckets = buildChatBuckets(chats, state.videoDuration, bucketSec);
+        state.chatHeatmapBuckets = buildChatBuckets(chats, state.videoDuration, bucketSec, extraPatterns);
         drawVolumeGraph();
       }
       state.chatHeatmapLoaded = true;
@@ -8168,6 +8234,10 @@
         hideVolumeGraphPanel();
         break;
 
+      case 'GET_CHANNEL_HANDLE':
+        sendResponse({ channelHandle: getChannelHandle() });
+        return true;
+
       case 'TOGGLE_VOLUME_GRAPH':
         console.log('TOGGLE_VOLUME_GRAPH 受信', { volumeGraphContainer: !!state.volumeGraphContainer, inDOM: state.volumeGraphContainer?.parentNode });
         if (state.volumeGraphContainer) {
@@ -8360,6 +8430,12 @@
       } else {
         hideEmbeddedUI();
       }
+    }
+
+    // チャンネル別拍手パターンが変更されたらヒートマップを再計算
+    if (changes[STORAGE_KEY_CHANNEL_CLAP_PATTERNS] && state.chatHeatmapLoaded) {
+      resetChatHeatmap();
+      loadChatForHeatmap();
     }
 
     const videoId = getVideoId();

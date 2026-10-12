@@ -313,3 +313,54 @@ export function formatSubtitleTime(totalSeconds) {
   }
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
+
+// popup.js にも同名の定数がある（popup は content script のモジュールをインポートできないため二重定義）
+export const STORAGE_KEY_CHANNEL_CLAP_PATTERNS = 'channelClapPatterns';
+
+/**
+ * 現在のYouTubeページからチャンネルハンドル（@付き）を取得する。
+ * @returns {string|null}
+ */
+export function getChannelHandle() {
+  // 方法1: ページ内のチャンネルリンクから取得
+  const link = document.querySelector('#owner a[href*="/@"], #channel-name a[href*="/@"], ytd-video-owner-renderer a[href*="/@"]');
+  if (link) {
+    const handle = extractHandleFromHref(link.getAttribute('href'));
+    if (handle) return handle;
+  }
+  // 方法2: meta タグから取得
+  const meta = document.querySelector('span[itemprop="author"] link[itemprop="url"]');
+  if (meta) {
+    const handle = extractHandleFromHref(meta.getAttribute('href'));
+    if (handle) return handle;
+  }
+  return null;
+}
+
+function extractHandleFromHref(href) {
+  const match = href?.match(/\/@([^/?]+)/);
+  if (!match) return null;
+  try {
+    return '@' + decodeURIComponent(match[1]);
+  } catch {
+    return '@' + match[1];
+  }
+}
+
+/**
+ * 指定チャンネルのカスタム拍手パターンを読み込む。
+ * @param {string} channelHandle - チャンネルハンドル（@付き）
+ * @returns {Promise<string[]>}
+ */
+export async function loadChannelClapPatterns(channelHandle) {
+  if (!channelHandle) return [];
+  try {
+    const result = await chrome.storage.local.get(STORAGE_KEY_CHANNEL_CLAP_PATTERNS);
+    const all = result[STORAGE_KEY_CHANNEL_CLAP_PATTERNS] || {};
+    return Array.isArray(all[channelHandle]) ? all[channelHandle] : [];
+  } catch (e) {
+    console.warn('[YCS] チャンネル別拍手パターンの読み込み失敗:', e);
+    return [];
+  }
+}
+
