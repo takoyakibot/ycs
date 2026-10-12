@@ -10,7 +10,7 @@ import {
   AUTO_DETECT_SKIP_NEAR_MARKER_SEC,
   SAMPLING_INTERVAL_SEC,
 } from './config.js';
-import { getVideoId, getChannelHandle, loadChannelClapPatterns } from './utils.js';
+import { getVideoId, getChannelHandle, getChannelHandleWithRetry, loadChannelClapPatterns } from './utils.js';
 import { initChatDB, loadChatDataForVideo, getChatContinuation, fetchAllChatReplays, saveChatsToDB } from './chat-search.js';
 import { pushMarkerHistory, updateTimestampList } from './timestamp-editor.js';
 import { drawVolumeGraph } from './volume-graph.js';
@@ -542,7 +542,7 @@ export async function autoDetectSongStarts() {
   isAutoDetectRunning = true;
   try {
     const videoId = getVideoId();
-    const channelHandle = getChannelHandle();
+    const channelHandle = await getChannelHandleWithRetry();
     const extraPatterns = await loadChannelClapPatterns(channelHandle);
     const { chats, chatUnavailable } = await fetchChats(videoId);
     if (videoId && getVideoId() !== videoId) return;

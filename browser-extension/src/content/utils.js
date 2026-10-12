@@ -322,18 +322,33 @@ export const STORAGE_KEY_CHANNEL_CLAP_PATTERNS = 'channelClapPatterns';
  * @returns {string|null}
  */
 export function getChannelHandle() {
-  // 方法1: ページ内のチャンネルリンクから取得
   const link = document.querySelector('#owner a[href*="/@"], #channel-name a[href*="/@"], ytd-video-owner-renderer a[href*="/@"]');
   if (link) {
     const handle = extractHandleFromHref(link.getAttribute('href'));
     if (handle) return handle;
   }
-  // 方法2: meta タグから取得
   const meta = document.querySelector('span[itemprop="author"] link[itemprop="url"]');
   if (meta) {
     const handle = extractHandleFromHref(meta.getAttribute('href'));
     if (handle) return handle;
   }
+  return null;
+}
+
+/**
+ * getChannelHandle のリトライ付き非同期版。
+ * SPA遷移直後など DOM が未描画の場合に最大3回リトライする。
+ * @returns {Promise<string|null>}
+ */
+export async function getChannelHandleWithRetry() {
+  const handle = getChannelHandle();
+  if (handle) return handle;
+  for (let i = 0; i < 3; i++) {
+    await new Promise(r => setTimeout(r, 500));
+    const h = getChannelHandle();
+    if (h) return h;
+  }
+  console.warn('[YCS] チャンネルハンドルを取得できませんでした');
   return null;
 }
 
