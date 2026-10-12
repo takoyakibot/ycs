@@ -10,6 +10,7 @@
   const STORAGE_KEY_EMBEDDED_UI = 'showEmbeddedUI';
   const STORAGE_KEY_GRAPH_BASE_HEIGHT = 'graphBaseHeight';
   const STORAGE_KEY_GRAPH_HEIGHT_STEP = 'graphHeightStep';
+  // src/content/utils.js にも同名の定数がある（popup は content script のモジュールをインポートできないため二重定義）
   const STORAGE_KEY_CHANNEL_CLAP_PATTERNS = 'channelClapPatterns';
 
   // 音量グラフの高さ（content.js側の既定値と揃えること）

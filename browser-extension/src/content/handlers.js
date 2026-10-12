@@ -8,6 +8,7 @@ import { closeLyricsPastePopup, closeSongCandidatePopup } from './song-candidate
 import { saveVolumeData, sendSpectralDataToServer, updateScanButtonState, showPermissionError, hidePermissionError } from './audio.js';
 import { updateListScanButtonState, showListScanButton, hideListScanButton, proceedToNextListScanVideo } from './list-scan.js';
 import { proceedToNextVideoOrFinish } from './playlist.js';
+import { resetChatHeatmap, loadChatForHeatmap } from './auto-detect.js';
 
 export function handleMessage(message, sender, sendResponse) {
   switch (message.type) {
@@ -236,6 +237,12 @@ export function handleStorageChange(changes, areaName) {
     } else {
       hideEmbeddedUI();
     }
+  }
+
+  // チャンネル別拍手パターンが変更されたらヒートマップを再計算
+  if (changes.channelClapPatterns && state.chatHeatmapLoaded) {
+    resetChatHeatmap();
+    loadChatForHeatmap();
   }
 
   const videoId = getVideoId();

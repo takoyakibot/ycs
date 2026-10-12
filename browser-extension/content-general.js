@@ -406,6 +406,7 @@
     return div.innerHTML;
   }
 
+  // popup.js にも同名の定数がある（popup は content script のモジュールをインポートできないため二重定義）
   const STORAGE_KEY_CHANNEL_CLAP_PATTERNS = 'channelClapPatterns';
 
   /**
@@ -416,16 +417,26 @@
     // 方法1: ページ内のチャンネルリンクから取得
     const link = document.querySelector('#owner a[href*="/@"], #channel-name a[href*="/@"], ytd-video-owner-renderer a[href*="/@"]');
     if (link) {
-      const match = link.getAttribute('href')?.match(/\/@([^/?]+)/);
-      if (match) return '@' + match[1];
+      const handle = extractHandleFromHref(link.getAttribute('href'));
+      if (handle) return handle;
     }
     // 方法2: meta タグから取得
     const meta = document.querySelector('span[itemprop="author"] link[itemprop="url"]');
     if (meta) {
-      const match = meta.getAttribute('href')?.match(/\/@([^/?]+)/);
-      if (match) return '@' + match[1];
+      const handle = extractHandleFromHref(meta.getAttribute('href'));
+      if (handle) return handle;
     }
     return null;
+  }
+
+  function extractHandleFromHref(href) {
+    const match = href?.match(/\/@([^/?]+)/);
+    if (!match) return null;
+    try {
+      return '@' + decodeURIComponent(match[1]);
+    } catch {
+      return '@' + match[1];
+    }
   }
 
   /**
@@ -4758,6 +4769,12 @@
       } else {
         hideEmbeddedUI();
       }
+    }
+
+    // チャンネル別拍手パターンが変更されたらヒートマップを再計算
+    if (changes.channelClapPatterns && state.chatHeatmapLoaded) {
+      resetChatHeatmap();
+      loadChatForHeatmap();
     }
 
     const videoId = getVideoId();
