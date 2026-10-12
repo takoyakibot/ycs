@@ -315,7 +315,7 @@ export function formatSubtitleTime(totalSeconds) {
 }
 
 // popup.js にも同名の定数がある（popup は content script のモジュールをインポートできないため二重定義）
-const STORAGE_KEY_CHANNEL_CLAP_PATTERNS = 'channelClapPatterns';
+export const STORAGE_KEY_CHANNEL_CLAP_PATTERNS = 'channelClapPatterns';
 
 /**
  * 現在のYouTubeページからチャンネルハンドル（@付き）を取得する。

@@ -3855,6 +3855,7 @@
       if (chats.length > 0) {
         const channelHandle = getChannelHandle();
         const extraPatterns = await loadChannelClapPatterns(channelHandle);
+        if (chatHeatmapEpoch !== myEpoch) return;
         const bucketSec = CHAT_ONLY_CONFIG.BUCKET_SEC;
         state.chatHeatmapBuckets = buildChatBuckets(chats, state.videoDuration, bucketSec, extraPatterns);
         drawVolumeGraph();
@@ -8432,7 +8433,7 @@
     }
 
     // チャンネル別拍手パターンが変更されたらヒートマップを再計算
-    if (changes.channelClapPatterns && state.chatHeatmapLoaded) {
+    if (changes[STORAGE_KEY_CHANNEL_CLAP_PATTERNS] && state.chatHeatmapLoaded) {
       resetChatHeatmap();
       loadChatForHeatmap();
     }

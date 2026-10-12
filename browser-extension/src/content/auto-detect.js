@@ -606,6 +606,7 @@ export async function loadChatForHeatmap() {
     if (chats.length > 0) {
       const channelHandle = getChannelHandle();
       const extraPatterns = await loadChannelClapPatterns(channelHandle);
+      if (chatHeatmapEpoch !== myEpoch) return;
       const bucketSec = CHAT_ONLY_CONFIG.BUCKET_SEC;
       state.chatHeatmapBuckets = buildChatBuckets(chats, state.videoDuration, bucketSec, extraPatterns);
       drawVolumeGraph();
