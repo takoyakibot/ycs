@@ -362,7 +362,7 @@ async function initClapPatterns(tabId) {
     section.style.display = 'block';
     document.getElementById('clap-channel-name').textContent = '';
     document.getElementById('clap-pattern-list').innerHTML =
-      '<div class="empty-message">このページではチャンネルを検出できません</div>';
+      '<div class="empty-message">チャンネルを検出できませんでした。ページ読み込み後に開き直してください</div>';
     document.getElementById('clap-pattern-input').disabled = true;
     document.getElementById('clap-pattern-add').disabled = true;
     return;

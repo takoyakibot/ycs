@@ -429,16 +429,16 @@
 
   /**
    * getChannelHandle のリトライ付き非同期版。
-   * SPA遷移直後など DOM が未描画の場合に最大3回リトライする。
+   * SPA遷移直後など DOM が未描画の場合にリトライする。
+   * @param {number} retries - リトライ回数
+   * @param {number} intervalMs - リトライ間隔（ミリ秒）
    * @returns {Promise<string|null>}
    */
-  async function getChannelHandleWithRetry() {
-    const handle = getChannelHandle();
-    if (handle) return handle;
-    for (let i = 0; i < 3; i++) {
-      await new Promise(r => setTimeout(r, 500));
+  async function getChannelHandleWithRetry(retries = 3, intervalMs = 500) {
+    for (let i = 0; i <= retries; i++) {
       const h = getChannelHandle();
       if (h) return h;
+      if (i < retries) await new Promise(r => setTimeout(r, intervalMs));
     }
     console.warn('[YCS] チャンネルハンドルを取得できませんでした');
     return null;
@@ -2589,6 +2589,7 @@
     try {
       const videoId = getVideoId();
       const channelHandle = await getChannelHandleWithRetry();
+      if (videoId && getVideoId() !== videoId) return;
       const extraPatterns = await loadChannelClapPatterns(channelHandle);
       const { chats, chatUnavailable } = await fetchChats(videoId);
       if (videoId && getVideoId() !== videoId) return;
@@ -2650,7 +2651,8 @@
       if (chatHeatmapEpoch !== myEpoch) return;
 
       if (chats.length > 0) {
-        const channelHandle = getChannelHandle();
+        const channelHandle = await getChannelHandleWithRetry();
+        if (chatHeatmapEpoch !== myEpoch) return;
         const extraPatterns = await loadChannelClapPatterns(channelHandle);
         if (chatHeatmapEpoch !== myEpoch) return;
         const bucketSec = CHAT_ONLY_CONFIG.BUCKET_SEC;
@@ -4717,7 +4719,7 @@
         break;
 
       case 'GET_CHANNEL_HANDLE':
-        sendResponse({ channelHandle: getChannelHandle() });
+        getChannelHandleWithRetry().then(h => sendResponse({ channelHandle: h }));
         return true;
 
       case 'TOGGLE_VOLUME_GRAPH':

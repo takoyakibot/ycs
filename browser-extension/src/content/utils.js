@@ -337,16 +337,16 @@ export function getChannelHandle() {
 
 /**
  * getChannelHandle のリトライ付き非同期版。
- * SPA遷移直後など DOM が未描画の場合に最大3回リトライする。
+ * SPA遷移直後など DOM が未描画の場合にリトライする。
+ * @param {number} retries - リトライ回数
+ * @param {number} intervalMs - リトライ間隔（ミリ秒）
  * @returns {Promise<string|null>}
  */
-export async function getChannelHandleWithRetry() {
-  const handle = getChannelHandle();
-  if (handle) return handle;
-  for (let i = 0; i < 3; i++) {
-    await new Promise(r => setTimeout(r, 500));
+export async function getChannelHandleWithRetry(retries = 3, intervalMs = 500) {
+  for (let i = 0; i <= retries; i++) {
     const h = getChannelHandle();
     if (h) return h;
+    if (i < retries) await new Promise(r => setTimeout(r, intervalMs));
   }
   console.warn('[YCS] チャンネルハンドルを取得できませんでした');
   return null;

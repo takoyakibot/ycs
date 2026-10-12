@@ -543,6 +543,7 @@ export async function autoDetectSongStarts() {
   try {
     const videoId = getVideoId();
     const channelHandle = await getChannelHandleWithRetry();
+    if (videoId && getVideoId() !== videoId) return;
     const extraPatterns = await loadChannelClapPatterns(channelHandle);
     const { chats, chatUnavailable } = await fetchChats(videoId);
     if (videoId && getVideoId() !== videoId) return;
@@ -604,7 +605,8 @@ export async function loadChatForHeatmap() {
     if (chatHeatmapEpoch !== myEpoch) return;
 
     if (chats.length > 0) {
-      const channelHandle = getChannelHandle();
+      const channelHandle = await getChannelHandleWithRetry();
+      if (chatHeatmapEpoch !== myEpoch) return;
       const extraPatterns = await loadChannelClapPatterns(channelHandle);
       if (chatHeatmapEpoch !== myEpoch) return;
       const bucketSec = CHAT_ONLY_CONFIG.BUCKET_SEC;
