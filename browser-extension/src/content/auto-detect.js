@@ -10,7 +10,7 @@ import {
   AUTO_DETECT_SKIP_NEAR_MARKER_SEC,
   SAMPLING_INTERVAL_SEC,
 } from './config.js';
-import { getVideoId } from './utils.js';
+import { getVideoId, getChannelHandle, loadChannelClapPatterns } from './utils.js';
 import { initChatDB, loadChatDataForVideo, getChatContinuation, fetchAllChatReplays, saveChatsToDB } from './chat-search.js';
 import { pushMarkerHistory, updateTimestampList } from './timestamp-editor.js';
 import { drawVolumeGraph } from './volume-graph.js';
@@ -168,10 +168,22 @@ export function detectSongSegments(data, intervalSec) {
   return segments;
 }
 
-export function detectClapBursts(chats, videoDurationSec) {
+/**
+ * メッセージが拍手かどうかを判定する。
+ * 基本パターン（CLAP_PATTERN）に加えて、チャンネル固有の追加パターンもチェックする。
+ * @param {string} message - チャットメッセージ
+ * @param {string[]} extraPatterns - チャンネル固有の追加パターン（プレーンテキスト、includes で比較）
+ * @returns {boolean}
+ */
+export function isClapMessage(message, extraPatterns = []) {
+  if (CLAP_PATTERN.test(message)) return true;
+  return extraPatterns.length > 0 && extraPatterns.some(p => message.includes(p));
+}
+
+export function detectClapBursts(chats, videoDurationSec, extraPatterns = []) {
   const cfg = CHAT_SIGNAL_CONFIG;
   const clapTimes = (chats || [])
-    .filter(c => typeof c.message === 'string' && CLAP_PATTERN.test(c.message))
+    .filter(c => typeof c.message === 'string' && isClapMessage(c.message, extraPatterns))
     .map(c => (Number(c.timestamp) || 0) / 1000 - cfg.CHAT_DELAY_SEC)
     .filter(t => t >= 0 && (!videoDurationSec || t <= videoDurationSec))
     .sort((a, b) => a - b);
@@ -204,7 +216,7 @@ export function isEmojiOnlyMessage(text) {
   return withoutShortcodes.length === 0 || EMOJI_ONLY_RE.test(withoutShortcodes);
 }
 
-export function buildChatBuckets(chats, videoDurationSec, bucketSec) {
+export function buildChatBuckets(chats, videoDurationSec, bucketSec, extraPatterns = []) {
   const delaySec = CHAT_SIGNAL_CONFIG.CHAT_DELAY_SEC;
   const numBuckets = Math.ceil(videoDurationSec / bucketSec);
   const buckets = Array.from({ length: numBuckets }, () => ({ total: 0, emojiOnly: 0, clap: 0 }));
@@ -215,8 +227,7 @@ export function buildChatBuckets(chats, videoDurationSec, bucketSec) {
     if (timeSec < 0 || timeSec >= videoDurationSec) continue;
     const idx = Math.min(numBuckets - 1, Math.floor(timeSec / bucketSec));
     buckets[idx].total++;
-    const isClap = CLAP_PATTERN.test(c.message);
-    if (isClap) {
+    if (isClapMessage(c.message, extraPatterns)) {
       buckets[idx].clap++;
     } else if (isEmojiOnlyMessage(c.message)) {
       buckets[idx].emojiOnly++;
@@ -319,7 +330,7 @@ export function findNextEmojiRise(buckets, bucketSec, afterSec) {
   return null;
 }
 
-export function chatOnlyDetectSongStarts(chats, videoDurationSec) {
+export function chatOnlyDetectSongStarts(chats, videoDurationSec, extraPatterns = []) {
   const cfg = CHAT_ONLY_CONFIG;
   const clapCfg = CHAT_SIGNAL_CONFIG;
 
@@ -327,9 +338,9 @@ export function chatOnlyDetectSongStarts(chats, videoDurationSec) {
     return { starts: [], method: 'insufficient' };
   }
 
-  const buckets = buildChatBuckets(chats, videoDurationSec, cfg.BUCKET_SEC);
+  const buckets = buildChatBuckets(chats, videoDurationSec, cfg.BUCKET_SEC, extraPatterns);
   const emojiSegments = detectEmojiSingingSegments(buckets, cfg.BUCKET_SEC);
-  const bursts = detectClapBursts(chats, videoDurationSec);
+  const bursts = detectClapBursts(chats, videoDurationSec, extraPatterns);
   const chatActive = bursts.length >= clapCfg.MIN_BURSTS_TO_TRUST;
 
   if (emojiSegments.length === 0 && bursts.length === 0) {
@@ -531,6 +542,8 @@ export async function autoDetectSongStarts() {
   isAutoDetectRunning = true;
   try {
     const videoId = getVideoId();
+    const channelHandle = getChannelHandle();
+    const extraPatterns = await loadChannelClapPatterns(channelHandle);
     const { chats, chatUnavailable } = await fetchChats(videoId);
     if (videoId && getVideoId() !== videoId) return;
 
@@ -543,8 +556,8 @@ export async function autoDetectSongStarts() {
         return;
       }
 
-      const bursts = detectClapBursts(chats, state.videoDuration);
-      const chatBuckets = chats.length > 0 ? buildChatBuckets(chats, state.videoDuration, CHAT_ONLY_CONFIG.BUCKET_SEC) : [];
+      const bursts = detectClapBursts(chats, state.videoDuration, extraPatterns);
+      const chatBuckets = chats.length > 0 ? buildChatBuckets(chats, state.videoDuration, CHAT_ONLY_CONFIG.BUCKET_SEC, extraPatterns) : [];
       const fused = fuseSegmentsWithChat(segments, bursts, chatBuckets, CHAT_ONLY_CONFIG.BUCKET_SEC);
 
       const sourceNote = fused.chatActive
@@ -552,7 +565,7 @@ export async function autoDetectSongStarts() {
         : (chats.length > 0 ? '音量のみ（拍手が少ない配信）' : (chatUnavailable ? '音量のみ（チャットなし）' : '音量のみ'));
       addDetectedMarkers(fused.starts, sourceNote);
     } else {
-      const result = chatOnlyDetectSongStarts(chats, state.videoDuration);
+      const result = chatOnlyDetectSongStarts(chats, state.videoDuration, extraPatterns);
       if (result.starts.length === 0) {
         const reason = result.method === 'insufficient'
           ? 'チャットデータが不足しています'
@@ -591,8 +604,10 @@ export async function loadChatForHeatmap() {
     if (chatHeatmapEpoch !== myEpoch) return;
 
     if (chats.length > 0) {
+      const channelHandle = getChannelHandle();
+      const extraPatterns = await loadChannelClapPatterns(channelHandle);
       const bucketSec = CHAT_ONLY_CONFIG.BUCKET_SEC;
-      state.chatHeatmapBuckets = buildChatBuckets(chats, state.videoDuration, bucketSec);
+      state.chatHeatmapBuckets = buildChatBuckets(chats, state.videoDuration, bucketSec, extraPatterns);
       drawVolumeGraph();
     }
     state.chatHeatmapLoaded = true;
