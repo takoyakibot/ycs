@@ -364,19 +364,3 @@ export async function loadChannelClapPatterns(channelHandle) {
   }
 }
 
-/**
- * 指定チャンネルのカスタム拍手パターンを保存する。
- * @param {string} channelHandle - チャンネルハンドル（@付き）
- * @param {string[]} patterns - パターン文字列の配列
- */
-export async function saveChannelClapPatterns(channelHandle, patterns) {
-  if (!channelHandle) return;
-  const result = await chrome.storage.local.get(STORAGE_KEY_CHANNEL_CLAP_PATTERNS);
-  const all = result[STORAGE_KEY_CHANNEL_CLAP_PATTERNS] || {};
-  if (patterns.length === 0) {
-    delete all[channelHandle];
-  } else {
-    all[channelHandle] = patterns;
-  }
-  await chrome.storage.local.set({ [STORAGE_KEY_CHANNEL_CLAP_PATTERNS]: all });
-}

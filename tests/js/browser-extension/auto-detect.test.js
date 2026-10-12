@@ -87,11 +87,14 @@ describe('isClapMessage', () => {
 
 describe('isEmojiOnlyMessage', () => {
   it('非ASCIIショートコードのみのメッセージを絵文字のみと判定する', () => {
-    // EMOJI_SHORTCODE_RE が非ASCII対応になったことで、
-    // 日本語ショートコードが正しく除去される
+    // EMOJI_SHORTCODE_RE はひらがな・カタカナを含むショートコードに対応
     expect(isEmojiOnlyMessage(':_ぱちぱち:')).toBe(true);
-    expect(isEmojiOnlyMessage(':_拍手:')).toBe(true);
     expect(isEmojiOnlyMessage(':_カワイイ:')).toBe(true);
+  });
+
+  it('漢字を含むショートコードは誤判定防止のためマッチしない', () => {
+    expect(isEmojiOnlyMessage(':_拍手:')).toBe(false);
+    expect(isEmojiOnlyMessage(':今日は:')).toBe(false);
   });
 
   it('ASCIIショートコードのみのメッセージを絵文字のみと判定する', () => {

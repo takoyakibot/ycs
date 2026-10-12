@@ -211,6 +211,15 @@
       return;
     }
 
+    if (pattern.length < 2) {
+      status.textContent = '2文字以上で入力してください';
+      status.style.color = '#c62828';
+      return;
+    }
+
+    const addBtn = document.getElementById('clap-pattern-add');
+    addBtn.disabled = true;
+
     const result = await chrome.storage.local.get(STORAGE_KEY_CHANNEL_CLAP_PATTERNS);
     const all = result[STORAGE_KEY_CHANNEL_CLAP_PATTERNS] || {};
     const patterns = all[currentChannelHandle] || [];
@@ -228,6 +237,7 @@
     input.value = '';
     status.textContent = '追加しました';
     status.style.color = '#2e7d32';
+    addBtn.disabled = false;
     await renderClapPatterns();
   }
 

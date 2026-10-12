@@ -132,7 +132,7 @@
 
   const EMOJI_ONLY_RE = /^[\p{Extended_Pictographic}\p{Emoji_Presentation}\p{So}\s‍️︎]+$/u;
 
-  const EMOJI_SHORTCODE_RE = /:[a-zA-Z0-9_぀-ゟ゠-ヿ一-鿿＀-￯]+:/g;
+  const EMOJI_SHORTCODE_RE = /:[a-zA-Z0-9_぀-ゟ゠-ヿ]+:/g;
 
   const CHAT_ONLY_CONFIG = {
     BUCKET_SEC: 10,
