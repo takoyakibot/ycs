@@ -1,7 +1,7 @@
 import state from './state.js';
 import { IS_GENERAL_EDITION } from './edition.js';
 import { SAVE_INTERVAL, DEFAULT_GRAPH_BASE_HEIGHT_PX, DEFAULT_GRAPH_HEIGHT_STEP_PX, GRAPH_BASE_HEIGHT_RANGE, GRAPH_HEIGHT_STEP_RANGE } from './config.js';
-import { getVideoId, clampGraphHeightValue, updateVideoDuration, updateProgress, isCurrentVideoScanned, getScanStatus } from './utils.js';
+import { getVideoId, getChannelHandle, clampGraphHeightValue, updateVideoDuration, updateProgress, isCurrentVideoScanned, getScanStatus } from './utils.js';
 import { showEmbeddedUI, hideEmbeddedUI, hideVolumeGraphPanel } from './ui.js';
 import { drawVolumeGraph, createVolumeGraph, insertVolumeGraph, resizeCanvas } from './volume-graph.js';
 import { closeLyricsPastePopup, closeSongCandidatePopup } from './song-candidates.js';
@@ -39,6 +39,10 @@ export function handleMessage(message, sender, sendResponse) {
     case 'HIDE_VOLUME_GRAPH':
       hideVolumeGraphPanel();
       break;
+
+    case 'GET_CHANNEL_HANDLE':
+      sendResponse({ channelHandle: getChannelHandle() });
+      return true;
 
     case 'TOGGLE_VOLUME_GRAPH':
       console.log('TOGGLE_VOLUME_GRAPH 受信', { volumeGraphContainer: !!state.volumeGraphContainer, inDOM: state.volumeGraphContainer?.parentNode });

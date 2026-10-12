@@ -10,6 +10,7 @@
   const STORAGE_KEY_EMBEDDED_UI = 'showEmbeddedUI';
   const STORAGE_KEY_GRAPH_BASE_HEIGHT = 'graphBaseHeight';
   const STORAGE_KEY_GRAPH_HEIGHT_STEP = 'graphHeightStep';
+  const STORAGE_KEY_CHANNEL_CLAP_PATTERNS = 'channelClapPatterns';
 
   // 音量グラフの高さ（content.js側の既定値と揃えること）
   const DEFAULT_GRAPH_BASE_HEIGHT = 60;
@@ -28,6 +29,7 @@
     graphHeightStep: document.getElementById('graph-height-step'),
     graphHeightStatus: document.getElementById('graph-height-status')
   };
+  let currentChannelHandle = null;
 
   /**
    * 初期化
@@ -71,6 +73,11 @@
     // YouTube埋め込みUIの初期状態をコンテンツスクリプトに通知
     if (isYouTube) {
       notifyYouTubeContentScript(showUI);
+    }
+
+    // チャンネル別拍手パターンの初期化（YouTube動画ページのみ）
+    if (isYouTube && tab?.id) {
+      await initClapPatterns(tab.id);
     }
 
     // スキャン済み一覧を読み込み
@@ -132,6 +139,128 @@
       [STORAGE_KEY_GRAPH_BASE_HEIGHT]: base,
       [STORAGE_KEY_GRAPH_HEIGHT_STEP]: step
     });
+  }
+
+  /**
+   * チャンネル別拍手パターンを初期化
+   */
+  async function initClapPatterns(tabId) {
+    try {
+      // コンテンツスクリプトからチャンネルハンドルを取得
+      const response = await chrome.tabs.sendMessage(tabId, { type: 'GET_CHANNEL_HANDLE' });
+      currentChannelHandle = response?.channelHandle || null;
+    } catch {
+      currentChannelHandle = null;
+    }
+
+    const section = document.getElementById('clap-patterns-section');
+    if (!currentChannelHandle) {
+      section.style.display = 'none';
+      return;
+    }
+
+    section.style.display = 'block';
+    document.getElementById('clap-channel-name').textContent = `(${currentChannelHandle})`;
+
+    document.getElementById('clap-pattern-add').addEventListener('click', addClapPattern);
+    document.getElementById('clap-pattern-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') addClapPattern();
+    });
+
+    await renderClapPatterns();
+  }
+
+  /**
+   * 拍手パターンの一覧を描画
+   */
+  async function renderClapPatterns() {
+    const list = document.getElementById('clap-pattern-list');
+    const result = await chrome.storage.local.get(STORAGE_KEY_CHANNEL_CLAP_PATTERNS);
+    const all = result[STORAGE_KEY_CHANNEL_CLAP_PATTERNS] || {};
+    const patterns = all[currentChannelHandle] || [];
+
+    if (patterns.length === 0) {
+      list.innerHTML = '<div class="empty-message">パターン未登録</div>';
+      return;
+    }
+
+    list.innerHTML = patterns.map((p, i) => `
+    <div class="clap-pattern-item">
+      <span class="pattern-text">${escapeHtmlPopup(p)}</span>
+      <button class="btn-remove" data-index="${i}" title="削除">&times;</button>
+    </div>
+  `).join('');
+
+    list.querySelectorAll('.btn-remove').forEach(btn => {
+      btn.addEventListener('click', () => removeClapPattern(Number(btn.dataset.index)));
+    });
+  }
+
+  /**
+   * 拍手パターンを追加
+   */
+  async function addClapPattern() {
+    const input = document.getElementById('clap-pattern-input');
+    const pattern = input.value.trim();
+    const status = document.getElementById('clap-pattern-status');
+
+    if (!pattern) {
+      status.textContent = 'パターンを入力してください';
+      status.style.color = '#c62828';
+      return;
+    }
+
+    const result = await chrome.storage.local.get(STORAGE_KEY_CHANNEL_CLAP_PATTERNS);
+    const all = result[STORAGE_KEY_CHANNEL_CLAP_PATTERNS] || {};
+    const patterns = all[currentChannelHandle] || [];
+
+    if (patterns.includes(pattern)) {
+      status.textContent = 'このパターンは既に登録されています';
+      status.style.color = '#f57c00';
+      return;
+    }
+
+    patterns.push(pattern);
+    all[currentChannelHandle] = patterns;
+    await chrome.storage.local.set({ [STORAGE_KEY_CHANNEL_CLAP_PATTERNS]: all });
+
+    input.value = '';
+    status.textContent = '追加しました';
+    status.style.color = '#2e7d32';
+    await renderClapPatterns();
+  }
+
+  /**
+   * 拍手パターンを削除
+   */
+  async function removeClapPattern(index) {
+    const result = await chrome.storage.local.get(STORAGE_KEY_CHANNEL_CLAP_PATTERNS);
+    const all = result[STORAGE_KEY_CHANNEL_CLAP_PATTERNS] || {};
+    const patterns = all[currentChannelHandle] || [];
+
+    if (index < 0 || index >= patterns.length) return;
+
+    patterns.splice(index, 1);
+    if (patterns.length === 0) {
+      delete all[currentChannelHandle];
+    } else {
+      all[currentChannelHandle] = patterns;
+    }
+    await chrome.storage.local.set({ [STORAGE_KEY_CHANNEL_CLAP_PATTERNS]: all });
+
+    const status = document.getElementById('clap-pattern-status');
+    status.textContent = '削除しました';
+    status.style.color = '#888';
+    await renderClapPatterns();
+  }
+
+  /**
+   * HTMLエスケープ（popup用）
+   */
+  function escapeHtmlPopup(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
 
   /**

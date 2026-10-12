@@ -183,6 +183,36 @@
       padding: 12px 0;
     }
 
+    .clap-pattern-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 8px;
+      background: #f5f5f5;
+      border-radius: 4px;
+      margin-bottom: 4px;
+      font-size: 12px;
+    }
+
+    .clap-pattern-item .pattern-text {
+      font-family: monospace;
+      word-break: break-all;
+    }
+
+    .clap-pattern-item .btn-remove {
+      background: none;
+      border: none;
+      color: #999;
+      cursor: pointer;
+      font-size: 14px;
+      padding: 0 4px;
+      line-height: 1;
+    }
+
+    .clap-pattern-item .btn-remove:hover {
+      color: #c62828;
+    }
+
   </style>
 </head>
 <body>
@@ -215,6 +245,17 @@
     <div id="graph-height-status" style="font-size: 10px; color: #888; margin-bottom: 4px;"></div>
 
 
+
+    <div id="clap-patterns-section" style="display: none;">
+      <div class="section-title">拍手パターン <span id="clap-channel-name" style="font-weight: normal; color: #888; font-size: 11px;"></span></div>
+      <div style="font-size: 12px; color: #666; margin-bottom: 8px;">このチャンネルで拍手として扱うパターン</div>
+      <div style="display: flex; gap: 4px; margin-bottom: 8px;">
+        <input type="text" id="clap-pattern-input" placeholder=":_ぱちぱち:" style="flex: 1; font-size: 12px; padding: 4px 8px; border: 1px solid #ddd; border-radius: 4px;">
+        <button id="clap-pattern-add" style="font-size: 12px; padding: 4px 10px; background: #667eea; color: #fff; border: none; border-radius: 4px; cursor: pointer; white-space: nowrap;">追加</button>
+      </div>
+      <div id="clap-pattern-list"></div>
+      <div id="clap-pattern-status" style="font-size: 10px; color: #888; margin-top: 4px;"></div>
+    </div>
 
     <div class="section-title">スキャン済み一覧 <span id="storage-usage" style="font-weight: normal; color: #999; font-size: 11px;"></span></div>
     <div id="scanned-list" class="scanned-list">
